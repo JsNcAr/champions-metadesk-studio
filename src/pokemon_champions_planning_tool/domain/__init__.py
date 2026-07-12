@@ -1,0 +1,1 @@
+"""Domain rules for Pokemon, box entries, and teams."""

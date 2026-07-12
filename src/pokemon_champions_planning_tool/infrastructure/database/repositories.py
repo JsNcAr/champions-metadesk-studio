@@ -5,12 +5,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.entities.pokemon import Pokemon
+from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
+from ...domain.pokemon_identity import format_api_name
 from .models import BoxEntryRecord, PokemonRecord, TeamMemberRecord, TeamRecord
 
 
@@ -88,9 +91,7 @@ class BoxRepository:
             self.session.refresh(new_record)
             return new_record
 
-        existing_record.notes = new_record.notes
-        existing_record.tags = new_record.tags
-        existing_record.is_favorite = new_record.is_favorite
+        existing_record.pokemon_canonical_id = new_record.pokemon_canonical_id
         existing_record.updated_at = _utc_now()
         self.session.add(existing_record)
         self.session.commit()
@@ -102,8 +103,72 @@ class BoxRepository:
             select(BoxEntryRecord).where(BoxEntryRecord.pokemon_canonical_id == canonical_id)
         ).first()
 
+    def resolve(self, identifier: str) -> BoxEntryRecord | None:
+        normalized_identifier = identifier.strip()
+        if not normalized_identifier:
+            return None
+
+        canonical_id = format_api_name(normalized_identifier) or normalized_identifier
+        record = self.get_by_canonical_id(canonical_id)
+        if record is not None:
+            return record
+
+        lowered_identifier = normalized_identifier.lower()
+        for box_entry in self.list_all():
+            pokemon_record = self.pokemon_repository.get(box_entry.pokemon_canonical_id)
+            if pokemon_record is not None and pokemon_record.display_name.lower() == lowered_identifier:
+                return box_entry
+
+        return None
+
     def list_all(self) -> list[BoxEntryRecord]:
-        return list(self.session.exec(select(BoxEntryRecord).order_by(BoxEntryRecord.created_at))) # type: ignore
+        records = list(self.session.exec(select(BoxEntryRecord)))
+        return sorted(records, key=lambda record: record.created_at)
+
+    def load_entry(self, identifier: str) -> BoxEntry | None:
+        record = self.resolve(identifier)
+        if record is None:
+            return None
+
+        pokemon_record = self.pokemon_repository.get(record.pokemon_canonical_id)
+        if pokemon_record is None:
+            return None
+
+        return record.to_domain(pokemon_record.to_domain())
+
+    def list_entries(self) -> list[BoxEntry]:
+        entries: list[BoxEntry] = []
+        for record in self.list_all():
+            pokemon_record = self.pokemon_repository.get(record.pokemon_canonical_id)
+            if pokemon_record is None:
+                continue
+            entries.append(record.to_domain(pokemon_record.to_domain()))
+        return entries
+
+    def update_metadata(
+        self,
+        identifier: str,
+        *,
+        notes: str | None = None,
+        tags: list[str] | None = None,
+        is_favorite: bool | None = None,
+    ) -> BoxEntryRecord | None:
+        record = self.resolve(identifier)
+        if record is None:
+            return None
+
+        if notes is not None:
+            record.notes = notes
+        if tags is not None:
+            record.tags = tags
+        if is_favorite is not None:
+            record.is_favorite = is_favorite
+
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
 
     def delete_by_canonical_id(self, canonical_id: str) -> bool:
         record = self.get_by_canonical_id(canonical_id)
@@ -128,11 +193,38 @@ class TeamRepository:
         self.session.refresh(record)
         return record
 
+    def get_by_name(self, name: str) -> TeamRecord | None:
+        normalized_name = name.strip().lower()
+        if not normalized_name:
+            return None
+
+        return self.session.exec(
+            select(TeamRecord).where(func.lower(TeamRecord.name) == normalized_name)
+        ).first()
+
+    def resolve(self, identifier: str) -> TeamRecord | None:
+        normalized_identifier = identifier.strip()
+        if not normalized_identifier:
+            return None
+
+        try:
+            team_id = UUID(normalized_identifier)
+        except ValueError:
+            team_id = None
+
+        if team_id is not None:
+            record = self.get(team_id)
+            if record is not None:
+                return record
+
+        return self.get_by_name(normalized_identifier)
+
     def get(self, team_id: UUID) -> TeamRecord | None:
         return self.session.get(TeamRecord, team_id)
 
     def list_all(self) -> list[TeamRecord]:
-        return list(self.session.exec(select(TeamRecord).order_by(TeamRecord.name)))
+        records = list(self.session.exec(select(TeamRecord)))
+        return sorted(records, key=lambda record: record.name.lower())
 
     def delete(self, team_id: UUID) -> bool:
         record = self.get(team_id)
@@ -142,6 +234,18 @@ class TeamRepository:
         self.session.delete(record)
         self.session.commit()
         return True
+
+    def rename(self, team_id: UUID, new_name: str) -> TeamRecord | None:
+        record = self.get(team_id)
+        if record is None:
+            return None
+
+        record.name = new_name
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
 
     def upsert_member(self, team_id: UUID, member: TeamMember) -> TeamMemberRecord:
         existing_record = self.session.exec(
@@ -168,11 +272,51 @@ class TeamRepository:
         self.session.refresh(existing_record)
         return existing_record
 
-    def list_members(self, team_id: UUID) -> list[TeamMemberRecord]:
-        return list(
+    def delete_member(self, team_id: UUID, slot_position: int) -> bool:
+        record = self.session.exec(
+            select(TeamMemberRecord).where(
+                TeamMemberRecord.team_id == team_id,
+                TeamMemberRecord.slot_position == slot_position,
+            )
+        ).first()
+        if record is None:
+            return False
+
+        self.session.delete(record)
+        self.session.commit()
+        return True
+
+    def delete_members_by_box_entry_id(self, box_entry_id: UUID) -> int:
+        records = list(
             self.session.exec(
-                select(TeamMemberRecord)
-                .where(TeamMemberRecord.team_id == team_id)
-                .order_by(TeamMemberRecord.slot_position) # type: ignore
+                select(TeamMemberRecord).where(TeamMemberRecord.box_entry_id == box_entry_id)
             )
         )
+        for record in records:
+            self.session.delete(record)
+        if records:
+            self.session.commit()
+        return len(records)
+
+    def list_members(self, team_id: UUID) -> list[TeamMemberRecord]:
+        records = list(self.session.exec(select(TeamMemberRecord).where(TeamMemberRecord.team_id == team_id)))
+        return sorted(records, key=lambda record: record.slot_position)
+
+    def load_team(self, team_id: UUID) -> Team | None:
+        record = self.get(team_id)
+        if record is None:
+            return None
+
+        members = [
+            TeamMember(
+                team_member_id=member.team_member_id,
+                box_entry_id=member.box_entry_id,
+                slot_position=member.slot_position,
+                item=member.item,
+                moveset=[PokemonMove.model_validate(move) for move in member.moveset],
+                ability=member.ability,
+                notes=member.notes,
+            )
+            for member in self.list_members(team_id)
+        ]
+        return record.to_domain(members)

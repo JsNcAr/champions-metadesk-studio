@@ -2,7 +2,7 @@
 
 from ..config import DEFAULT_CSV_FILENAME
 from ..domain.entities.box_entry import BoxEntry
-from ..infrastructure.csv.csv_operations import upsert_to_spreadsheet
+from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import BoxRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import (
@@ -20,9 +20,10 @@ def add_pokemon_to_box(pokemon_name, filename=DEFAULT_CSV_FILENAME):
 
     if official_data:
         with get_session() as session:
-            BoxRepository(session).upsert_box_entry(BoxEntry(pokemon=official_data))
+            box_repository = BoxRepository(session)
+            box_repository.upsert_box_entry(BoxEntry(pokemon=official_data))
+            export_box_entries_to_csv(box_repository.list_entries(), filename)
 
-        upsert_to_spreadsheet(official_data, filename)
         print(f"✅ Success: Saved '{official_data.display_name}' to SQLite and CSV.")
     else:
         print(

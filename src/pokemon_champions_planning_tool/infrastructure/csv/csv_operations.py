@@ -2,6 +2,7 @@ import csv
 import os
 
 from ...config import CSV_HEADERS, DEFAULT_CSV_FILENAME
+from ...domain.entities.box_entry import BoxEntry
 from ...domain.entities.pokemon import Pokemon
 from ...domain.pokemon_identity import format_api_name
 
@@ -19,6 +20,28 @@ def save_rows(filename, rows):
         writer = csv.DictWriter(file, fieldnames=CSV_HEADERS)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _box_entry_to_row(box_entry: BoxEntry):
+    pokemon = box_entry.pokemon
+    primary_ability = pokemon.abilities[0].name.title().replace("-", " ") if pokemon.abilities else "Unknown"
+
+    return {
+        "Pokémon": pokemon.display_name,
+        "Form": pokemon.form_name,
+        "Ability": primary_ability,
+        "HP": pokemon.stats.hp,
+        "Attack": pokemon.stats.attack,
+        "Defense": pokemon.stats.defense,
+        "Sp. Atk": pokemon.stats.special_attack,
+        "Sp. Def": pokemon.stats.special_defense,
+        "Speed": pokemon.stats.speed,
+        "Total": pokemon.total,
+    }
+
+
+def export_box_entries_to_csv(box_entries: list[BoxEntry], filename=DEFAULT_CSV_FILENAME):
+    save_rows(filename, [_box_entry_to_row(box_entry) for box_entry in box_entries])
 
 
 def _build_row(pokemon: Pokemon):

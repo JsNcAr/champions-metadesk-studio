@@ -1,13 +1,16 @@
 """Use-case orchestration for adding a Pokemon to the CSV box."""
 
 from ..config import DEFAULT_CSV_FILENAME
+from ..domain.entities.box_entry import BoxEntry
 from ..infrastructure.csv.csv_operations import upsert_to_spreadsheet
+from ..infrastructure.database.database import get_session
+from ..infrastructure.database.repositories import BoxRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import (
     get_official_stats,
 )
 
 
-def append_to_spreadsheet(pokemon_name, filename=DEFAULT_CSV_FILENAME):
+def add_pokemon_to_box(pokemon_name, filename=DEFAULT_CSV_FILENAME):
     formatted_name = pokemon_name.strip().title()
     if not formatted_name:
         return
@@ -16,8 +19,14 @@ def append_to_spreadsheet(pokemon_name, filename=DEFAULT_CSV_FILENAME):
     official_data = get_official_stats(formatted_name)
 
     if official_data:
+        with get_session() as session:
+            BoxRepository(session).upsert_box_entry(BoxEntry(pokemon=official_data))
+
         upsert_to_spreadsheet(official_data, filename)
-        print(f"✅ Success: Saved '{official_data['display_name']}' to CSV.")
+        print(f"✅ Success: Saved '{official_data.display_name}' to SQLite and CSV.")
     else:
         print(
             f"❌ Error: '{formatted_name}' could not be found. Check your spelling.")
+
+
+append_to_spreadsheet = add_pokemon_to_box

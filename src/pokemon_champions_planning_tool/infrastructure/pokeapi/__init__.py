@@ -1,0 +1,1 @@
+"""PokéAPI adapter for Pokemon stat retrieval."""

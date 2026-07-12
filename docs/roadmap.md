@@ -3,15 +3,18 @@
 ## Phase 0: Current Prototype
 
 - CLI-based PokéAPI lookup.
-- CSV export of Pokemon stats.
+- SQLite-backed box persistence through SQLModel.
+- CSV export of the current box snapshot.
 - Basic name normalization for a few common forms.
 - Duplicate handling via canonical PokéAPI identity.
 
 ## Phase 1: Core Data Layer
 
-- Replace the CSV-first workflow with a structured local data model for the box.
+- Consolidate the data model around SQLite as the source of truth.
 - Define entities for Pokemon, forms, stats, moves, abilities, items, box entries, and teams.
-- Add persistence so box and team data survive restarts.
+- Add full CRUD repositories for box and team data.
+- Add migrations or schema bootstrap support if the schema changes.
+- Keep CSV export as a derived output, not the primary store.
 
 ## Phase 2: Box Viewer
 

@@ -7,7 +7,8 @@ The repository currently has a single Python CLI entry point that:
 - accepts a Pokemon name from the terminal
 - normalizes it into a PokéAPI identifier
 - fetches official stats from PokéAPI
-- writes or updates a CSV row in the repository root
+- stores the Pokemon in SQLite through SQLModel
+- exports the current box snapshot to CSV as a transitional format
 
 This is a useful prototype, but it is not yet the target GUI architecture.
 
@@ -44,7 +45,7 @@ This layer should be independent from the GUI framework and from the way data is
 
 This layer is responsible for talking to external systems and reading or writing local storage.
 
-- local persistence for box and team data
+- local persistence for box and team data in SQLite
 - cached PokéAPI responses
 - CSV export generation
 - PokéAPI client
@@ -105,9 +106,9 @@ The repository now includes these package folders as a lightweight scaffold, so 
 
 ## Practical Implementation Notes
 
-- The current prototype uses `requests` and direct CSV writes.
+- The current prototype uses `requests`, SQLModel, SQLite, and CSV export.
 - The next refactor should introduce a service layer before the GUI is built.
-- A lightweight persistence approach is enough at first, such as JSON, SQLite, or another simple local store.
+- SQLite is the best current local store because it is simple, durable, and a good fit for the eventual box/team workflow.
 - Start with the minimum structure that keeps the box, team, and export logic independent.
 
 ## What This Avoids

@@ -15,7 +15,7 @@ This folder contains the planning documents for the Pokemon Champions planning t
 
 ## Current Implementation Status
 
-The repository currently has a CLI prototype that queries PokéAPI, stores the current box state in SQLite via SQLModel, and exports the current box to CSV. The planned GUI, box manager, team manager, filtering, and visualization features are documented here but not implemented yet.
+The repository currently has a CLI prototype that queries PokéAPI, stores the current box state in SQLite via SQLModel, exports the current box to CSV, and exposes basic box/team terminal commands. The planned GUI, richer filtering, and visualization features are documented here but not implemented yet.
 
 ## Recommended Reading Order
 

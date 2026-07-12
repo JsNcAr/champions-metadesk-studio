@@ -22,6 +22,7 @@ The codebase is intentionally small and early-stage.
 - Fetches the Pokemon's official stats from PokéAPI.
 - Upserts the Pokemon into the SQLite database using a canonical identity.
 - Mirrors the current box state to `pokemon_team_stats.csv` as a transitional export.
+- Exposes terminal commands for basic box and team management.
 - Keeps running until you type `exit` or `quit`.
 
 ## Planned Product

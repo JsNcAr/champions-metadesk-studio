@@ -5,6 +5,7 @@
 - CLI-based PokéAPI lookup.
 - SQLite-backed box persistence through SQLModel.
 - CSV export of the current box snapshot.
+- Terminal commands for box and team management.
 - Basic name normalization for a few common forms.
 - Duplicate handling via canonical PokéAPI identity.
 

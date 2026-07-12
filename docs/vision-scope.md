@@ -34,7 +34,7 @@ The tool should make it easy to add a Pokemon by name, review its stats and typi
 
 ## Current State
 
-The current codebase is a single Python CLI prototype. It can query PokéAPI and append stats to a local CSV file, but it does not yet implement the GUI product described here.
+The current codebase is a structured Python CLI application implementing the core domain, service, and infrastructure layers. It queries PokéAPI, persists data (box, teams, members, and stats) in a local SQLite database via SQLModel, and mirrors/exports box entries to CSV. The planned GUI layout and frontend components described here are not yet implemented.
 
 ## Suggested Product Direction
 

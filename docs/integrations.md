@@ -36,7 +36,7 @@ CSV remains a useful export format because it is simple and compatible with spre
 
 Optional later integrations could include:
 
-- local JSON storage for the app database
-- image caching for sprites and artwork
-- import from external team notes or spreadsheets
-- battle data sources if the project expands beyond planning
+- local sqlite file configuration (allowing custom database file paths)
+- image and sprite offline caching (to prevent redownloading from PokéAPI)
+- import from external team planning tools, exportable JSON formats, or team worksheets
+- battle data sources if the project expands beyond planning (e.g. Smogon usage statistics)

@@ -43,8 +43,13 @@ def format_api_name(pokemon_name):
         if len(words) == 2:
             return f"{words[1]}-mega"
 
-    if words[0] in ["alolan", "galarian", "hisuian", "paldean"]:
-        region = words[0][:-1] if words[0].endswith("n") else words[0]
-        return f"{words[1]}-{region}"
+    regional_map = {
+        "alolan": "alola",
+        "galarian": "galar",
+        "hisuian": "hisui",
+        "paldean": "paldea",
+    }
+    if words[0] in regional_map:
+        return f"{words[1]}-{regional_map[words[0]]}"
 
     return "-".join(words)

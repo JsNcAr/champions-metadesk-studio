@@ -50,8 +50,16 @@ When the GUI exists, cover:
 4. Team stat totals should equal the sum of all team members.
 5. Type coverage should classify attacking and defensive multipliers correctly.
 
-## Suggested Tooling
+## Suggested Tooling and Execution
 
-- `pytest` for Python unit tests during the prototype stage.
-- A GUI testing framework later, depending on the chosen frontend.
-- Mocked PokéAPI responses to keep tests stable and fast.
+The project uses Python's standard `unittest` library for test runner execution to avoid adding external dependencies. 
+
+To run the automated tests:
+```bash
+PYTHONPATH=src poetry run python -m unittest discover -s tests
+```
+
+- `unittest.TestCase` is used for unit and database integration tests.
+- SQLite is tested using temporary folder paths for in-memory/isolated SQLite engines.
+- Future work: Mock PokéAPI responses to keep tests stable and fast.
+- Future work: Introduce a GUI testing framework later, depending on the chosen frontend.

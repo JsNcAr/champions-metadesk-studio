@@ -13,17 +13,17 @@ The codebase is intentionally small and early-stage.
 - Primary local storage: `pokemon_champions.db` in the repository root
 - CSV export: `pokemon_team_stats.csv` in the repository root
 - GUI status: not implemented yet
-- Tests: no automated project tests yet
+- Tests: Automated unit and repository integration tests cover name normalization and database operations.
 
 ## What The Prototype Does
 
-- Prompts for a Pokemon name in the terminal.
-- Normalizes a few common naming patterns before calling PokéAPI.
-- Fetches the Pokemon's official stats from PokéAPI.
-- Upserts the Pokemon into the SQLite database using a canonical identity.
-- Mirrors the current box state to `pokemon_team_stats.csv` as a transitional export.
-- Exposes terminal commands for basic box and team management.
-- Keeps running until you type `exit` or `quit`.
+- Launches an interactive command shell for Pokemon box and team management.
+- Normalizes Pokemon names (e.g. regional variants and Mega forms) before querying PokéAPI.
+- Fetches official base stats, types, abilities, and sprites from PokéAPI.
+- Persists Pokemon records, box entries, and team structures locally in SQLite via SQLModel.
+- Synchronizes the box state to `pokemon_team_stats.csv` automatically when changes occur.
+- Exposes terminal commands to add, inspect, delete, note, tag, and favorite box entries.
+- Supports team creation, slot assignment (with item, moveset, and ability configuration), and team list/show commands.
 
 ## Planned Product
 
@@ -42,36 +42,77 @@ The product planning documents live in [docs/README.md](docs/README.md).
 
 ```bash
 poetry install
-python -m pokemon_champions_planning_tool.main
+PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main
 ```
 
 Example session:
 
 ```text
-Enter Pokemon Name: Pikachu
-Enter Pokemon Name: Mega Lucario
-Enter Pokemon Name: exit
+========================================================
+  Pokemon Champions Box & Team Terminal  
+========================================================
+Type 'help' to see commands, or 'exit' to close.
+
+pokemon> add Pikachu
+🔍 Querying PokéAPI endpoint for 'Pikachu'...
+✅ Success: Saved 'Pikachu' to SQLite and CSV.
+
+pokemon> box list
+Pokemon | Form | Types    | Total | Fav
+--------+------+----------+-------+----
+Pikachu | Base | electric | 320   | no 
+
+pokemon> box favorite Pikachu on
+✅ Favorite status updated for 'Pikachu'.
+
+pokemon> team create "Electric Storm"
+✅ Created team 'Electric Storm'.
+
+pokemon> team add "Electric Storm" 1 Pikachu --item "Light Ball" --ability "Static" --notes "Lead sweeper"
+✅ Added 'Pikachu' to team 'Electric Storm' in slot 1.
+
+pokemon> team show "Electric Storm"
+Team: Electric Storm
+ID: d079234b-4860-4966-8968-3e4cb418df4f
+Description: None
+Slot | Pokemon | Item       | Ability | Moves | Total
+-----+---------+------------+---------+-------+------
+1    | Pikachu | Light Ball | Static  | -     | 320  
+Team totals: HP 35 | Atk 55 | Def 40 | SpA 50 | SpD 50 | Spe 90
+
+pokemon> exit
+Shutting down data pipeline...
+```
+
+## Running Tests
+
+To run the automated unit and integration tests:
+
+```bash
+PYTHONPATH=src poetry run python -m unittest discover -s tests
 ```
 
 ## Repository Layout
 
 ```text
-pokemon_team_stats.csv
-pyproject.toml
-README.md
-docs/
-src/
-	pokemon_champions_planning_tool/
-		main.py
-		domain/
-		infrastructure/
-		services/
-		ui/
-tests/
+pokemon_champions.db          # Local SQLite Database
+pokemon_team_stats.csv        # Transitional CSV Export
+pyproject.toml                # Poetry configuration
+README.md                     # Root project documentation
+docs/                         # Detailed design and vision documents
+src/                          # Main source directory
+    pokemon_champions_planning_tool/
+        main.py               # Application entry point
+        config.py             # Global configurations & constants
+        domain/               # Core business entities & domain logic
+        infrastructure/       # PokéAPI client, database schemas, and CSV operations
+        services/             # Orchestrating workflows and interactive shell CLI
+        ui/                   # UI placeholder for future GUI
+tests/                        # Automated unit & integration tests
 ```
 
 ## Notes
 
-- The CLI is a prototype, not the final architecture.
-- The new package folders under `src/pokemon_champions_planning_tool/` are a lightweight scaffold for the future GUI.
-- SQLite is the current source of truth for stored box data, while CSV remains an export-friendly transitional format.
+- The interactive CLI serves as a fully functional domain, service, and persistence prototype.
+- The package structure under `src/pokemon_champions_planning_tool/` implements a clean 3-layer architecture (UI, Domain, Infrastructure) to support the eventual GUI transition.
+- SQLite is the source of truth for all stored box and team data, while CSV remains a derived export-friendly snapshot.

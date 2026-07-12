@@ -2,15 +2,15 @@
 
 ## Current Architecture
 
-The repository currently has a single Python CLI entry point that:
+The repository currently implements a command shell prototype that:
 
-- accepts a Pokemon name from the terminal
-- normalizes it into a PokéAPI identifier
-- fetches official stats from PokéAPI
-- stores the Pokemon in SQLite through SQLModel
-- exports the current box snapshot to CSV as a transitional format
+- accepts box and team management commands via an interactive prompt
+- normalizes inputs into canonical PokéAPI identifiers
+- fetches official stats, types, abilities, and sprites from PokéAPI
+- stores Pokemon records, box entries, and teams in SQLite using SQLModel
+- exports/mirrors box entries to CSV automatically on modification
 
-This is a useful prototype, but it is not yet the target GUI architecture.
+This CLI serves as the application's current user interface, built on top of the target 3-layer architecture.
 
 ## Target Architecture
 
@@ -75,7 +75,7 @@ src/pokemon_champions_planning_tool/
 - `services/` coordinates workflows such as adding a Pokemon or building a team.
 - `infrastructure/` contains API clients, persistence, and CSV export helpers.
 
-The repository now includes these package folders as a lightweight scaffold, so the future GUI work can grow into the intended structure without a major rewrite.
+The repository is fully implemented using these package layers, allowing the interactive CLI (contained in `services/terminal_shell.py`) to serve as the temporary UI layer, while leaving `ui/` open for the future desktop/web GUI without requiring any database or domain changes.
 
 ## Recommended Boundaries
 
@@ -106,10 +106,9 @@ The repository now includes these package folders as a lightweight scaffold, so 
 
 ## Practical Implementation Notes
 
-- The current prototype uses `requests`, SQLModel, SQLite, and CSV export.
-- The next refactor should introduce a service layer before the GUI is built.
-- SQLite is the best current local store because it is simple, durable, and a good fit for the eventual box/team workflow.
-- Start with the minimum structure that keeps the box, team, and export logic independent.
+- The CLI prototype uses `requests`, SQLModel, SQLite, and CSV export.
+- The service layer (`pokemon_import_service.py`, `terminal_shell.py`) orchestrates business flows and persistence transitions.
+- SQLite is the source of truth for stored box and team data, while the CSV is kept in sync as a derived export file.
 
 ## What This Avoids
 

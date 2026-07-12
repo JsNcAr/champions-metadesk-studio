@@ -1,115 +1,151 @@
 # Data Model
 
-## Core Entities
+This document outlines the core domain entities and SQLModel database persistence records implemented in the Pokemon Champions Planning Tool.
 
-### Pokemon
-Represents the base Pokemon identity.
+## Core Domain Entities (Pydantic / Dataclasses)
 
-Suggested fields:
+The domain layer uses a mix of Pydantic models (for API validation and serialization) and standard Python dataclasses (for business logic containers).
 
-- canonical_id
-- display_name
-- dex_number
-- base_types
-- default_sprite_url
-- available_forms
+### `Pokemon` (Pydantic BaseModel)
+Represents a specific Pokemon species/form and its API-backed attributes.
+- `canonical_id: str` — Stable PokéAPI identifier (e.g. `"pikachu"`, `"charizard-mega-x"`).
+- `display_name: str` — Human-readable name (e.g. `"Pikachu"`, `"Mega Charizard X"`).
+- `species_name: str | None` — Base species name when the record represents a specific form.
+- `form_name: str` — Form label such as `"Base"`, `"Mega"`, or `"Regional"`.
+- `dex_number: int | None` — National Pokédex number when available.
+- `types: list[str]` — Primary and secondary Pokemon types.
+- `sprite_url: str | None` — Default sprite or artwork URL.
+- `stats: PokemonStats` — Validated base stat block.
+- `abilities: list[PokemonAbility]` — Known abilities for this Pokemon or form.
+- `moves: list[PokemonMove]` — Known or selected moves associated with the Pokemon.
+- `available_forms: list[PokemonForm]` — Other forms that can be selected.
+- `@property total -> int` — Computed property returning the sum of all base stats.
 
-### PokemonForm
-Represents a specific form or variant.
+### `PokemonStats` (Pydantic BaseModel)
+Represents the base stat block.
+- `hp: int`
+- `attack: int`
+- `defense: int`
+- `special_attack: int` (aliased to `sp_atk`)
+- `special_defense: int` (aliased to `sp_def`)
+- `speed: int`
+- `@property total -> int` — Derived sum of all 6 base stats.
 
-Suggested fields:
+### `PokemonAbility` (Pydantic BaseModel)
+- `name: str` — Ability name.
+- `slot: int | None` — Ability slot number.
+- `is_hidden: bool` — Whether the ability is hidden.
+- `url: str | None` — PokéAPI URL for the ability details.
 
-- form_id
-- pokemon_id
-- form_name
-- is_mega
-- is_regional
-- sprite_url
-- type_override
+### `PokemonForm` (Pydantic BaseModel)
+- `form_id: str` — Stable identifier for the form.
+- `display_name: str` — Human-readable form name.
+- `is_mega: bool` — Whether it is a Mega form.
+- `is_regional: bool` — Whether it is a regional variant.
+- `sprite_url: str | None` — Sprite/artwork URL for the form.
+- `type_override: list[str]` — Types that override the base Pokemon types.
 
-### PokemonStats
-Represents stat values for a specific Pokemon or form.
+### `PokemonMove` (Pydantic BaseModel)
+- `name: str` — Move name.
+- `type: str | None` — Move type.
+- `power: int | None` — Base power.
+- `accuracy: int | None` — Accuracy percentage.
+- `category: str | None` — Physical, special, or status.
+- `priority: int` — Move priority.
+- `learn_method: str | None` — How the move is learned.
+- `level_learned_at: int | None` — Level at which the move is learned.
 
-Suggested fields:
+### `BoxEntry` (Standard Python Dataclass)
+Represents a user's stored Pokemon in their box.
+- `box_entry_id: UUID` — Unique identifier (default: auto-generated `uuid4`).
+- `pokemon: Pokemon` — Domain Pokemon entity.
+- `notes: str` — User-supplied notes or nicknames.
+- `tags: list[str]` — Custom tags for filtering (e.g. `["lead", "sweeper"]`).
+- `is_favorite: bool` — Mark as favorite.
+- `created_at: datetime` — Timestamp of creation (UTC).
+- `updated_at: datetime` — Timestamp of last modification (UTC).
 
-- hp
-- attack
-- defense
-- special_attack
-- special_defense
-- speed
-- total
+### `Team` (Standard Python Dataclass)
+Represents a user-created squad or team.
+- `team_id: UUID` — Unique identifier.
+- `name: str` — Team name.
+- `description: str` — Detailed team notes.
+- `members: list[TeamMember]` — List of slot assignments.
+- `created_at: datetime`
+- `updated_at: datetime`
 
-### PokemonAbility
-Represents an ability and metadata about it.
+### `TeamMember` (Standard Python Dataclass)
+Represents one box entry assigned to a specific team slot.
+- `team_member_id: UUID` — Unique identifier.
+- `box_entry_id: UUID` — Foreign reference to a `BoxEntry`.
+- `slot_position: int` — Team slot position index (e.g. 1-6).
+- `item: str | None` — Held item.
+- `moveset: list[PokemonMove]` — Assigned moves.
+- `ability: str | None` — Chosen ability.
+- `notes: str` — Slot-specific comments.
 
-Suggested fields:
+---
 
-- name
-- is_hidden
-- slot
+## SQLite Database Schemas (SQLModel Tables)
 
-### PokemonMove
-Represents a move that can be assigned to a team member.
+Database models in `src/pokemon_champions_planning_tool/infrastructure/database/models.py` map these domain structures directly to SQL tables via SQLModel.
 
-Suggested fields:
+### `PokemonRecord` (Table: `pokemon_records`)
+- `canonical_id: str` (Primary Key, Indexed)
+- `display_name: str`
+- `species_name: str | None`
+- `form_name: str`
+- `dex_number: int | None` (Indexed)
+- `types: list[str]` (Stored as JSON array)
+- `sprite_url: str | None`
+- `hp: int`
+- `attack: int`
+- `defense: int`
+- `special_attack: int`
+- `special_defense: int`
+- `speed: int`
+- `abilities: list[dict]` (Stored as JSON array)
+- `moves: list[dict]` (Stored as JSON array)
+- `available_forms: list[dict]` (Stored as JSON array)
+- `created_at: datetime`
+- `updated_at: datetime`
 
-- move_name
-- type
-- power
-- accuracy
-- category
-- priority
+### `BoxEntryRecord` (Table: `box_entries`)
+- `box_entry_id: UUID` (Primary Key, Indexed)
+- `pokemon_canonical_id: str` (Foreign Key -> `pokemon_records.canonical_id`, Unique, Indexed)
+- `notes: str`
+- `tags: list[str]` (Stored as JSON array)
+- `is_favorite: bool`
+- `created_at: datetime`
+- `updated_at: datetime`
 
-### BoxEntry
-Represents a Pokemon stored in the user's box.
+### `TeamRecord` (Table: `teams`)
+- `team_id: UUID` (Primary Key, Indexed)
+- `name: str` (Indexed)
+- `description: str`
+- `created_at: datetime`
+- `updated_at: datetime`
 
-Suggested fields:
+### `TeamMemberRecord` (Table: `team_members`)
+- `team_member_id: UUID` (Primary Key, Indexed)
+- `team_id: UUID` (Foreign Key -> `teams.team_id`, Indexed)
+- `box_entry_id: UUID` (Foreign Key -> `box_entries.box_entry_id`, Indexed)
+- `slot_position: int` (Indexed)
+- `item: str | None`
+- `moveset: list[dict]` (Stored as JSON array)
+- `ability: str | None`
+- `notes: str`
+- *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
 
-- box_entry_id
-- pokemon_id
-- form_id
-- notes
-- tags
-- created_at
-- updated_at
-
-### Team
-Represents a named team.
-
-Suggested fields:
-
-- team_id
-- team_name
-- description
-- created_at
-- updated_at
-
-### TeamSlot
-Represents a team member assignment.
-
-Suggested fields:
-
-- team_slot_id
-- team_id
-- box_entry_id
-- item
-- moveset
-- slot_position
+---
 
 ## Derived Values
 
-These should be computed from the stored data rather than manually duplicated when possible:
+The following values are computed dynamically by the application layer rather than stored:
+- **Total Stats**: Derived at runtime in both `Pokemon` and `PokemonStats` using `@computed_field`.
+- **Team Stat Totals**: Summed across all active team members during a `team show` command.
+- **CSV Rows**: Formatted and exported dynamically by mapping database entities to CSV rows in `csv_operations.py`.
 
-- total stats
-- type coverage
-- defensive weakness groups
-- filtered and sorted views
-- export rows
-
-## Identity Rule
-
-The most important data rule is that display text and storage identity must be different concepts.
-
-- Display text can be friendly and localized for users.
-- Storage identity should remain canonical and stable so the same Pokemon never becomes multiple records because of wording differences.
+## Naming and Identity Rules
+- **Stable Identity**: The `canonical_id` is derived using `format_api_name` (e.g. `"Mega Lucario"` -> `"lucario-mega"`). This canonical name represents the database primary key for a Pokemon record, preventing duplicates caused by differences in spelling, spacing, or capitalization.
+- **Friendly Display**: The display name is generated via `format_display_name` (e.g. `"lucario-mega"` -> `"Mega Lucario"`), isolating user presentation from database keys.

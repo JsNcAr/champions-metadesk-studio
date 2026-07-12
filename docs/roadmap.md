@@ -1,21 +1,26 @@
 # Product Roadmap
 
-## Phase 0: Current Prototype
+## Phase 0: CLI Prototype [COMPLETED]
 
 - CLI-based PokéAPI lookup.
 - SQLite-backed box persistence through SQLModel.
 - CSV export of the current box snapshot.
 - Terminal commands for box and team management.
-- Basic name normalization for a few common forms.
+- Basic name normalization for regional/mega forms.
 - Duplicate handling via canonical PokéAPI identity.
 
-## Phase 1: Core Data Layer
+## Phase 1: Core Data Layer [COMPLETED]
 
-- Consolidate the data model around SQLite as the source of truth.
-- Define entities for Pokemon, forms, stats, moves, abilities, items, box entries, and teams.
-- Add full CRUD repositories for box and team data.
-- Add migrations or schema bootstrap support if the schema changes.
-- Keep CSV export as a derived output, not the primary store.
+- SQLite consolidated as the source of truth using SQLModel schemas.
+- Defined domain entities and database records for:
+  - `Pokemon` and `PokemonStats`
+  - `PokemonAbility` and `PokemonMove`
+  - `PokemonForm`
+  - `BoxEntry` (with notes, tags, favorite state)
+  - `Team` and `TeamMember` (referencing box entries)
+- Created full Repository CRUD patterns (`PokemonRepository`, `BoxRepository`, `TeamRepository`).
+- Kept CSV export as a derived output synced when box entries are updated.
+
 
 ## Phase 2: Box Viewer
 
@@ -36,11 +41,11 @@
 - Add advanced stat visualization.
 - Add defensive damage charts by attacking type.
 - Add bulk export and comparison tools.
-- Add quality-of-life features such as favorites, tags, and saved filters.
+- Add quality-of-life features such as favorites and tags [COMPLETED IN CLI] and saved filters.
 
 ## Phase 5: Polish and Hardening
 
-- Add tests for data normalization and rules.
+- Add tests for data normalization, identity rules, and SQLite repositories [COMPLETED].
 - Add API caching to reduce repeated calls.
 - Improve error handling and offline behavior.
 - Review GUI accessibility and layout responsiveness.
@@ -49,8 +54,8 @@
 
 These are low-risk additions that fit the current direction and can be added early:
 
-- normalize and deduplicate Pokemon names more aggressively
+- normalize and deduplicate Pokemon names more aggressively [COMPLETED]
 - cache PokéAPI responses locally
-- add a separate CSV export command for the current box
+- add a separate CSV export command for the current box [COMPLETED]
 - add stat-based filters before the full GUI exists
 - add a first-pass damage multiplier calculator from type data

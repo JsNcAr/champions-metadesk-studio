@@ -1,8 +1,8 @@
 """Use-case orchestration for adding a Pokemon to the CSV box."""
 
-from config import DEFAULT_CSV_FILENAME
-from infrastructure.csv.csv_operations import upsert_to_spreadsheet
-from infrastructure.pokeapi.pokeapi_retrieval import (
+from ..config import DEFAULT_CSV_FILENAME
+from ..infrastructure.csv.csv_operations import upsert_to_spreadsheet
+from ..infrastructure.pokeapi.pokeapi_retrieval import (
     get_official_stats,
 )
 

@@ -1,4 +1,4 @@
-from services.pokemon_import_service import append_to_spreadsheet
+from .services.pokemon_import_service import append_to_spreadsheet
 
 if __name__ == "__main__":
     print("=" * 44)

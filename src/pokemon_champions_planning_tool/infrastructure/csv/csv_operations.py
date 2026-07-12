@@ -1,7 +1,7 @@
 import csv
 import os
-from config import CSV_HEADERS, DEFAULT_CSV_FILENAME
-from domain.pokemon_identity import format_api_name
+from ...config import CSV_HEADERS, DEFAULT_CSV_FILENAME
+from ...domain.pokemon_identity import format_api_name
 
 def load_existing_rows(filename):
     if not os.path.isfile(filename):

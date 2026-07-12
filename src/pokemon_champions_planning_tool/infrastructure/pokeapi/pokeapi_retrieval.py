@@ -2,8 +2,8 @@
 
 import requests
 
-from config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
-from domain.pokemon_identity import format_display_name, format_api_name
+from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...domain.pokemon_identity import format_display_name, format_api_name
 
 
 def get_official_stats(pokemon_name):

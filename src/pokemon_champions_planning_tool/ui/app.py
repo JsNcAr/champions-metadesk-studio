@@ -145,7 +145,7 @@ def main(page: ft.Page):
     )
 
     # --- Detail Drawer UI elements ---
-    detail_container = ft.Column(visible=False, spacing=10, expand=True)
+    detail_container = ft.Column(visible=False, spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
 
     # --- Team Builder UI elements ---
     team_dropdown = ft.Dropdown(
@@ -476,6 +476,7 @@ def main(page: ft.Page):
 
     # --- Renderers ---
     def render_box_grid():
+        box_grid.child_aspect_ratio = 0.60 if state["all_stats_visible"] else 0.80
         box_grid.controls.clear()
         
         filtered = []
@@ -503,6 +504,7 @@ def main(page: ft.Page):
         for entry in filtered:
             # Card styling
             types_row = ft.Row(
+                alignment=ft.MainAxisAlignment.CENTER,
                 spacing=5,
                 controls=[
                     ft.Container(
@@ -545,7 +547,7 @@ def main(page: ft.Page):
             stats_block = ft.Container(visible=False)
             if state["all_stats_visible"]:
                 stats_block = ft.Container(
-                    margin=ft.Margin.only(top=6),
+                    margin=ft.Margin.only(top=4, bottom=4),
                     content=ft.Column(
                         spacing=3,
                         controls=[
@@ -573,6 +575,8 @@ def main(page: ft.Page):
             def make_select_handler(e_id=entry.box_entry_id):
                 return lambda e: handle_pokemon_select(e_id)
 
+            img_dim = 64 if state["all_stats_visible"] else 80
+
             card = ft.Card(
                 content=ft.Container(
                     content=ft.Column(
@@ -593,8 +597,8 @@ def main(page: ft.Page):
                             ft.Container(
                                 content=ft.Image(
                                     src=entry.pokemon.sprite_url,
-                                    width=80,
-                                    height=80,
+                                    width=img_dim,
+                                    height=img_dim,
                                     fit=ft.BoxFit.CONTAIN,
                                 ) if entry.pokemon.sprite_url else ft.Icon(ft.Icons.IMAGE, size=60),
                                 alignment=ft.Alignment.CENTER
@@ -604,13 +608,13 @@ def main(page: ft.Page):
                                 controls=[
                                     ft.Text(entry.pokemon.display_name, size=15, weight=ft.FontWeight.BOLD, overflow=ft.TextOverflow.ELLIPSIS),
                                     ft.Text(f"Form: {entry.pokemon.form_name}", size=11, color=ft.Colors.GREY_400),
+                                    stats_block,
                                     types_row,
-                                    stats_block
                                 ]
                             )
                         ]
                     ),
-                    padding=10,
+                    padding=8,
                     on_click=make_select_handler()
                 ),
                 bgcolor=ft.Colors.BLUE_GREY_900 if state["selected_pokemon_id"] == entry.box_entry_id else ft.Colors.SURFACE_VARIANT
@@ -1020,6 +1024,7 @@ def main(page: ft.Page):
             ft.Container(
                 content=detail_container,
                 width=300,
+                expand=True,
                 bgcolor=ft.Colors.BLUE_GREY_950,
                 padding=15,
                 border_radius=10,

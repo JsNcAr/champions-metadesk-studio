@@ -145,7 +145,17 @@ def main(page: ft.Page):
     )
 
     # --- Detail Drawer UI elements ---
-    detail_container = ft.Column(visible=False, spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+    detail_container = ft.Column(spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+    detail_panel = ft.Container(
+        content=detail_container,
+        width=300,
+        expand=True,
+        bgcolor=ft.Colors.BLUE_GREY_950,
+        padding=15,
+        border_radius=10,
+        border=ft.Border.all(1, ft.Colors.GREY_800),
+        visible=False
+    )
 
     # --- Team Builder UI elements ---
     team_dropdown = ft.Dropdown(
@@ -624,14 +634,16 @@ def main(page: ft.Page):
         page.update()
 
     def close_detail_container(e=None):
-        detail_container.visible = False
+        state["selected_pokemon_id"] = None
+        detail_panel.visible = False
+        render_box_grid()
         page.update()
 
     def render_detail_drawer():
         detail_container.controls.clear()
         
         if state["selected_pokemon_id"] is None:
-            detail_container.visible = False
+            detail_panel.visible = False
             page.update()
             return
         
@@ -643,11 +655,11 @@ def main(page: ft.Page):
             session.close()
 
         if entry is None:
-            detail_container.visible = False
+            detail_panel.visible = False
             page.update()
             return
 
-        detail_container.visible = True
+        detail_panel.visible = True
         
         # Header info
         detail_container.controls.append(
@@ -1021,15 +1033,7 @@ def main(page: ft.Page):
                 ]
             ),
             # Right panel - Detail Drawer
-            ft.Container(
-                content=detail_container,
-                width=300,
-                expand=True,
-                bgcolor=ft.Colors.BLUE_GREY_950,
-                padding=15,
-                border_radius=10,
-                border=ft.Border.all(1, ft.Colors.GREY_800),
-            )
+            detail_panel
         ]
     )
 

@@ -108,6 +108,14 @@ class BoxRepository:
         if not normalized_identifier:
             return None
 
+        try:
+            val_uuid = UUID(normalized_identifier)
+            record = self.session.get(BoxEntryRecord, val_uuid)
+            if record is not None:
+                return record
+        except ValueError:
+            pass
+
         canonical_id = format_api_name(normalized_identifier) or normalized_identifier
         record = self.get_by_canonical_id(canonical_id)
         if record is not None:

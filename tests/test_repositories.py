@@ -85,6 +85,11 @@ class TestRepositories(unittest.TestCase):
         self.assertEqual(loaded.pokemon.display_name, "Pikachu")
         self.assertEqual(loaded.notes, "My favorite mouse")
 
+        # Retrieve by UUID string
+        loaded_by_uuid = box_repo.load_entry(str(record.box_entry_id))
+        self.assertIsNotNone(loaded_by_uuid)
+        self.assertEqual(loaded_by_uuid.pokemon.display_name, "Pikachu")
+
         # List entries
         entries = box_repo.list_entries()
         self.assertEqual(len(entries), 1)

@@ -49,6 +49,16 @@ TYPE_COLORS = {
     "steel": "#B8B8D0", "fairy": "#EE99AC", "unknown": "#68A090"
 }
 
+# Pokémon Stat Colors (Official Palette)
+STAT_COLORS = {
+    "hp": "#FF5959",
+    "attack": "#F08030",
+    "defense": "#F8D030",
+    "special_attack": "#6890F0",
+    "special_defense": "#78C850",
+    "speed": "#F85888",
+}
+
 
 def main(page: ft.Page):
     page.title = APP_NAME
@@ -129,7 +139,7 @@ def main(page: ft.Page):
         expand=True,
         runs_count=3,
         max_extent=250,
-        child_aspect_ratio=0.85,
+        child_aspect_ratio=0.72,
         spacing=15,
         run_spacing=15,
     )
@@ -246,23 +256,16 @@ def main(page: ft.Page):
         page.update()
 
         def background_add():
-            box_repo, _, session = get_repositories()
             try:
                 # Query PokéAPI and upsert
                 add_pokemon_to_box(name)
-                # Toast notification is handled inside the import service print statement fallback,
-                # but we trigger UI refresh and toast here.
                 refresh_box()
-                # Run refresh_box to load updated list
-                entries = box_repo.list_entries()
-                if entries:
-                    # check if the added name matches canonical or display name of last item
-                    last_entry = entries[-1]
+                if state["box_entries"]:
+                    last_entry = state["box_entries"][-1]
                     show_toast(f"Added {last_entry.pokemon.display_name} to box")
             except Exception as ex:
                 show_toast(f"Error querying PokéAPI: {str(ex)}", is_error=True)
             finally:
-                session.close()
                 search_input.disabled = False
                 search_input.value = ""
                 add_button.disabled = False
@@ -512,17 +515,58 @@ def main(page: ft.Page):
                 ]
             )
 
-            stats_block = ft.Container(visible=False)
-            if state["all_stats_visible"]:
-                stats_block = ft.Container(
+            def make_stat_cell(lbl: str, val: int, hex_col: str):
+                return ft.Container(
+                    expand=True,
+                    bgcolor="#111827",
+                    border_radius=4,
+                    padding=ft.Padding.symmetric(horizontal=5, vertical=4),
                     content=ft.Column(
                         spacing=2,
                         controls=[
-                            ft.Text(f"HP: {entry.pokemon.stats.hp} | Atk: {entry.pokemon.stats.attack} | Def: {entry.pokemon.stats.defense}", size=11, color=ft.Colors.GREY_400),
-                            ft.Text(f"SpA: {entry.pokemon.stats.special_attack} | SpD: {entry.pokemon.stats.special_defense} | Spe: {entry.pokemon.stats.speed}", size=11, color=ft.Colors.GREY_400),
+                            ft.Row(
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                controls=[
+                                    ft.Text(lbl, size=9, weight=ft.FontWeight.BOLD, color=hex_col),
+                                    ft.Text(str(val), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                ]
+                            ),
+                            ft.ProgressBar(
+                                value=min(1.0, max(0.0, val / 180.0)),
+                                color=hex_col,
+                                bgcolor="#374151",
+                                height=3,
+                                border_radius=2
+                            )
                         ]
-                    ),
-                    margin=ft.Margin.only(top=5)
+                    )
+                )
+
+            stats_block = ft.Container(visible=False)
+            if state["all_stats_visible"]:
+                stats_block = ft.Container(
+                    margin=ft.Margin.only(top=6),
+                    content=ft.Column(
+                        spacing=3,
+                        controls=[
+                            ft.Row(
+                                spacing=3,
+                                controls=[
+                                    make_stat_cell("HP", entry.pokemon.stats.hp, STAT_COLORS["hp"]),
+                                    make_stat_cell("ATK", entry.pokemon.stats.attack, STAT_COLORS["attack"]),
+                                    make_stat_cell("DEF", entry.pokemon.stats.defense, STAT_COLORS["defense"]),
+                                ]
+                            ),
+                            ft.Row(
+                                spacing=3,
+                                controls=[
+                                    make_stat_cell("SPA", entry.pokemon.stats.special_attack, STAT_COLORS["special_attack"]),
+                                    make_stat_cell("SPD", entry.pokemon.stats.special_defense, STAT_COLORS["special_defense"]),
+                                    make_stat_cell("SPE", entry.pokemon.stats.speed, STAT_COLORS["speed"]),
+                                ]
+                            ),
+                        ]
+                    )
                 )
                 stats_block.visible = True
 

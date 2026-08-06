@@ -239,3 +239,13 @@ class MegaEvolutionRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
 
 
+class MegaCheckedSpeciesRecord(SQLModel, table=True):
+    """Tracks species that have already been checked for Mega Evolutions in PokéAPI."""
+
+    __tablename__: ClassVar[str] = "mega_checked_species"
+
+    species_name: str = Field(primary_key=True, index=True)
+    checked_at: datetime = Field(default_factory=_utc_now)
+
+
+

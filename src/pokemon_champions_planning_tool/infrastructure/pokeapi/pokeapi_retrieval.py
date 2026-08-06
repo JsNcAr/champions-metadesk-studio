@@ -1,5 +1,6 @@
 """PokéAPI adapter for Pokemon stat retrieval."""
 
+from functools import lru_cache
 import requests
 
 from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
@@ -10,6 +11,7 @@ from ...domain.pokemon_identity import format_display_name, format_api_name
 from ..database.models import MegaEvolutionRecord
 
 
+@lru_cache(maxsize=512)
 def get_official_stats(pokemon_name):
     """Fetches stats directly from PokéAPI using requests."""
     api_name = format_api_name(pokemon_name)
@@ -80,6 +82,7 @@ def get_official_stats(pokemon_name):
         return None
 
 
+@lru_cache(maxsize=16)
 def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]:
     """Fetches the list of species in the specified Pokédex (defaults to 'champions') from PokéAPI."""
     try:
@@ -104,6 +107,7 @@ def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]
         return []
 
 
+@lru_cache(maxsize=512)
 def get_mega_varieties_for_species(species_name: str) -> list[str]:
     """Fetches the list of Mega variety canonical IDs for a species from PokéAPI."""
     try:
@@ -123,6 +127,7 @@ def get_mega_varieties_for_species(species_name: str) -> list[str]:
         return []
 
 
+@lru_cache(maxsize=256)
 def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
     """Fetches details for a specific Mega Evolution from PokéAPI and builds a MegaEvolutionRecord."""
     try:

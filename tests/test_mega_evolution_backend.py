@@ -84,6 +84,20 @@ class TestMegaEvolutionBackend(unittest.TestCase):
         self.assertEqual(len(cached_megas), 2)
         mock_get_varieties.assert_not_called()
 
+    @patch("pokemon_champions_planning_tool.services.mega_evolution_service.get_mega_varieties_for_species")
+    def test_non_mega_species_sentinel_caching(self, mock_get_varieties):
+        mock_get_varieties.return_value = []  # Pikachu has no Megas
+
+        megas = sync_mega_evolutions_for_species(self.session, "pikachu")
+        self.assertEqual(megas, [])
+        mock_get_varieties.assert_called_once_with("pikachu")
+
+        # Second call for Pikachu must NOT query PokéAPI again!
+        mock_get_varieties.reset_mock()
+        megas2 = sync_mega_evolutions_for_species(self.session, "pikachu")
+        self.assertEqual(megas2, [])
+        mock_get_varieties.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

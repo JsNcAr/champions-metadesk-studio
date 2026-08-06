@@ -17,6 +17,7 @@ from ...domain.pokemon_identity import format_api_name
 from .models import (
     BoxEntryRecord,
     ChampionsSpeciesRecord,
+    MegaCheckedSpeciesRecord,
     MegaEvolutionRecord,
     PokemonRecord,
     TeamMemberRecord,
@@ -334,6 +335,8 @@ class ChampionsCatalogRepository:
 
     def list_all(self) -> list[ChampionsSpeciesRecord]:
         records = list(self.session.exec(select(ChampionsSpeciesRecord)))
+        for r in records:
+            self.session.expunge(r)
         return sorted(records, key=lambda r: r.entry_number)
 
     def list_species_names(self) -> list[str]:
@@ -372,7 +375,10 @@ class MegaEvolutionRepository:
         self.session = session
 
     def get(self, canonical_id: str) -> MegaEvolutionRecord | None:
-        return self.session.get(MegaEvolutionRecord, canonical_id)
+        rec = self.session.get(MegaEvolutionRecord, canonical_id)
+        if rec is not None:
+            self.session.expunge(rec)
+        return rec
 
     def list_by_species(self, species_name: str) -> list[MegaEvolutionRecord]:
         records = list(
@@ -382,11 +388,26 @@ class MegaEvolutionRepository:
                 )
             )
         )
+        for r in records:
+            self.session.expunge(r)
         return sorted(records, key=lambda r: r.canonical_id)
 
     def list_all(self) -> list[MegaEvolutionRecord]:
         records = list(self.session.exec(select(MegaEvolutionRecord)))
+        for r in records:
+            self.session.expunge(r)
         return sorted(records, key=lambda r: r.canonical_id)
+
+    def is_species_checked(self, species_name: str) -> bool:
+        normalized = species_name.strip().lower()
+        return self.session.get(MegaCheckedSpeciesRecord, normalized) is not None
+
+    def mark_species_checked(self, species_name: str) -> None:
+        normalized = species_name.strip().lower()
+        if not self.is_species_checked(normalized):
+            record = MegaCheckedSpeciesRecord(species_name=normalized)
+            self.session.add(record)
+            self.session.commit()
 
     def upsert(self, record: MegaEvolutionRecord) -> MegaEvolutionRecord:
         existing = self.get(record.canonical_id)

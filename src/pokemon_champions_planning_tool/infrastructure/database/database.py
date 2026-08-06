@@ -27,20 +27,38 @@ def get_engine(database_filename: str = DEFAULT_DATABASE_FILENAME):
     )
 
 
+from sqlalchemy import text
+
+# Guard: only run DDL once per process lifetime
+_DB_INITIALIZED: set[str] = set()
+
+
 def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
-    """Create all SQLModel tables if they do not already exist."""
+    """Create all SQLModel tables if they do not already exist. Safe to call multiple times."""
+    global _DB_INITIALIZED
+    if database_filename in _DB_INITIALIZED:
+        return get_engine(database_filename)
 
     from . import models  # noqa: F401 - registers SQLModel tables
 
     engine = get_engine(database_filename)
     SQLModel.metadata.create_all(engine)
+
+    # Lightweight schema migration for selected_form column
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE team_members ADD COLUMN selected_form VARCHAR DEFAULT 'base';"))
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
+
+    _DB_INITIALIZED.add(database_filename)
     return engine
 
 
 @contextmanager
 def get_session(database_filename: str = DEFAULT_DATABASE_FILENAME) -> Iterator[Session]:
-    """Yield a session bound to the shared SQLite engine."""
-
-    engine = initialize_database(database_filename)
+    """Yield a session bound to the shared SQLite engine (DDL already initialized at startup)."""
+    engine = get_engine(database_filename)
     with Session(engine) as session:
         yield session

@@ -13,6 +13,7 @@ class TeamMember:
     box_entry_id: UUID
     slot_position: int
     team_member_id: UUID = field(default_factory=uuid4)
+    selected_form: str = "base"
     item: str | None = None
     moveset: list[PokemonMove] = field(default_factory=list)
     ability: str | None = None

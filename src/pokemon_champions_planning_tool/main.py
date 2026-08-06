@@ -1,10 +1,13 @@
 import sys
-from .infrastructure.database.database import get_session
+from .infrastructure.database.database import initialize_database, get_session
 from .services.champions_catalog_service import sync_champions_catalog_on_startup
 from .services.terminal_shell import TerminalShell
 
 
 def run():
+    # Initialize DB schema once before anything else (DDL, migrations)
+    initialize_database()
+
     with get_session() as session:
         sync_champions_catalog_on_startup(session)
 
@@ -20,4 +23,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

@@ -132,12 +132,13 @@ class TestRepositories(unittest.TestCase):
         self.assertIsNotNone(resolved)
         self.assertEqual(resolved.team_id, team_record.team_id)
 
-        # Add member
+        # Add member with Mega form selection
         member = TeamMember(
             box_entry_id=box_record.box_entry_id,
             slot_position=1,
-            item="Light Ball",
-            ability="Static",
+            selected_form="charizard-mega-x",
+            item="Charizardite X",
+            ability="Tough Claws",
             notes="Lead sweeper",
         )
         team_repo.upsert_member(team_record.team_id, member)
@@ -146,7 +147,8 @@ class TestRepositories(unittest.TestCase):
         loaded_team = team_repo.load_team(team_record.team_id)
         self.assertIsNotNone(loaded_team)
         self.assertEqual(len(loaded_team.members), 1)
-        self.assertEqual(loaded_team.members[0].item, "Light Ball")
+        self.assertEqual(loaded_team.members[0].selected_form, "charizard-mega-x")
+        self.assertEqual(loaded_team.members[0].item, "Charizardite X")
         self.assertEqual(loaded_team.members[0].slot_position, 1)
 
         # Rename team

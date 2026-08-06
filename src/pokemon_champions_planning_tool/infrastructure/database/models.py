@@ -175,6 +175,7 @@ class TeamMemberRecord(SQLModel, table=True):
     team_id: UUID = Field(foreign_key="teams.team_id", index=True)
     box_entry_id: UUID = Field(foreign_key="box_entries.box_entry_id", index=True)
     slot_position: int = Field(index=True)
+    selected_form: str = Field(default="base")
     item: str | None = None
     moveset: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     ability: str | None = None
@@ -187,10 +188,23 @@ class TeamMemberRecord(SQLModel, table=True):
             team_id=team_id,
             box_entry_id=team_member.box_entry_id,
             slot_position=team_member.slot_position,
+            selected_form=getattr(team_member, "selected_form", "base"),
             item=team_member.item,
             moveset=[move.model_dump(mode="json") for move in team_member.moveset],
             ability=team_member.ability,
             notes=team_member.notes,
+        )
+
+    def to_domain(self) -> TeamMember:
+        return TeamMember(
+            team_member_id=self.team_member_id,
+            box_entry_id=self.box_entry_id,
+            slot_position=self.slot_position,
+            selected_form=self.selected_form or "base",
+            item=self.item,
+            moveset=[PokemonMove.model_validate(move) for move in self.moveset],
+            ability=self.ability,
+            notes=self.notes,
         )
 
 

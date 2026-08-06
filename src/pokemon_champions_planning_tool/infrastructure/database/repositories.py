@@ -322,18 +322,7 @@ class TeamRepository:
         if record is None:
             return None
 
-        members = [
-            TeamMember(
-                team_member_id=member.team_member_id,
-                box_entry_id=member.box_entry_id,
-                slot_position=member.slot_position,
-                item=member.item,
-                moveset=[PokemonMove.model_validate(move) for move in member.moveset],
-                ability=member.ability,
-                notes=member.notes,
-            )
-            for member in self.list_members(team_id)
-        ]
+        members = [member.to_domain() for member in self.list_members(team_id)]
         return record.to_domain(members)
 
 

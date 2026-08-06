@@ -49,9 +49,17 @@ from ..domain.entities.team import Team
 from ..domain.entities.team_member import TeamMember
 from ..domain.entities.pokemon_move import PokemonMove
 from ..infrastructure.database.database import get_session
-from ..infrastructure.database.repositories import BoxRepository, TeamRepository, ChampionsCatalogRepository
+from ..infrastructure.database.repositories import (
+    BoxRepository,
+    TeamRepository,
+    ChampionsCatalogRepository,
+    MegaEvolutionRepository,
+)
 from ..services.pokemon_import_service import add_pokemon_to_box
-from ..services.mega_evolution_service import sync_all_champions_megas_on_startup
+from ..services.mega_evolution_service import (
+    sync_all_champions_megas_on_startup,
+    sync_mega_evolutions_for_species,
+)
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 
 # Pokémon Type Colors
@@ -99,23 +107,33 @@ def main(page: ft.Page):
         "box_entries": [],
         "teams": [],
         "champions_catalog": [],      # ChampionsSpeciesRecord list
+        "mega_species_set": set(),    # Set of species_names that have megas (cached)
+        "all_pokemon_names": [],      # Flat list of display names for search autocomplete
         "selected_pokemon_id": None,  # UUID of BoxEntry
         "active_team_id": None,       # UUID of Team
         "search_query": "",
         "sort_by": "Name (Asc)",
         "all_stats_visible": False,
         "assigning_slot_position": None,  # Slot number when choosing from box
+        "detail_form_id": "base",     # Active form shown in detail drawer
     }
 
     # --- Database Helpers ---
     def get_repositories():
-        session = get_session().__enter__()
-        return BoxRepository(session), TeamRepository(session), session
+        """Open a fresh session; caller is responsible for calling session.close()."""
+        from ..infrastructure.database.database import get_engine
+        from sqlmodel import Session as SqlSession
+        session = SqlSession(get_engine())
+        return BoxRepository(session), TeamRepository(session), MegaEvolutionRepository(session), session
 
     def load_champions_catalog():
+        """Load all lookup caches from DB in a single pass at startup."""
         with get_session() as session:
-            repo = ChampionsCatalogRepository(session)
-            state["champions_catalog"] = repo.list_all()
+            catalog_repo = ChampionsCatalogRepository(session)
+            mega_repo = MegaEvolutionRepository(session)
+            state["champions_catalog"] = catalog_repo.list_all()
+            state["all_pokemon_names"] = [r.display_name for r in state["champions_catalog"]]
+            state["mega_species_set"] = set(m.species_name.lower() for m in mega_repo.list_all())
 
     # --- Notifications ---
     def show_toast(message: str, is_error: bool = False):
@@ -228,7 +246,7 @@ def main(page: ft.Page):
         if not name:
             show_toast("Team name cannot be empty", is_error=True)
             return
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, mega_repo, session = get_repositories()
         try:
             if team_repo.get_by_name(name) is not None:
                 show_toast("A team with this name already exists", is_error=True)
@@ -258,16 +276,17 @@ def main(page: ft.Page):
 
     # --- Data Refresher Functions ---
     def refresh_box():
-        box_repo, _, session = get_repositories()
+        box_repo, _, _, session = get_repositories()
         try:
             state["box_entries"] = box_repo.list_entries()
-            render_box_grid()
-            render_detail_drawer()
+            render_box_grid(update_page=False)
+            render_detail_drawer(update_page=False)
+            page.update()
         finally:
             session.close()
 
     def refresh_teams():
-        _, team_repo, session = get_repositories()
+        _, team_repo, _, session = get_repositories()
         try:
             state["teams"] = team_repo.list_all()
             
@@ -293,9 +312,10 @@ def main(page: ft.Page):
     def handle_search_input_change(val: str):
         query = val.strip().lower()
         if not query or len(query) < 2:
-            suggestion_row.visible = False
-            suggestion_row.controls.clear()
-            page.update()
+            if suggestion_row.visible:
+                suggestion_row.visible = False
+                suggestion_row.controls.clear()
+                page.update()
             return
 
         matches = [
@@ -304,9 +324,10 @@ def main(page: ft.Page):
         ][:6]
 
         if not matches:
-            suggestion_row.visible = False
-            suggestion_row.controls.clear()
-            page.update()
+            if suggestion_row.visible:
+                suggestion_row.visible = False
+                suggestion_row.controls.clear()
+                page.update()
             return
 
         suggestion_row.controls = [
@@ -382,22 +403,22 @@ def main(page: ft.Page):
 
     def handle_pokemon_select(box_entry_id: UUID):
         state["selected_pokemon_id"] = box_entry_id
-        render_box_grid()
-        render_detail_drawer()
+        state["detail_form_id"] = "base"  # Reset form on new selection
+        render_box_grid(update_page=False)
+        render_detail_drawer(update_page=False)
+        page.update()
 
     def handle_toggle_favorite(box_entry: BoxEntry, fav_val: bool):
-        box_repo, _, session = get_repositories()
+        box_repo, _, _, session = get_repositories()
         try:
             box_repo.update_metadata(box_entry.pokemon.canonical_id, is_favorite=fav_val)
-            # Sync CSV
             export_box_entries_to_csv(box_repo.list_entries())
             refresh_box()
-            show_toast(f"Favorite status updated for {box_entry.pokemon.display_name}")
         finally:
             session.close()
 
     def handle_delete_pokemon(box_entry_id: UUID):
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, _, session = get_repositories()
         try:
             entry = box_repo.load_entry(str(box_entry_id))
             if entry:
@@ -416,7 +437,7 @@ def main(page: ft.Page):
             session.close()
 
     def handle_save_notes(box_entry_id: UUID, notes: str):
-        box_repo, _, session = get_repositories()
+        box_repo, _, _, session = get_repositories()
         try:
             entry = box_repo.load_entry(str(box_entry_id))
             if entry:
@@ -429,7 +450,7 @@ def main(page: ft.Page):
 
     def handle_save_tags(box_entry_id: UUID, tags_str: str):
         tags = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
-        box_repo, _, session = get_repositories()
+        box_repo, _, _, session = get_repositories()
         try:
             entry = box_repo.load_entry(str(box_entry_id))
             if entry:
@@ -454,7 +475,7 @@ def main(page: ft.Page):
     def handle_delete_team():
         if state["active_team_id"] is None:
             return
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, _, session = get_repositories()
         try:
             team_record = team_repo.get(state["active_team_id"])
             if team_record:
@@ -469,7 +490,7 @@ def main(page: ft.Page):
             session.close()
 
     def handle_export_csv():
-        box_repo, _, session = get_repositories()
+        box_repo, _, _, session = get_repositories()
         try:
             entries = box_repo.list_entries()
             export_box_entries_to_csv(entries)
@@ -509,13 +530,14 @@ def main(page: ft.Page):
         if state["active_team_id"] is None or state["assigning_slot_position"] is None:
             return
         
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, _, session = get_repositories()
         try:
             box_entry = box_repo.load_entry(str(box_entry_id))
             if box_entry:
                 member = TeamMember(
                     box_entry_id=box_entry_id,
                     slot_position=state["assigning_slot_position"],
+                    selected_form="base",
                     item=None,
                     moveset=[],
                     ability=box_entry.pokemon.abilities[0].name.title() if box_entry.pokemon.abilities else None,
@@ -531,7 +553,7 @@ def main(page: ft.Page):
     def handle_remove_member(slot_position: int):
         if state["active_team_id"] is None:
             return
-        _, team_repo, session = get_repositories()
+        _, team_repo, _, session = get_repositories()
         try:
             team_repo.delete_member(state["active_team_id"], slot_position)
             show_toast(f"Cleared slot {slot_position}")
@@ -539,10 +561,10 @@ def main(page: ft.Page):
         finally:
             session.close()
 
-    def handle_update_member_field(slot_position: int, ability: str, item: str, moves_str: str, notes: str):
+    def handle_update_member_field(slot_position: int, selected_form: str, ability: str, item: str, moves_str: str, notes: str):
         if state["active_team_id"] is None:
             return
-        _, team_repo, session = get_repositories()
+        _, team_repo, _, session = get_repositories()
         try:
             members = team_repo.list_members(state["active_team_id"])
             matching = next((m for m in members if m.slot_position == slot_position), None)
@@ -556,6 +578,7 @@ def main(page: ft.Page):
                     team_member_id=matching.team_member_id,
                     box_entry_id=matching.box_entry_id,
                     slot_position=slot_position,
+                    selected_form=selected_form,
                     item=item.strip() or None,
                     moveset=moves,
                     ability=ability.strip() or None,
@@ -563,15 +586,13 @@ def main(page: ft.Page):
                 )
                 team_repo.upsert_member(state["active_team_id"], updated_member)
                 show_toast("Team slot updated")
-                # Reload team totals without full refresh
-                update_team_totals()
+                render_team_builder()
         finally:
             session.close()
 
     # --- Renderers ---
-    def render_box_grid():
+    def render_box_grid(update_page: bool = True):
         box_grid.child_aspect_ratio = 0.60 if state["all_stats_visible"] else 0.80
-        box_grid.controls.clear()
         
         filtered = []
         for entry in state["box_entries"]:
@@ -595,7 +616,12 @@ def main(page: ft.Page):
         elif state["sort_by"] == "Speed (Desc)":
             filtered.sort(key=lambda e: e.pokemon.stats.speed, reverse=True)
 
+        mega_species = state.get("mega_species_set", set())
+
+        new_cards = []
         for entry in filtered:
+            has_megas = entry.pokemon.species_name.lower() in mega_species
+
             # Card styling
             types_row = ft.Row(
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -671,6 +697,34 @@ def main(page: ft.Page):
 
             img_dim = 64 if state["all_stats_visible"] else 80
 
+            card_info_controls = [
+                ft.Text(entry.pokemon.display_name, size=15, weight=ft.FontWeight.BOLD, overflow=ft.TextOverflow.ELLIPSIS),
+            ]
+            if has_megas:
+                card_info_controls.append(
+                    ft.Container(
+                        content=ft.Row(
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            spacing=2,
+                            tight=True,
+                            controls=[
+                                ft.Icon(ft.Icons.FLASH_ON, size=10, color=ft.Colors.AMBER_400),
+                                ft.Text("Mega Available", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+                            ]
+                        ),
+                        bgcolor="#291d03",
+                        border_radius=10,
+                        padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                        border=ft.Border.all(1, ft.Colors.AMBER_400)
+                    )
+                )
+            else:
+                card_info_controls.append(
+                    ft.Text(f"Form: {entry.pokemon.form_name}", size=11, color=ft.Colors.GREY_400)
+                )
+
+            card_info_controls.extend([stats_block, types_row])
+
             card = ft.Card(
                 content=ft.Container(
                     content=ft.Column(
@@ -699,12 +753,7 @@ def main(page: ft.Page):
                             ),
                             ft.Column(
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                                controls=[
-                                    ft.Text(entry.pokemon.display_name, size=15, weight=ft.FontWeight.BOLD, overflow=ft.TextOverflow.ELLIPSIS),
-                                    ft.Text(f"Form: {entry.pokemon.form_name}", size=11, color=ft.Colors.GREY_400),
-                                    stats_block,
-                                    types_row,
-                                ]
+                                controls=card_info_controls
                             )
                         ]
                     ),
@@ -713,34 +762,39 @@ def main(page: ft.Page):
                 ),
                 bgcolor=ft.Colors.CARD_SELECTED if state["selected_pokemon_id"] == entry.box_entry_id else ft.Colors.CARD_BG
             )
-            box_grid.controls.append(card)
+            new_cards.append(card)
         
-        page.update()
+        box_grid.controls = new_cards
+        if update_page:
+            page.update()
 
     def close_detail_container(e=None):
         state["selected_pokemon_id"] = None
         detail_panel.visible = False
-        render_box_grid()
+        render_box_grid(update_page=False)
         page.update()
 
-    def render_detail_drawer():
+    def render_detail_drawer(update_page: bool = True):
         detail_container.controls.clear()
         
         if state["selected_pokemon_id"] is None:
             detail_panel.visible = False
-            page.update()
+            if update_page:
+                page.update()
             return
         
-        # Load the selected Pokemon
-        box_repo, _, session = get_repositories()
+        # Load the selected Pokemon & its Megas
+        box_repo, _, mega_repo, session = get_repositories()
         try:
             entry = box_repo.load_entry(str(state["selected_pokemon_id"]))
+            megas = sync_mega_evolutions_for_species(session, entry.pokemon.species_name) if entry else []
         finally:
             session.close()
 
         if entry is None:
             detail_panel.visible = False
-            page.update()
+            if update_page:
+                page.update()
             return
 
         detail_panel.visible = True
@@ -770,13 +824,72 @@ def main(page: ft.Page):
             )
         )
 
+        active_form_id = state.get("detail_form_id", "base")
+        active_mega = next((m for m in megas if m.canonical_id == active_form_id), None)
+
+        if active_mega:
+            display_sprite = active_mega.sprite_url or entry.pokemon.sprite_url
+            display_hp = active_mega.hp
+            display_atk = active_mega.attack
+            display_def = active_mega.defense
+            display_spa = active_mega.special_attack
+            display_spd = active_mega.special_defense
+            display_spe = active_mega.speed
+            display_sub = f"⚡ Mega Form · {active_mega.display_name}"
+            display_types = active_mega.types
+        else:
+            display_sprite = entry.pokemon.sprite_url
+            display_hp = entry.pokemon.stats.hp
+            display_atk = entry.pokemon.stats.attack
+            display_def = entry.pokemon.stats.defense
+            display_spa = entry.pokemon.stats.special_attack
+            display_spd = entry.pokemon.stats.special_defense
+            display_spe = entry.pokemon.stats.speed
+            display_sub = f"#{entry.pokemon.dex_number or '???'}  ·  {entry.pokemon.form_name}"
+            display_types = entry.pokemon.types
+
+        # Form Switcher Pills (if Megas exist)
+        if megas:
+            def set_detail_form(fid):
+                state["detail_form_id"] = fid
+                render_detail_drawer()
+
+            form_pills = []
+            base_active = (active_form_id == "base")
+            form_pills.append(
+                ft.Container(
+                    content=ft.Text("Base Form", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400 if base_active else ft.Colors.WHITE),
+                    bgcolor="#78350f" if base_active else "#1e293b",
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                    border_radius=12,
+                    border=ft.Border.all(1, ft.Colors.AMBER_400 if base_active else ft.Colors.DIVIDER),
+                    on_click=lambda e: set_detail_form("base")
+                )
+            )
+            for m in megas:
+                m_active = (active_form_id == m.canonical_id)
+                form_pills.append(
+                    ft.Container(
+                        content=ft.Text(f"⚡ {m.form_name}", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400 if m_active else ft.Colors.WHITE),
+                        bgcolor="#78350f" if m_active else "#1e293b",
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                        border_radius=12,
+                        border=ft.Border.all(1, ft.Colors.AMBER_400 if m_active else ft.Colors.DIVIDER),
+                        on_click=lambda e, fid=m.canonical_id: set_detail_form(fid)
+                    )
+                )
+
+            detail_container.controls.append(
+                ft.Row(controls=form_pills, alignment=ft.MainAxisAlignment.CENTER, spacing=6)
+            )
+
         # Sprite avatar
         detail_container.controls.append(
             ft.Container(
                 content=ft.Image(
-                    src=entry.pokemon.sprite_url, width=110, height=110,
+                    src=display_sprite, width=110, height=110,
                     fit=ft.BoxFit.CONTAIN
-                ) if entry.pokemon.sprite_url else ft.Icon(ft.Icons.IMAGE, size=80),
+                ) if display_sprite else ft.Icon(ft.Icons.IMAGE, size=80),
                 bgcolor=ft.Colors.CARD_BG,
                 border_radius=55,
                 width=130, height=130,
@@ -786,18 +899,28 @@ def main(page: ft.Page):
             )
         )
 
-        # Name / info
+        # Name / info & Type Badges
+        type_badges = []
+        for t in display_types:
+            bg_col = TYPE_COLORS.get(t.lower(), "#777777")
+            type_badges.append(
+                ft.Container(
+                    content=ft.Text(t.upper(), size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                    bgcolor=bg_col,
+                    border_radius=4,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=2)
+                )
+            )
+
         detail_container.controls.append(
             ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
                 controls=[
                     ft.Text(entry.pokemon.display_name, size=20, weight=ft.FontWeight.BOLD),
+                    ft.Row(controls=type_badges, alignment=ft.MainAxisAlignment.CENTER, spacing=4),
                     ft.Container(
-                        content=ft.Text(
-                            f"#{entry.pokemon.dex_number or '???'}  ·  {entry.pokemon.form_name}",
-                            size=12, color=ft.Colors.GREY_400
-                        ),
+                        content=ft.Text(display_sub, size=12, color=ft.Colors.GREY_400),
                         bgcolor=ft.Colors.CARD_BG,
                         border_radius=6,
                         padding=ft.Padding.symmetric(horizontal=10, vertical=4)
@@ -816,14 +939,14 @@ def main(page: ft.Page):
             )
 
         # Base Stats
-        detail_container.controls.append(_section("BASE STATS"))
+        detail_container.controls.append(_section("STAT OVERVIEW"))
         stats_list = [
-            ("HP",  entry.pokemon.stats.hp,              ft.Colors.RED_400),
-            ("Atk", entry.pokemon.stats.attack,          ft.Colors.ORANGE_400),
-            ("Def", entry.pokemon.stats.defense,         ft.Colors.YELLOW_400),
-            ("SpA", entry.pokemon.stats.special_attack,  ft.Colors.BLUE_400),
-            ("SpD", entry.pokemon.stats.special_defense, ft.Colors.GREEN_400),
-            ("Spe", entry.pokemon.stats.speed,           ft.Colors.PINK_400),
+            ("HP",  display_hp,  ft.Colors.RED_400),
+            ("Atk", display_atk, ft.Colors.ORANGE_400),
+            ("Def", display_def, ft.Colors.YELLOW_400),
+            ("SpA", display_spa, ft.Colors.BLUE_400),
+            ("SpD", display_spd, ft.Colors.GREEN_400),
+            ("Spe", display_spe, ft.Colors.PINK_400),
         ]
         stats_column = ft.Column(spacing=6)
         for label, val, color in stats_list:
@@ -901,18 +1024,19 @@ def main(page: ft.Page):
         detail_container.controls.append(
             ft.Container(
                 content=ft.ElevatedButton(
-                    "Delete from Box",
-                    icon=ft.Icons.DELETE_FOREVER,
-                    bgcolor=ft.Colors.RED_700,
+                    "Delete From Box",
+                    icon=ft.Icons.DELETE,
+                    bgcolor="#991b1b",
                     color=ft.Colors.WHITE,
-                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                     on_click=lambda e, e_id=entry.box_entry_id: handle_delete_pokemon(e_id)
                 ),
-                margin=ft.Margin.only(top=8)
+                alignment=ft.Alignment.CENTER,
+                margin=ft.Margin.only(top=10)
             )
         )
 
-        page.update()
+        if update_page:
+            page.update()
 
     def render_team_builder():
         team_grid.controls.clear()
@@ -929,7 +1053,7 @@ def main(page: ft.Page):
             page.update()
             return
 
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, _, session = get_repositories()
         try:
             team = team_repo.load_team(state["active_team_id"])
             members = team_repo.list_members(state["active_team_id"])
@@ -966,10 +1090,11 @@ def main(page: ft.Page):
                     bgcolor=ft.Colors.BLUE_GREY_950
                 )
             else:
-                # Load corresponding box entry
-                box_repo, _, session = get_repositories()
+                # Load corresponding box entry & species megas
+                box_repo, _, mega_repo, session = get_repositories()
                 try:
                     box_entry = box_repo.load_entry(str(matching_member.box_entry_id))
+                    megas = sync_mega_evolutions_for_species(session, box_entry.pokemon.species_name) if box_entry else []
                 finally:
                     session.close()
 
@@ -977,8 +1102,32 @@ def main(page: ft.Page):
                     continue
                 
                 pokemon = box_entry.pokemon
+                selected_form = matching_member.selected_form or "base"
+                active_mega = next((m for m in megas if m.canonical_id == selected_form), None)
+
+                if active_mega:
+                    card_sprite = active_mega.sprite_url or pokemon.sprite_url
+                    card_bst = active_mega.hp + active_mega.attack + active_mega.defense + active_mega.special_attack + active_mega.special_defense + active_mega.speed
+                    card_name = f"{pokemon.display_name} (⚡ {active_mega.form_name})"
+                else:
+                    card_sprite = pokemon.sprite_url
+                    card_bst = pokemon.total
+                    card_name = pokemon.display_name
 
                 # Form input elements for member attributes
+                form_drop = None
+                if megas:
+                    form_options = [
+                        ft.dropdown.Option("base", text=f"Base ({pokemon.form_name})"),
+                        *[ft.dropdown.Option(m.canonical_id, text=f"⚡ {m.display_name}") for m in megas]
+                    ]
+                    form_drop = ft.Dropdown(
+                        label="Active Form",
+                        value=selected_form,
+                        options=form_options,
+                        text_size=12
+                    )
+
                 ability_options = [
                     ft.dropdown.Option(text=ab.name.title().replace("-", " "))
                     for ab in pokemon.abilities
@@ -1011,44 +1160,50 @@ def main(page: ft.Page):
                     text_size=12
                 )
 
-                def make_update_handler(s_pos=slot, ab_dr=ability_drop, it_fl=item_field, mv_fl=moves_field, nt_fl=notes_field):
-                    return lambda e: handle_update_member_field(s_pos, ab_dr.value, it_fl.value, mv_fl.value, nt_fl.value)
+                def make_update_handler(s_pos=slot, fm_dr=form_drop, ab_dr=ability_drop, it_fl=item_field, mv_fl=moves_field, nt_fl=notes_field):
+                    return lambda e: handle_update_member_field(s_pos, fm_dr.value if fm_dr else "base", ab_dr.value, it_fl.value, mv_fl.value, nt_fl.value)
 
                 def make_remove_handler(s_pos=slot):
                     return lambda e: handle_remove_member(s_pos)
+
+                slot_controls = [
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Text(f"Slot {slot}", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.AMBER_400),
+                            ft.IconButton(ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_400, on_click=make_remove_handler(), tooltip="Remove Member")
+                        ]
+                    ),
+                    ft.Row(
+                        spacing=10,
+                        controls=[
+                            ft.Image(src=card_sprite, width=50, height=50, fit=ft.BoxFit.CONTAIN) if card_sprite else ft.Icon(ft.Icons.IMAGE),
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text(card_name, size=14, weight=ft.FontWeight.BOLD),
+                                    ft.Text(f"BST: {card_bst}", size=11, color=ft.Colors.GREY_400)
+                                ]
+                            )
+                        ]
+                    ),
+                ]
+                if form_drop:
+                    slot_controls.append(form_drop)
+                slot_controls.extend([
+                    ability_drop,
+                    item_field,
+                    moves_field,
+                    notes_field,
+                    ft.ElevatedButton("Save Changes", icon=ft.Icons.SAVE, on_click=make_update_handler(), height=30)
+                ])
 
                 slot_card = ft.Card(
                     content=ft.Container(
                         content=ft.Column(
                             spacing=6,
                             scroll=ft.ScrollMode.AUTO,
-                            controls=[
-                                ft.Row(
-                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                    controls=[
-                                        ft.Text(f"Slot {slot}", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.AMBER_400),
-                                        ft.IconButton(ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_400, on_click=make_remove_handler(), tooltip="Remove Member")
-                                    ]
-                                ),
-                                ft.Row(
-                                    spacing=10,
-                                    controls=[
-                                        ft.Image(src=pokemon.sprite_url, width=50, height=50, fit=ft.BoxFit.CONTAIN) if pokemon.sprite_url else ft.Icon(ft.Icons.IMAGE),
-                                        ft.Column(
-                                            spacing=2,
-                                            controls=[
-                                                ft.Text(pokemon.display_name, size=14, weight=ft.FontWeight.BOLD),
-                                                ft.Text(f"BST: {pokemon.total}", size=11, color=ft.Colors.GREY_400)
-                                            ]
-                                        )
-                                    ]
-                                ),
-                                ability_drop,
-                                item_field,
-                                moves_field,
-                                notes_field,
-                                ft.ElevatedButton("Save Changes", icon=ft.Icons.SAVE, on_click=make_update_handler(), height=30)
-                            ]
+                            controls=slot_controls
                         ),
                         padding=12
                     )
@@ -1066,7 +1221,7 @@ def main(page: ft.Page):
             page.update()
             return
 
-        box_repo, team_repo, session = get_repositories()
+        box_repo, team_repo, mega_repo, session = get_repositories()
         try:
             members = team_repo.list_members(state["active_team_id"])
             total_hp = total_attack = total_defense = total_spa = total_spd = total_speed = 0
@@ -1074,12 +1229,21 @@ def main(page: ft.Page):
             for m in members:
                 b_entry = box_repo.load_entry(str(m.box_entry_id))
                 if b_entry:
-                    total_hp += b_entry.pokemon.stats.hp
-                    total_attack += b_entry.pokemon.stats.attack
-                    total_defense += b_entry.pokemon.stats.defense
-                    total_spa += b_entry.pokemon.stats.special_attack
-                    total_spd += b_entry.pokemon.stats.special_defense
-                    total_speed += b_entry.pokemon.stats.speed
+                    mega_rec = mega_repo.get(m.selected_form) if (m.selected_form and m.selected_form != "base") else None
+                    if mega_rec:
+                        total_hp += mega_rec.hp
+                        total_attack += mega_rec.attack
+                        total_defense += mega_rec.defense
+                        total_spa += mega_rec.special_attack
+                        total_spd += mega_rec.special_defense
+                        total_speed += mega_rec.speed
+                    else:
+                        total_hp += b_entry.pokemon.stats.hp
+                        total_attack += b_entry.pokemon.stats.attack
+                        total_defense += b_entry.pokemon.stats.defense
+                        total_spa += b_entry.pokemon.stats.special_attack
+                        total_spd += b_entry.pokemon.stats.special_defense
+                        total_speed += b_entry.pokemon.stats.speed
         finally:
             session.close()
 
@@ -1266,8 +1430,9 @@ def main(page: ft.Page):
             try:
                 with get_session() as session:
                     res = sync_all_champions_megas_on_startup(session)
-                    load_champions_catalog()
-                    show_toast(f"✅ Mega Evolutions catalog updated! ({res['total_local']} Megas cached)")
+                # Refresh all caches after session is closed
+                load_champions_catalog()
+                show_toast(f"✅ Mega Evolutions catalog updated! ({res['total_local']} Megas cached)")
             except Exception as ex:
                 show_toast(f"Error syncing Megas: {str(ex)}", is_error=True)
             finally:

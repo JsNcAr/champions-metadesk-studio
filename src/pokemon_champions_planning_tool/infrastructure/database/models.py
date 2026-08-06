@@ -192,3 +192,15 @@ class TeamMemberRecord(SQLModel, table=True):
             ability=team_member.ability,
             notes=team_member.notes,
         )
+
+
+class ChampionsSpeciesRecord(SQLModel, table=True):
+    """Persisted Champions Pokédex catalog species record."""
+
+    __tablename__: ClassVar[str] = "champions_species"
+
+    entry_number: int = Field(primary_key=True)
+    species_name: str = Field(index=True, unique=True)
+    display_name: str
+    created_at: datetime = Field(default_factory=_utc_now)
+

@@ -14,7 +14,7 @@ from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.pokemon_identity import format_api_name
-from .models import BoxEntryRecord, PokemonRecord, TeamMemberRecord, TeamRecord
+from .models import BoxEntryRecord, PokemonRecord, TeamMemberRecord, TeamRecord, ChampionsSpeciesRecord
 
 
 def _utc_now() -> datetime:
@@ -328,3 +328,42 @@ class TeamRepository:
             for member in self.list_members(team_id)
         ]
         return record.to_domain(members)
+
+
+class ChampionsCatalogRepository:
+    """Repository for managing the Champions Pokédex species catalog."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def list_all(self) -> list[ChampionsSpeciesRecord]:
+        records = list(self.session.exec(select(ChampionsSpeciesRecord)))
+        return sorted(records, key=lambda r: r.entry_number)
+
+    def list_species_names(self) -> list[str]:
+        return [r.species_name for r in self.list_all()]
+
+    def sync_species_entries(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        """Saves any species entries from PokéAPI that are missing from the local catalog."""
+        existing_names = set(self.list_species_names())
+        added_count = 0
+
+        for entry in entries:
+            name = entry["species_name"]
+            if name not in existing_names:
+                record = ChampionsSpeciesRecord(
+                    entry_number=entry["entry_number"],
+                    species_name=name,
+                    display_name=entry.get("display_name", name.title()),
+                )
+                self.session.add(record)
+                added_count += 1
+
+        if added_count > 0:
+            self.session.commit()
+
+        return {
+            "total_remote": len(entries),
+            "added": added_count,
+            "existing": len(existing_names),
+        }

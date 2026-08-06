@@ -49,7 +49,7 @@ from ..domain.entities.team import Team
 from ..domain.entities.team_member import TeamMember
 from ..domain.entities.pokemon_move import PokemonMove
 from ..infrastructure.database.database import get_session
-from ..infrastructure.database.repositories import BoxRepository, TeamRepository
+from ..infrastructure.database.repositories import BoxRepository, TeamRepository, ChampionsCatalogRepository
 from ..services.pokemon_import_service import add_pokemon_to_box
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 
@@ -97,6 +97,7 @@ def main(page: ft.Page):
     state = {
         "box_entries": [],
         "teams": [],
+        "champions_catalog": [],      # ChampionsSpeciesRecord list
         "selected_pokemon_id": None,  # UUID of BoxEntry
         "active_team_id": None,       # UUID of Team
         "search_query": "",
@@ -110,6 +111,11 @@ def main(page: ft.Page):
         session = get_session().__enter__()
         return BoxRepository(session), TeamRepository(session), session
 
+    def load_champions_catalog():
+        with get_session() as session:
+            repo = ChampionsCatalogRepository(session)
+            state["champions_catalog"] = repo.list_all()
+
     # --- Notifications ---
     def show_toast(message: str, is_error: bool = False):
         snack = ft.SnackBar(
@@ -122,10 +128,13 @@ def main(page: ft.Page):
         page.update()
 
     # --- UI Component Declarations (to be wired later) ---
+    suggestion_row = ft.Row(spacing=8, wrap=True, visible=False)
+
     search_input = ft.TextField(
         label="Add Pokemon by Name",
-        hint_text="e.g. Pikachu, Charizard, Mega Lucario",
+        hint_text="Type to search Champions roster...",
         expand=True,
+        on_change=lambda e: handle_search_input_change(e.control.value),
         on_submit=lambda e: handle_add_pokemon()
     )
     add_button = ft.ElevatedButton("Add to Box", icon=ft.Icons.ADD, on_click=lambda e: handle_add_pokemon())
@@ -280,7 +289,56 @@ def main(page: ft.Page):
             session.close()
 
     # --- Event Handlers ---
+    def handle_search_input_change(val: str):
+        query = val.strip().lower()
+        if not query or len(query) < 2:
+            suggestion_row.visible = False
+            suggestion_row.controls.clear()
+            page.update()
+            return
+
+        matches = [
+            rec for rec in state["champions_catalog"]
+            if query in rec.species_name.lower() or query in rec.display_name.lower()
+        ][:6]
+
+        if not matches:
+            suggestion_row.visible = False
+            suggestion_row.controls.clear()
+            page.update()
+            return
+
+        suggestion_row.controls = [
+            ft.Container(
+                content=ft.Row(
+                    spacing=5,
+                    tight=True,
+                    controls=[
+                        ft.Icon(ft.Icons.CATCHING_POKEMON, size=13, color=ft.Colors.AMBER_400),
+                        ft.Text(rec.display_name, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
+                    ]
+                ),
+                bgcolor=ft.Colors.CARD_SELECTED,
+                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+                border_radius=16,
+                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                on_click=lambda e, name=rec.display_name: select_suggestion(name)
+            )
+            for rec in matches
+        ]
+        suggestion_row.visible = True
+        page.update()
+
+    def select_suggestion(name: str):
+        search_input.value = name
+        suggestion_row.visible = False
+        suggestion_row.controls.clear()
+        page.update()
+        handle_add_pokemon()
+
     def handle_add_pokemon():
+        suggestion_row.visible = False
+        suggestion_row.controls.clear()
         name = search_input.value.strip()
         if not name:
             return
@@ -1085,20 +1143,26 @@ def main(page: ft.Page):
                 controls=[
                     # Add Pokemon bar
                     ft.Container(
-                        content=ft.Row(
+                        content=ft.Column(
+                            spacing=8,
                             controls=[
-                                search_input,
-                                ft.Container(
-                                    content=ft.ElevatedButton(
-                                        "Add to Box",
-                                        icon=ft.Icons.ADD,
-                                        on_click=lambda e: handle_add_pokemon(),
-                                        bgcolor=ft.Colors.AMBER_700,
-                                        color=ft.Colors.WHITE,
-                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8))
-                                    ),
+                                ft.Row(
+                                    controls=[
+                                        search_input,
+                                        ft.Container(
+                                            content=ft.ElevatedButton(
+                                                "Add to Box",
+                                                icon=ft.Icons.ADD,
+                                                on_click=lambda e: handle_add_pokemon(),
+                                                bgcolor=ft.Colors.AMBER_700,
+                                                color=ft.Colors.WHITE,
+                                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8))
+                                            ),
+                                        ),
+                                        add_spinner
+                                    ]
                                 ),
-                                add_spinner
+                                suggestion_row
                             ]
                         ),
                         bgcolor=ft.Colors.CARD_BG,
@@ -1228,6 +1292,7 @@ def main(page: ft.Page):
     page.add(header, container_holder)
 
     # --- Initial State Load ---
+    load_champions_catalog()
     refresh_box()
     refresh_teams()
 

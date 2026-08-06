@@ -77,3 +77,28 @@ def get_official_stats(pokemon_name):
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Network error reaching PokéAPI: {e}")
         return None
+
+
+def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]:
+    """Fetches the list of species in the specified Pokédex (defaults to 'champions') from PokéAPI."""
+    try:
+        url = f"{POKEAPI_BASE_URL}/pokedex/{pokedex_name}"
+        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response.raise_for_status()
+
+        data = response.json()
+        entries = []
+        for entry in data.get("pokemon_entries", []):
+            species_info = entry.get("pokemon_species", {})
+            raw_name = species_info.get("name", "")
+            if raw_name:
+                entries.append({
+                    "entry_number": entry.get("entry_number", 0),
+                    "species_name": raw_name,
+                    "display_name": format_display_name(raw_name),
+                })
+        return entries
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Network error fetching {pokedex_name} Pokédex catalog: {e}")
+        return []
+

@@ -38,6 +38,37 @@ The target product is a GUI tool for:
 
 The product planning documents live in [docs/README.md](docs/README.md).
 
+## Running The GUI
+
+To launch the Flet web/desktop GUI:
+
+```bash
+PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main --web
+```
+
+The GUI will open in your browser at `http://localhost:8550`.
+
+### Troubleshooting: Stopping an Active Server / Port Conflict
+
+If the server is already running in another terminal window or process, you may see a port conflict or want to restart the application. To locate and stop the active process:
+
+1. **Find and kill the process using port 8550**:
+   ```bash
+   fuser -k 8550/tcp
+   ```
+
+2. **Or kill by process search**:
+   ```bash
+   pkill -f "pokemon_champions_planning_tool.main"
+   ```
+
+3. **Or inspect the Process ID (PID) first**:
+   ```bash
+   lsof -i :8550
+   # Then kill using the PID found:
+   kill -9 <PID>
+   ```
+
 ## Running The CLI
 
 ```bash

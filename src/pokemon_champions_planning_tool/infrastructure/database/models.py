@@ -204,3 +204,24 @@ class ChampionsSpeciesRecord(SQLModel, table=True):
     display_name: str
     created_at: datetime = Field(default_factory=_utc_now)
 
+
+class MegaEvolutionRecord(SQLModel, table=True):
+    """Persisted Mega Evolution record with stats, typing, and sprite."""
+
+    __tablename__: ClassVar[str] = "mega_evolutions"
+
+    canonical_id: str = Field(primary_key=True, index=True)
+    species_name: str = Field(index=True)
+    display_name: str
+    form_name: str = Field(default="Mega")
+    types: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    sprite_url: str | None = None
+    hp: int
+    attack: int
+    defense: int
+    special_attack: int
+    special_defense: int
+    speed: int
+    created_at: datetime = Field(default_factory=_utc_now)
+
+

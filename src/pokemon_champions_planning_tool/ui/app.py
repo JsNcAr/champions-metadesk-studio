@@ -51,6 +51,7 @@ from ..domain.entities.pokemon_move import PokemonMove
 from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import BoxRepository, TeamRepository, ChampionsCatalogRepository
 from ..services.pokemon_import_service import add_pokemon_to_box
+from ..services.mega_evolution_service import sync_all_champions_megas_on_startup
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 
 # Pokémon Type Colors
@@ -1254,6 +1255,43 @@ def main(page: ft.Page):
             container_holder.content = team_tab_layout
         page.update()
 
+    sync_megas_spinner = ft.ProgressRing(visible=False, width=16, height=16)
+
+    def handle_manual_mega_sync():
+        sync_megas_spinner.visible = True
+        show_toast("Syncing Mega Evolutions from PokéAPI in background...")
+        page.update()
+
+        def background_sync():
+            try:
+                with get_session() as session:
+                    res = sync_all_champions_megas_on_startup(session)
+                    load_champions_catalog()
+                    show_toast(f"✅ Mega Evolutions catalog updated! ({res['total_local']} Megas cached)")
+            except Exception as ex:
+                show_toast(f"Error syncing Megas: {str(ex)}", is_error=True)
+            finally:
+                sync_megas_spinner.visible = False
+                page.update()
+
+        threading.Thread(target=background_sync, daemon=True).start()
+
+    sync_megas_btn = ft.Container(
+        content=ft.Row(
+            spacing=6,
+            controls=[
+                ft.Icon(ft.Icons.SYNC, size=16, color=ft.Colors.AMBER_400),
+                ft.Text("Sync Megas", size=12, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE),
+                sync_megas_spinner
+            ]
+        ),
+        bgcolor="#1e293b",
+        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        border_radius=8,
+        border=ft.Border.all(1, ft.Colors.DIVIDER),
+        on_click=lambda e: handle_manual_mega_sync()
+    )
+
     # App header bar
     header = ft.Container(
         content=ft.Row(
@@ -1279,7 +1317,7 @@ def main(page: ft.Page):
                         )
                     ]
                 ),
-                tabs_row
+                ft.Row(spacing=10, controls=[tabs_row, sync_megas_btn])
             ]
         ),
         bgcolor=ft.Colors.CARD_BG,

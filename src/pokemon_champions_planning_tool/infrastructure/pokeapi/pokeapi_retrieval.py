@@ -7,6 +7,7 @@ from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_ability import PokemonAbility
 from ...domain.entities.pokemon_stats import PokemonStats
 from ...domain.pokemon_identity import format_display_name, format_api_name
+from ..database.models import MegaEvolutionRecord
 
 
 def get_official_stats(pokemon_name):
@@ -101,4 +102,56 @@ def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Network error fetching {pokedex_name} Pokédex catalog: {e}")
         return []
+
+
+def get_mega_varieties_for_species(species_name: str) -> list[str]:
+    """Fetches the list of Mega variety canonical IDs for a species from PokéAPI."""
+    try:
+        url = f"{POKEAPI_BASE_URL}/pokemon-species/{species_name.strip().lower()}"
+        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        data = response.json()
+        varieties = data.get("varieties", [])
+        mega_names = []
+        for var in varieties:
+            v_name = var.get("pokemon", {}).get("name", "")
+            if "-mega" in v_name:
+                mega_names.append(v_name)
+        return mega_names
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Network error checking Mega varieties for '{species_name}': {e}")
+        return []
+
+
+def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
+    """Fetches details for a specific Mega Evolution from PokéAPI and builds a MegaEvolutionRecord."""
+    try:
+        url = f"{POKEAPI_BASE_URL}/pokemon/{mega_api_name.strip().lower()}"
+        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response.raise_for_status()
+
+        data = response.json()
+        stats = {stat["stat"]["name"]: stat["base_stat"] for stat in data.get("stats", [])}
+
+        species_name = data.get("species", {}).get("name", mega_api_name.split("-mega")[0])
+        display_name = format_display_name(mega_api_name)
+
+        return MegaEvolutionRecord(
+            canonical_id=mega_api_name,
+            species_name=species_name,
+            display_name=display_name,
+            form_name="Mega X" if mega_api_name.endswith("-mega-x") else "Mega Y" if mega_api_name.endswith("-mega-y") else "Mega",
+            types=[t["type"]["name"] for t in data.get("types", [])],
+            sprite_url=data.get("sprites", {}).get("front_default"),
+            hp=stats.get("hp", 0),
+            attack=stats.get("attack", 0),
+            defense=stats.get("defense", 0),
+            special_attack=stats.get("special-attack", 0),
+            special_defense=stats.get("special-defense", 0),
+            speed=stats.get("speed", 0),
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ Network error fetching Mega details for '{mega_api_name}': {e}")
+        return None
+
 

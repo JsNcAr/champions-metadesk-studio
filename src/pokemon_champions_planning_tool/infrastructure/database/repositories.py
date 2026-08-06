@@ -14,7 +14,14 @@ from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.pokemon_identity import format_api_name
-from .models import BoxEntryRecord, PokemonRecord, TeamMemberRecord, TeamRecord, ChampionsSpeciesRecord
+from .models import (
+    BoxEntryRecord,
+    ChampionsSpeciesRecord,
+    MegaEvolutionRecord,
+    PokemonRecord,
+    TeamMemberRecord,
+    TeamRecord,
+)
 
 
 def _utc_now() -> datetime:
@@ -367,3 +374,51 @@ class ChampionsCatalogRepository:
             "added": added_count,
             "existing": len(existing_names),
         }
+
+
+class MegaEvolutionRepository:
+    """Repository for managing Mega Evolution records in SQLite."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get(self, canonical_id: str) -> MegaEvolutionRecord | None:
+        return self.session.get(MegaEvolutionRecord, canonical_id)
+
+    def list_by_species(self, species_name: str) -> list[MegaEvolutionRecord]:
+        records = list(
+            self.session.exec(
+                select(MegaEvolutionRecord).where(
+                    func.lower(MegaEvolutionRecord.species_name) == species_name.strip().lower()
+                )
+            )
+        )
+        return sorted(records, key=lambda r: r.canonical_id)
+
+    def list_all(self) -> list[MegaEvolutionRecord]:
+        records = list(self.session.exec(select(MegaEvolutionRecord)))
+        return sorted(records, key=lambda r: r.canonical_id)
+
+    def upsert(self, record: MegaEvolutionRecord) -> MegaEvolutionRecord:
+        existing = self.get(record.canonical_id)
+        if existing is None:
+            self.session.add(record)
+            self.session.commit()
+            self.session.refresh(record)
+            return record
+
+        existing.species_name = record.species_name
+        existing.display_name = record.display_name
+        existing.form_name = record.form_name
+        existing.types = record.types
+        existing.sprite_url = record.sprite_url
+        existing.hp = record.hp
+        existing.attack = record.attack
+        existing.defense = record.defense
+        existing.special_attack = record.special_attack
+        existing.special_defense = record.special_defense
+        existing.speed = record.speed
+        self.session.add(existing)
+        self.session.commit()
+        self.session.refresh(existing)
+        return existing

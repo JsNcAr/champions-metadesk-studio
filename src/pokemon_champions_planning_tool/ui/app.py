@@ -7,26 +7,39 @@ from uuid import UUID
 # Bypass Flet's buggy deprecation wrapper on colors
 class ColorsBypass:
     WHITE = "white"
+    BLACK = "black"
     RED_ACCENT = "redaccent"
-    GREEN_ACCENT_700 = "#388e3c"
-    GREY_400 = "#bdbdbd"
-    YELLOW = "yellow"
-    GREY_600 = "#757575"
-    AMBER_400 = "#ffca28"
-    AMBER_700 = "#ffa000"
-    BLUE_GREY_900 = "#263238"
-    BLUE_GREY_950 = "#1a2327"
-    SURFACE_VARIANT = "#37474f"
-    GREY_500 = "#9e9e9e"
-    RED_400 = "#ef5350"
-    ORANGE_400 = "#ffa726"
-    YELLOW_400 = "#ffee58"
-    BLUE_400 = "#42a5f5"
-    GREEN_400 = "#66bb6a"
-    PINK_400 = "#ec407a"
-    GREY_800 = "#424242"
-    RED_700 = "#d32f2f"
-    BLUE_300 = "#64b5f6"
+    GREEN_ACCENT_700 = "#16a34a"
+    GREY_400 = "#9ca3af"
+    YELLOW = "#fbbf24"
+    GREY_600 = "#6b7280"
+    AMBER_400 = "#fbbf24"
+    AMBER_700 = "#d97706"
+    AMBER_100 = "#fef3c7"
+    # Surfaces
+    BG_BASE = "#0f172a"         # page background
+    CARD_BG = "#1e293b"         # default card surface
+    CARD_SELECTED = "#1e3a5f"   # selected card highlight (blue tinted)
+    PANEL_BG = "#111827"        # right panel / drawer
+    TOOLBAR_BG = "#1e293b"      # filter toolbar bar
+    HEADER_BG = "#0f172a"
+    BLUE_GREY_900 = "#1e293b"
+    BLUE_GREY_950 = "#111827"
+    SURFACE_VARIANT = "#1e293b"
+    DIVIDER = "#334155"
+    # Text
+    GREY_500 = "#6b7280"
+    GREY_300 = "#d1d5db"
+    # Semantic
+    RED_400 = "#f87171"
+    RED_700 = "#b91c1c"
+    ORANGE_400 = "#fb923c"
+    YELLOW_400 = "#facc15"
+    BLUE_400 = "#60a5fa"
+    BLUE_300 = "#93c5fd"
+    GREEN_400 = "#4ade80"
+    PINK_400 = "#f472b6"
+    GREY_800 = "#374151"
 
 ft.Colors = ColorsBypass
 
@@ -60,13 +73,25 @@ STAT_COLORS = {
 }
 
 
+# Design constants
+_C = ft.Colors  # alias
+
+# Padding helpers
+P_CARD = ft.Padding.symmetric(horizontal=12, vertical=10)
+P_PANEL = ft.Padding.all(16)
+
+
 def main(page: ft.Page):
     page.title = APP_NAME
     page.theme_mode = ft.ThemeMode.DARK
-    page.padding = 20
+    page.bgcolor = ft.Colors.BG_BASE
+    page.padding = ft.Padding.symmetric(horizontal=20, vertical=16)
     page.window_width = 1280
     page.window_height = 800
-    page.spacing = 15
+    page.spacing = 0
+    page.fonts = {
+        "Inter": "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2"
+    }
 
     # --- Application State ---
     state = {
@@ -145,15 +170,15 @@ def main(page: ft.Page):
     )
 
     # --- Detail Drawer UI elements ---
-    detail_container = ft.Column(spacing=10, expand=True, scroll=ft.ScrollMode.AUTO)
+    detail_container = ft.Column(spacing=12, expand=True, scroll=ft.ScrollMode.AUTO)
     detail_panel = ft.Container(
         content=detail_container,
-        width=300,
+        width=310,
         expand=True,
-        bgcolor=ft.Colors.BLUE_GREY_950,
-        padding=15,
-        border_radius=10,
-        border=ft.Border.all(1, ft.Colors.GREY_800),
+        bgcolor=ft.Colors.PANEL_BG,
+        padding=ft.Padding.all(16),
+        border_radius=12,
+        border=ft.Border.all(1, ft.Colors.DIVIDER),
         visible=False
     )
 
@@ -627,7 +652,7 @@ def main(page: ft.Page):
                     padding=8,
                     on_click=make_select_handler()
                 ),
-                bgcolor=ft.Colors.BLUE_GREY_900 if state["selected_pokemon_id"] == entry.box_entry_id else ft.Colors.SURFACE_VARIANT
+                bgcolor=ft.Colors.CARD_SELECTED if state["selected_pokemon_id"] == entry.box_entry_id else ft.Colors.CARD_BG
             )
             box_grid.controls.append(card)
         
@@ -660,72 +685,115 @@ def main(page: ft.Page):
             return
 
         detail_panel.visible = True
-        
-        # Header info
+
+        # Header
         detail_container.controls.append(
-            ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    ft.Text("POKÉMON DETAILS", weight=ft.FontWeight.BOLD, size=16, color=ft.Colors.AMBER_400),
-                    ft.IconButton(
-                        icon=ft.Icons.CLOSE,
-                        on_click=lambda e: close_detail_container()
-                    )
-                ]
+            ft.Container(
+                content=ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    controls=[
+                        ft.Row(spacing=8, controls=[
+                            ft.Icon(ft.Icons.CATCHING_POKEMON, color=ft.Colors.AMBER_400, size=16),
+                            ft.Text("POKÉMON DETAILS", weight=ft.FontWeight.BOLD, size=13,
+                                    color=ft.Colors.AMBER_400)
+                        ]),
+                        ft.IconButton(
+                            icon=ft.Icons.CLOSE, icon_size=18,
+                            icon_color=ft.Colors.GREY_400,
+                            on_click=lambda e: close_detail_container()
+                        )
+                    ]
+                ),
+                bgcolor=ft.Colors.CARD_BG,
+                border_radius=8,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                border=ft.Border.all(1, ft.Colors.DIVIDER)
             )
         )
 
+        # Sprite avatar
         detail_container.controls.append(
-            ft.Row(
-                alignment=ft.MainAxisAlignment.CENTER,
-                controls=[
-                    ft.Image(src=entry.pokemon.sprite_url, width=120, height=120, fit=ft.BoxFit.CONTAIN) if entry.pokemon.sprite_url else ft.Icon(ft.Icons.IMAGE, size=80)
-                ]
+            ft.Container(
+                content=ft.Image(
+                    src=entry.pokemon.sprite_url, width=110, height=110,
+                    fit=ft.BoxFit.CONTAIN
+                ) if entry.pokemon.sprite_url else ft.Icon(ft.Icons.IMAGE, size=80),
+                bgcolor=ft.Colors.CARD_BG,
+                border_radius=55,
+                width=130, height=130,
+                alignment=ft.Alignment.CENTER,
+                border=ft.Border.all(2, ft.Colors.DIVIDER),
+                margin=ft.Margin.symmetric(vertical=6)
             )
         )
 
+        # Name / info
         detail_container.controls.append(
             ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
                 controls=[
                     ft.Text(entry.pokemon.display_name, size=20, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"Canonical ID: {entry.pokemon.canonical_id}", size=11, color=ft.Colors.GREY_500),
-                    ft.Text(f"Dex Number: #{entry.pokemon.dex_number or '???'}", size=12, color=ft.Colors.GREY_400),
+                    ft.Container(
+                        content=ft.Text(
+                            f"#{entry.pokemon.dex_number or '???'}  ·  {entry.pokemon.form_name}",
+                            size=12, color=ft.Colors.GREY_400
+                        ),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border_radius=6,
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=4)
+                    ),
                 ]
             )
         )
 
-        # Base Stats Bars
+        # Section label helper
+        def _section(label):
+            return ft.Container(
+                content=ft.Text(label, size=11, weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.GREY_400),
+                border=ft.Border(bottom=ft.BorderSide(1, ft.Colors.DIVIDER)),
+                padding=ft.Padding.only(bottom=4)
+            )
+
+        # Base Stats
+        detail_container.controls.append(_section("BASE STATS"))
         stats_list = [
-            ("HP", entry.pokemon.stats.hp, ft.Colors.RED_400),
-            ("Atk", entry.pokemon.stats.attack, ft.Colors.ORANGE_400),
-            ("Def", entry.pokemon.stats.defense, ft.Colors.YELLOW_400),
-            ("SpA", entry.pokemon.stats.special_attack, ft.Colors.BLUE_400),
+            ("HP",  entry.pokemon.stats.hp,              ft.Colors.RED_400),
+            ("Atk", entry.pokemon.stats.attack,          ft.Colors.ORANGE_400),
+            ("Def", entry.pokemon.stats.defense,         ft.Colors.YELLOW_400),
+            ("SpA", entry.pokemon.stats.special_attack,  ft.Colors.BLUE_400),
             ("SpD", entry.pokemon.stats.special_defense, ft.Colors.GREEN_400),
-            ("Spe", entry.pokemon.stats.speed, ft.Colors.PINK_400)
+            ("Spe", entry.pokemon.stats.speed,           ft.Colors.PINK_400),
         ]
-        
         stats_column = ft.Column(spacing=6)
         for label, val, color in stats_list:
-            norm_val = min(val / 255.0, 1.0)
             stats_column.controls.append(
-                ft.Column(
-                    spacing=2,
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    spacing=8,
                     controls=[
-                        ft.Row(
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                            controls=[
-                                ft.Text(label, size=12, weight=ft.FontWeight.BOLD),
-                                ft.Text(str(val), size=12, weight=ft.FontWeight.BOLD)
-                            ]
+                        ft.Container(
+                            content=ft.Text(label, size=11, weight=ft.FontWeight.BOLD, color=color),
+                            width=30
                         ),
-                        ft.ProgressBar(value=norm_val, color=color, bgcolor=ft.Colors.BLUE_GREY_900)
+                        ft.ProgressBar(
+                            value=min(val / 255.0, 1.0),
+                            color=color,
+                            bgcolor=ft.Colors.GREY_800,
+                            expand=True,
+                            height=7,
+                            border_radius=4
+                        ),
+                        ft.Text(str(val), size=11, weight=ft.FontWeight.BOLD, width=30,
+                                text_align=ft.TextAlign.RIGHT)
                     ]
                 )
             )
         detail_container.controls.append(stats_column)
 
-        # Notes and Nicknames
+        # Notes
+        detail_container.controls.append(_section("NOTES"))
         notes_field = ft.TextField(
             label="User Notes / Nickname",
             value=entry.notes,
@@ -739,9 +807,10 @@ def main(page: ft.Page):
             icon=ft.Icons.SAVE,
             on_click=lambda e, e_id=entry.box_entry_id: handle_save_notes(e_id, notes_field.value)
         )
-        detail_container.controls.append(ft.Column(spacing=2, controls=[notes_field, notes_btn]))
+        detail_container.controls.append(ft.Column(spacing=4, controls=[notes_field, notes_btn]))
 
-        # Tags Management
+        # Tags
+        detail_container.controls.append(_section("TAGS"))
         tags_field = ft.TextField(
             label="Tags (comma separated)",
             value=", ".join(entry.tags),
@@ -752,35 +821,35 @@ def main(page: ft.Page):
             icon=ft.Icons.TAG,
             on_click=lambda e, e_id=entry.box_entry_id: handle_save_tags(e_id, tags_field.value)
         )
-        detail_container.controls.append(ft.Column(spacing=2, controls=[tags_field, tags_btn]))
+        detail_container.controls.append(ft.Column(spacing=4, controls=[tags_field, tags_btn]))
 
-        # Type effectiveness multiplier placeholder
+        # Weaknesses placeholder
+        detail_container.controls.append(_section("DEFENSIVE WEAKNESSES"))
         detail_container.controls.append(
             ft.Container(
-                content=ft.Column(
-                    spacing=5,
-                    controls=[
-                        ft.Text("Defensive Weaknesses", weight=ft.FontWeight.BOLD, size=13),
-                        ft.Container(
-                            content=ft.Text("TODO: Implement Type Effectiveness Matrix (Backend Integration)", size=11, color=ft.Colors.GREY_500, italic=True),
-                            border=ft.Border.all(1, ft.Colors.GREY_800),
-                            padding=8,
-                            border_radius=5
-                        )
-                    ]
+                content=ft.Text(
+                    "TODO: Type Effectiveness Matrix (Backend Integration)",
+                    size=11, color=ft.Colors.GREY_500, italic=True
                 ),
-                margin=ft.Margin.only(top=10)
+                bgcolor=ft.Colors.CARD_BG,
+                border=ft.Border.all(1, ft.Colors.DIVIDER),
+                padding=ft.Padding.all(10),
+                border_radius=8
             )
         )
 
-        # Delete Button
+        # Delete button
         detail_container.controls.append(
-            ft.ElevatedButton(
-                "Delete from Box",
-                icon=ft.Icons.DELETE,
-                bgcolor=ft.Colors.RED_700,
-                color=ft.Colors.WHITE,
-                on_click=lambda e, e_id=entry.box_entry_id: handle_delete_pokemon(e_id)
+            ft.Container(
+                content=ft.ElevatedButton(
+                    "Delete from Box",
+                    icon=ft.Icons.DELETE_FOREVER,
+                    bgcolor=ft.Colors.RED_700,
+                    color=ft.Colors.WHITE,
+                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                    on_click=lambda e, e_id=entry.box_entry_id: handle_delete_pokemon(e_id)
+                ),
+                margin=ft.Margin.only(top=8)
             )
         )
 
@@ -977,57 +1046,86 @@ def main(page: ft.Page):
 
     # --- UI Layout Assembly ---
 
-    # Main Tabs Selection Controls
-    box_tab_btn = ft.ElevatedButton(
-        "Box Roster",
-        icon=ft.Icons.INBOX,
-        on_click=lambda e: switch_tab(0),
-        bgcolor=ft.Colors.AMBER_700,
-        color=ft.Colors.WHITE
+    # Main Tabs Selection Controls — pill style
+    def _tab_pill(label, icon, active):
+        return ft.Container(
+            content=ft.Row(
+                spacing=6,
+                controls=[
+                    ft.Icon(icon, size=16, color=ft.Colors.WHITE if active else ft.Colors.GREY_400),
+                    ft.Text(label, size=13, weight=ft.FontWeight.W_600,
+                            color=ft.Colors.WHITE if active else ft.Colors.GREY_400)
+                ]
+            ),
+            bgcolor=ft.Colors.AMBER_700 if active else ft.Colors.CARD_BG,
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+            border=ft.Border.all(1, ft.Colors.AMBER_700 if active else ft.Colors.DIVIDER)
+        )
+
+    box_tab_btn = ft.GestureDetector(
+        content=_tab_pill("Box Roster", ft.Icons.INBOX, True),
+        on_tap=lambda e: switch_tab(0)
     )
-    team_tab_btn = ft.ElevatedButton(
-        "Team Builder",
-        icon=ft.Icons.PEOPLE,
-        on_click=lambda e: switch_tab(1),
-        bgcolor=ft.Colors.BLUE_GREY_900,
-        color=ft.Colors.WHITE
+    team_tab_btn = ft.GestureDetector(
+        content=_tab_pill("Team Builder", ft.Icons.PEOPLE, False),
+        on_tap=lambda e: switch_tab(1)
     )
-    tabs_row = ft.Row(
-        controls=[box_tab_btn, team_tab_btn],
-        spacing=10
-    )
+    tabs_row = ft.Row(controls=[box_tab_btn, team_tab_btn], spacing=8)
 
     # VIEW 1: Box Roster Layout
     box_tab_layout = ft.Row(
         expand=True,
-        spacing=15,
+        spacing=14,
         controls=[
             # Left panel - search, filters, list grid
             ft.Column(
                 expand=2,
-                spacing=12,
+                spacing=10,
                 controls=[
-                    ft.Row(
-                        controls=[
-                            search_input,
-                            add_button,
-                            add_spinner
-                        ]
+                    # Add Pokemon bar
+                    ft.Container(
+                        content=ft.Row(
+                            controls=[
+                                search_input,
+                                ft.Container(
+                                    content=ft.ElevatedButton(
+                                        "Add to Box",
+                                        icon=ft.Icons.ADD,
+                                        on_click=lambda e: handle_add_pokemon(),
+                                        bgcolor=ft.Colors.AMBER_700,
+                                        color=ft.Colors.WHITE,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8))
+                                    ),
+                                ),
+                                add_spinner
+                            ]
+                        ),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border_radius=10,
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+                        border=ft.Border.all(1, ft.Colors.DIVIDER)
                     ),
-                    ft.Divider(height=10),
-                    ft.Row(
-                        spacing=10,
-                        controls=[
-                            filter_search,
-                            sort_dropdown,
-                            all_stats_switch,
-                            ft.IconButton(
-                                icon=ft.Icons.DOWNLOAD,
-                                icon_color=ft.Colors.BLUE_300,
-                                on_click=lambda e: handle_export_csv(),
-                                tooltip="Export Box to CSV"
-                            )
-                        ]
+                    # Filters toolbar
+                    ft.Container(
+                        content=ft.Row(
+                            spacing=10,
+                            controls=[
+                                filter_search,
+                                sort_dropdown,
+                                all_stats_switch,
+                                ft.IconButton(
+                                    icon=ft.Icons.DOWNLOAD,
+                                    icon_color=ft.Colors.BLUE_300,
+                                    on_click=lambda e: handle_export_csv(),
+                                    tooltip="Export Box to CSV"
+                                )
+                            ]
+                        ),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border_radius=10,
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                        border=ft.Border.all(1, ft.Colors.DIVIDER)
                     ),
                     box_grid
                 ]
@@ -1079,31 +1177,55 @@ def main(page: ft.Page):
     )
 
     # Wire Tabs Switching
-    tab_views = [box_tab_layout, team_tab_layout]
     container_holder = ft.Container(content=box_tab_layout, expand=True)
 
     def switch_tab(index):
         if index == 0:
-            box_tab_btn.bgcolor = ft.Colors.AMBER_700
-            team_tab_btn.bgcolor = ft.Colors.BLUE_GREY_900
+            box_tab_btn.content = _tab_pill("Box Roster", ft.Icons.INBOX, True)
+            team_tab_btn.content = _tab_pill("Team Builder", ft.Icons.PEOPLE, False)
             container_holder.content = box_tab_layout
         else:
-            box_tab_btn.bgcolor = ft.Colors.BLUE_GREY_900
-            team_tab_btn.bgcolor = ft.Colors.AMBER_700
+            box_tab_btn.content = _tab_pill("Box Roster", ft.Icons.INBOX, False)
+            team_tab_btn.content = _tab_pill("Team Builder", ft.Icons.PEOPLE, True)
             container_holder.content = team_tab_layout
         page.update()
 
-    page.add(
-        ft.Row(
+    # App header bar
+    header = ft.Container(
+        content=ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[
-                ft.Icon(ft.Icons.SETTINGS_ACCESSIBILITY, color=ft.Colors.AMBER_400, size=30),
-                ft.Text(APP_NAME, size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
-            ],
-            alignment=ft.MainAxisAlignment.START
+                ft.Row(
+                    spacing=12,
+                    controls=[
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.CATCHING_POKEMON, color=ft.Colors.AMBER_400, size=28),
+                            bgcolor="#1e293b",
+                            border_radius=10,
+                            padding=ft.Padding.all(8)
+                        ),
+                        ft.Column(
+                            spacing=0,
+                            controls=[
+                                ft.Text(APP_NAME, size=20, weight=ft.FontWeight.BOLD,
+                                        color=ft.Colors.AMBER_400),
+                                ft.Text("Box & Team Planner", size=11,
+                                        color=ft.Colors.GREY_400)
+                            ]
+                        )
+                    ]
+                ),
+                tabs_row
+            ]
         ),
-        tabs_row,
-        container_holder
+        bgcolor=ft.Colors.CARD_BG,
+        padding=ft.Padding.symmetric(horizontal=20, vertical=12),
+        border_radius=12,
+        border=ft.Border.all(1, ft.Colors.DIVIDER),
+        margin=ft.Margin.only(bottom=14)
     )
+
+    page.add(header, container_holder)
 
     # --- Initial State Load ---
     refresh_box()

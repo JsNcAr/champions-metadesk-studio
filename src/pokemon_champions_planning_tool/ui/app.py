@@ -1859,16 +1859,31 @@ def main(page: ft.Page):
     def _apply_item_to_slot(slot_position: int, item_canonical_id: str | None):
         if state["active_team_id"] is None:
             return
-        _, team_repo, _, session = get_repositories()
+        box_repo, team_repo, _, session = get_repositories()
         try:
             members = team_repo.list_members(state["active_team_id"])
             matching = next((m for m in members if m.slot_position == slot_position), None)
             if matching:
+                selected_form = matching.selected_form or "base"
+
+                if item_canonical_id and item_canonical_id in state["items_by_id"]:
+                    item_rec = state["items_by_id"][item_canonical_id]
+                    if item_rec.target_species and item_rec.target_form:
+                        # Check species match
+                        box_entry = box_repo.load_entry(str(matching.box_entry_id)) if matching.box_entry_id else None
+                        species = box_entry.pokemon.species_name if box_entry else None
+                        if species and item_rec.target_species.lower() == species.lower():
+                            selected_form = item_rec.target_form
+                    elif not item_rec.target_species and selected_form.startswith("mega"):
+                        selected_form = "base"
+                elif item_canonical_id is None and selected_form.startswith("mega"):
+                    selected_form = "base"
+
                 updated = TeamMember(
                     team_member_id=matching.team_member_id,
                     box_entry_id=matching.box_entry_id,
                     slot_position=slot_position,
-                    selected_form=matching.selected_form or "base",
+                    selected_form=selected_form,
                     item=item_canonical_id,
                     moveset=matching.moveset,
                     ability=matching.ability,

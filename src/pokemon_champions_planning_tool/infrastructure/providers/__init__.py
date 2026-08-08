@@ -10,11 +10,12 @@ Services NEVER import ShowdownItemAdapter or the PokéAPI client directly.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
 import requests
 
-from ....config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
 from ...domain.entities.item import Item
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
@@ -36,30 +37,48 @@ _STAT_MODIFIER_MAP: dict[str, dict[str, float]] = {
 # Showdown slugs are already lowercase-concatenated, so we maintain a small
 # explicit map for the irregular ones we know about.
 _SHOWDOWN_TO_POKEAPI_SLUG: dict[str, str] = {
-    "choicescarf": "choice-scarf",
-    "choiceband":  "choice-band",
-    "choicespecs": "choice-specs",
-    "lifeorb":     "life-orb",
-    "ironball":    "iron-ball",
-    "zoomlens":    "zoom-lens",
-    "assaultvest": "assault-vest",
-    "eviolite":    "eviolite",
-    "leftovers":   "leftovers",
+    "choicescarf": "choice-scarf", "choiceband": "choice-band", "choicespecs": "choice-specs",
+    "lifeorb": "life-orb", "ironball": "iron-ball", "zoomlens": "zoom-lens", "assaultvest": "assault-vest",
+    "heavydutyboots": "heavy-duty-boots", "rockyhelmet": "rocky-helmet", "expertbelt": "expert-belt",
+    "airballoon": "air-balloon", "safetygoggles": "safety-goggles", "weaknesspolicy": "weakness-policy",
+    "loadeddice": "loaded-dice", "covertcloak": "covert-cloak", "clearamulet": "clear-amulet",
+    "abilityshield": "ability-shield", "boosterenergy": "booster-energy", "focussash": "focus-sash",
+    "blacksludge": "black-sludge", "damprock": "damp-rock", "heatrock": "heat-rock", "smoothrock": "smooth-rock",
+    "icyrock": "icy-rock", "lightclay": "light-clay", "terrainextender": "terrain-extender",
+    "electricseed": "electric-seed", "grassyseed": "grassy-seed", "mistyseed": "misty-seed", "psychicseed": "psychic-seed",
+    "protectivepads": "protective-pads", "punchingglove": "punching-glove", "utilityumbrella": "utility-umbrella",
+    "throatspray": "throat-spray", "redcard": "red-card", "ejectbutton": "eject-button", "ejectpack": "eject-pack",
+    "blunderpolicy": "blunder-policy", "roomservice": "room-service", "mirrorherb": "mirror-herb",
+    "powerherb": "power-herb", "whiteherb": "white-herb", "mentalherb": "mental-herb", "focusband": "focus-band",
+    "widelens": "wide-lens", "scopelens": "scope-lens", "muscleband": "muscle-band", "wiseglasses": "wise-glasses",
+    "bindingband": "binding-band", "gripclaw": "grip-claw", "stickybarb": "sticky-barb", "destinyknot": "destiny-knot",
+    "flameorb": "flame-orb", "toxicorb": "toxic-orb", "ringtarget": "ring-target", "blackbelt": "black-belt",
+    "blackglasses": "black-glasses", "charcoal": "charcoal", "dragonfang": "dragon-fang", "hardstone": "hard-stone",
+    "magnet": "magnet", "miracleseed": "miracle-seed", "mysticwater": "mystic-water", "nevermeltice": "never-melt-ice",
+    "poisonbarb": "poison-barb", "spelltag": "spell-tag", "twistedspoon": "twisted-spoon", "sharpbeak": "sharp-beak",
+    "softsand": "soft-sand", "silverpowder": "silver-powder", "silkscarf": "silk-scarf",
+    "bigroot": "big-root", "brightpowder": "bright-powder", "fairyfeather": "fairy-feather",
+    "kingsrock": "kings-rock", "lightball": "light-ball", "metalcoat": "metal-coat",
+    "quickclaw": "quick-claw", "shedshell": "shed-shell", "shellbell": "shell-bell",
 }
 
 
 def _showdown_slug_to_pokeapi(slug: str) -> str:
     """Converts a Showdown compact slug to a PokéAPI hyphenated slug.
 
-    Uses the explicit map for known items, otherwise inserts hyphens at
-    digit-to-letter and letter-to-digit boundaries (handles most Mega Stones
-    like "charizarditex" -> "charizardite-x").
+    Uses explicit mapping for multi-word items, otherwise applies target regexes
+    for Berries (aspearberry -> aspear-berry), Mega Stones (charizarditex -> charizardite-x),
+    and Z-Crystals (absoliniumz -> absolinium-z).
     """
     if slug in _SHOWDOWN_TO_POKEAPI_SLUG:
         return _SHOWDOWN_TO_POKEAPI_SLUG[slug]
-    # Insert hyphen before trailing single letters/digits (mega stone suffixes)
-    # e.g. charizarditex -> charizardite-x, charizarditey -> charizardite-y
-    converted = re.sub(r"([a-z])([xy])$", r"\1-\2", slug)
+
+    # 1. Berries: aspearberry -> aspear-berry
+    converted = re.sub(r"([a-z])(berry)$", r"\1-\2", slug)
+    # 2. Mega Stones X/Y: charizarditex -> charizardite-x
+    converted = re.sub(r"(ite)([xy])$", r"\1-\2", converted)
+    # 3. Z-Crystals: absoliniumz -> absolinium-z
+    converted = re.sub(r"([a-z]+ium)(z)$", r"\1-\2", converted)
     return converted
 
 
@@ -158,15 +177,32 @@ class HybridItemProvider:
         # were overridden to null = legal, even if base was Past)
         all_showdown_slugs = legal_slugs | set(mega_mappings.keys())
 
+        # Collect slugs needing PokéAPI detail fetch
+        pokeapi_cache: dict[str, dict | None] = {}
+        if not skip_pokeapi:
+            slugs_to_fetch = [
+                _showdown_slug_to_pokeapi(s)
+                for s in all_showdown_slugs
+                if _showdown_slug_to_pokeapi(s) not in existing_pokeapi_slugs
+            ]
+            if slugs_to_fetch:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_slug = {
+                        executor.submit(_fetch_pokeapi_item_detail, slug): slug
+                        for slug in slugs_to_fetch
+                    }
+                    for future in as_completed(future_to_slug):
+                        slug = future_to_slug[future]
+                        try:
+                            pokeapi_cache[slug] = future.result()
+                        except Exception:
+                            pokeapi_cache[slug] = None
+
         records: list[ItemRecord] = []
         for showdown_slug in sorted(all_showdown_slugs):
             is_legal = showdown_slug in legal_slugs
             pokeapi_slug = _showdown_slug_to_pokeapi(showdown_slug)
-
-            # Skip PokéAPI fetch if record already in DB
-            pokeapi_data = None
-            if not skip_pokeapi and pokeapi_slug not in existing_pokeapi_slugs:
-                pokeapi_data = _fetch_pokeapi_item_detail(pokeapi_slug)
+            pokeapi_data = pokeapi_cache.get(pokeapi_slug)
 
             records.append(
                 _build_item_record(showdown_slug, is_legal, mega_mappings, pokeapi_data)

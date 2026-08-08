@@ -54,11 +54,21 @@ from ..infrastructure.database.repositories import (
     TeamRepository,
     ChampionsCatalogRepository,
     MegaEvolutionRepository,
+    ItemRepository,
 )
 from ..services.pokemon_import_service import add_pokemon_to_box
 from ..services.mega_evolution_service import (
     sync_all_champions_megas_on_startup,
     sync_mega_evolutions_for_species,
+)
+from ..services.items_catalog_service import (
+    sync_items_catalog,
+    load_items_catalog,
+    check_items_catalog_staleness,
+)
+from ..services.item_effect_service import (
+    compute_effective_stats,
+    validate_item_assignment,
 )
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 
@@ -116,6 +126,12 @@ def main(page: ft.Page):
         "all_stats_visible": False,
         "assigning_slot_position": None,  # Slot number when choosing from box
         "detail_form_id": "base",     # Active form shown in detail drawer
+        # Item system state
+        "items_catalog": [],          # list[ItemRecord]
+        "items_by_id": {},            # dict[canonical_id, ItemRecord]
+        "champions_items": [],        # list[ItemRecord] — Champions-legal only
+        "mega_stone_map": {},         # dict[species_name, list[ItemRecord]]
+        "item_picker_slot": None,     # Slot being assigned in item picker dialog
     }
 
     # --- Database Helpers ---
@@ -134,6 +150,11 @@ def main(page: ft.Page):
             state["champions_catalog"] = catalog_repo.list_all()
             state["all_pokemon_names"] = [r.display_name for r in state["champions_catalog"]]
             state["mega_species_set"] = set(m.species_name.lower() for m in mega_repo.list_all())
+
+    def load_items_to_state():
+        """Prime item state dicts from local SQLite catalog (0ms during UI rendering)."""
+        with get_session() as session:
+            load_items_catalog(session, state)
 
     # --- Notifications ---
     def show_toast(message: str, is_error: bool = False):
@@ -1140,12 +1161,139 @@ def main(page: ft.Page):
                     text_size=12
                 )
                 
-                item_field = ft.TextField(
-                    label="Held Item",
-                    value=matching_member.item or "",
-                    text_size=12
+                # Build rich item slot widget ----------------------------------------
+                current_item_id = matching_member.item
+                current_item_rec = state["items_by_id"].get(current_item_id) if current_item_id else None
+
+                # Run guardrail validation
+                validation = validate_item_assignment(
+                    current_item_rec,
+                    species_name=pokemon.species_name,
+                    team_items=[
+                        state["items_by_id"].get(m.item)
+                        for m in (team_repo.list_members(state["active_team_id"]) if False else [])
+                        if m.item
+                    ]
+                ) if current_item_rec else None
+
+                # Auto-unlock Mega form if Mega Stone matches this species
+                if (current_item_rec and current_item_rec.target_species and
+                        current_item_rec.target_species.lower() == pokemon.species_name.lower() and
+                        current_item_rec.target_form):
+                    # Inject Mega Stone unlocked form into the form drop if not already present
+                    stone_target_id = next(
+                        (m.canonical_id for m in megas if current_item_rec.target_form in m.canonical_id.lower()),
+                        None
+                    )
+                    if stone_target_id and form_drop:
+                        form_drop.value = stone_target_id
+                        selected_form = stone_target_id
+                        active_mega = next((m for m in megas if m.canonical_id == selected_form), None)
+                        if active_mega:
+                            card_sprite = active_mega.sprite_url or pokemon.sprite_url
+                            card_bst = (active_mega.hp + active_mega.attack + active_mega.defense +
+                                        active_mega.special_attack + active_mega.special_defense + active_mega.speed)
+                            card_name = f"{pokemon.display_name} (⚡ {active_mega.form_name})"
+
+                # Compute effective stats for modifier display
+                effective_stats = compute_effective_stats(pokemon.stats, current_item_rec) if current_item_rec else pokemon.stats
+                speed_modified = (effective_stats.speed != pokemon.stats.speed)
+
+                # Item slot button label
+                if current_item_rec:
+                    item_label_txt = current_item_rec.display_name
+                    item_label_col = ft.Colors.WHITE
+                    item_icon_src = current_item_rec.sprite_url
+                else:
+                    item_label_txt = "Select Held Item…"
+                    item_label_col = ft.Colors.GREY_500
+                    item_icon_src = None
+
+                # Guardrail badge
+                guardrail_controls = []
+                if validation and validation.error:
+                    guardrail_controls.append(
+                        ft.Container(
+                            content=ft.Row(spacing=4, controls=[
+                                ft.Icon(ft.Icons.ERROR, size=12, color=ft.Colors.RED_400),
+                                ft.Text(validation.error, size=10, color=ft.Colors.RED_400,
+                                        overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
+                            ]),
+                            bgcolor="#3b0000",
+                            border=ft.Border.all(1, ft.Colors.RED_400),
+                            border_radius=5,
+                            padding=ft.Padding.symmetric(horizontal=6, vertical=4),
+                        )
+                    )
+                elif validation and validation.warning:
+                    guardrail_controls.append(
+                        ft.Container(
+                            content=ft.Row(spacing=4, controls=[
+                                ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=ft.Colors.AMBER_400),
+                                ft.Text(validation.warning, size=10, color=ft.Colors.AMBER_400,
+                                        overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
+                            ]),
+                            bgcolor="#291d03",
+                            border=ft.Border.all(1, ft.Colors.AMBER_400),
+                            border_radius=5,
+                            padding=ft.Padding.symmetric(horizontal=6, vertical=4),
+                        )
+                    )
+
+                # Speed modifier badge (shown inline in the stat row)
+                speed_badge = None
+                if speed_modified:
+                    delta_pct = round((effective_stats.speed / pokemon.stats.speed - 1) * 100)
+                    badge_sign = "+" if delta_pct > 0 else ""
+                    badge_col = ft.Colors.BLUE_400 if delta_pct > 0 else ft.Colors.ORANGE_400
+                    speed_badge = ft.Container(
+                        content=ft.Text(f"Spe {effective_stats.speed} ({badge_sign}{delta_pct}%)",
+                                        size=10, weight=ft.FontWeight.BOLD, color=badge_col),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border=ft.Border.all(1, badge_col),
+                        border_radius=4,
+                        padding=ft.Padding.symmetric(horizontal=5, vertical=2),
+                    )
+
+                item_slot_widget = ft.Container(
+                    content=ft.Column(spacing=4, controls=[
+                        ft.Row(
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            controls=[
+                                ft.Text("Held Item", size=10, weight=ft.FontWeight.BOLD,
+                                        color=ft.Colors.GREY_400),
+                                ft.Row(spacing=4, controls=[
+                                    speed_badge if speed_badge else ft.Container(),
+                                    ft.IconButton(
+                                        icon=ft.Icons.CLOSE, icon_size=14,
+                                        icon_color=ft.Colors.GREY_500,
+                                        tooltip="Remove Item",
+                                        visible=current_item_rec is not None,
+                                        on_click=lambda e, s=slot: _apply_item_to_slot(s, None),
+                                    )
+                                ])
+                            ]
+                        ),
+                        ft.Container(
+                            content=ft.Row(spacing=8, controls=[
+                                ft.Image(src=item_icon_src, width=24, height=24, fit=ft.BoxFit.CONTAIN)
+                                if item_icon_src else ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=20, color=ft.Colors.GREY_500),
+                                ft.Text(item_label_txt, size=12, color=item_label_col, expand=True,
+                                        overflow=ft.TextOverflow.ELLIPSIS),
+                                ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=12, color=ft.Colors.GREY_500),
+                            ]),
+                            bgcolor=ft.Colors.CARD_BG,
+                            border_radius=6,
+                            border=ft.Border.all(1, ft.Colors.DIVIDER),
+                            padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+                            on_click=lambda e, s=slot: _open_item_picker(s),
+                            ink=True,
+                        ),
+                        *guardrail_controls,
+                    ]),
                 )
-                
+                # -------------------------------------------------------------------
+
                 moves_str = ", ".join(m.name for m in matching_member.moveset)
                 moves_field = ft.TextField(
                     label="Moveset (comma separated)",
@@ -1160,8 +1308,8 @@ def main(page: ft.Page):
                     text_size=12
                 )
 
-                def make_update_handler(s_pos=slot, fm_dr=form_drop, ab_dr=ability_drop, it_fl=item_field, mv_fl=moves_field, nt_fl=notes_field):
-                    return lambda e: handle_update_member_field(s_pos, fm_dr.value if fm_dr else "base", ab_dr.value, it_fl.value, mv_fl.value, nt_fl.value)
+                def make_update_handler(s_pos=slot, fm_dr=form_drop, ab_dr=ability_drop, item_id=current_item_id, mv_fl=moves_field, nt_fl=notes_field):
+                    return lambda e: handle_update_member_field(s_pos, fm_dr.value if fm_dr else "base", ab_dr.value, item_id or "", mv_fl.value, nt_fl.value)
 
                 def make_remove_handler(s_pos=slot):
                     return lambda e: handle_remove_member(s_pos)
@@ -1192,7 +1340,7 @@ def main(page: ft.Page):
                     slot_controls.append(form_drop)
                 slot_controls.extend([
                     ability_drop,
-                    item_field,
+                    item_slot_widget,
                     moves_field,
                     notes_field,
                     ft.ElevatedButton("Save Changes", icon=ft.Icons.SAVE, on_click=make_update_handler(), height=30)
@@ -1419,43 +1567,320 @@ def main(page: ft.Page):
             container_holder.content = team_tab_layout
         page.update()
 
-    sync_megas_spinner = ft.ProgressRing(visible=False, width=16, height=16)
+    # -----------------------------------------------------------------------
+    # SETTINGS / DATA MANAGEMENT MODAL
+    # Centralised place for all manual DB sync actions.
+    # -----------------------------------------------------------------------
 
-    def handle_manual_mega_sync():
-        sync_megas_spinner.visible = True
-        show_toast("Syncing Mega Evolutions from PokéAPI in background...")
+    # Spinner refs used by Settings modal rows
+    _spinner_megas = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
+    _spinner_items = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
+
+    # Status text refs updated after each sync
+    _status_megas = ft.Text("", size=11, color=ft.Colors.GREY_400)
+    _status_items = ft.Text("", size=11, color=ft.Colors.GREY_400)
+
+    def _count_text(label: str, count: int, unit: str) -> str:
+        return f"{count:,} {unit}" if count > 0 else "Not yet synced"
+
+    def _refresh_settings_status():
+        with get_session() as session:
+            mega_repo = MegaEvolutionRepository(session)
+            item_repo = ItemRepository(session)
+            mega_count = len(mega_repo.list_all())
+            item_count = item_repo.count()
+        _status_megas.value = _count_text("Megas", mega_count, "forms cached")
+        _status_items.value = _count_text("Items", item_count, "items catalogued")
         page.update()
 
-        def background_sync():
+    def _handle_sync_megas(e=None):
+        _spinner_megas.visible = True
+        _status_megas.value = "Syncing…"
+        page.update()
+        def _bg():
             try:
                 with get_session() as session:
                     res = sync_all_champions_megas_on_startup(session)
-                # Refresh all caches after session is closed
                 load_champions_catalog()
-                show_toast(f"✅ Mega Evolutions catalog updated! ({res['total_local']} Megas cached)")
+                _status_megas.value = f"{res.get('total_local', 0):,} forms cached"
+                show_toast(f"✅ Mega Evolutions synced! ({res.get('total_local', 0)} cached)")
             except Exception as ex:
-                show_toast(f"Error syncing Megas: {str(ex)}", is_error=True)
+                show_toast(f"Mega sync error: {ex}", is_error=True)
+                _status_megas.value = "Sync failed"
             finally:
-                sync_megas_spinner.visible = False
+                _spinner_megas.visible = False
                 page.update()
+        threading.Thread(target=_bg, daemon=True).start()
 
-        threading.Thread(target=background_sync, daemon=True).start()
+    def _handle_sync_items(e=None):
+        _spinner_items.visible = True
+        _status_items.value = "Syncing…"
+        page.update()
+        def _bg():
+            try:
+                with get_session() as session:
+                    res = sync_items_catalog(session, force=True)
+                load_items_to_state()
+                _status_items.value = f"{res.get('total', 0):,} items catalogued"
+                show_toast(f"✅ Items catalog synced! ({res.get('added', 0)} added, {res.get('updated', 0)} updated)")
+                render_team_builder()
+            except Exception as ex:
+                show_toast(f"Items sync error: {ex}", is_error=True)
+                _status_items.value = "Sync failed"
+            finally:
+                _spinner_items.visible = False
+                page.update()
+        threading.Thread(target=_bg, daemon=True).start()
 
-    sync_megas_btn = ft.Container(
-        content=ft.Row(
-            spacing=6,
-            controls=[
-                ft.Icon(ft.Icons.SYNC, size=16, color=ft.Colors.AMBER_400),
-                ft.Text("Sync Megas", size=12, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE),
-                sync_megas_spinner
-            ]
+    def _make_settings_row(icon, title: str, status_ref, spinner_ref, on_sync) -> ft.Container:
+        return ft.Container(
+            content=ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[
+                    ft.Row(spacing=10, controls=[
+                        ft.Icon(icon, size=18, color=ft.Colors.AMBER_400),
+                        ft.Column(spacing=2, controls=[
+                            ft.Text(title, size=13, weight=ft.FontWeight.W_600),
+                            status_ref,
+                        ])
+                    ]),
+                    ft.Row(spacing=6, controls=[
+                        spinner_ref,
+                        ft.Container(
+                            content=ft.Row(spacing=4, controls=[
+                                ft.Icon(ft.Icons.SYNC, size=13, color=ft.Colors.WHITE),
+                                ft.Text("Sync", size=11, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE),
+                            ]),
+                            bgcolor=ft.Colors.AMBER_700,
+                            border_radius=6,
+                            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+                            on_click=on_sync,
+                        )
+                    ])
+                ]
+            ),
+            bgcolor=ft.Colors.CARD_BG,
+            border_radius=8,
+            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
+            border=ft.Border.all(1, ft.Colors.DIVIDER),
+        )
+
+    settings_modal = ft.AlertDialog(
+        title=ft.Row(spacing=10, controls=[
+            ft.Icon(ft.Icons.SETTINGS, color=ft.Colors.AMBER_400),
+            ft.Text("Data & Synchronization", weight=ft.FontWeight.BOLD, size=16),
+        ]),
+        content=ft.Container(
+            width=460,
+            content=ft.Column(
+                spacing=10,
+                tight=True,
+                controls=[
+                    ft.Text(
+                        "Manage the local SQLite catalog. Sync pulls the latest data from PokéAPI & Pokémon Showdown.",
+                        size=12, color=ft.Colors.GREY_400
+                    ),
+                    ft.Divider(height=1, color=ft.Colors.DIVIDER),
+                    _make_settings_row(
+                        ft.Icons.FLASH_ON, "Mega Evolutions",
+                        _status_megas, _spinner_megas, _handle_sync_megas
+                    ),
+                    _make_settings_row(
+                        ft.Icons.DIAMOND, "Held Items Catalog",
+                        _status_items, _spinner_items, _handle_sync_items
+                    ),
+                ]
+            )
         ),
-        bgcolor="#1e293b",
-        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-        border_radius=8,
-        border=ft.Border.all(1, ft.Colors.DIVIDER),
-        on_click=lambda e: handle_manual_mega_sync()
+        actions=[ft.TextButton("Close", on_click=lambda e: _close_settings())],
     )
+    page.overlay.append(settings_modal)
+
+    def _open_settings(e=None):
+        _refresh_settings_status()
+        settings_modal.open = True
+        page.update()
+
+    def _close_settings(e=None):
+        settings_modal.open = False
+        page.update()
+
+    settings_btn = ft.IconButton(
+        icon=ft.Icons.SETTINGS,
+        icon_color=ft.Colors.GREY_400,
+        tooltip="Data & Synchronization Settings",
+        on_click=_open_settings,
+    )
+
+    # -----------------------------------------------------------------------
+    # ITEM PICKER MODAL
+    # Opened when clicking the held-item slot of a team member card.
+    # -----------------------------------------------------------------------
+
+    _item_search_query = ft.Ref[ft.TextField]()
+    _item_list_col = ft.Column(scroll=ft.ScrollMode.AUTO, height=380, spacing=6)
+    _item_legal_only = ft.Ref[ft.Checkbox]()
+    _item_category_filter = ft.Ref[ft.Dropdown]()
+
+    def _render_item_picker_list():
+        _item_list_col.controls.clear()
+        query = (_item_search_query.current.value or "").strip().lower()
+        legal_only = _item_legal_only.current.value if _item_legal_only.current else True
+        cat_filter = _item_category_filter.current.value if _item_category_filter.current else "all"
+
+        source = state["champions_items"] if legal_only else state["items_catalog"]
+        if cat_filter and cat_filter != "all":
+            source = [i for i in source if (i.category or "").replace("-", " ") == cat_filter.replace("-", " ")]
+        if query:
+            source = [i for i in source if query in i.display_name.lower() or query in (i.short_effect or "").lower()]
+
+        if not source:
+            _item_list_col.controls.append(
+                ft.Container(
+                    content=ft.Text("No items found.", size=12, color=ft.Colors.GREY_500, italic=True),
+                    alignment=ft.Alignment.CENTER, padding=ft.Padding.all(20)
+                )
+            )
+        else:
+            for item in source[:80]:  # cap for performance
+                is_legal = item.is_champions_legal
+                badge_col = ft.Colors.GREEN_400 if is_legal else ft.Colors.AMBER_400
+                badge_txt = "Champions Legal" if is_legal else "Banned in Champions"
+                badge_icon = ft.Icons.CHECK_CIRCLE if is_legal else ft.Icons.WARNING_ROUNDED
+
+                _item_list_col.controls.append(
+                    ft.Container(
+                        content=ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN)
+                                if item.sprite_url else
+                                ft.Icon(ft.Icons.DIAMOND, size=28, color=ft.Colors.AMBER_400),
+                                ft.Column(spacing=2, expand=True, controls=[
+                                    ft.Text(item.display_name, size=13, weight=ft.FontWeight.W_600),
+                                    ft.Text(item.short_effect or "", size=11, color=ft.Colors.GREY_400,
+                                            overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
+                                    ft.Row(spacing=4, controls=[
+                                        ft.Icon(badge_icon, size=11, color=badge_col),
+                                        ft.Text(badge_txt, size=10, color=badge_col),
+                                    ])
+                                ]),
+                            ]
+                        ),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border_radius=8,
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+                        border=ft.Border.all(1, ft.Colors.DIVIDER),
+                        on_click=lambda e, it=item: _handle_item_selected(it),
+                        ink=True,
+                    )
+                )
+        page.update()
+
+    def _handle_item_selected(item):
+        slot = state.get("item_picker_slot")
+        if slot is None:
+            return
+        item_picker_modal.open = False
+        page.update()
+        # Persist choice via existing update handler flow
+        _apply_item_to_slot(slot, item.canonical_id)
+
+    def _apply_item_to_slot(slot_position: int, item_canonical_id: str | None):
+        if state["active_team_id"] is None:
+            return
+        _, team_repo, _, session = get_repositories()
+        try:
+            members = team_repo.list_members(state["active_team_id"])
+            matching = next((m for m in members if m.slot_position == slot_position), None)
+            if matching:
+                updated = TeamMember(
+                    team_member_id=matching.team_member_id,
+                    box_entry_id=matching.box_entry_id,
+                    slot_position=slot_position,
+                    selected_form=matching.selected_form or "base",
+                    item=item_canonical_id,
+                    moveset=matching.moveset,
+                    ability=matching.ability,
+                    notes=matching.notes or ""
+                )
+                team_repo.upsert_member(state["active_team_id"], updated)
+        finally:
+            session.close()
+        render_team_builder()
+
+    def _open_item_picker(slot_position: int):
+        state["item_picker_slot"] = slot_position
+        if _item_search_query.current:
+            _item_search_query.current.value = ""
+        _render_item_picker_list()
+        item_picker_modal.open = True
+        page.update()
+
+    # Build category options from existing items
+    def _get_category_options():
+        seen = set()
+        opts = [ft.dropdown.Option("all", text="All Categories")]
+        for it in state["items_catalog"]:
+            cat = (it.category or "other")
+            if cat not in seen:
+                seen.add(cat)
+                opts.append(ft.dropdown.Option(cat, text=cat.replace("-", " ").title()))
+        return opts
+
+    item_picker_modal = ft.AlertDialog(
+        title=ft.Row(spacing=8, controls=[
+            ft.Icon(ft.Icons.DIAMOND, color=ft.Colors.AMBER_400),
+            ft.Text("Select Held Item", weight=ft.FontWeight.BOLD, size=16),
+        ]),
+        content=ft.Container(
+            width=480,
+            content=ft.Column(
+                spacing=8,
+                tight=True,
+                controls=[
+                    ft.Row(spacing=8, controls=[
+                        ft.TextField(
+                            ref=_item_search_query,
+                            label="Search items…",
+                            prefix_icon=ft.Icons.SEARCH,
+                            expand=True,
+                            text_size=13,
+                            on_change=lambda e: _render_item_picker_list(),
+                        ),
+                        ft.Dropdown(
+                            ref=_item_category_filter,
+                            label="Category",
+                            width=160,
+                            text_size=12,
+                            options=[ft.dropdown.Option("all", text="All")],
+                            on_select=lambda e: _render_item_picker_list(),
+                        ),
+                    ]),
+                    ft.Checkbox(
+                        ref=_item_legal_only,
+                        label="Champions-legal only",
+                        value=True,
+                        on_change=lambda e: _render_item_picker_list(),
+                    ),
+                    ft.Divider(height=1, color=ft.Colors.DIVIDER),
+                    _item_list_col,
+                ]
+            )
+        ),
+        actions=[
+            ft.TextButton("Clear Item", on_click=lambda e: [
+                setattr(item_picker_modal, "open", False),
+                _apply_item_to_slot(state.get("item_picker_slot"), None),
+                page.update(),
+            ]),
+            ft.TextButton("Cancel", on_click=lambda e: [
+                setattr(item_picker_modal, "open", False),
+                page.update(),
+            ]),
+        ],
+    )
+    page.overlay.append(item_picker_modal)
 
     # App header bar
     header = ft.Container(
@@ -1482,7 +1907,7 @@ def main(page: ft.Page):
                         )
                     ]
                 ),
-                ft.Row(spacing=10, controls=[tabs_row, sync_megas_btn])
+                ft.Row(spacing=10, controls=[tabs_row, settings_btn])
             ]
         ),
         bgcolor=ft.Colors.CARD_BG,
@@ -1496,6 +1921,10 @@ def main(page: ft.Page):
 
     # --- Initial State Load ---
     load_champions_catalog()
+    load_items_to_state()
+    # Populate item picker category dropdown after items are loaded
+    if _item_category_filter.current:
+        _item_category_filter.current.options = _get_category_options()
     refresh_box()
     refresh_teams()
 

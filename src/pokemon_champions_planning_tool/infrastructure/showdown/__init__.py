@@ -72,7 +72,7 @@ def _extract_item_blocks(ts_text: str) -> dict[str, str]:
         return {}
 
     result: dict[str, str] = {}
-    slug_pattern = re.compile(r"\b([a-z][a-z0-9]*):\s*\{", re.MULTILINE)
+    slug_pattern = re.compile(r"^(?:\t| {1,4})([a-z0-9]+):\s*\{", re.MULTILINE)
     text_from_export = ts_text[export_start + 1:]
 
     for match in slug_pattern.finditer(text_from_export):
@@ -117,7 +117,7 @@ def get_champions_legal_slugs() -> set[str]:
 
     def _get_nonstandard(body: str) -> str | None:
         m = re.search(r"isNonstandard:\s*([^\n,}]+)", body)
-        return m.group(1).strip() if m else None
+        return m.group(1).strip().strip("\"'") if m else None
 
     legal_slugs: set[str] = set()
 
@@ -134,11 +134,11 @@ def get_champions_legal_slugs() -> set[str]:
                 pass
             else:
                 # No override change — use base legality
-                if base_nonstandard is None or "Future" in (base_nonstandard or ""):
+                if base_nonstandard is None:
                     legal_slugs.add(slug)
         else:
             # Not mentioned in Champions mod — use base legality
-            if base_nonstandard is None or "Future" in (base_nonstandard or ""):
+            if base_nonstandard is None:
                 legal_slugs.add(slug)
 
     return legal_slugs

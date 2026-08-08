@@ -478,6 +478,13 @@ class ItemRepository:
         self.session.expunge(existing)
         return existing
 
+    def delete(self, canonical_id: str) -> None:
+        """Deletes an item record by canonical_id."""
+        rec = self.session.get(ItemRecord, canonical_id)
+        if rec is not None:
+            self.session.delete(rec)
+            self.session.commit()
+
     def list_all(self) -> list[ItemRecord]:
         records = list(self.session.exec(select(ItemRecord)))
         for r in records:

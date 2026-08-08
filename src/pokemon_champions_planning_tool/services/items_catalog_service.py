@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from sqlmodel import Session
 
-from ..database.models import ItemRecord
-from ..database.repositories import ItemRepository
-from ..providers import HybridItemProvider
+from ..infrastructure.database.models import ItemRecord
+from ..infrastructure.database.repositories import ItemRepository
+from ..infrastructure.providers import HybridItemProvider
 
 
 def check_items_catalog_staleness(session: Session) -> bool:
@@ -70,8 +70,8 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
 
     provider = HybridItemProvider()
 
-    # Collect existing canonical_ids to avoid redundant PokéAPI fetches
-    existing = {r.canonical_id for r in repo.list_all()}
+    # Collect existing canonical_ids that already have PokéAPI sprite data
+    existing = set() if force else {r.canonical_id for r in repo.list_all() if r.sprite_url is not None}
 
     # If forced, clear Showdown cache so we re-fetch from GitHub
     if force:
@@ -85,13 +85,20 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
 
     added = 0
     updated = 0
+    new_ids = set()
     for record in new_records:
+        new_ids.add(record.canonical_id)
         was_new = repo.get(record.canonical_id) is None
         repo.upsert(record)
         if was_new:
             added += 1
         else:
             updated += 1
+
+    # Prune obsolete/invalid item records from previous bad syncs
+    for existing_record in repo.list_all():
+        if existing_record.canonical_id not in new_ids:
+            repo.delete(existing_record.canonical_id)
 
     # Update the staleness sentinel
     legal_count = provider.get_champions_legal_count()

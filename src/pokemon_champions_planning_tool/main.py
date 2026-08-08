@@ -1,6 +1,7 @@
 import sys
 from .infrastructure.database.database import initialize_database, get_session
 from .services.champions_catalog_service import sync_champions_catalog_on_startup
+from .services.items_catalog_service import sync_items_catalog
 from .services.terminal_shell import TerminalShell
 
 
@@ -10,6 +11,7 @@ def run():
 
     with get_session() as session:
         sync_champions_catalog_on_startup(session)
+        sync_items_catalog(session)
 
     if "--cli" in sys.argv:
         TerminalShell().run()

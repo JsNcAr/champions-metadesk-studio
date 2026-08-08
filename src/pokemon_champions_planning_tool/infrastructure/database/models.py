@@ -249,3 +249,50 @@ class MegaCheckedSpeciesRecord(SQLModel, table=True):
 
 
 
+
+class ItemRecord(SQLModel, table=True):
+    """Persisted held item with Champions format legality and stat modifier data."""
+
+    __tablename__: ClassVar[str] = "item_records"
+
+    canonical_id: str = Field(primary_key=True, index=True)
+    display_name: str
+    category: str = Field(default="other", index=True)
+    is_champions_legal: bool = Field(default=True, index=True)
+    sprite_url: str | None = None
+    short_effect: str = Field(default="")
+    target_species: str | None = Field(default=None, index=True)
+    target_form: str | None = None
+    stat_modifiers: dict[str, float] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+    def to_domain(self) -> "Item":
+        from ...domain.entities.item import Item
+        return Item(
+            canonical_id=self.canonical_id,
+            display_name=self.display_name,
+            category=self.category,
+            is_champions_legal=self.is_champions_legal,
+            sprite_url=self.sprite_url,
+            short_effect=self.short_effect,
+            target_species=self.target_species,
+            target_form=self.target_form,
+            stat_modifiers=dict(self.stat_modifiers),
+        )
+
+
+class ItemCatalogMetaRecord(SQLModel, table=True):
+    """Singleton row tracking the last successful item catalog sync.
+
+    id is always 1. Used for staleness detection: compare total_holdable_items
+    against the live count from Showdown to decide whether to re-sync.
+    """
+
+    __tablename__: ClassVar[str] = "item_catalog_meta"
+
+    id: int = Field(default=1, primary_key=True)
+    total_holdable_items: int = Field(default=0)
+    last_synced_at: datetime = Field(default_factory=_utc_now)

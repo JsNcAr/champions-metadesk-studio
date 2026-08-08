@@ -17,6 +17,8 @@ from ...domain.pokemon_identity import format_api_name
 from .models import (
     BoxEntryRecord,
     ChampionsSpeciesRecord,
+    ItemCatalogMetaRecord,
+    ItemRecord,
     MegaCheckedSpeciesRecord,
     MegaEvolutionRecord,
     PokemonRecord,
@@ -432,3 +434,98 @@ class MegaEvolutionRepository:
         self.session.commit()
         self.session.refresh(existing)
         return existing
+
+
+class ItemRepository:
+    """CRUD helpers for item catalog records and sync metadata."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    # ------------------------------------------------------------------
+    # Item CRUD
+    # ------------------------------------------------------------------
+
+    def get(self, canonical_id: str) -> ItemRecord | None:
+        rec = self.session.get(ItemRecord, canonical_id)
+        if rec is not None:
+            self.session.expunge(rec)
+        return rec
+
+    def upsert(self, record: ItemRecord) -> ItemRecord:
+        """Insert or update an item record. Returns the persisted record."""
+        existing = self.session.get(ItemRecord, record.canonical_id)
+        if existing is None:
+            self.session.add(record)
+            self.session.commit()
+            self.session.refresh(record)
+            self.session.expunge(record)
+            return record
+
+        # Update mutable fields
+        existing.display_name = record.display_name
+        existing.category = record.category
+        existing.is_champions_legal = record.is_champions_legal
+        existing.sprite_url = record.sprite_url
+        existing.short_effect = record.short_effect
+        existing.target_species = record.target_species
+        existing.target_form = record.target_form
+        existing.stat_modifiers = record.stat_modifiers
+        existing.updated_at = _utc_now()
+        self.session.add(existing)
+        self.session.commit()
+        self.session.refresh(existing)
+        self.session.expunge(existing)
+        return existing
+
+    def list_all(self) -> list[ItemRecord]:
+        records = list(self.session.exec(select(ItemRecord)))
+        for r in records:
+            self.session.expunge(r)
+        return sorted(records, key=lambda r: r.canonical_id)
+
+    def list_champions_legal(self) -> list[ItemRecord]:
+        """Returns only items flagged as legal in the Champions format."""
+        records = list(
+            self.session.exec(
+                select(ItemRecord).where(ItemRecord.is_champions_legal == True)  # noqa: E712
+            )
+        )
+        for r in records:
+            self.session.expunge(r)
+        return sorted(records, key=lambda r: r.canonical_id)
+
+    def list_mega_stones(self) -> list[ItemRecord]:
+        """Returns all Mega Stone items (those with a target_species set)."""
+        records = list(
+            self.session.exec(
+                select(ItemRecord).where(ItemRecord.target_species != None)  # noqa: E711
+            )
+        )
+        for r in records:
+            self.session.expunge(r)
+        return sorted(records, key=lambda r: r.canonical_id)
+
+    def count(self) -> int:
+        return len(self.session.exec(select(ItemRecord)).all())
+
+    # ------------------------------------------------------------------
+    # Staleness sentinel (ItemCatalogMetaRecord singleton)
+    # ------------------------------------------------------------------
+
+    def get_meta(self) -> ItemCatalogMetaRecord | None:
+        return self.session.get(ItemCatalogMetaRecord, 1)
+
+    def update_meta(self, total_holdable_items: int) -> None:
+        """Upsert the singleton meta row with the current known item count."""
+        meta = self.session.get(ItemCatalogMetaRecord, 1)
+        if meta is None:
+            meta = ItemCatalogMetaRecord(
+                id=1, total_holdable_items=total_holdable_items
+            )
+            self.session.add(meta)
+        else:
+            meta.total_holdable_items = total_holdable_items
+            meta.last_synced_at = _utc_now()
+            self.session.add(meta)
+        self.session.commit()

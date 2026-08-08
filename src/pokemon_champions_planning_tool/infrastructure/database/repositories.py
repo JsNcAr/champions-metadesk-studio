@@ -154,6 +154,8 @@ class BoxRepository:
 
         return record.to_domain(pokemon_record.to_domain())
 
+    get = load_entry
+
     def list_entries(self) -> list[BoxEntry]:
         entries: list[BoxEntry] = []
         for record in self.list_all():

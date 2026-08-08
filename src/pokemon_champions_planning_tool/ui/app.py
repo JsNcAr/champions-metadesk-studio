@@ -4,8 +4,12 @@ import threading
 import flet as ft
 from uuid import UUID
 
+class MetaColors(type):
+    def __getattr__(cls, name: str) -> str:
+        return name.lower()
+
 # Bypass Flet's buggy deprecation wrapper on colors
-class ColorsBypass:
+class ColorsBypass(metaclass=MetaColors):
     WHITE = "white"
     BLACK = "black"
     RED_ACCENT = "redaccent"
@@ -16,6 +20,9 @@ class ColorsBypass:
     AMBER_400 = "#fbbf24"
     AMBER_700 = "#d97706"
     AMBER_100 = "#fef3c7"
+    CYAN_400 = "#22d3ee"
+    RED_200 = "#fecaca"
+    RED_900 = "#7f1d1d"
     # Surfaces
     BG_BASE = "#0f172a"         # page background
     CARD_BG = "#1e293b"         # default card surface
@@ -1727,6 +1734,7 @@ def main(page: ft.Page):
         query = (_item_search_query.current.value or "").strip().lower()
         legal_only = _item_legal_only.current.value if _item_legal_only.current else True
         cat_filter = _item_category_filter.current.value if _item_category_filter.current else "all"
+        target_species = state.get("item_picker_species")
 
         source = state["champions_items"] if legal_only else state["items_catalog"]
         if cat_filter and cat_filter != "all":
@@ -1741,40 +1749,102 @@ def main(page: ft.Page):
                     alignment=ft.Alignment.CENTER, padding=ft.Padding.all(20)
                 )
             )
-        else:
-            for item in source[:80]:  # cap for performance
-                is_legal = item.is_champions_legal
+            page.update()
+            return
+
+        # Separate items into valid vs incompatible Mega Stones for target_species
+        valid_items = []
+        incompatible_megas = []
+
+        for item in source:
+            if target_species and item.target_species:
+                if item.target_species.lower() != target_species.lower():
+                    incompatible_megas.append(item)
+                else:
+                    valid_items.append(item)
+            else:
+                valid_items.append(item)
+
+        # Helper to build an item row card control
+        def _build_item_card(item, is_incompatible_mega: bool = False):
+            is_legal = item.is_champions_legal
+
+            if is_incompatible_mega:
+                bg_col = "#241618"  # Dark muted red background
+                border_col = ft.Colors.RED_900
+                badge_col = ft.Colors.RED_400
+                badge_txt = f"Species Mismatch (Requires {item.target_species.title()})"
+                badge_icon = ft.Icons.ERROR_OUTLINE
+                title_col = ft.Colors.RED_200
+            else:
+                bg_col = ft.Colors.CARD_BG
+                border_col = ft.Colors.DIVIDER
                 badge_col = ft.Colors.GREEN_400 if is_legal else ft.Colors.AMBER_400
                 badge_txt = "Champions Legal" if is_legal else "Banned in Champions"
                 badge_icon = ft.Icons.CHECK_CIRCLE if is_legal else ft.Icons.WARNING_ROUNDED
+                if item.target_species and target_species and item.target_species.lower() == target_species.lower():
+                    badge_txt += f" — Compatible with {target_species.title()}"
+                    badge_col = ft.Colors.CYAN_400
+                    badge_icon = ft.Icons.FLASH_ON
+                title_col = ft.Colors.WHITE
 
-                _item_list_col.controls.append(
-                    ft.Container(
-                        content=ft.Row(
-                            spacing=10,
-                            controls=[
-                                ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN)
-                                if item.sprite_url else
-                                ft.Icon(ft.Icons.DIAMOND, size=28, color=ft.Colors.AMBER_400),
-                                ft.Column(spacing=2, expand=True, controls=[
-                                    ft.Text(item.display_name, size=13, weight=ft.FontWeight.W_600),
-                                    ft.Text(item.short_effect or "", size=11, color=ft.Colors.GREY_400,
-                                            overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
-                                    ft.Row(spacing=4, controls=[
-                                        ft.Icon(badge_icon, size=11, color=badge_col),
-                                        ft.Text(badge_txt, size=10, color=badge_col),
-                                    ])
-                                ]),
-                            ]
+            return ft.Container(
+                content=ft.Row(
+                    spacing=10,
+                    controls=[
+                        ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN)
+                        if item.sprite_url else
+                        ft.Icon(
+                            ft.Icons.FLASH_ON if item.target_species else ft.Icons.DIAMOND,
+                            size=24,
+                            color=ft.Colors.RED_400 if is_incompatible_mega else ft.Colors.AMBER_400
                         ),
-                        bgcolor=ft.Colors.CARD_BG,
-                        border_radius=8,
-                        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-                        border=ft.Border.all(1, ft.Colors.DIVIDER),
-                        on_click=lambda e, it=item: _handle_item_selected(it),
-                        ink=True,
-                    )
+                        ft.Column(spacing=2, expand=True, controls=[
+                            ft.Text(item.display_name, size=13, weight=ft.FontWeight.W_600, color=title_col),
+                            ft.Text(item.short_effect or "", size=11, color=ft.Colors.GREY_400,
+                                    overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
+                            ft.Row(spacing=4, controls=[
+                                ft.Icon(badge_icon, size=11, color=badge_col),
+                                ft.Text(badge_txt, size=10, color=badge_col, weight=ft.FontWeight.W_500),
+                            ])
+                        ]),
+                    ]
+                ),
+                bgcolor=bg_col,
+                border_radius=8,
+                padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+                border=ft.Border.all(1, border_col),
+                on_click=lambda e, it=item: _handle_item_selected(it),
+                ink=True,
+            )
+
+        # Render valid items
+        for item in valid_items[:80]:
+            _item_list_col.controls.append(_build_item_card(item, is_incompatible_mega=False))
+
+        # Render incompatible Mega Stones section divider and cards at bottom
+        if incompatible_megas:
+            _item_list_col.controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        spacing=8,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        controls=[
+                            ft.Divider(height=1, expand=True, color=ft.Colors.RED_900),
+                            ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=14, color=ft.Colors.RED_400),
+                            ft.Text(
+                                f"Incompatible Mega Stones ({len(incompatible_megas)})",
+                                size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_400
+                            ),
+                            ft.Divider(height=1, expand=True, color=ft.Colors.RED_900),
+                        ]
+                    ),
+                    padding=ft.Padding.symmetric(vertical=10)
                 )
+            )
+            for item in incompatible_megas[:40]:
+                _item_list_col.controls.append(_build_item_card(item, is_incompatible_mega=True))
+
         page.update()
 
     def _handle_item_selected(item):
@@ -1811,6 +1881,20 @@ def main(page: ft.Page):
 
     def _open_item_picker(slot_position: int):
         state["item_picker_slot"] = slot_position
+        species_name = None
+        if state["active_team_id"] is not None:
+            box_repo, team_repo, _, session = get_repositories()
+            try:
+                members = team_repo.list_members(state["active_team_id"])
+                matching = next((m for m in members if m.slot_position == slot_position), None)
+                if matching and matching.box_entry_id:
+                    box_entry = box_repo.load_entry(str(matching.box_entry_id))
+                    if box_entry:
+                        species_name = box_entry.pokemon.species_name
+            finally:
+                session.close()
+        state["item_picker_species"] = species_name
+
         if _item_search_query.current:
             _item_search_query.current.value = ""
         _render_item_picker_list()

@@ -248,11 +248,13 @@ def main(page: ft.Page):
         expand=True,
         runs_count=3,
         max_extent=350,
-        child_aspect_ratio=0.75,
-        spacing=15,
-        run_spacing=15,
+        child_aspect_ratio=0.85,
+        spacing=12,
+        run_spacing=12,
     )
-    team_totals_row = ft.Row(spacing=15, alignment=ft.MainAxisAlignment.CENTER)
+    team_totals_row = ft.Column(spacing=4)
+    team_banner_row = ft.Row(spacing=10, alignment=ft.MainAxisAlignment.CENTER)
+    team_validation_col = ft.Column(spacing=6)
 
     # --- MODAL: Assign Pokemon to Slot ---
     def close_modal(e=None):
@@ -1100,22 +1102,36 @@ def main(page: ft.Page):
                 def make_open_handler(s_pos=slot):
                     return lambda e: handle_open_assign_modal(s_pos)
 
-                slot_card = ft.Card(
-                    content=ft.Container(
-                        content=ft.Column(
-                            alignment=ft.MainAxisAlignment.CENTER,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Icon(ft.Icons.ADD_BOX, size=40, color=ft.Colors.GREY_500),
-                                ft.Text(f"Slot {slot}", weight=ft.FontWeight.BOLD, size=15),
-                                ft.Text("Empty Slot", size=12, color=ft.Colors.GREY_500),
-                                ft.ElevatedButton("Assign Pokémon", on_click=make_open_handler())
-                            ]
-                        ),
-                        padding=15,
-                        alignment=ft.Alignment.CENTER
+                slot_card = ft.Container(
+                    content=ft.Column(
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
+                        controls=[
+                            ft.Container(
+                                content=ft.Text(f"{slot}", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_500),
+                                bgcolor="#1e293b", border_radius=10,
+                                padding=ft.Padding.symmetric(horizontal=8, vertical=2),
+                            ),
+                            ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=32, color=ft.Colors.GREY_500),
+                            ft.Text("Empty Slot", size=11, color=ft.Colors.GREY_500),
+                            ft.Container(
+                                content=ft.Text("Assign Pokémon", size=11, color=ft.Colors.AMBER_400,
+                                                weight=ft.FontWeight.W_600),
+                                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                border_radius=6,
+                                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+                                on_click=make_open_handler(),
+                                ink=True,
+                            )
+                        ]
                     ),
-                    bgcolor=ft.Colors.BLUE_GREY_950
+                    border=ft.Border.all(1, "#334155"),
+                    border_radius=10,
+                    padding=16,
+                    alignment=ft.Alignment.CENTER,
+                    bgcolor="#111827",
+                    height=160,
                 )
             else:
                 # Load corresponding box entry & species megas
@@ -1142,6 +1158,15 @@ def main(page: ft.Page):
                     card_bst = pokemon.total
                     card_name = pokemon.display_name
 
+                # ── Auto-save helpers ────────────────────────────────────────
+                def _auto_save_form(e, s_pos=slot, cur_ab=matching_member.ability, cur_item=matching_member.item, cur_moves=matching_member.moveset, cur_notes=matching_member.notes):
+                    moves_str = ", ".join(mv.name for mv in cur_moves)
+                    handle_update_member_field(s_pos, e.control.value, cur_ab or "", cur_item or "", moves_str, cur_notes or "")
+
+                def _auto_save_ability(e, s_pos=slot, cur_form=selected_form, cur_item=matching_member.item, cur_moves=matching_member.moveset, cur_notes=matching_member.notes):
+                    moves_str = ", ".join(mv.name for mv in cur_moves)
+                    handle_update_member_field(s_pos, cur_form, e.control.value, cur_item or "", moves_str, cur_notes or "")
+
                 # Form input elements for member attributes
                 form_drop = None
                 if megas:
@@ -1153,7 +1178,8 @@ def main(page: ft.Page):
                         label="Active Form",
                         value=selected_form,
                         options=form_options,
-                        text_size=12
+                        text_size=12,
+                        on_select=_auto_save_form,
                     )
 
                 ability_options = [
@@ -1165,7 +1191,8 @@ def main(page: ft.Page):
                     label="Ability",
                     value=matching_member.ability or (ability_options[0].text if ability_options else ""),
                     options=ability_options,
-                    text_size=12
+                    text_size=12,
+                    on_select=_auto_save_ability,
                 )
                 
                 # Build rich item slot widget ----------------------------------------
@@ -1301,72 +1328,150 @@ def main(page: ft.Page):
                 )
                 # -------------------------------------------------------------------
 
-                moves_str = ", ".join(m.name for m in matching_member.moveset)
-                moves_field = ft.TextField(
-                    label="Moveset (comma separated)",
-                    value=moves_str,
-                    hint_text="e.g. Thunderbolt, Ice Beam",
-                    text_size=12
-                )
-                
+                # ── 4-slot move chip UI ──────────────────────────────────────
+                current_moves = [mv.name for mv in matching_member.moveset]
+                while len(current_moves) < 4:
+                    current_moves.append("")
+
+                def _save_move(slot_pos, move_idx, new_name, form_val, ability_val, item_val, notes_val, all_moves):
+                    updated = list(all_moves)
+                    updated[move_idx] = new_name.strip()
+                    moves_str = ", ".join(m for m in updated if m)
+                    handle_update_member_field(slot_pos, form_val, ability_val, item_val or "", moves_str, notes_val or "")
+
+                def _make_move_chip(s_pos, m_idx, m_name, f_val, ab_val, item_val, notes_val, all_moves):
+                    move_tf = ft.TextField(value=m_name, text_size=11, border_radius=6,
+                                          hint_text=f"Move {m_idx+1}", expand=True,
+                                          content_padding=ft.Padding.symmetric(horizontal=8, vertical=6))
+                    def _on_submit(e, sp=s_pos, mi=m_idx, tf=move_tf, fv=f_val, av=ab_val, iv=item_val, nv=notes_val, am=all_moves):
+                        _save_move(sp, mi, tf.value, fv, av, iv, nv, am)
+                    move_tf.on_submit = _on_submit
+                    move_tf.on_blur = _on_submit
+                    return move_tf
+
+                move_chips_row1 = ft.Row(spacing=4, controls=[
+                    _make_move_chip(slot, i, current_moves[i],
+                                    selected_form, matching_member.ability or "",
+                                    current_item_id, matching_member.notes or "",
+                                    current_moves)
+                    for i in range(2)
+                ])
+                move_chips_row2 = ft.Row(spacing=4, controls=[
+                    _make_move_chip(slot, i, current_moves[i],
+                                    selected_form, matching_member.ability or "",
+                                    current_item_id, matching_member.notes or "",
+                                    current_moves)
+                    for i in range(2, 4)
+                ])
+                moves_widget = ft.Column(spacing=4, controls=[
+                    ft.Text("Moves", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                    move_chips_row1,
+                    move_chips_row2,
+                ])
+
                 notes_field = ft.TextField(
-                    label="Slot Planning Notes",
+                    label="Planning Notes",
                     value=matching_member.notes or "",
-                    text_size=12
+                    text_size=11,
+                    multiline=True, max_lines=2,
                 )
 
-                def make_update_handler(s_pos=slot, fm_dr=form_drop, ab_dr=ability_drop, item_id=current_item_id, mv_fl=moves_field, nt_fl=notes_field):
-                    return lambda e: handle_update_member_field(s_pos, fm_dr.value if fm_dr else "base", ab_dr.value, item_id or "", mv_fl.value, nt_fl.value)
+                def make_update_handler(s_pos=slot, fm_dr=form_drop, ab_dr=ability_drop, item_id=current_item_id, mv=current_moves, nt_fl=notes_field):
+                    return lambda e: handle_update_member_field(s_pos, fm_dr.value if fm_dr else "base", ab_dr.value, item_id or "", ", ".join(m for m in mv if m), nt_fl.value)
 
                 def make_remove_handler(s_pos=slot):
                     return lambda e: handle_remove_member(s_pos)
 
-                slot_controls = [
-                    ft.Row(
+                # Type-color hero header
+                primary_type = (pokemon.types[0].lower() if pokemon.types else "normal")
+                type_col = TYPE_COLORS.get(primary_type, "#A8A878")
+                type_bg = type_col + "33"  # 20% alpha tint
+
+                type_badges_header = [
+                    ft.Container(
+                        content=ft.Text(t.upper(), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                        bgcolor=TYPE_COLORS.get(t.lower(), "#777777"),
+                        border_radius=4,
+                        padding=ft.Padding.symmetric(horizontal=5, vertical=2)
+                    ) for t in (pokemon.types if not active_mega else (getattr(active_mega, "types", None) or pokemon.types))
+                ]
+
+                hero_header = ft.Container(
+                    content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
-                            ft.Text(f"Slot {slot}", weight=ft.FontWeight.BOLD, size=14, color=ft.Colors.AMBER_400),
-                            ft.IconButton(ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_400, on_click=make_remove_handler(), tooltip="Remove Member")
-                        ]
-                    ),
-                    ft.Row(
-                        spacing=10,
-                        controls=[
-                            ft.Image(src=card_sprite, width=50, height=50, fit=ft.BoxFit.CONTAIN) if card_sprite else ft.Icon(ft.Icons.IMAGE),
-                            ft.Column(
-                                spacing=2,
-                                controls=[
-                                    ft.Text(card_name, size=14, weight=ft.FontWeight.BOLD),
-                                    ft.Text(f"BST: {card_bst}", size=11, color=ft.Colors.GREY_400)
-                                ]
+                            ft.Row(spacing=8, controls=[
+                                ft.Image(src=card_sprite, width=58, height=58, fit=ft.BoxFit.CONTAIN)
+                                if card_sprite else ft.Icon(ft.Icons.IMAGE, size=48),
+                                ft.Column(spacing=2, controls=[
+                                    ft.Row(spacing=4, controls=[
+                                        ft.Container(
+                                            content=ft.Text(str(slot), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                            bgcolor=type_col + "aa", border_radius=8,
+                                            padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                                        ),
+                                        *([ft.Container(
+                                            content=ft.Text("⚡ MEGA", size=8, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400),
+                                            bgcolor="#291d03", border_radius=8,
+                                            border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                            padding=ft.Padding.symmetric(horizontal=5, vertical=2),
+                                        )] if active_mega else [])
+                                    ]),
+                                    ft.Text(pokemon.display_name, size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                    ft.Row(spacing=3, controls=type_badges_header),
+                                    ft.Text(f"BST {card_bst}", size=10, color=ft.Colors.GREY_300),
+                                ])
+                            ]),
+                            ft.IconButton(
+                                icon=ft.Icons.DELETE_OUTLINE, icon_size=16,
+                                icon_color=ft.Colors.RED_400,
+                                tooltip="Remove Member",
+                                on_click=make_remove_handler()
                             )
                         ]
                     ),
-                ]
+                    bgcolor=type_bg,
+                    border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+                    border=ft.Border(bottom=ft.BorderSide(1, type_col + "66")),
+                )
+
+                slot_controls = [hero_header]
                 if form_drop:
                     slot_controls.append(form_drop)
                 slot_controls.extend([
                     ability_drop,
                     item_slot_widget,
-                    moves_field,
+                    moves_widget,
                     notes_field,
-                    ft.ElevatedButton("Save Changes", icon=ft.Icons.SAVE, on_click=make_update_handler(), height=30)
+                    ft.Container(
+                        content=ft.TextButton("Save Notes", icon=ft.Icons.SAVE, on_click=make_update_handler()),
+                        alignment=ft.Alignment.CENTER_RIGHT,
+                    )
                 ])
 
-                slot_card = ft.Card(
-                    content=ft.Container(
-                        content=ft.Column(
-                            spacing=6,
-                            scroll=ft.ScrollMode.AUTO,
-                            controls=slot_controls
-                        ),
-                        padding=12
-                    )
+                slot_card = ft.Container(
+                    content=ft.Column(
+                        spacing=0,
+                        scroll=ft.ScrollMode.AUTO,
+                        controls=[
+                            hero_header,
+                            ft.Container(
+                                content=ft.Column(spacing=6, controls=slot_controls[1:]),
+                                padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+                            )
+                        ]
+                    ),
+                    bgcolor=ft.Colors.CARD_BG,
+                    border_radius=10,
+                    border=ft.Border.all(1, type_col + "55"),
                 )
 
             team_grid.controls.append(slot_card)
 
         update_team_totals()
+        update_team_banner(members)
+        update_team_validation(members)
         page.update()
 
     def update_team_totals():
@@ -1402,27 +1507,124 @@ def main(page: ft.Page):
         finally:
             session.close()
 
-        totals_list = [
-            ("HP", total_hp), ("Atk", total_attack), ("Def", total_defense),
-            ("SpA", total_spa), ("SpD", total_spd), ("Spe", total_speed)
+        MAX_STAT = 6 * 255
+        stat_rows = [
+            ("HP",  total_hp,     STAT_COLORS["hp"]),
+            ("Atk", total_attack, STAT_COLORS["attack"]),
+            ("Def", total_defense,STAT_COLORS["defense"]),
+            ("SpA", total_spa,    STAT_COLORS["special_attack"]),
+            ("SpD", total_spd,    STAT_COLORS["special_defense"]),
+            ("Spe", total_speed,  STAT_COLORS["speed"]),
         ]
-
-        totals_controls = [
-            ft.Text("TEAM TOTALS:", weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400, size=13)
-        ]
-        for label, val in totals_list:
-            totals_controls.append(
-                ft.Container(
-                    content=ft.Text(f"{label}: {val}", weight=ft.FontWeight.BOLD, size=12),
-                    bgcolor=ft.Colors.BLUE_GREY_900,
-                    padding=ft.Padding.symmetric(horizontal=10, vertical=6),
-                    border_radius=5
-                )
+        n = max(len(members), 1)
+        team_totals_row.controls.append(
+            ft.Text("TEAM TOTALS", weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400, size=11)
+        )
+        for label, val, color in stat_rows:
+            team_totals_row.controls.append(
+                ft.Row(spacing=6, controls=[
+                    ft.Container(content=ft.Text(label, size=10, weight=ft.FontWeight.BOLD, color=color), width=28),
+                    ft.ProgressBar(value=min(val / MAX_STAT, 1.0), color=color, bgcolor=ft.Colors.GREY_800,
+                                   expand=True, height=6, border_radius=3),
+                    ft.Text(str(val), size=10, width=36, text_align=ft.TextAlign.RIGHT),
+                ])
             )
-        team_totals_row.controls.extend(totals_controls)
         page.update()
 
+    def update_team_banner(members):
+        """Render 6 sprite circles as a compact overview banner."""
+        team_banner_row.controls.clear()
+        if state["active_team_id"] is None:
+            return
+        box_repo, _, _, session = get_repositories()
+        try:
+            member_map = {m.slot_position: m for m in members}
+            for slot in range(1, 7):
+                m = member_map.get(slot)
+                if m and m.box_entry_id:
+                    b_entry = box_repo.load_entry(str(m.box_entry_id))
+                    sprite = b_entry.pokemon.sprite_url if b_entry else None
+                    ptype = (b_entry.pokemon.types[0].lower() if b_entry and b_entry.pokemon.types else "normal")
+                    ring_col = TYPE_COLORS.get(ptype, "#A8A878")
+                    team_banner_row.controls.append(
+                        ft.Container(
+                            content=ft.Stack(controls=[
+                                ft.Image(src=sprite, width=44, height=44, fit=ft.BoxFit.CONTAIN)
+                                if sprite else ft.Icon(ft.Icons.CATCHING_POKEMON, size=28, color=ft.Colors.GREY_500),
+                                ft.Container(
+                                    content=ft.Text(str(slot), size=8, color=ft.Colors.WHITE),
+                                    bgcolor=ring_col + "cc", border_radius=6,
+                                    padding=ft.Padding.symmetric(horizontal=3, vertical=1),
+                                    bottom=0, right=0,
+                                )
+                            ]),
+                            width=52, height=52,
+                            border_radius=26,
+                            border=ft.Border.all(2, ring_col),
+                            bgcolor="#1e293b",
+                            alignment=ft.Alignment.CENTER,
+                        )
+                    )
+                else:
+                    team_banner_row.controls.append(
+                        ft.Container(
+                            content=ft.Text(str(slot), size=10, color=ft.Colors.GREY_500),
+                            width=52, height=52, border_radius=26,
+                            border=ft.Border.all(1, "#334155"),
+                            bgcolor="#111827",
+                            alignment=ft.Alignment.CENTER,
+                        )
+                    )
+        finally:
+            session.close()
+
+    def update_team_validation(members):
+        """Show simple team health checks below the grid."""
+        team_validation_col.controls.clear()
+        if state["active_team_id"] is None:
+            return
+
+        checks = []
+        # Duplicate items check
+        item_ids = [m.item for m in members if m.item]
+        if len(item_ids) != len(set(item_ids)):
+            checks.append((False, "Duplicate held items on team"))
+        else:
+            checks.append((True, "No duplicate held items"))
+
+        # Mega Stone count
+        mega_items = [m.item for m in members if m.item and m.item in state["items_by_id"]
+                      and state["items_by_id"][m.item].target_species]
+        n_megas = len(mega_items)
+        if n_megas > 1:
+            checks.append((False, f"Too many Mega Stones ({n_megas}/1 allowed)"))
+        elif n_megas == 1:
+            checks.append((True, "Mega Stone count: 1/1 ✓"))
+        else:
+            checks.append((True, "No Mega Stones equipped"))
+
+        # Full team check
+        filled = len([m for m in members])
+        if filled < 6:
+            checks.append((None, f"Team incomplete: {filled}/6 slots filled"))
+        else:
+            checks.append((True, "Full team of 6"))
+
+        team_validation_col.controls.append(
+            ft.Text("TEAM HEALTH", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+        )
+        for ok, msg in checks:
+            icon = ft.Icons.CHECK_CIRCLE if ok else (ft.Icons.WARNING_ROUNDED if ok is None else ft.Icons.ERROR)
+            col = ft.Colors.GREEN_400 if ok else (ft.Colors.AMBER_400 if ok is None else ft.Colors.RED_400)
+            team_validation_col.controls.append(
+                ft.Row(spacing=6, controls=[
+                    ft.Icon(icon, size=12, color=col),
+                    ft.Text(msg, size=11, color=col),
+                ])
+            )
+
     # --- UI Layout Assembly ---
+
 
     # Main Tabs Selection Controls — pill style
     def _tab_pill(label, icon, active):
@@ -1522,7 +1724,7 @@ def main(page: ft.Page):
     # VIEW 2: Team Builder Layout
     team_tab_layout = ft.Column(
         expand=True,
-        spacing=15,
+        spacing=12,
         controls=[
             ft.Row(
                 spacing=10,
@@ -1541,22 +1743,31 @@ def main(page: ft.Page):
                     )
                 ]
             ),
-            team_totals_row,
-            team_grid,
+            # Team overview banner — 6 sprite circles
             ft.Container(
-                content=ft.Column(
-                    spacing=5,
-                    controls=[
-                        ft.Text("Offensive Type Coverage Breakdown", weight=ft.FontWeight.BOLD, size=13),
-                        ft.Container(
-                            content=ft.Text("TODO: Implement Offensive Type Coverage Summary (Backend Integration)", size=11, color=ft.Colors.GREY_500, italic=True),
-                            border=ft.Border.all(1, ft.Colors.GREY_800),
-                            padding=8,
-                            border_radius=5
-                        )
-                    ]
-                )
-            )
+                content=team_banner_row,
+                bgcolor=ft.Colors.CARD_BG,
+                border_radius=10,
+                padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                border=ft.Border.all(1, ft.Colors.DIVIDER),
+            ),
+            # Stat distribution totals
+            ft.Container(
+                content=team_totals_row,
+                bgcolor=ft.Colors.CARD_BG,
+                border_radius=10,
+                padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                border=ft.Border.all(1, ft.Colors.DIVIDER),
+            ),
+            team_grid,
+            # Team health validation summary
+            ft.Container(
+                content=team_validation_col,
+                bgcolor=ft.Colors.CARD_BG,
+                border_radius=10,
+                padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                border=ft.Border.all(1, ft.Colors.DIVIDER),
+            ),
         ]
     )
 

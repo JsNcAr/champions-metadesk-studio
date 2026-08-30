@@ -2088,6 +2088,10 @@ def main(page: ft.Page):
             except ValueError:
                 pass
 
+        if sum(evs.values()) > 510:
+            show_toast(f"Total EVs cannot exceed 510 (currently {sum(evs.values())})", is_error=True)
+            return
+
         ivs = {}
         for stat, tf in _iv_inputs.items():
             try:
@@ -2096,6 +2100,7 @@ def main(page: ft.Page):
                     ivs[stat] = val
             except ValueError:
                 pass
+
 
         _, team_repo, _, session = get_repositories()
         try:
@@ -2437,6 +2442,7 @@ def main(page: ft.Page):
                 member = _TM(
                     box_entry_id=box_entry_id,
                     slot_position=i + 1,
+                    selected_form=slot.showdown_form_key or "base",
                     item=slot.item_name,
                     ability=slot.ability_name,
                     moveset=moves,
@@ -2446,6 +2452,7 @@ def main(page: ft.Page):
                     level=slot.level,
                 )
                 team_repo5.upsert_member(new_team.team_id, member)
+
 
             state["active_team_id"] = new_team.team_id
             show_toast(f"Team '{team_name}' imported successfully!")

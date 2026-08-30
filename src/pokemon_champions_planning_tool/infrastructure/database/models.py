@@ -214,8 +214,8 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[move.model_dump(mode="json") for move in team_member.moveset],
             ability=team_member.ability,
             notes=team_member.notes,
-            evs=dict(team_member.evs),
-            ivs=dict(team_member.ivs),
+            evs=dict(team_member.evs or {}),
+            ivs=dict(team_member.ivs or {}),
             nature=team_member.nature,
             level=team_member.level,
         )
@@ -227,14 +227,15 @@ class TeamMemberRecord(SQLModel, table=True):
             slot_position=self.slot_position,
             selected_form=self.selected_form or "base",
             item=self.item,
-            moveset=[PokemonMove.model_validate(move) for move in self.moveset],
+            moveset=[PokemonMove.model_validate(move) for move in (self.moveset or [])],
             ability=self.ability,
-            notes=self.notes,
-            evs=dict(self.evs),
-            ivs=dict(self.ivs),
+            notes=self.notes or "",
+            evs=dict(self.evs or {}),
+            ivs=dict(self.ivs or {}),
             nature=self.nature,
-            level=self.level,
+            level=self.level or 50,
         )
+
 
 
 class ChampionsSpeciesRecord(SQLModel, table=True):

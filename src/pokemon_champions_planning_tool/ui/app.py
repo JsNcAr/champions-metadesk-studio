@@ -725,14 +725,26 @@ def main(page: ft.Page):
         finally:
             session.close()
 
-    def handle_update_member_field(slot_position: int, selected_form: str, ability: str, item: str, moves_str: str, notes: str):
+    def handle_update_member_field(
+        slot_position: int,
+        selected_form: str,
+        ability: str,
+        item: str,
+        moves_str: str,
+        notes: str,
+        nature: str | None = None,
+        level: int | None = None,
+        evs: dict | None = None,
+        ivs: dict | None = None,
+    ):
         if state["active_team_id"] is None:
             return
         _, team_repo, _, session = get_repositories()
         try:
-            members = team_repo.list_members(state["active_team_id"])
-            matching = next((m for m in members if m.slot_position == slot_position), None)
-            if matching:
+            member_recs = team_repo.list_members(state["active_team_id"])
+            matching_rec = next((m for m in member_recs if m.slot_position == slot_position), None)
+            if matching_rec:
+                matching = matching_rec.to_domain()
                 moves = [
                     PokemonMove(name=m_name.strip())
                     for m_name in moves_str.split(",")
@@ -746,13 +758,18 @@ def main(page: ft.Page):
                     item=item.strip() or None,
                     moveset=moves,
                     ability=ability.strip() or None,
-                    notes=notes.strip()
+                    notes=notes.strip(),
+                    nature=nature if nature is not None else matching.nature,
+                    level=level if level is not None else matching.level,
+                    evs=evs if evs is not None else matching.evs,
+                    ivs=ivs if ivs is not None else matching.ivs,
                 )
                 team_repo.upsert_member(state["active_team_id"], updated_member)
                 show_toast("Team slot updated")
                 render_team_builder()
         finally:
             session.close()
+
 
     # --- Renderers ---
     def render_box_grid(update_page: bool = True):
@@ -1602,7 +1619,14 @@ def main(page: ft.Page):
                                             bgcolor="#291d03", border_radius=8,
                                             border=ft.Border.all(1, ft.Colors.AMBER_700),
                                             padding=ft.Padding.symmetric(horizontal=5, vertical=2),
-                                        )] if active_mega else [])
+                                        )] if active_mega else []),
+                                        *([ft.Container(
+                                            content=ft.Text("📋 PLANNED", size=8, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_300),
+                                            bgcolor="#3b2d00", border_radius=8,
+                                            border=ft.Border.all(1, ft.Colors.AMBER_500),
+                                            padding=ft.Padding.symmetric(horizontal=5, vertical=2),
+                                            tooltip="This Pokémon is a planned template entry and is not in your live Box roster.",
+                                        )] if getattr(box_entry, "is_planned", False) else [])
                                     ]),
                                     ft.Text(pokemon.display_name, size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
                                     ft.Row(spacing=3, controls=type_badges_header),
@@ -1623,6 +1647,40 @@ def main(page: ft.Page):
                     border=ft.Border(bottom=ft.BorderSide(1, type_col + "66")),
                 )
 
+                # Format EV summary string e.g. "252 HP / 252 Atk / 4 Spe"
+                ev_parts = []
+                stat_labels = {"hp": "HP", "attack": "Atk", "defense": "Def", "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"}
+                for st, lbl in stat_labels.items():
+                    if matching_member.evs and matching_member.evs.get(st, 0) > 0:
+                        ev_parts.append(f"{matching_member.evs[st]} {lbl}")
+                ev_str = " / ".join(ev_parts) if ev_parts else "No EVs set"
+                nature_str = matching_member.nature or "Hardy"
+                level_str = f"Lvl {matching_member.level or 50}"
+
+                spread_summary_widget = ft.Container(
+                    content=ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(spacing=2, expand=True, controls=[
+                                ft.Row(spacing=6, controls=[
+                                    ft.Text(f"{nature_str} Nature", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400),
+                                    ft.Text(f"• {level_str}", size=11, color=ft.Colors.GREY_400),
+                                ]),
+                                ft.Text(f"EVs: {ev_str}", size=10, color=ft.Colors.GREY_300, overflow=ft.TextOverflow.ELLIPSIS),
+                            ]),
+                            ft.IconButton(
+                                icon=ft.Icons.TUNE, icon_size=16, icon_color=ft.Colors.AMBER_400,
+                                tooltip="Edit Competitive Spread & EVs/IVs",
+                                on_click=lambda e, s=slot, m=matching_member: _open_spread_modal(s, m),
+                            )
+                        ]
+                    ),
+                    bgcolor="#1e293b",
+                    border_radius=6,
+                    padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                )
+
                 slot_controls = [hero_header]
                 if form_drop:
                     slot_controls.append(form_drop)
@@ -1630,6 +1688,7 @@ def main(page: ft.Page):
                     ability_drop,
                     item_slot_widget,
                     moves_widget,
+                    spread_summary_widget,
                     notes_field,
                     ft.Container(
                         content=ft.TextButton("Save Notes", icon=ft.Icons.SAVE, on_click=make_update_handler()),
@@ -1637,6 +1696,7 @@ def main(page: ft.Page):
                     )
                 ])
 
+                card_border_col = ft.Colors.AMBER_600 if getattr(box_entry, "is_planned", False) else type_col + "55"
                 slot_card = ft.Container(
                     content=ft.Column(
                         spacing=0,
@@ -1651,8 +1711,9 @@ def main(page: ft.Page):
                     ),
                     bgcolor=ft.Colors.CARD_BG,
                     border_radius=10,
-                    border=ft.Border.all(1, type_col + "55"),
+                    border=ft.Border.all(1 if not getattr(box_entry, "is_planned", False) else 2, card_border_col),
                 )
+
 
             team_grid.controls.append(slot_card)
 
@@ -1732,15 +1793,16 @@ def main(page: ft.Page):
                     b_entry = box_repo.load_entry(str(m.box_entry_id))
                     sprite = b_entry.pokemon.sprite_url if b_entry else None
                     ptype = (b_entry.pokemon.types[0].lower() if b_entry and b_entry.pokemon.types else "normal")
-                    ring_col = TYPE_COLORS.get(ptype, "#A8A878")
+                    is_planned = getattr(b_entry, "is_planned", False)
+                    ring_col = ft.Colors.AMBER_500 if is_planned else TYPE_COLORS.get(ptype, "#A8A878")
                     team_banner_row.controls.append(
                         ft.Container(
                             content=ft.Stack(controls=[
                                 ft.Image(src=sprite, width=44, height=44, fit=ft.BoxFit.CONTAIN)
                                 if sprite else ft.Icon(ft.Icons.CATCHING_POKEMON, size=28, color=ft.Colors.GREY_500),
                                 ft.Container(
-                                    content=ft.Text(str(slot), size=8, color=ft.Colors.WHITE),
-                                    bgcolor=ring_col + "cc", border_radius=6,
+                                    content=ft.Text(f"{slot}📋" if is_planned else str(slot), size=8, color=ft.Colors.WHITE),
+                                    bgcolor="#3b2d00" if is_planned else ring_col + "cc", border_radius=6,
                                     padding=ft.Padding.symmetric(horizontal=3, vertical=1),
                                     bottom=0, right=0,
                                 )
@@ -1750,6 +1812,7 @@ def main(page: ft.Page):
                             border=ft.Border.all(2, ring_col),
                             bgcolor="#1e293b",
                             alignment=ft.Alignment.CENTER,
+                            tooltip=f"Slot {slot}: {b_entry.pokemon.display_name} {'(Planned Template)' if is_planned else ''}",
                         )
                     )
                 else:
@@ -1790,12 +1853,27 @@ def main(page: ft.Page):
         else:
             checks.append((True, "No Mega Stones equipped"))
 
-        # Full team check
+        # Full team & planned count check
         filled = len([m for m in members])
+        box_repo, _, _, session = get_repositories()
+        try:
+            planned_count = sum(
+                1 for m in members
+                if m.box_entry_id and getattr(box_repo.load_entry(str(m.box_entry_id)), "is_planned", False)
+            )
+        finally:
+            session.close()
+
         if filled < 6:
             checks.append((None, f"Team incomplete: {filled}/6 slots filled"))
         else:
             checks.append((True, "Full team of 6"))
+
+        if planned_count > 0:
+            checks.append((None, f"Roster: {filled - planned_count} owned in Box, {planned_count} planned templates 📋"))
+        else:
+            checks.append((True, "All Pokémon owned in Box roster ✓"))
+
 
         team_validation_col.controls.append(
             ft.Text("TEAM HEALTH", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
@@ -1920,8 +1998,190 @@ def main(page: ft.Page):
     )
 
     # -----------------------------------------------------------------------
+    # COMPETITIVE SPREAD / EV / IV / NATURE EDITOR MODAL
+    # -----------------------------------------------------------------------
+    _spread_slot_pos = [1]
+    _spread_nature_drop = ft.Dropdown(
+        label="Nature",
+        options=[
+            ft.dropdown.Option(n) for n in [
+                "Adamant", "Bashful", "Bold", "Brave", "Calm", "Careful", "Docile",
+                "Gentle", "Hardy", "Hasty", "Impish", "Jolly", "Lax", "Lonely",
+                "Mild", "Modest", "Naive", "Naughty", "Quiet", "Quirky", "Rash",
+                "Relaxed", "Sassy", "Serious", "Timid"
+            ]
+        ],
+        text_size=12, width=180,
+    )
+    _spread_level_tf = ft.TextField(label="Level", value="50", width=80, text_size=12)
+
+    _ev_inputs = {
+        stat: ft.TextField(value="0", label=label, width=72, text_size=11, text_align=ft.TextAlign.RIGHT)
+        for stat, label in [
+            ("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+            ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")
+        ]
+    }
+    _iv_inputs = {
+        stat: ft.TextField(value="31", label=label, width=72, text_size=11, text_align=ft.TextAlign.RIGHT)
+        for stat, label in [
+            ("hp", "HP"), ("attack", "Atk"), ("defense", "Def"),
+            ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")
+        ]
+    }
+    _ev_total_text = ft.Text("Total EVs: 0 / 510", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+
+    def _update_ev_total(e=None):
+        tot = 0
+        for tf in _ev_inputs.values():
+            try:
+                tot += int(tf.value or "0")
+            except ValueError:
+                pass
+        _ev_total_text.value = f"Total EVs: {tot} / 510"
+        _ev_total_text.color = ft.Colors.RED_400 if tot > 510 else ft.Colors.AMBER_400
+        page.update()
+
+    for tf in _ev_inputs.values():
+        tf.on_change = _update_ev_total
+
+    def _apply_preset_evs(preset_type: str):
+        for tf in _ev_inputs.values():
+            tf.value = "0"
+        if preset_type == "physical_sweeper":
+            _ev_inputs["attack"].value = "252"
+            _ev_inputs["speed"].value = "252"
+            _ev_inputs["hp"].value = "4"
+        elif preset_type == "special_sweeper":
+            _ev_inputs["special_attack"].value = "252"
+            _ev_inputs["speed"].value = "252"
+            _ev_inputs["hp"].value = "4"
+        elif preset_type == "bulky_support":
+            _ev_inputs["hp"].value = "252"
+            _ev_inputs["defense"].value = "128"
+            _ev_inputs["special_defense"].value = "128"
+        _update_ev_total()
+
+    def _apply_preset_ivs(preset_type: str):
+        for tf in _iv_inputs.values():
+            tf.value = "31"
+        if preset_type == "no_good_atk":
+            _iv_inputs["attack"].value = "0"
+        elif preset_type == "trick_room":
+            _iv_inputs["speed"].value = "0"
+        page.update()
+
+    def _save_spread_modal(e=None):
+        slot_pos = _spread_slot_pos[0]
+        nature = _spread_nature_drop.value or "Hardy"
+        try:
+            level = max(1, min(100, int(_spread_level_tf.value or "50")))
+        except ValueError:
+            level = 50
+
+        evs = {}
+        for stat, tf in _ev_inputs.items():
+            try:
+                val = max(0, min(252, int(tf.value or "0")))
+                if val > 0:
+                    evs[stat] = val
+            except ValueError:
+                pass
+
+        ivs = {}
+        for stat, tf in _iv_inputs.items():
+            try:
+                val = max(0, min(31, int(tf.value or "31")))
+                if val != 31:
+                    ivs[stat] = val
+            except ValueError:
+                pass
+
+        _, team_repo, _, session = get_repositories()
+        try:
+            member_recs = team_repo.list_members(state["active_team_id"])
+            matching_rec = next((m for m in member_recs if m.slot_position == slot_pos), None)
+            if matching_rec:
+                dom = matching_rec.to_domain()
+                updated = TeamMember(
+                    team_member_id=dom.team_member_id,
+                    box_entry_id=dom.box_entry_id,
+                    slot_position=dom.slot_position,
+                    selected_form=dom.selected_form,
+                    item=dom.item,
+                    moveset=dom.moveset,
+                    ability=dom.ability,
+                    notes=dom.notes,
+                    nature=nature,
+                    level=level,
+                    evs=evs,
+                    ivs=ivs,
+                )
+                team_repo.upsert_member(state["active_team_id"], updated)
+                show_toast("Competitive spread saved!")
+                _spread_modal.open = False
+                render_team_builder()
+        finally:
+            session.close()
+
+    _spread_modal = ft.AlertDialog(
+        title=ft.Text("Edit Competitive Spread & EVs/IVs", weight=ft.FontWeight.BOLD),
+        content=ft.Column(
+            spacing=10, width=540, scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Row(spacing=10, controls=[_spread_nature_drop, _spread_level_tf]),
+                ft.Divider(),
+                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[
+                    ft.Text("Effort Values (EVs)", weight=ft.FontWeight.BOLD, size=12),
+                    _ev_total_text,
+                ]),
+                ft.Row(spacing=4, controls=[
+                    ft.Text("Presets:", size=10, color=ft.Colors.GREY_400),
+                    ft.OutlinedButton("Phys Sweeper", on_click=lambda e: _apply_preset_evs("physical_sweeper")),
+                    ft.OutlinedButton("Spec Sweeper", on_click=lambda e: _apply_preset_evs("special_sweeper")),
+                    ft.OutlinedButton("Bulky Support", on_click=lambda e: _apply_preset_evs("bulky_support")),
+                ]),
+                ft.Row(spacing=4, controls=[_ev_inputs["hp"], _ev_inputs["attack"], _ev_inputs["defense"],
+                                           _ev_inputs["special_attack"], _ev_inputs["special_defense"], _ev_inputs["speed"]]),
+                ft.Divider(),
+                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[
+                    ft.Text("Individual Values (IVs)", weight=ft.FontWeight.BOLD, size=12),
+                    ft.Row(spacing=4, controls=[
+                        ft.OutlinedButton("0 Atk", on_click=lambda e: _apply_preset_ivs("no_good_atk")),
+                        ft.OutlinedButton("0 Spe", on_click=lambda e: _apply_preset_ivs("trick_room")),
+                        ft.OutlinedButton("31 All", on_click=lambda e: _apply_preset_ivs("all_31")),
+                    ]),
+                ]),
+                ft.Row(spacing=4, controls=[_iv_inputs["hp"], _iv_inputs["attack"], _iv_inputs["defense"],
+                                           _iv_inputs["special_attack"], _iv_inputs["special_defense"], _iv_inputs["speed"]]),
+            ]
+        ),
+        actions=[
+            ft.ElevatedButton("Save Spread", icon=ft.Icons.CHECK, on_click=_save_spread_modal,
+                              style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE)),
+            ft.TextButton("Cancel", on_click=lambda e: setattr(_spread_modal, "open", False) or page.update()),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(_spread_modal)
+
+    def _open_spread_modal(slot_pos: int, member_rec_or_dom):
+        _spread_slot_pos[0] = slot_pos
+        m_dom = member_rec_or_dom if isinstance(member_rec_or_dom, TeamMember) else member_rec_or_dom.to_domain()
+        _spread_nature_drop.value = m_dom.nature or "Hardy"
+        _spread_level_tf.value = str(m_dom.level or 50)
+        for stat, tf in _ev_inputs.items():
+            tf.value = str(m_dom.evs.get(stat, 0))
+        for stat, tf in _iv_inputs.items():
+            tf.value = str(m_dom.ivs.get(stat, 31))
+        _update_ev_total()
+        _spread_modal.open = True
+        page.update()
+
+    # -----------------------------------------------------------------------
     # SHOWDOWN EXPORT MODAL
     # -----------------------------------------------------------------------
+
     _export_text_field = ft.TextField(
         multiline=True, read_only=True, min_lines=12, max_lines=20,
         text_style=ft.TextStyle(font_family="monospace", size=11),

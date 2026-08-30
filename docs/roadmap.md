@@ -46,15 +46,22 @@
 
 ---
 
+## Phase 4: Competitive Imports & Spreads [COMPLETED]
+- **Showdown Export Workflow**: One-click generation of standard Showdown text & direct publishing to Pokepast.es with shareable URLs.
+- **Showdown Import Workflow**: Parse raw text or Pokepast.es URLs into live team slots with interactive 6-slot preview grid.
+- **Phase 0 Prerequisites**:
+  - **Planned Pokémon / Ghost-Entry System**: `is_planned` flag on `BoxEntryRecord` allowing non-owned Pokémon to be stored as team templates without cluttering the Box roster.
+  - **Readiness Orchestrator**: 3-option import modal (Add to Box, Import as Template, Cancel).
+  - **EVs, IVs, Nature & Level Tracking**: Full JSON schema for competitive stat spreads on `TeamMemberRecord`.
+  - **Spread Editor UI**: Interactive modal with nature selector, level input, EV sliders/presets (Phys Sweeper, Spec Sweeper, Bulky Support) and IV presets (0 Atk, 0 Spe Trick Room, 31 All).
+
+---
+
 ## Upcoming Planned Features (Missing Backlog)
 
 ### 🛡️ Feature 1: Type Coverage & Vulnerability Matrix (Team Builder)
 - **Defensive Type Matrix**: Visual chart showing team-wide weaknesses, resistances, and immunities per attacking type (e.g., *“3 members weak to Ground, 0 immunities”*).
 - **Offensive STAB & Move Coverage**: Summary highlighting uncovered attacking types based on team movesets and primary types.
-
-### 📋 Feature 2: Showdown Import & Export (Team Builder)
-- **Export to Showdown**: One-click generation of standard Poképast / Showdown text format for easy team sharing.
-- **Import from Showdown**: Modal to paste Showdown team text and auto-build a 6-slot team with items, moves, abilities, and forms.
 
 ### 🔄 Feature 3: Quick Slot Reordering & Swapping (Team Builder)
 - Reorder team slots (e.g. *"Move to Lead"*, *"Swap Slot 2 with Slot 5"*) via slot card action buttons without clearing slots.

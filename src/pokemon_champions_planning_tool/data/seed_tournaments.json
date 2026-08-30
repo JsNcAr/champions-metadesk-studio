@@ -1,0 +1,55 @@
+{
+  "seed_version": "seed_v2",
+  "tournaments": [
+    {
+      "tournament_id": "champions-launch-2026",
+      "name": "Pokémon Champions Launch Invitational 2026",
+      "event_date": "2026-07-01T00:00:00Z",
+      "format_regulation": "Champions Season 1",
+      "game_platform": "Pokémon Champions",
+      "organizer": "The Pokémon Company",
+      "location": "Tokyo, Japan",
+      "total_players": 128,
+      "teams": [
+        {
+          "player_name": "Satoshi Tajiri",
+          "placement": 1,
+          "standing_label": "1st Place",
+          "pokepast_url": "https://pokepast.es/champions-satoshi-2026",
+          "showdown_text": "Charizard @ Solar Glasses\nAbility: Solar Power\nLevel: 50\nEVs: 252 SpA / 4 SpD / 252 Spe\nTimid Nature\n- Flamethrower\n- Air Slash\n- Solar Beam\n- Protect\n\nPikachu @ Light Ball\nAbility: Lightning Rod\nLevel: 50\nEVs: 252 Atk / 4 SpD / 252 Spe\nJolly Nature\n- Volt Tackle\n- Fake Out\n- Iron Tail\n- Protect\n\nLucario @ Life Orb\nAbility: Inner Focus\nLevel: 50\nEVs: 252 Atk / 4 SpD / 252 Spe\nJolly Nature\n- Close Combat\n- Extreme Speed\n- Meteor Mash\n- Protect\n\nGengar @ Choice Specs\nAbility: Cursed Body\nLevel: 50\nEVs: 252 SpA / 4 SpD / 252 Spe\nTimid Nature\n- Shadow Ball\n- Sludge Bomb\n- Dazzling Gleam\n- Thunderbolt\n",
+          "members": [
+            { "canonical_id": "charizard", "species_name": "Charizard" },
+            { "canonical_id": "pikachu", "species_name": "Pikachu" },
+            { "canonical_id": "lucario", "species_name": "Lucario" },
+            { "canonical_id": "gengar", "species_name": "Gengar" }
+          ]
+        }
+      ]
+    },
+    {
+      "tournament_id": "vgc-worlds-2024",
+      "name": "2024 VGC World Championship",
+      "event_date": "2024-08-18T00:00:00Z",
+      "format_regulation": "Regulation G",
+      "game_platform": "Scarlet & Violet",
+      "organizer": "Play! Pokémon",
+      "location": "Honolulu, Hawaii",
+      "total_players": 1024,
+      "teams": [
+        {
+          "player_name": "Luca Ceribelli",
+          "placement": 1,
+          "standing_label": "1st Place",
+          "pokepast_url": "https://pokepast.es/luca-ceribelli-worlds-2024",
+          "showdown_text": "Miraidon @ Choice Specs\nAbility: Hadron Engine\nLevel: 50\nEVs: 252 SpA / 4 SpD / 252 Spe\nTimid Nature\n- Electro Drift\n- Dazzling Gleam\n- Volt Switch\n- Draco Meteor\n\nIncineroar @ Sitrus Berry\nAbility: Intimidate\nLevel: 50\nEVs: 252 HP / 156 Def / 100 SpD\nCareful Nature\n- Fake Out\n- Knock Off\n- Flare Blitz\n- Parting Shot\n\nOgerpon-Hearthflame @ Hearthflame Mask\nAbility: Mold Breaker\nLevel: 50\nEVs: 252 Atk / 4 SpD / 252 Spe\nJolly Nature\n- Ivy Cudgel\n- Horn Leech\n- Follow Me\n- Spiky Shield\n\nUrshifu-Rapid-Strike @ Mystic Water\nAbility: Unseen Fist\nLevel: 50\nEVs: 252 Atk / 4 SpD / 252 Spe\nJolly Nature\n- Surging Strikes\n- Aqua Jet\n- Close Combat\n- Detect\n",
+          "members": [
+            { "canonical_id": "miraidon", "species_name": "Miraidon" },
+            { "canonical_id": "incineroar", "species_name": "Incineroar" },
+            { "canonical_id": "ogerpon-hearthflame", "species_name": "Ogerpon-Hearthflame" },
+            { "canonical_id": "urshifu-rapid-strike", "species_name": "Urshifu-Rapid-Strike" }
+          ]
+        }
+      ]
+    }
+  ]
+}

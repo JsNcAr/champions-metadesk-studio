@@ -24,7 +24,15 @@ from .models import (
     PokemonRecord,
     TeamMemberRecord,
     TeamRecord,
+    TournamentRecord,
+    TournamentTeamRecord,
+    TournamentTeamMemberRecord,
+    TournamentSeedMetaRecord,
 )
+import json
+from pathlib import Path
+from typing import Any
+
 
 
 def _utc_now() -> datetime:
@@ -603,3 +611,226 @@ class ItemRepository:
             meta.last_synced_at = _utc_now()
             self.session.add(meta)
         self.session.commit()
+
+
+# ---------------------------------------------------------------------------
+# TournamentRepository
+# ---------------------------------------------------------------------------
+
+
+class TournamentRepository:
+    """Persistence operations for VGC Tournament metadata, teams, and seed datasets."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def upsert_tournament(self, tournament: TournamentRecord) -> TournamentRecord:
+        existing = self.session.get(TournamentRecord, tournament.tournament_id)
+        if existing:
+            existing.name = tournament.name
+            existing.event_date = tournament.event_date
+            existing.format_regulation = tournament.format_regulation
+            existing.game_platform = tournament.game_platform
+            existing.organizer = tournament.organizer
+            existing.location = tournament.location
+            existing.total_players = tournament.total_players
+            existing.updated_at = _utc_now()
+            self.session.add(existing)
+            target = existing
+        else:
+            self.session.add(tournament)
+            target = tournament
+        self.session.commit()
+        self.session.refresh(target)
+        return target
+
+    def get_tournament(self, tournament_id: str) -> TournamentRecord | None:
+        return self.session.get(TournamentRecord, tournament_id)
+
+    def list_tournaments(self) -> list[TournamentRecord]:
+        return list(self.session.exec(select(TournamentRecord).order_by(TournamentRecord.event_date.desc())).all())
+
+
+    def save_team(
+        self, team: TournamentTeamRecord, members: list[TournamentTeamMemberRecord]
+    ) -> TournamentTeamRecord:
+        self.session.add(team)
+        self.session.commit()
+        self.session.refresh(team)
+
+        for m in members:
+            m.tournament_team_id = team.tournament_team_id
+            self.session.add(m)
+        self.session.commit()
+        return team
+
+    def get_team(self, tournament_team_id: UUID) -> TournamentTeamRecord | None:
+        return self.session.get(TournamentTeamRecord, tournament_team_id)
+
+    def get_team_members(self, tournament_team_id: UUID) -> list[TournamentTeamMemberRecord]:
+        stmt = (
+            select(TournamentTeamMemberRecord)
+            .where(TournamentTeamMemberRecord.tournament_team_id == tournament_team_id)
+            .order_by(TournamentTeamMemberRecord.slot_position)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def list_teams_by_tournament(self, tournament_id: str) -> list[TournamentTeamRecord]:
+        stmt = (
+            select(TournamentTeamRecord)
+            .where(TournamentTeamRecord.tournament_id == tournament_id)
+            .order_by(TournamentTeamRecord.placement)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def search_teams(
+        self,
+        query: str | None = None,
+        regulation_filter: str | None = None,
+        placement_filter: int | None = None,
+        species_filter: str | None = None,
+        game_platform_filter: str | None = None,
+        max_age_days: int | None = None,
+    ) -> list[TournamentTeamRecord]:
+        stmt = select(TournamentTeamRecord)
+        joined_tournaments = False
+
+        if regulation_filter and regulation_filter != "All":
+            stmt = stmt.join(
+                TournamentRecord,
+                TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
+            )
+            stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
+            joined_tournaments = True
+
+        if game_platform_filter and game_platform_filter != "All":
+            if not joined_tournaments:
+                stmt = stmt.join(
+                    TournamentRecord,
+                    TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
+                )
+                joined_tournaments = True
+            stmt = stmt.where(TournamentRecord.game_platform == game_platform_filter)
+
+        if max_age_days is not None and max_age_days > 0:
+            if not joined_tournaments:
+                stmt = stmt.join(
+                    TournamentRecord,
+                    TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
+                )
+                joined_tournaments = True
+            from datetime import timedelta
+            cutoff = _utc_now() - timedelta(days=max_age_days)
+            stmt = stmt.where(TournamentRecord.event_date >= cutoff)
+
+        if placement_filter:
+            stmt = stmt.where(TournamentTeamRecord.placement <= placement_filter)
+
+        if query:
+            q_pattern = f"%{query.strip()}%"
+            subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(
+                (TournamentTeamMemberRecord.species_name.ilike(q_pattern))
+                | (TournamentTeamMemberRecord.canonical_id.ilike(q_pattern))
+            )
+            stmt = stmt.where(
+                (TournamentTeamRecord.player_name.ilike(q_pattern))
+                | (TournamentTeamRecord.tournament_id.ilike(q_pattern))
+                | (TournamentTeamRecord.tournament_team_id.in_(subq_member))
+            )
+
+        if species_filter and species_filter != query:
+            s_pattern = f"%{species_filter.strip()}%"
+            subq_spec = select(TournamentTeamMemberRecord.tournament_team_id).where(
+                (TournamentTeamMemberRecord.species_name.ilike(s_pattern))
+                | (TournamentTeamMemberRecord.canonical_id.ilike(s_pattern))
+            )
+            stmt = stmt.where(TournamentTeamRecord.tournament_team_id.in_(subq_spec))
+
+        stmt = stmt.order_by(TournamentTeamRecord.placement.asc())
+        return list(self.session.exec(stmt).all())
+
+    def is_seeded(self, seed_version: str) -> bool:
+        meta = self.session.get(TournamentSeedMetaRecord, 1)
+        return meta is not None and meta.seed_version == seed_version
+
+    def seed_from_file(self, json_file_path: Path, force: bool = False) -> dict[str, Any]:
+        if not json_file_path.exists():
+            return {"status": "file_not_found", "teams_added": 0}
+
+        try:
+            with open(json_file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as err:
+            return {"status": "read_error", "error": str(err), "teams_added": 0}
+
+        version = data.get("seed_version", "seed_v1")
+        if not force and self.is_seeded(version):
+            return {"status": "skipped", "reason": "already_seeded", "teams_added": 0}
+
+        tournaments_data = data.get("tournaments", [])
+        total_tourneys = 0
+        total_teams = 0
+
+        for t_dict in tournaments_data:
+            dt_str = t_dict.get("event_date")
+            parsed_dt = _utc_now()
+            if dt_str:
+                try:
+                    parsed_dt = datetime.fromisoformat(dt_str)
+                except ValueError:
+                    pass
+
+            t_rec = TournamentRecord(
+                tournament_id=t_dict["tournament_id"],
+                name=t_dict["name"],
+                event_date=parsed_dt,
+                format_regulation=t_dict.get("format_regulation", "VGC"),
+                game_platform=t_dict.get("game_platform", "Scarlet & Violet"),
+                organizer=t_dict.get("organizer", "Official VGC"),
+                location=t_dict.get("location", "Online"),
+                total_players=t_dict.get("total_players", 0),
+            )
+            self.upsert_tournament(t_rec)
+            total_tourneys += 1
+
+            teams_data = t_dict.get("teams", [])
+            for team_dict in teams_data:
+                team_rec = TournamentTeamRecord(
+                    tournament_id=t_rec.tournament_id,
+                    player_name=team_dict["player_name"],
+                    placement=team_dict["placement"],
+                    standing_label=team_dict.get("standing_label", f"{team_dict['placement']}th Place"),
+                    pokepast_url=team_dict.get("pokepast_url"),
+                    showdown_text=team_dict.get("showdown_text", ""),
+                    source_dataset=version,
+                )
+                members = []
+                for idx, mem in enumerate(team_dict.get("members", []), start=1):
+                    members.append(
+                        TournamentTeamMemberRecord(
+                            slot_position=idx,
+                            canonical_id=mem["canonical_id"],
+                            species_name=mem["species_name"],
+                        )
+                    )
+                self.save_team(team_rec, members)
+                total_teams += 1
+
+        meta = self.session.get(TournamentSeedMetaRecord, 1)
+        if meta is None:
+            meta = TournamentSeedMetaRecord(
+                id=1,
+                seed_version=version,
+                total_tournaments=total_tourneys,
+                total_teams=total_teams,
+            )
+            self.session.add(meta)
+        else:
+            meta.seed_version = version
+            meta.total_tournaments = total_tourneys
+            meta.total_teams = total_teams
+            meta.loaded_at = _utc_now()
+            self.session.add(meta)
+        self.session.commit()
+
+        return {"status": "success", "tournaments_added": total_tourneys, "teams_added": total_teams}

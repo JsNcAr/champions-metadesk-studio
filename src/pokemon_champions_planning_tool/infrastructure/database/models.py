@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, JSON, Text, UniqueConstraint
+
 from sqlmodel import Field, SQLModel
 
 from ...domain.entities.box_entry import BoxEntry
@@ -326,3 +327,66 @@ class ItemCatalogMetaRecord(SQLModel, table=True):
     id: int = Field(default=1, primary_key=True)
     total_holdable_items: int = Field(default=0)
     last_synced_at: datetime = Field(default_factory=_utc_now)
+
+
+# ---------------------------------------------------------------------------
+# Tournament & Meta Explorer Records
+# ---------------------------------------------------------------------------
+
+
+class TournamentRecord(SQLModel, table=True):
+    """Persisted VGC Tournament metadata."""
+
+    __tablename__: ClassVar[str] = "tournaments"
+
+    tournament_id: str = Field(primary_key=True, index=True)
+    name: str = Field(index=True)
+    event_date: datetime = Field(default_factory=_utc_now, index=True)
+    format_regulation: str = Field(index=True)
+    game_platform: str = Field(default="Scarlet & Violet", index=True)
+    organizer: str = Field(default="Official VGC")
+    location: str = Field(default="Honolulu, HI")
+    total_players: int = Field(default=0)
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
+class TournamentTeamRecord(SQLModel, table=True):
+    """Persisted tournament team standing & submission."""
+
+    __tablename__: ClassVar[str] = "tournament_teams"
+
+    tournament_team_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    tournament_id: str = Field(foreign_key="tournaments.tournament_id", index=True)
+    player_name: str = Field(index=True)
+    placement: int = Field(index=True)
+    standing_label: str = Field(default="Top 8")
+    pokepast_url: str | None = None
+    showdown_text: str = Field(sa_column=Column(Text, nullable=False))
+    source_dataset: str = Field(default="seed_v1", index=True)
+    created_at: datetime = Field(default_factory=_utc_now)
+
+
+class TournamentTeamMemberRecord(SQLModel, table=True):
+    """Normalized species entries for fast synergy and filtering queries."""
+
+    __tablename__: ClassVar[str] = "tournament_team_members"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tournament_team_id: UUID = Field(foreign_key="tournament_teams.tournament_team_id", index=True)
+    slot_position: int = Field(default=1)
+    canonical_id: str = Field(index=True)
+    species_name: str = Field(index=True)
+
+
+class TournamentSeedMetaRecord(SQLModel, table=True):
+    """Tracks tournament seed dataset loading status."""
+
+    __tablename__: ClassVar[str] = "tournament_seed_meta"
+
+    id: int = Field(default=1, primary_key=True)
+    seed_version: str = Field(default="seed_v1")
+    total_tournaments: int = Field(default=0)
+    total_teams: int = Field(default=0)
+    loaded_at: datetime = Field(default_factory=_utc_now)
+

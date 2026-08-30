@@ -56,7 +56,13 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE team_members ADD COLUMN level INTEGER NOT NULL DEFAULT 50;",
         # box_entries — ghost/planned entry support (Phase 0.A)
         "ALTER TABLE box_entries ADD COLUMN is_planned BOOLEAN NOT NULL DEFAULT 0;",
+        # tournaments — game platform / system filter (Feature 7)
+        "ALTER TABLE tournaments ADD COLUMN game_platform VARCHAR DEFAULT 'Scarlet & Violet';",
+        # box_entries — drop unique index on pokemon_canonical_id if present
+        "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
+        "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
     ]
+
 
     with engine.connect() as conn:
         for sql in migrations:
@@ -72,7 +78,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
 
 @contextmanager
 def get_session(database_filename: str = DEFAULT_DATABASE_FILENAME) -> Iterator[Session]:
-    """Yield a session bound to the shared SQLite engine (DDL already initialized at startup)."""
-    engine = get_engine(database_filename)
+    """Yield a session bound to the shared SQLite engine (DDL initialized on demand)."""
+    engine = initialize_database(database_filename)
     with Session(engine) as session:
         yield session

@@ -102,7 +102,8 @@ class ImportReadinessReport:
     in_box: tuple[ParsedSlot, ...]        # Has a matching BoxEntry already
     missing: tuple[ParsedSlot, ...]       # Not in box, but found in catalog
     unresolvable: tuple[ParsedSlot, ...]  # Not found anywhere
-    warnings: tuple[str, ...]
+    illegal_species: tuple[ParsedSlot, ...] = field(default_factory=tuple) # Species not legal in Champions
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -427,27 +428,47 @@ def parse_showdown_text(paste_text: str) -> ParsedTeamResult:
 def resolve_import_readiness(
     parsed_result: ParsedTeamResult,
     box_repo: "BoxRepository",
+    legal_species_catalog: set[str] | list[str] | None = None,
 ) -> ImportReadinessReport:
-    """Cross-reference parsed slots against the user's box.
+    """Cross-reference parsed slots against the user's box and format legality.
 
     Returns an :class:`ImportReadinessReport` categorising each slot as
     *in_box* (already owned), *missing* (not owned, but slot is parseable),
-    or *unresolvable* (species could not be identified at all).
+    *unresolvable* (species could not be identified at all), or *illegal_species*
+    (not legal in Pokémon Champions format).
     """
     in_box: list[ParsedSlot] = []
     missing: list[ParsedSlot] = []
     unresolvable: list[ParsedSlot] = []
+    illegal_species: list[ParsedSlot] = []
     warnings: list[str] = []
 
     # Build a lookup of canonical IDs already in the box
     real_entries = box_repo.list_entries(include_planned=False)
     owned_canonical_ids: set[str] = {e.pokemon.canonical_id for e in real_entries}
 
+    catalog_set = set(legal_species_catalog) if legal_species_catalog else None
+
     for slot in parsed_result.slots:
         if not slot.species_name:
             unresolvable.append(slot)
             warnings.append(f"Slot {slot.raw_header!r}: species could not be identified.")
             continue
+
+        # Check format legality if catalog is provided
+        if catalog_set:
+            s_name = slot.species_name.lower().strip()
+            s_key = slot.showdown_form_key.lower().strip()
+            is_legal = any(
+                s_name == c.lower() or s_key == c.lower() or
+                s_key.startswith(c.lower().split("-")[0]) or
+                c.lower().startswith(s_key.split("-")[0])
+                for c in catalog_set
+            )
+            if not is_legal:
+                illegal_species.append(slot)
+                warnings.append(f"⚠️ {slot.species_name} is NOT legal in Pokémon Champions format.")
+                continue
 
         # Try to find a matching canonical ID by checking if any owned entry's
         # canonical_id or display_name matches the Showdown form key.
@@ -472,8 +493,10 @@ def resolve_import_readiness(
         in_box=tuple(in_box),
         missing=tuple(missing),
         unresolvable=tuple(unresolvable),
+        illegal_species=tuple(illegal_species),
         warnings=tuple(warnings),
     )
+
 
 
 # ---------------------------------------------------------------------------

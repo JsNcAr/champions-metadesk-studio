@@ -1,6 +1,7 @@
 """Flet GUI application for Pokemon box and team management."""
 
 import threading
+from typing import Any
 import flet as ft
 from uuid import UUID
 
@@ -59,10 +60,12 @@ from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import (
     BoxRepository,
     TeamRepository,
+    PokemonRepository,
     ChampionsCatalogRepository,
     MegaEvolutionRepository,
     ItemRepository,
 )
+
 from ..services.pokemon_import_service import add_pokemon_to_box
 from ..services.mega_evolution_service import (
     sync_all_champions_megas_on_startup,
@@ -91,6 +94,11 @@ from ..infrastructure.providers.pokepast_provider import (
     PokepastProvider,
     PokepastNetworkError,
 )
+from ..services.tournament_service import TournamentService
+from pathlib import Path
+
+SEED_FILE_PATH = Path(__file__).parent.parent / "data" / "seed_tournaments.json"
+
 
 # Pokémon Type Colors
 TYPE_COLORS = {
@@ -115,9 +123,17 @@ STAT_COLORS = {
 # Design constants
 _C = ft.Colors  # alias
 
-# Padding helpers
-P_CARD = ft.Padding.symmetric(horizontal=12, vertical=10)
-P_PANEL = ft.Padding.all(16)
+def _get_obj_attr(obj: Any, attr_name: str, default: str = "") -> str:
+    """Safely retrieve attribute from Pydantic model, dictionary, or primitive string."""
+    if obj is None:
+        return default
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, dict):
+        val = obj.get(attr_name, default)
+        return str(val) if val is not None else default
+    val = getattr(obj, attr_name, default)
+    return str(val) if val is not None else default
 
 
 def main(page: ft.Page):
@@ -358,6 +374,7 @@ def main(page: ft.Page):
                 team_dropdown.value = None
 
             render_team_builder()
+            page.update()
         finally:
             session.close()
 
@@ -704,7 +721,7 @@ def main(page: ft.Page):
                     selected_form="base",
                     item=None,
                     moveset=[],
-                    ability=box_entry.pokemon.abilities[0].name.title() if box_entry.pokemon.abilities else None,
+                    ability=_get_obj_attr(box_entry.pokemon.abilities[0], "name").title() if box_entry.pokemon.abilities else None,
                     notes=""
                 )
                 team_repo.upsert_member(state["active_team_id"], member)
@@ -1352,11 +1369,11 @@ def main(page: ft.Page):
 
                 # ── Auto-save helpers ────────────────────────────────────────
                 def _auto_save_form(e, s_pos=slot, cur_ab=matching_member.ability, cur_item=matching_member.item, cur_moves=matching_member.moveset, cur_notes=matching_member.notes):
-                    moves_str = ", ".join(mv.name for mv in cur_moves)
+                    moves_str = ", ".join(_get_obj_attr(mv, "name") for mv in cur_moves)
                     handle_update_member_field(s_pos, e.control.value, cur_ab or "", cur_item or "", moves_str, cur_notes or "")
 
                 def _auto_save_ability(e, s_pos=slot, cur_form=selected_form, cur_item=matching_member.item, cur_moves=matching_member.moveset, cur_notes=matching_member.notes):
-                    moves_str = ", ".join(mv.name for mv in cur_moves)
+                    moves_str = ", ".join(_get_obj_attr(mv, "name") for mv in cur_moves)
                     handle_update_member_field(s_pos, cur_form, e.control.value, cur_item or "", moves_str, cur_notes or "")
 
                 # Form input elements for member attributes
@@ -1375,7 +1392,7 @@ def main(page: ft.Page):
                     )
 
                 ability_options = [
-                    ft.dropdown.Option(text=ab.name.title().replace("-", " "))
+                    ft.dropdown.Option(text=_get_obj_attr(ab, "name").title().replace("-", " "))
                     for ab in pokemon.abilities
                 ]
                 
@@ -1533,7 +1550,7 @@ def main(page: ft.Page):
                 # -------------------------------------------------------------------
 
                 # ── 4-slot move chip UI ──────────────────────────────────────
-                current_moves = [mv.name for mv in matching_member.moveset]
+                current_moves = [_get_obj_attr(mv, "name") for mv in matching_member.moveset]
                 while len(current_moves) < 4:
                     current_moves.append("")
 
@@ -1681,6 +1698,47 @@ def main(page: ft.Page):
                     border=ft.Border.all(1, ft.Colors.DIVIDER),
                 )
 
+                # -----------------------------------------------
+                # Dynamic Meta Partners Widget
+                # -----------------------------------------------
+                synergy_controls = []
+                with get_session() as syn_session:
+                    tourney_svc = TournamentService(syn_session, seed_file_path=SEED_FILE_PATH)
+                    partners = tourney_svc.get_top_partners(pokemon.canonical_id, limit=4)
+                    
+                    if partners:
+                        partner_pills = []
+                        for p in partners:
+                            partner_pills.append(
+                                ft.Container(
+                                    content=ft.Row(spacing=4, controls=[
+                                        ft.Image(src=p.sprite_url, width=20, height=20, fit=ft.BoxFit.CONTAIN) if p.sprite_url else ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=ft.Colors.GREY_500),
+                                        ft.Text(p.display_name, size=10, weight=ft.FontWeight.W_600),
+                                        ft.Text(f"{p.synergy_percentage:.0f}%", size=9, color=ft.Colors.GREEN_400)
+                                    ]),
+                                    bgcolor=ft.Colors.CARD_BG,
+                                    border_radius=12,
+                                    padding=ft.Padding.only(left=2, top=2, bottom=2, right=8),
+                                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                                    tooltip=f"Appears together in {p.co_occurrence_count} teams",
+                                )
+                            )
+                        
+                        synergy_widget = ft.Container(
+                            content=ft.Column(spacing=6, controls=[
+                                ft.Row(spacing=4, controls=[
+                                    ft.Icon(ft.Icons.GROUP_ADD, size=14, color=ft.Colors.AMBER_400),
+                                    ft.Text("Top Tournament Partners", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+                                ]),
+                                ft.Row(spacing=6, wrap=True, controls=partner_pills)
+                            ]),
+                            bgcolor="#1e293b",
+                            border_radius=8,
+                            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+                            border=ft.Border.all(1, ft.Colors.DIVIDER),
+                        )
+                        synergy_controls.append(synergy_widget)
+
                 slot_controls = [hero_header]
                 if form_drop:
                     slot_controls.append(form_drop)
@@ -1689,12 +1747,14 @@ def main(page: ft.Page):
                     item_slot_widget,
                     moves_widget,
                     spread_summary_widget,
+                    *synergy_controls,
                     notes_field,
                     ft.Container(
                         content=ft.TextButton("Save Notes", icon=ft.Icons.SAVE, on_click=make_update_handler()),
                         alignment=ft.Alignment.CENTER_RIGHT,
                     )
                 ])
+
 
                 card_border_col = ft.Colors.AMBER_600 if getattr(box_entry, "is_planned", False) else type_col + "55"
                 slot_card = ft.Container(
@@ -1916,7 +1976,12 @@ def main(page: ft.Page):
         content=_tab_pill("Team Builder", ft.Icons.PEOPLE, False),
         on_tap=lambda e: switch_tab(1)
     )
-    tabs_row = ft.Row(controls=[box_tab_btn, team_tab_btn], spacing=8)
+    tourney_tab_btn = ft.GestureDetector(
+        content=_tab_pill("Tournaments & Meta", ft.Icons.EMOJI_EVENTS, False),
+        on_tap=lambda e: switch_tab(2)
+    )
+    tabs_row = ft.Row(controls=[box_tab_btn, team_tab_btn, tourney_tab_btn], spacing=8)
+
 
     # VIEW 1: Box Roster Layout
     box_tab_layout = ft.Row(
@@ -2365,7 +2430,12 @@ def main(page: ft.Page):
                     _import_status.value = f"✅ Found {len(parsed.slots)} Pokémon"
                     box_repo3, _, _, session3 = get_repositories()
                     try:
-                        _last_readiness[0] = resolve_import_readiness(parsed, box_repo3)
+                        champions_repo = ChampionsCatalogRepository(session3)
+                        legal_names = set(champions_repo.list_species_names())
+                        if not legal_names:
+                            pok_repo = PokemonRepository(session3)
+                            legal_names = {p.species_name for p in pok_repo.list_all()}
+                        _last_readiness[0] = resolve_import_readiness(parsed, box_repo3, legal_species_catalog=legal_names)
                     finally:
                         session3.close()
                 except PokepastNetworkError as err:
@@ -2382,7 +2452,12 @@ def main(page: ft.Page):
             _import_status.value = f"{'✅' if parsed.is_valid else '❌'} {len(parsed.slots)} Pokémon parsed"
             box_repo4, _, _, session4 = get_repositories()
             try:
-                _last_readiness[0] = resolve_import_readiness(parsed, box_repo4)
+                champions_repo4 = ChampionsCatalogRepository(session4)
+                legal_names4 = set(champions_repo4.list_species_names())
+                if not legal_names4:
+                    pok_repo4 = PokemonRepository(session4)
+                    legal_names4 = {p.species_name for p in pok_repo4.list_all()}
+                _last_readiness[0] = resolve_import_readiness(parsed, box_repo4, legal_species_catalog=legal_names4)
             finally:
                 session4.close()
             page.update()
@@ -2407,6 +2482,8 @@ def main(page: ft.Page):
             entries_by_name = {e.pokemon.display_name.lower(): e for e in all_entries}
             entries_by_cid  = {e.pokemon.canonical_id: e for e in all_entries}
 
+            pok_repo5 = PokemonRepository(session5)
+
             for i, slot in enumerate(parsed.slots[:6]):
                 # Resolve existing box entry
                 existing = (
@@ -2414,17 +2491,21 @@ def main(page: ft.Page):
                     entries_by_cid.get(slot.showdown_form_key)
                 )
                 if existing is None:
-                    # Create a stub PokemonRecord via catalog lookup
-                    from ..domain.entities.pokemon import Pokemon as _Pkmn
-                    from ..domain.entities.pokemon_stats import PokemonStats as _Stats
-                    stub = _Pkmn(
-                        canonical_id=slot.showdown_form_key,
-                        display_name=slot.species_name,
-                        species_name=slot.showdown_form_key.split("-")[0],
-                        form_name="base",
-                        types=[],
-                        stats=_Stats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
-                    )
+                    # Look up species in catalog first
+                    cat_pok_rec = pok_repo5.get(slot.showdown_form_key) or pok_repo5.get(slot.species_name.lower())
+                    if cat_pok_rec:
+                        stub = cat_pok_rec.to_domain()
+                    else:
+                        from ..domain.entities.pokemon import Pokemon as _Pkmn
+                        from ..domain.entities.pokemon_stats import PokemonStats as _Stats
+                        stub = _Pkmn(
+                            canonical_id=slot.showdown_form_key,
+                            display_name=slot.species_name,
+                            species_name=slot.showdown_form_key.split("-")[0],
+                            form_name="base",
+                            types=[],
+                            stats=_Stats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
+                        )
                     stub_entry = _BoxEntry(
                         pokemon=stub,
                         tags=["imported", team_name],
@@ -2438,7 +2519,7 @@ def main(page: ft.Page):
                 else:
                     box_entry_id = existing.box_entry_id
 
-                moves = [PokemonMove(name=m, power=0, accuracy=0, pp=0, damage_class="", type="") for m in slot.moves]
+                moves = [PokemonMove(name=m, power=0, accuracy=0, type="") for m in slot.moves]
                 member = _TM(
                     box_entry_id=box_entry_id,
                     slot_position=i + 1,
@@ -2452,6 +2533,7 @@ def main(page: ft.Page):
                     level=slot.level,
                 )
                 team_repo5.upsert_member(new_team.team_id, member)
+
 
 
             state["active_team_id"] = new_team.team_id
@@ -2468,14 +2550,64 @@ def main(page: ft.Page):
         readiness = _last_readiness[0]
         if readiness is None:
             return
+
+        # Safeguard: Check if team contains non-Champions species
+        if getattr(readiness, "illegal_species", None):
+            illegal_names = [s.species_name for s in readiness.illegal_species]
+            illegal_list = ft.Column(spacing=3, controls=[
+                ft.Row(spacing=6, controls=[
+                    ft.Icon(ft.Icons.CANCEL, size=14, color=ft.Colors.RED_400),
+                    ft.Text(n, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_300),
+                ]) for n in illegal_names
+            ])
+
+            def _close_illegal_dialog(e=None):
+                readiness_dialog.open = False
+                page.update()
+
+            readiness_dialog = ft.AlertDialog(
+                title=ft.Row(spacing=8, controls=[
+                    ft.Icon(ft.Icons.BLOCK, color=ft.Colors.RED_400, size=22),
+                    ft.Text("Cannot Import — Non-Champions Team", weight=ft.FontWeight.BOLD, color=ft.Colors.RED_400),
+                ]),
+                content=ft.Column(spacing=10, width=460, controls=[
+                    ft.Text(f"This team contains {len(illegal_names)} Pokémon that are NOT legal in Pokémon Champions:", size=12),
+                    illegal_list,
+                    ft.Container(
+                        content=ft.Text(
+                            "Pokémon Champions only supports species in the official Champions Pokédex catalog. "
+                            "Rosters containing unreleased or illegal species cannot be imported into your Box or Team Builder.",
+                            size=11, color=ft.Colors.GREY_300
+                        ),
+                        bgcolor="#2a1215",
+                        border_radius=6,
+                        padding=ft.Padding.all(8),
+                        border=ft.Border.all(1, ft.Colors.RED_700),
+                    )
+                ]),
+                actions=[
+                    ft.TextButton("✖ Close / Cancel", on_click=_close_illegal_dialog),
+                ],
+                actions_alignment=ft.MainAxisAlignment.CENTER,
+            )
+            page.overlay.append(readiness_dialog)
+            readiness_dialog.open = True
+            page.update()
+            return
+
         missing_names = [s.species_name for s in readiness.missing]
         unresolvable_names = [s.species_name for s in readiness.unresolvable]
         problem_names = missing_names + unresolvable_names
 
+
         if not problem_names:
             # All Pokémon in box — import directly
+            _import_modal.open = False
             _commit_team_import(use_planned=False)
             return
+
+        # Close import modal so only readiness_dialog is active
+        _import_modal.open = False
 
         # Build the readiness decision dialog
         missing_list = ft.Column(spacing=2, controls=[
@@ -2486,6 +2618,11 @@ def main(page: ft.Page):
         def _close_readiness(e=None):
             readiness_dialog.open = False
             page.update()
+
+        def _handle_choice(use_planned: bool):
+            readiness_dialog.open = False
+            _import_modal.open = False
+            _commit_team_import(use_planned=use_planned)
 
         readiness_dialog = ft.AlertDialog(
             title=ft.Text("⚠️ Import Notice", weight=ft.FontWeight.BOLD),
@@ -2498,12 +2635,12 @@ def main(page: ft.Page):
                 ft.ElevatedButton(
                     "📥 Add to Box & Import",
                     style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_ACCENT_700, color=ft.Colors.WHITE),
-                    on_click=lambda e: (_close_readiness(), _commit_team_import(use_planned=False)),
+                    on_click=lambda e: _handle_choice(use_planned=False),
                 ),
                 ft.ElevatedButton(
                     "📋 Import as Template",
                     style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
-                    on_click=lambda e: (_close_readiness(), _commit_team_import(use_planned=True)),
+                    on_click=lambda e: _handle_choice(use_planned=True),
                 ),
                 ft.TextButton("✖ Cancel", on_click=_close_readiness),
             ],
@@ -2611,6 +2748,322 @@ def main(page: ft.Page):
         ]
     )
 
+    # -----------------------------------------------------------------------
+    # VIEW 3: Meta & Tournament Explorer Layout
+    # -----------------------------------------------------------------------
+    _tourney_search_tf = ft.TextField(
+        hint_text="Search species, player, or event...",
+        width=220,
+        text_size=12,
+        height=40,
+        on_submit=lambda e: _render_tourney_explorer(),
+    )
+    _tourney_game_drop = ft.Dropdown(
+        value="All",
+        options=[
+            ft.dropdown.Option("All", text="All Games"),
+            ft.dropdown.Option("Pokémon Champions", text="Pokémon Champions"),
+            ft.dropdown.Option("Scarlet & Violet", text="Scarlet & Violet"),
+        ],
+        width=170,
+        text_size=12,
+        height=40,
+        on_select=lambda e: _render_tourney_explorer(),
+    )
+    _tourney_recency_drop = ft.Dropdown(
+        value="365",
+        options=[
+            ft.dropdown.Option("365", text="📅 Last 12 Months"),
+            ft.dropdown.Option("180", text="📅 Last 6 Months"),
+            ft.dropdown.Option("all", text="📅 All Time"),
+        ],
+        width=160,
+        text_size=12,
+        height=40,
+        on_select=lambda e: _render_tourney_explorer(),
+    )
+    _tourney_format_drop = ft.Dropdown(
+        value="All",
+        options=[
+            ft.dropdown.Option("All", text="All Formats"),
+            ft.dropdown.Option("Regulation H", text="Regulation H"),
+            ft.dropdown.Option("Regulation G", text="Regulation G"),
+            ft.dropdown.Option("Champions Season 1", text="Champions Season 1"),
+        ],
+        width=160,
+        text_size=12,
+        height=40,
+        on_select=lambda e: _render_tourney_explorer(),
+    )
+    _tourney_placement_drop = ft.Dropdown(
+        value="all",
+        options=[
+            ft.dropdown.Option("all", text="All Placements"),
+            ft.dropdown.Option("1", text="🥇 1st Place"),
+            ft.dropdown.Option("2", text="🥈 Top 2"),
+            ft.dropdown.Option("4", text="🏆 Top 4"),
+            ft.dropdown.Option("8", text="🏅 Top 8"),
+        ],
+        width=140,
+        text_size=12,
+        height=40,
+        on_select=lambda e: _render_tourney_explorer(),
+    )
+
+
+    _tourney_grid = ft.GridView(
+        expand=True,
+        max_extent=520,
+        child_aspect_ratio=1.35,
+        spacing=14,
+        run_spacing=14,
+    )
+
+    def _import_tournament_team(showdown_text: str, team_title: str):
+        _open_import_modal()
+        _import_input.value = showdown_text
+        _on_import_input_change()
+        show_toast(f"Loaded '{team_title}' roster for import preview!")
+
+
+    def _render_tourney_explorer():
+        _tourney_grid.controls.clear()
+        with get_session() as session:
+            tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
+            pokemon_repo = PokemonRepository(session)
+            champions_repo = ChampionsCatalogRepository(session)
+
+            champions_legal_set = set(champions_repo.list_species_names())
+            if not champions_legal_set:
+                champions_legal_set = {p.species_name for p in pokemon_repo.list_all()}
+
+            q = _tourney_search_tf.value
+            reg = _tourney_format_drop.value
+            game_plat = _tourney_game_drop.value
+            rec_val = _tourney_recency_drop.value
+            max_days = int(rec_val) if rec_val and rec_val.isdigit() else None
+
+            place_val = None
+            if _tourney_placement_drop.value and _tourney_placement_drop.value != "all":
+                try:
+                    place_val = int(_tourney_placement_drop.value)
+                except ValueError:
+                    pass
+
+            teams = tourney_svc.search_teams(
+                query=q,
+                regulation_filter=reg,
+                placement_filter=place_val,
+                species_filter=q,
+                game_platform_filter=game_plat,
+                max_age_days=max_days,
+            )
+
+            if not teams:
+                _tourney_grid.controls.append(
+                    ft.Container(
+                        content=ft.Column(
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=10,
+                            controls=[
+                                ft.Icon(ft.Icons.EMOJI_EVENTS_OUTLINED, size=48, color=ft.Colors.GREY_500),
+                                ft.Text("No tournament teams matched your filters.", size=14, color=ft.Colors.GREY_400),
+                            ],
+                        ),
+                        alignment=ft.Alignment.CENTER,
+                        padding=ft.Padding.all(40),
+                    )
+                )
+                page.update()
+                return
+
+            for team in teams:
+                tourney_rec = tourney_svc.repo.get_tournament(team.tournament_id)
+                tourney_name = tourney_rec.name if tourney_rec else team.tournament_id
+                tourney_reg = tourney_rec.format_regulation if tourney_rec else "VGC"
+
+                # Placement badge color
+                badge_bg = ft.Colors.PURPLE_900
+                badge_color = ft.Colors.WHITE
+                badge_icon = "🏅"
+                if team.placement == 1:
+                    badge_bg = ft.Colors.AMBER_700
+                    badge_color = ft.Colors.BLACK
+                    badge_icon = "🥇"
+                elif team.placement == 2:
+                    badge_bg = ft.Colors.BLUE_GREY_600
+                    badge_color = ft.Colors.WHITE
+                    badge_icon = "🥈"
+                elif team.placement <= 4:
+                    badge_bg = ft.Colors.BLUE_700
+                    badge_color = ft.Colors.WHITE
+                    badge_icon = "🏆"
+
+                # Members sprite row & legality check
+                members = tourney_svc.get_team_members(team.tournament_team_id)
+                member_controls = []
+                has_illegal_species = False
+
+                for m in members:
+                    sname = m.species_name.lower().strip()
+                    ckey = m.canonical_id.lower().strip()
+                    is_leg = any(
+                        sname == c.lower() or ckey == c.lower() or
+                        ckey.startswith(c.lower().split("-")[0]) or
+                        c.lower().startswith(ckey.split("-")[0])
+                        for c in champions_legal_set
+                    )
+                    if not is_leg:
+                        has_illegal_species = True
+
+                    pok_rec = pokemon_repo.get(m.canonical_id)
+                    sprite_url = pok_rec.sprite_url if pok_rec else None
+
+                    if sprite_url:
+                        img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
+                    else:
+                        img_ctrl = ft.Container(
+                            content=ft.Text(m.species_name[:3].upper(), size=10, weight=ft.FontWeight.BOLD),
+                            bgcolor="#1e293b",
+                            border_radius=19,
+                            width=38,
+                            height=38,
+                            alignment=ft.Alignment.CENTER,
+                        )
+
+                    border_color = ft.Colors.RED_700 if not is_leg else ft.Colors.DIVIDER
+                    member_controls.append(
+                        ft.Container(
+                            content=img_ctrl,
+                            bgcolor="#1c1917" if not is_leg else "#0f172a",
+                            border_radius=10,
+                            padding=ft.Padding.all(4),
+                            border=ft.Border.all(1, border_color),
+                            tooltip=f"{m.species_name} {'(⚠️ Non-Champions)' if not is_leg else ''}",
+                        )
+                    )
+
+                legality_badge = ft.Container(
+                    content=ft.Text("⚠️ Non-Champions Roster", size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                    bgcolor="#881337",
+                    border_radius=6,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=3),
+                    border=ft.Border.all(1, ft.Colors.RED_700),
+                ) if has_illegal_species else ft.Container(
+                    content=ft.Text("✅ Champions Legal", size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_300),
+                    bgcolor="#064e3b",
+                    border_radius=6,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=3),
+                    border=ft.Border.all(1, ft.Colors.GREEN_700),
+                )
+
+                # Card assembly
+                card = ft.Container(
+                    content=ft.Column(
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            # Header Row: Placement & Player Info
+                            ft.Row(
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                controls=[
+                                    ft.Row(
+                                        spacing=8,
+                                        controls=[
+                                            ft.Container(
+                                                content=ft.Text(
+                                                    f"{badge_icon} {team.standing_label}",
+                                                    size=11,
+                                                    weight=ft.FontWeight.BOLD,
+                                                    color=badge_color,
+                                                ),
+                                                bgcolor=badge_bg,
+                                                border_radius=6,
+                                                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+                                            ),
+                                            ft.Column(
+                                                spacing=1,
+                                                controls=[
+                                                    ft.Text(team.player_name, size=13, weight=ft.FontWeight.BOLD),
+                                                    ft.Text(tourney_name, size=10, color=ft.Colors.GREY_400),
+                                                ],
+                                            ),
+                                        ],
+                                    ),
+                                    ft.Column(
+                                        horizontal_alignment=ft.CrossAxisAlignment.END,
+                                        spacing=2,
+                                        controls=[
+                                            ft.Container(
+                                                content=ft.Text(tourney_reg, size=10, weight=ft.FontWeight.W_600, color=ft.Colors.AMBER_400),
+                                                bgcolor="#1e293b",
+                                                border_radius=6,
+                                                padding=ft.Padding.symmetric(horizontal=6, vertical=3),
+                                                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                            ),
+                                            legality_badge,
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            # Roster Sprites Row
+                            ft.Row(
+                                spacing=6,
+                                wrap=True,
+                                controls=member_controls,
+                            ),
+                            # Footer Action Row
+                            ft.Row(
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                controls=[
+                                    ft.ElevatedButton(
+                                        "⚠️ Import (Validation Check)" if has_illegal_species else "📥 Import Team",
+                                        icon=ft.Icons.DOWNLOAD,
+                                        style=ft.ButtonStyle(
+                                            bgcolor=ft.Colors.RED_900 if has_illegal_species else ft.Colors.AMBER_700,
+                                            color=ft.Colors.WHITE
+                                        ),
+                                        on_click=lambda e, t_text=team.showdown_text, t_name=team.player_name: _import_tournament_team(t_text, t_name),
+                                    ),
+                                    ft.OutlinedButton(
+                                        "PokéPaste",
+                                        icon=ft.Icons.OPEN_IN_NEW,
+                                        visible=bool(team.pokepast_url),
+                                        on_click=lambda e, url=team.pokepast_url: page.launch_url(url) if url else None,
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    bgcolor=ft.Colors.CARD_BG,
+                    border_radius=12,
+                    padding=ft.Padding.all(14),
+                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                )
+                _tourney_grid.controls.append(card)
+
+        page.update()
+
+    tourney_tab_layout = ft.Column(
+        expand=True,
+        spacing=12,
+        controls=[
+            ft.Row(
+                spacing=8,
+                wrap=True,
+                controls=[
+                    _tourney_search_tf,
+                    _tourney_game_drop,
+                    _tourney_recency_drop,
+                    _tourney_format_drop,
+                    _tourney_placement_drop,
+                    ft.ElevatedButton("Search Roster", icon=ft.Icons.SEARCH, on_click=lambda e: _render_tourney_explorer()),
+                ],
+            ),
+            _tourney_grid,
+        ],
+    )
+
     # Wire Tabs Switching
     container_holder = ft.Container(content=box_tab_layout, expand=True)
 
@@ -2618,12 +3071,21 @@ def main(page: ft.Page):
         if index == 0:
             box_tab_btn.content = _tab_pill("Box Roster", ft.Icons.INBOX, True)
             team_tab_btn.content = _tab_pill("Team Builder", ft.Icons.PEOPLE, False)
+            tourney_tab_btn.content = _tab_pill("Tournaments & Meta", ft.Icons.EMOJI_EVENTS, False)
             container_holder.content = box_tab_layout
-        else:
+        elif index == 1:
             box_tab_btn.content = _tab_pill("Box Roster", ft.Icons.INBOX, False)
             team_tab_btn.content = _tab_pill("Team Builder", ft.Icons.PEOPLE, True)
+            tourney_tab_btn.content = _tab_pill("Tournaments & Meta", ft.Icons.EMOJI_EVENTS, False)
             container_holder.content = team_tab_layout
+        else:
+            box_tab_btn.content = _tab_pill("Box Roster", ft.Icons.INBOX, False)
+            team_tab_btn.content = _tab_pill("Team Builder", ft.Icons.PEOPLE, False)
+            tourney_tab_btn.content = _tab_pill("Tournaments & Meta", ft.Icons.EMOJI_EVENTS, True)
+            container_holder.content = tourney_tab_layout
+            _render_tourney_explorer()
         page.update()
+
 
     # -----------------------------------------------------------------------
     # SETTINGS / DATA MANAGEMENT MODAL

@@ -310,19 +310,26 @@ class TestResolveImportReadiness(unittest.TestCase):
         self.assertEqual(len(report.in_box), 1)
         self.assertEqual(len(report.missing), 0)
 
-    def test_missing_pokemon(self):
-        slot = self._make_slot("Flutter Mane", "flutter-mane")
+    def test_illegal_species_detection(self):
+        legal_slot = self._make_slot("Pikachu", "pikachu")
+        illegal_slot = self._make_slot("Miraidon", "miraidon")
         result_mock = MagicMock()
-        result_mock.slots = (slot,)
-        repo = self._make_box_repo([("Incineroar", "incineroar")])
-        report = resolve_import_readiness(result_mock, repo)
-        self.assertEqual(len(report.missing), 1)
-        self.assertEqual(len(report.in_box), 0)
+        result_mock.slots = (legal_slot, illegal_slot)
+        repo = self._make_box_repo([("Pikachu", "pikachu")])
+
+        catalog = {"Pikachu", "Charizard", "Lucario"}
+        report = resolve_import_readiness(result_mock, repo, legal_species_catalog=catalog)
+
+        self.assertEqual(len(report.in_box), 1)
+        self.assertEqual(len(report.illegal_species), 1)
+        self.assertEqual(report.illegal_species[0].species_name, "Miraidon")
+        self.assertTrue(any("Miraidon" in w for w in report.warnings))
 
 
 # ---------------------------------------------------------------------------
 # PokepastProvider Tests
 # ---------------------------------------------------------------------------
+
 
 
 class TestPokepastProviderExtractId(unittest.TestCase):

@@ -67,3 +67,10 @@
 
 ### 🏷️ Feature 6: Bulk Roster Actions (Box Roster)
 - Multi-select box entries to batch-tag, batch-delete, or assign to teams simultaneously.
+
+### 🏆 Feature 7: Meta & Tournament Team Explorer
+- **Tournament Team Sync**: Fetch and cache official tournament team sheets (Worlds, Internationals, Regionals) via Limitless VGC API and Smogon Stats into local SQLite store (`TournamentRecord` & `TournamentMemberRecord`).
+- **Meta & Placement Search**: Search winning tournament teams by contained Pokémon species, event name, or final standing (e.g. *1st Place / Top 8*).
+- **One-Click Import to Team Builder**: Import any 6-Pokémon tournament roster directly into your active Team Builder slots (with movesets, items, abilities, and forms).
+- **Teammate Synergy Recommendations**: Surface top meta partner recommendations when building slots in the Team Builder based on Smogon/MunchStats data.
+

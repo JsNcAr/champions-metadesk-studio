@@ -78,6 +78,19 @@ from ..services.item_effect_service import (
     validate_item_assignment,
 )
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
+from ..services.showdown_service import (
+    export_team_to_showdown_text,
+    parse_showdown_text,
+    resolve_import_readiness,
+    import_from_pokepast_url,
+    publish_to_pokepast,
+    ParsedTeamResult,
+    ImportReadinessReport,
+)
+from ..infrastructure.providers.pokepast_provider import (
+    PokepastProvider,
+    PokepastNetworkError,
+)
 
 # Pokémon Type Colors
 TYPE_COLORS = {
@@ -1906,6 +1919,368 @@ def main(page: ft.Page):
         ]
     )
 
+    # -----------------------------------------------------------------------
+    # SHOWDOWN EXPORT MODAL
+    # -----------------------------------------------------------------------
+    _export_text_field = ft.TextField(
+        multiline=True, read_only=True, min_lines=12, max_lines=20,
+        text_style=ft.TextStyle(font_family="monospace", size=11),
+        bgcolor="#0f172a", border_color=ft.Colors.DIVIDER,
+        expand=True,
+    )
+    _export_pokepast_btn = ft.ElevatedButton(
+        "🌐 Publish to Poképast.es",
+        icon=ft.Icons.UPLOAD,
+        style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+    )
+    _export_pokepast_link = ft.TextButton(
+        "🔗 Open Paste", visible=False,
+        style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+    )
+    _export_spinner = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
+
+    _export_modal = ft.AlertDialog(
+        title=ft.Text("Export Team — Showdown Format", weight=ft.FontWeight.BOLD),
+        content=ft.Column(
+            spacing=10, width=620,
+            controls=[
+                _export_text_field,
+                ft.Row(spacing=8, controls=[
+                    ft.ElevatedButton(
+                        "📋 Copy to Clipboard",
+                        icon=ft.Icons.CONTENT_COPY,
+                        on_click=lambda e: (
+                            page.set_clipboard(_export_text_field.value or ""),
+                            show_toast("Copied to clipboard!"),
+                        ),
+                    ),
+                    _export_pokepast_btn,
+                    _export_spinner,
+                    _export_pokepast_link,
+                ]),
+            ],
+        ),
+        actions=[ft.TextButton("Close", on_click=lambda e: setattr(_export_modal, "open", False) or page.update())],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(_export_modal)
+
+    def _open_export_modal(e=None):
+        """Build Showdown text from the active team and open the export modal."""
+        if state["active_team_id"] is None:
+            show_toast("No active team to export", is_error=True)
+            return
+        box_repo2, team_repo2, _, session2 = get_repositories()
+        try:
+            members = team_repo2.get_members(state["active_team_id"]) or []
+            team_rec = team_repo2.resolve(str(state["active_team_id"]))
+            team_name = team_rec.name if team_rec else "My Team"
+            all_entries = box_repo2.list_entries(include_planned=True)
+            entries_by_id = {e.box_entry_id: e for e in all_entries}
+            text = export_team_to_showdown_text(members, entries_by_id)
+            _export_text_field.value = text if text.strip() else "(No team members to export)"
+            _export_pokepast_btn.text = "🌐 Publish to Poképast.es"
+            _export_pokepast_btn.disabled = False
+            _export_pokepast_link.visible = False
+            _export_pokepast_link.url = None
+            _export_spinner.visible = False
+
+            # Capture for closure
+            _members_snapshot = list(members)
+            _entries_snapshot = dict(entries_by_id)
+            _team_name_snapshot = team_name
+
+            def _do_publish(e=None):
+                _export_spinner.visible = True
+                _export_pokepast_btn.disabled = True
+                page.update()
+                try:
+                    provider = PokepastProvider()
+                    result = publish_to_pokepast(
+                        _members_snapshot, _entries_snapshot,
+                        team_name=_team_name_snapshot,
+                        team_id=str(state["active_team_id"]),
+                        pokepast_provider=provider,
+                    )
+                    _export_pokepast_link.text = f"🔗 Open Paste: {result.pokepast_url}"
+                    _export_pokepast_link.url = result.pokepast_url
+                    _export_pokepast_link.visible = True
+                    _export_pokepast_btn.text = "✅ Published!"
+                    page.launch_url(result.pokepast_url)
+                except PokepastNetworkError as err:
+                    show_toast(f"Publish failed: {err}", is_error=True)
+                    _export_pokepast_btn.disabled = False
+                finally:
+                    _export_spinner.visible = False
+                    page.update()
+
+            _export_pokepast_btn.on_click = lambda e: threading.Thread(target=_do_publish, daemon=True).start()
+        finally:
+            session2.close()
+
+        _export_modal.open = True
+        page.update()
+
+    # -----------------------------------------------------------------------
+    # SHOWDOWN IMPORT MODAL
+    # -----------------------------------------------------------------------
+    _import_input = ft.TextField(
+        label="Paste Showdown text or Poképast URL",
+        multiline=True, min_lines=8, max_lines=14,
+        hint_text="https://pokepast.es/abc123  —  or paste raw Showdown text here",
+        text_style=ft.TextStyle(font_family="monospace", size=11),
+        bgcolor="#0f172a", border_color=ft.Colors.DIVIDER,
+        expand=True, on_change=lambda e: _on_import_input_change(),
+    )
+    _import_preview_row = ft.Row(wrap=True, spacing=8, run_spacing=8)
+    _import_warning_col = ft.Column(spacing=4, visible=False)
+    _import_spinner = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
+    _import_status = ft.Text("", size=11, color=ft.Colors.GREY_400)
+    # Holds the last successfully parsed result for use by confirm buttons
+    _last_parsed: list[ParsedTeamResult] = [None]
+    _last_readiness: list[ImportReadinessReport] = [None]
+
+    def _build_import_preview(parsed: ParsedTeamResult):
+        """Populate the 6-slot preview cards from a ParsedTeamResult."""
+        _import_preview_row.controls.clear()
+        _import_warning_col.controls.clear()
+        _import_warning_col.visible = False
+
+        for slot in parsed.slots:
+            has_warn = slot.resolved_canonical_id is None
+            _import_preview_row.controls.append(
+                ft.Container(
+                    content=ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                        ft.Text(slot.species_name, size=11, weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.RED_400 if has_warn else ft.Colors.WHITE,
+                                text_align=ft.TextAlign.CENTER),
+                        ft.Text(slot.item_name or "—", size=9, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
+                        ft.Text(slot.ability_name or "", size=9, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
+                        *[ft.Text(f"• {m}", size=9, color=ft.Colors.BLUE_300) for m in slot.moves],
+                    ]),
+                    bgcolor="#1e293b" if not has_warn else "#3b0000",
+                    border_radius=8,
+                    border=ft.Border.all(1, ft.Colors.RED_400 if has_warn else ft.Colors.DIVIDER),
+                    padding=ft.Padding.all(8),
+                    width=120,
+                )
+            )
+
+        if parsed.warnings:
+            _import_warning_col.visible = True
+            for w in parsed.warnings:
+                _import_warning_col.controls.append(
+                    ft.Row(spacing=4, controls=[
+                        ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=ft.Colors.AMBER_400),
+                        ft.Text(w, size=10, color=ft.Colors.AMBER_400),
+                    ])
+                )
+
+    def _on_import_input_change():
+        text = _import_input.value or ""
+        if not text.strip():
+            _import_preview_row.controls.clear()
+            _import_status.value = ""
+            _last_parsed[0] = None
+            _last_readiness[0] = None
+            page.update()
+            return
+
+        if PokepastProvider.is_pokepast_url(text.strip()):
+            # Async fetch from Pokepast
+            def _fetch():
+                _import_spinner.visible = True
+                _import_status.value = "Fetching from Poképast.es…"
+                page.update()
+                try:
+                    provider = PokepastProvider()
+                    parsed = import_from_pokepast_url(text.strip(), provider)
+                    _last_parsed[0] = parsed
+                    _build_import_preview(parsed)
+                    _import_status.value = f"✅ Found {len(parsed.slots)} Pokémon"
+                    box_repo3, _, _, session3 = get_repositories()
+                    try:
+                        _last_readiness[0] = resolve_import_readiness(parsed, box_repo3)
+                    finally:
+                        session3.close()
+                except PokepastNetworkError as err:
+                    _import_status.value = f"❌ Fetch failed: {err}"
+                finally:
+                    _import_spinner.visible = False
+                    page.update()
+            threading.Thread(target=_fetch, daemon=True).start()
+        else:
+            # Parse raw text immediately (synchronous — fast)
+            parsed = parse_showdown_text(text)
+            _last_parsed[0] = parsed
+            _build_import_preview(parsed)
+            _import_status.value = f"{'✅' if parsed.is_valid else '❌'} {len(parsed.slots)} Pokémon parsed"
+            box_repo4, _, _, session4 = get_repositories()
+            try:
+                _last_readiness[0] = resolve_import_readiness(parsed, box_repo4)
+            finally:
+                session4.close()
+            page.update()
+
+    def _commit_team_import(use_planned: bool):
+        """Write parsed team to DB. use_planned=True → missing entries become ghosts."""
+        parsed = _last_parsed[0]
+        readiness = _last_readiness[0]
+        if parsed is None or not parsed.is_valid:
+            return
+        box_repo5, team_repo5, _, session5 = get_repositories()
+        try:
+            from ..domain.entities.team import Team as _Team
+            from ..domain.entities.box_entry import BoxEntry as _BoxEntry
+            from ..domain.entities.team_member import TeamMember as _TM
+
+            # Create the new team
+            team_name = parsed.title or "Imported Team"
+            new_team = team_repo5.create(_Team(name=team_name))
+
+            all_entries = box_repo5.list_entries(include_planned=True)
+            entries_by_name = {e.pokemon.display_name.lower(): e for e in all_entries}
+            entries_by_cid  = {e.pokemon.canonical_id: e for e in all_entries}
+
+            for i, slot in enumerate(parsed.slots[:6]):
+                # Resolve existing box entry
+                existing = (
+                    entries_by_name.get(slot.species_name.lower()) or
+                    entries_by_cid.get(slot.showdown_form_key)
+                )
+                if existing is None:
+                    # Create a stub PokemonRecord via catalog lookup
+                    from ..domain.entities.pokemon import Pokemon as _Pkmn
+                    from ..domain.entities.pokemon_stats import PokemonStats as _Stats
+                    stub = _Pkmn(
+                        canonical_id=slot.showdown_form_key,
+                        display_name=slot.species_name,
+                        species_name=slot.showdown_form_key.split("-")[0],
+                        form_name="base",
+                        types=[],
+                        stats=_Stats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
+                    )
+                    stub_entry = _BoxEntry(
+                        pokemon=stub,
+                        tags=["imported", team_name],
+                        is_planned=use_planned,
+                    )
+                    if use_planned:
+                        record = box_repo5.create_planned_entry(stub_entry)
+                    else:
+                        record = box_repo5.upsert_box_entry(stub_entry)
+                    box_entry_id = record.box_entry_id
+                else:
+                    box_entry_id = existing.box_entry_id
+
+                moves = [PokemonMove(name=m, power=0, accuracy=0, pp=0, damage_class="", type="") for m in slot.moves]
+                member = _TM(
+                    box_entry_id=box_entry_id,
+                    slot_position=i + 1,
+                    item=slot.item_name,
+                    ability=slot.ability_name,
+                    moveset=moves,
+                    nature=slot.nature,
+                    evs=dict(slot.evs),
+                    ivs=dict(slot.ivs),
+                    level=slot.level,
+                )
+                team_repo5.upsert_member(new_team.team_id, member)
+
+            state["active_team_id"] = new_team.team_id
+            show_toast(f"Team '{team_name}' imported successfully!")
+            _import_modal.open = False
+            refresh_teams()
+        except Exception as err:
+            show_toast(f"Import failed: {err}", is_error=True)
+        finally:
+            session5.close()
+
+    def _show_readiness_dialog():
+        """Show the 3-option dialog when missing Pokémon are detected."""
+        readiness = _last_readiness[0]
+        if readiness is None:
+            return
+        missing_names = [s.species_name for s in readiness.missing]
+        unresolvable_names = [s.species_name for s in readiness.unresolvable]
+        problem_names = missing_names + unresolvable_names
+
+        if not problem_names:
+            # All Pokémon in box — import directly
+            _commit_team_import(use_planned=False)
+            return
+
+        # Build the readiness decision dialog
+        missing_list = ft.Column(spacing=2, controls=[
+            ft.Text(f"• {n}", size=11, color=ft.Colors.AMBER_400)
+            for n in problem_names
+        ])
+
+        def _close_readiness(e=None):
+            readiness_dialog.open = False
+            page.update()
+
+        readiness_dialog = ft.AlertDialog(
+            title=ft.Text("⚠️ Import Notice", weight=ft.FontWeight.BOLD),
+            content=ft.Column(spacing=10, width=420, controls=[
+                ft.Text(f"{len(problem_names)} Pokémon in this team are not in your box:", size=12),
+                missing_list,
+                ft.Text("How would you like to proceed?", size=12, weight=ft.FontWeight.W_600),
+            ]),
+            actions=[
+                ft.ElevatedButton(
+                    "📥 Add to Box & Import",
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_ACCENT_700, color=ft.Colors.WHITE),
+                    on_click=lambda e: (_close_readiness(), _commit_team_import(use_planned=False)),
+                ),
+                ft.ElevatedButton(
+                    "📋 Import as Template",
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+                    on_click=lambda e: (_close_readiness(), _commit_team_import(use_planned=True)),
+                ),
+                ft.TextButton("✖ Cancel", on_click=_close_readiness),
+            ],
+            actions_alignment=ft.MainAxisAlignment.CENTER,
+        )
+        page.overlay.append(readiness_dialog)
+        readiness_dialog.open = True
+        page.update()
+
+    _import_modal = ft.AlertDialog(
+        title=ft.Text("Import Team — Showdown / Poképast", weight=ft.FontWeight.BOLD),
+        content=ft.Column(
+            spacing=10, width=680, scroll=ft.ScrollMode.AUTO,
+            controls=[
+                _import_input,
+                ft.Row(spacing=6, controls=[_import_spinner, _import_status]),
+                _import_warning_col,
+                _import_preview_row,
+            ],
+        ),
+        actions=[
+            ft.ElevatedButton(
+                "✅ Import Team",
+                icon=ft.Icons.DOWNLOAD,
+                style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+                on_click=lambda e: _show_readiness_dialog(),
+            ),
+            ft.TextButton("Cancel", on_click=lambda e: setattr(_import_modal, "open", False) or page.update()),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(_import_modal)
+
+    def _open_import_modal(e=None):
+        _import_input.value = ""
+        _import_preview_row.controls.clear()
+        _import_warning_col.controls.clear()
+        _import_warning_col.visible = False
+        _import_status.value = ""
+        _last_parsed[0] = None
+        _last_readiness[0] = None
+        _import_modal.open = True
+        page.update()
+
     # VIEW 2: Team Builder Layout
     team_tab_layout = ft.Column(
         expand=True,
@@ -1925,9 +2300,22 @@ def main(page: ft.Page):
                         icon_color=ft.Colors.RED_400,
                         on_click=lambda e: handle_delete_team(),
                         tooltip="Delete Active Team"
-                    )
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.UPLOAD_FILE,
+                        icon_color=ft.Colors.BLUE_300,
+                        on_click=_open_export_modal,
+                        tooltip="Export team to Showdown / Poképast.es",
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
+                        icon_color=ft.Colors.GREEN_400,
+                        on_click=_open_import_modal,
+                        tooltip="Import team from Showdown paste or Poképast URL",
+                    ),
                 ]
             ),
+
             # Team overview banner — 6 sprite circles
             ft.Container(
                 content=team_banner_row,

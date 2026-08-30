@@ -339,10 +339,15 @@ class TeamRepository:
             return new_record
 
         existing_record.box_entry_id = new_record.box_entry_id
+        existing_record.selected_form = new_record.selected_form
         existing_record.item = new_record.item
         existing_record.moveset = new_record.moveset
         existing_record.ability = new_record.ability
         existing_record.notes = new_record.notes
+        existing_record.evs = new_record.evs
+        existing_record.ivs = new_record.ivs
+        existing_record.nature = new_record.nature
+        existing_record.level = new_record.level
         self.session.add(existing_record)
         self.session.commit()
         self.session.refresh(existing_record)
@@ -378,12 +383,16 @@ class TeamRepository:
         records = list(self.session.exec(select(TeamMemberRecord).where(TeamMemberRecord.team_id == team_id)))
         return sorted(records, key=lambda record: record.slot_position)
 
+    def get_members(self, team_id: UUID) -> list[TeamMember]:
+        """Return hydrated domain TeamMember instances for a team."""
+        return [record.to_domain() for record in self.list_members(team_id)]
+
     def load_team(self, team_id: UUID) -> Team | None:
         record = self.get(team_id)
         if record is None:
             return None
 
-        members = [member.to_domain() for member in self.list_members(team_id)]
+        members = self.get_members(team_id)
         return record.to_domain(members)
 
 

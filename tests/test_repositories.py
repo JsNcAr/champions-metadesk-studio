@@ -132,7 +132,7 @@ class TestRepositories(unittest.TestCase):
         self.assertIsNotNone(resolved)
         self.assertEqual(resolved.team_id, team_record.team_id)
 
-        # Add member with Mega form selection
+        # Add member with Mega form selection and competitive spread
         member = TeamMember(
             box_entry_id=box_record.box_entry_id,
             slot_position=1,
@@ -140,8 +140,39 @@ class TestRepositories(unittest.TestCase):
             item="Charizardite X",
             ability="Tough Claws",
             notes="Lead sweeper",
+            evs={"hp": 252, "attack": 252, "speed": 4},
+            ivs={"speed": 31},
+            nature="Jolly",
+            level=50,
         )
         team_repo.upsert_member(team_record.team_id, member)
+
+        # Test get_members helper method
+        members = team_repo.get_members(team_record.team_id)
+        self.assertEqual(len(members), 1)
+        self.assertEqual(members[0].selected_form, "charizard-mega-x")
+        self.assertEqual(members[0].nature, "Jolly")
+        self.assertEqual(members[0].evs, {"hp": 252, "attack": 252, "speed": 4})
+
+        # Test update (upsert) existing member spread fields
+        member_update = TeamMember(
+            box_entry_id=box_record.box_entry_id,
+            slot_position=1,
+            selected_form="charizard-mega-x",
+            item="Charizardite X",
+            ability="Tough Claws",
+            notes="Updated sweeper",
+            evs={"hp": 4, "attack": 252, "speed": 252},
+            ivs={"speed": 31},
+            nature="Adamant",
+            level=100,
+        )
+        team_repo.upsert_member(team_record.team_id, member_update)
+        updated_members = team_repo.get_members(team_record.team_id)
+        self.assertEqual(len(updated_members), 1)
+        self.assertEqual(updated_members[0].nature, "Adamant")
+        self.assertEqual(updated_members[0].level, 100)
+        self.assertEqual(updated_members[0].evs, {"hp": 4, "attack": 252, "speed": 252})
 
         # Load team and verify
         loaded_team = team_repo.load_team(team_record.team_id)

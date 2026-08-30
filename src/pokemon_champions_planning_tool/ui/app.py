@@ -133,6 +133,12 @@ def main(page: ft.Page):
         "all_stats_visible": False,
         "assigning_slot_position": None,  # Slot number when choosing from box
         "detail_form_id": "base",     # Active form shown in detail drawer
+        # Box filter state
+        "selected_type_filter": "all",  # "all" or a type string e.g. "fire"
+        "favorites_only": False,
+        "megas_only": False,
+        "bst_min": 0,
+        "bst_max": 999,
         # Item system state
         "items_catalog": [],          # list[ItemRecord]
         "items_by_id": {},            # dict[canonical_id, ItemRecord]
@@ -224,6 +230,9 @@ def main(page: ft.Page):
         spacing=15,
         run_spacing=15,
     )
+    # Filter bar widgets — populated by render_type_filter_bar()
+    type_filter_row = ft.Row(wrap=True, spacing=6, run_spacing=4)
+    quick_toggles_row = ft.Row(spacing=8)
 
     # --- Detail Drawer UI elements ---
     detail_container = ft.Column(spacing=12, expand=True, scroll=ft.ScrollMode.AUTO)
@@ -309,6 +318,7 @@ def main(page: ft.Page):
         box_repo, _, _, session = get_repositories()
         try:
             state["box_entries"] = box_repo.list_entries()
+            render_type_filter_bar()
             render_box_grid(update_page=False)
             render_detail_drawer(update_page=False)
             page.update()
@@ -430,6 +440,117 @@ def main(page: ft.Page):
     def handle_stats_visibility_toggle(visible: bool):
         state["all_stats_visible"] = visible
         render_box_grid()
+
+    def handle_type_filter_change(type_name: str):
+        state["selected_type_filter"] = type_name
+        render_type_filter_bar()
+        render_box_grid()
+
+    def handle_toggle_favorites_only():
+        state["favorites_only"] = not state["favorites_only"]
+        render_type_filter_bar()
+        render_box_grid()
+
+    def handle_toggle_megas_only():
+        state["megas_only"] = not state["megas_only"]
+        render_type_filter_bar()
+        render_box_grid()
+
+    def handle_clear_filters():
+        state["selected_type_filter"] = "all"
+        state["favorites_only"] = False
+        state["megas_only"] = False
+        state["bst_min"] = 0
+        state["bst_max"] = 999
+        filter_search.value = ""
+        state["search_query"] = ""
+        render_type_filter_bar()
+        render_box_grid()
+        page.update()
+
+    def render_type_filter_bar():
+        """Re-render the type pills and quick toggles based on current state."""
+        type_filter_row.controls.clear()
+        quick_toggles_row.controls.clear()
+
+        # "All" pill
+        all_active = state["selected_type_filter"] == "all"
+        type_filter_row.controls.append(
+            ft.Container(
+                content=ft.Text("All", size=10, weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.WHITE if all_active else ft.Colors.GREY_400),
+                bgcolor=ft.Colors.AMBER_700 if all_active else "#1e293b",
+                border=ft.Border.all(1, ft.Colors.AMBER_700 if all_active else "#334155"),
+                border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                on_click=lambda e: handle_type_filter_change("all"), ink=True,
+            )
+        )
+        # One pill per type
+        for type_name, type_color in TYPE_COLORS.items():
+            if type_name == "unknown":
+                continue
+            active = state["selected_type_filter"] == type_name
+            type_filter_row.controls.append(
+                ft.Container(
+                    content=ft.Text(type_name.title(), size=10, weight=ft.FontWeight.BOLD,
+                                    color=ft.Colors.WHITE),
+                    bgcolor=type_color if active else type_color + "44",
+                    border=ft.Border.all(1, type_color),
+                    border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                    on_click=lambda e, tn=type_name: handle_type_filter_change(tn), ink=True,
+                )
+            )
+
+        # Favorites toggle pill
+        fav_active = state["favorites_only"]
+        quick_toggles_row.controls.append(
+            ft.Container(
+                content=ft.Row(spacing=4, controls=[
+                    ft.Icon(ft.Icons.STAR, size=12,
+                            color=ft.Colors.YELLOW if fav_active else ft.Colors.GREY_500),
+                    ft.Text("Favorites", size=10, weight=ft.FontWeight.W_600,
+                            color=ft.Colors.WHITE if fav_active else ft.Colors.GREY_400),
+                ]),
+                bgcolor=ft.Colors.AMBER_700 + "33" if fav_active else "#1e293b",
+                border=ft.Border.all(1, ft.Colors.AMBER_700 if fav_active else "#334155"),
+                border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                on_click=lambda e: handle_toggle_favorites_only(), ink=True,
+            )
+        )
+        # Mega Capable toggle pill
+        mega_active = state["megas_only"]
+        quick_toggles_row.controls.append(
+            ft.Container(
+                content=ft.Row(spacing=4, controls=[
+                    ft.Icon(ft.Icons.FLASH_ON, size=12,
+                            color=ft.Colors.AMBER_400 if mega_active else ft.Colors.GREY_500),
+                    ft.Text("Mega Capable", size=10, weight=ft.FontWeight.W_600,
+                            color=ft.Colors.WHITE if mega_active else ft.Colors.GREY_400),
+                ]),
+                bgcolor="#291d03" if mega_active else "#1e293b",
+                border=ft.Border.all(1, ft.Colors.AMBER_700 if mega_active else "#334155"),
+                border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                on_click=lambda e: handle_toggle_megas_only(), ink=True,
+            )
+        )
+        # Clear Filters button — only shown when any filter is active
+        any_active = (state["selected_type_filter"] != "all" or
+                      state["favorites_only"] or state["megas_only"])
+        if any_active:
+            quick_toggles_row.controls.append(
+                ft.Container(
+                    content=ft.Row(spacing=4, controls=[
+                        ft.Icon(ft.Icons.CLEAR, size=12, color=ft.Colors.RED_400),
+                        ft.Text("Clear Filters", size=10, color=ft.Colors.RED_400,
+                                weight=ft.FontWeight.W_600),
+                    ]),
+                    bgcolor="#1e293b",
+                    border=ft.Border.all(1, ft.Colors.RED_400),
+                    border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                    on_click=lambda e: handle_clear_filters(), ink=True,
+                )
+            )
+        page.update()
 
     def handle_pokemon_select(box_entry_id: UUID):
         state["selected_pokemon_id"] = box_entry_id
@@ -622,15 +743,38 @@ def main(page: ft.Page):
 
     # --- Renderers ---
     def render_box_grid(update_page: bool = True):
-        box_grid.child_aspect_ratio = 0.60 if state["all_stats_visible"] else 0.80
-        
-        filtered = []
-        for entry in state["box_entries"]:
-            name_match = state["search_query"] in entry.pokemon.display_name.lower()
-            tag_match = any(state["search_query"] in tag.lower() for tag in entry.tags)
-            type_match = any(state["search_query"] in t.lower() for t in entry.pokemon.types)
-            if state["search_query"] == "" or name_match or tag_match or type_match:
-                filtered.append(entry)
+        has_tags_visible = any(e.tags for e in state["box_entries"])
+        if state["all_stats_visible"]:
+            box_grid.child_aspect_ratio = 0.55 if has_tags_visible else 0.60
+        else:
+            box_grid.child_aspect_ratio = 0.65 if has_tags_visible else 0.80
+
+        mega_species = state.get("mega_species_set", set())
+
+        def _passes_filter(entry) -> bool:
+            # Text search: name OR tag OR type (OR within text search)
+            if state["search_query"]:
+                q = state["search_query"]
+                if not (q in entry.pokemon.display_name.lower() or
+                        any(q in t.lower() for t in entry.tags) or
+                        any(q in t.lower() for t in entry.pokemon.types)):
+                    return False
+            # Type filter pill (AND with text search)
+            if state["selected_type_filter"] != "all":
+                if state["selected_type_filter"] not in [t.lower() for t in entry.pokemon.types]:
+                    return False
+            # Favorites toggle
+            if state["favorites_only"] and not entry.is_favorite:
+                return False
+            # Mega capable toggle
+            if state["megas_only"] and entry.pokemon.species_name.lower() not in mega_species:
+                return False
+            # BST range
+            if not (state["bst_min"] <= entry.pokemon.total <= state["bst_max"]):
+                return False
+            return True
+
+        filtered = [e for e in state["box_entries"] if _passes_filter(e)]
 
         # Sorting logic
         if state["sort_by"] == "Name (Asc)":
@@ -645,8 +789,6 @@ def main(page: ft.Page):
             filtered.sort(key=lambda e: e.pokemon.stats.attack, reverse=True)
         elif state["sort_by"] == "Speed (Desc)":
             filtered.sort(key=lambda e: e.pokemon.stats.speed, reverse=True)
-
-        mega_species = state.get("mega_species_set", set())
 
         new_cards = []
         for entry in filtered:
@@ -754,6 +896,26 @@ def main(page: ft.Page):
                 )
 
             card_info_controls.extend([stats_block, types_row])
+
+            # Clickable tag pills — clicking a tag filters the box to that tag
+            if entry.tags:
+                card_info_controls.append(
+                    ft.Row(
+                        wrap=True, spacing=4, run_spacing=4,
+                        controls=[
+                            ft.Container(
+                                content=ft.Text(tag, size=9, color=ft.Colors.BLUE_400),
+                                bgcolor="#1e3a5f",
+                                border=ft.Border.all(1, ft.Colors.BLUE_400),
+                                border_radius=6,
+                                padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                                on_click=lambda e, t=tag: handle_filter_change(t),
+                                ink=True,
+                            )
+                            for tag in entry.tags
+                        ]
+                    )
+                )
 
             card = ft.Card(
                 content=ft.Container(
@@ -1274,20 +1436,32 @@ def main(page: ft.Page):
                         )
                     )
 
-                # Speed modifier badge (shown inline in the stat row)
-                speed_badge = None
-                if speed_modified:
-                    delta_pct = round((effective_stats.speed / pokemon.stats.speed - 1) * 100)
-                    badge_sign = "+" if delta_pct > 0 else ""
-                    badge_col = ft.Colors.BLUE_400 if delta_pct > 0 else ft.Colors.ORANGE_400
-                    speed_badge = ft.Container(
-                        content=ft.Text(f"Spe {effective_stats.speed} ({badge_sign}{delta_pct}%)",
-                                        size=10, weight=ft.FontWeight.BOLD, color=badge_col),
-                        bgcolor=ft.Colors.CARD_BG,
-                        border=ft.Border.all(1, badge_col),
-                        border_radius=4,
-                        padding=ft.Padding.symmetric(horizontal=5, vertical=2),
-                    )
+                # Multi-stat modifier badges (all stats with zero-guard)
+                def _make_stat_badges(effective, base):
+                    badges = []
+                    for stat_key, label, color in [
+                        ("attack",          "Atk", STAT_COLORS["attack"]),
+                        ("defense",         "Def", STAT_COLORS["defense"]),
+                        ("special_attack",  "SpA", STAT_COLORS["special_attack"]),
+                        ("special_defense", "SpD", STAT_COLORS["special_defense"]),
+                        ("speed",           "Spe", STAT_COLORS["speed"]),
+                    ]:
+                        eff = getattr(effective, stat_key)
+                        base_v = getattr(base, stat_key)
+                        if eff != base_v and base_v:  # zero-guard
+                            delta = round((eff / base_v - 1) * 100)
+                            sign = "+" if delta > 0 else ""
+                            badges.append(ft.Container(
+                                content=ft.Text(f"{label} {eff} ({sign}{delta}%)", size=9,
+                                                weight=ft.FontWeight.BOLD, color=color),
+                                bgcolor=ft.Colors.CARD_BG,
+                                border=ft.Border.all(1, color),
+                                border_radius=4,
+                                padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                            ))
+                    return badges
+
+                stat_badges = _make_stat_badges(effective_stats, pokemon.stats)
 
                 item_slot_widget = ft.Container(
                     content=ft.Column(spacing=4, controls=[
@@ -1296,16 +1470,13 @@ def main(page: ft.Page):
                             controls=[
                                 ft.Text("Held Item", size=10, weight=ft.FontWeight.BOLD,
                                         color=ft.Colors.GREY_400),
-                                ft.Row(spacing=4, controls=[
-                                    speed_badge if speed_badge else ft.Container(),
-                                    ft.IconButton(
-                                        icon=ft.Icons.CLOSE, icon_size=14,
-                                        icon_color=ft.Colors.GREY_500,
-                                        tooltip="Remove Item",
-                                        visible=current_item_rec is not None,
-                                        on_click=lambda e, s=slot: _apply_item_to_slot(s, None),
-                                    )
-                                ])
+                                ft.IconButton(
+                                    icon=ft.Icons.CLOSE, icon_size=14,
+                                    icon_color=ft.Colors.GREY_500,
+                                    tooltip="Remove Item",
+                                    visible=current_item_rec is not None,
+                                    on_click=lambda e, s=slot: _apply_item_to_slot(s, None),
+                                )
                             ]
                         ),
                         ft.Container(
@@ -1323,6 +1494,9 @@ def main(page: ft.Page):
                             on_click=lambda e, s=slot: _open_item_picker(s),
                             ink=True,
                         ),
+                        # Stat modifier badges below the item button
+                        *([ ft.Row(wrap=True, spacing=4, run_spacing=4, controls=stat_badges) ]
+                          if stat_badges else []),
                         *guardrail_controls,
                     ]),
                 )
@@ -1713,6 +1887,17 @@ def main(page: ft.Page):
                         padding=ft.Padding.symmetric(horizontal=12, vertical=6),
                         border=ft.Border.all(1, ft.Colors.DIVIDER)
                     ),
+                    # Type filter pills
+                    ft.Container(
+                        content=ft.Column(spacing=6, controls=[
+                            quick_toggles_row,
+                            type_filter_row,
+                        ]),
+                        bgcolor=ft.Colors.CARD_BG,
+                        border_radius=10,
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                        border=ft.Border.all(1, ft.Colors.DIVIDER),
+                    ),
                     box_grid
                 ]
             ),
@@ -2017,7 +2202,22 @@ def main(page: ft.Page):
                             ft.Row(spacing=4, controls=[
                                 ft.Icon(badge_icon, size=11, color=badge_col),
                                 ft.Text(badge_txt, size=10, color=badge_col, weight=ft.FontWeight.W_500),
-                            ])
+                            ]),
+                            # Stat modifier pills (e.g. Choice Band → +50% Atk)
+                            *([ft.Row(wrap=True, spacing=4, run_spacing=4, controls=[
+                                ft.Container(
+                                    content=ft.Text(
+                                        f"{'+'if round((mult-1)*100)>=0 else ''}{round((mult-1)*100)}% {k.replace('_',' ').title()}",
+                                        size=9, color=STAT_COLORS.get(k, ft.Colors.GREY_400)
+                                    ),
+                                    bgcolor=ft.Colors.CARD_BG,
+                                    border=ft.Border.all(1, STAT_COLORS.get(k, ft.Colors.GREY_400)),
+                                    border_radius=4,
+                                    padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                                )
+                                for k, mult in (item.stat_modifiers or {}).items()
+                                if mult != 1.0
+                            ])] if item.stat_modifiers else []),
                         ]),
                     ]
                 ),

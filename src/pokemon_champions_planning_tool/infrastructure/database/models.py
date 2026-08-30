@@ -96,17 +96,25 @@ class PokemonRecord(SQLModel, table=True):
 
 
 class BoxEntryRecord(SQLModel, table=True):
-    """Persisted user box entry linked to a canonical Pokemon record."""
+    """Persisted user box entry linked to a canonical Pokemon record.
+
+    ``is_planned`` marks ghost/template entries that exist on a team plan but
+    have not yet been caught/owned by the user.  Planned entries are excluded
+    from the main box grid but remain valid FK targets for TeamMemberRecord.
+    """
 
     __tablename__: ClassVar[str] = "box_entries"
 
     box_entry_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    # unique=True removed — uniqueness is enforced at the repository layer for
+    # non-planned entries only (a Pokémon can have one real + one planned entry).
     pokemon_canonical_id: str = Field(
-        foreign_key="pokemon_records.canonical_id", unique=True, index=True
+        foreign_key="pokemon_records.canonical_id", index=True
     )
     notes: str = ""
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     is_favorite: bool = False
+    is_planned: bool = Field(default=False, index=True)
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
@@ -117,6 +125,7 @@ class BoxEntryRecord(SQLModel, table=True):
             notes=box_entry.notes,
             tags=list(box_entry.tags),
             is_favorite=box_entry.is_favorite,
+            is_planned=box_entry.is_planned,
             created_at=box_entry.created_at,
             updated_at=box_entry.updated_at,
         )
@@ -128,6 +137,7 @@ class BoxEntryRecord(SQLModel, table=True):
             notes=self.notes,
             tags=list(self.tags),
             is_favorite=self.is_favorite,
+            is_planned=self.is_planned,
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
@@ -166,7 +176,13 @@ class TeamRecord(SQLModel, table=True):
 
 
 class TeamMemberRecord(SQLModel, table=True):
-    """Persisted team slot assignment."""
+    """Persisted team slot assignment.
+
+    ``evs`` and ``ivs`` store competitive EV/IV spreads as dicts mapping stat
+    keys (``hp``, ``attack``, ``defense``, ``special_attack``,
+    ``special_defense``, ``speed``) to integer values.  Only non-zero EVs and
+    non-31 IVs need to be stored; missing keys imply 0 EVs / 31 IVs.
+    """
 
     __tablename__: ClassVar[str] = "team_members"
     __table_args__ = (UniqueConstraint("team_id", "slot_position", name="uq_team_slot"),)
@@ -180,6 +196,11 @@ class TeamMemberRecord(SQLModel, table=True):
     moveset: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     ability: str | None = None
     notes: str = ""
+    # Competitive spread fields
+    evs: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    ivs: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    nature: str | None = None
+    level: int = Field(default=50)
 
     @classmethod
     def from_domain(cls, team_id: UUID, team_member: TeamMember) -> "TeamMemberRecord":
@@ -193,6 +214,10 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[move.model_dump(mode="json") for move in team_member.moveset],
             ability=team_member.ability,
             notes=team_member.notes,
+            evs=dict(team_member.evs),
+            ivs=dict(team_member.ivs),
+            nature=team_member.nature,
+            level=team_member.level,
         )
 
     def to_domain(self) -> TeamMember:
@@ -205,6 +230,10 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[PokemonMove.model_validate(move) for move in self.moveset],
             ability=self.ability,
             notes=self.notes,
+            evs=dict(self.evs),
+            ivs=dict(self.ivs),
+            nature=self.nature,
+            level=self.level,
         )
 
 

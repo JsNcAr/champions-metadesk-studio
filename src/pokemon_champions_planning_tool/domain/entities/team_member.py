@@ -18,3 +18,8 @@ class TeamMember:
     moveset: list[PokemonMove] = field(default_factory=list)
     ability: str | None = None
     notes: str = ""
+    # Competitive spread — only non-zero EVs / non-31 IVs need to be present
+    evs: dict[str, int] = field(default_factory=dict)
+    ivs: dict[str, int] = field(default_factory=dict)
+    nature: str | None = None
+    level: int = 50

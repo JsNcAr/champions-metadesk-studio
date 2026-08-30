@@ -44,13 +44,27 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
     engine = get_engine(database_filename)
     SQLModel.metadata.create_all(engine)
 
-    # Lightweight schema migration for selected_form column
+    # Lightweight schema migrations — each ALTER TABLE is wrapped in its own
+    # try/except so a pre-existing column never aborts the others.
+    migrations = [
+        # team_members — original migration (form field)
+        "ALTER TABLE team_members ADD COLUMN selected_form VARCHAR DEFAULT 'base';",
+        # team_members — competitive spread fields (Phase 0.B)
+        "ALTER TABLE team_members ADD COLUMN evs JSON NOT NULL DEFAULT '{}';",
+        "ALTER TABLE team_members ADD COLUMN ivs JSON NOT NULL DEFAULT '{}';",
+        "ALTER TABLE team_members ADD COLUMN nature VARCHAR;",
+        "ALTER TABLE team_members ADD COLUMN level INTEGER NOT NULL DEFAULT 50;",
+        # box_entries — ghost/planned entry support (Phase 0.A)
+        "ALTER TABLE box_entries ADD COLUMN is_planned BOOLEAN NOT NULL DEFAULT 0;",
+    ]
+
     with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE team_members ADD COLUMN selected_form VARCHAR DEFAULT 'base';"))
-            conn.commit()
-        except Exception:
-            pass  # Column already exists
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists — safe to ignore
 
     _DB_INITIALIZED.add(database_filename)
     return engine

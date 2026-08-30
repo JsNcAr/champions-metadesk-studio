@@ -80,7 +80,12 @@ class PokemonRepository:
 
 
 class BoxRepository:
-    """CRUD helpers for the user's box entries."""
+    """CRUD helpers for the user's box entries.
+
+    Uniqueness rule (enforced here, not at DB level):
+    - At most ONE non-planned entry per ``pokemon_canonical_id``.
+    - Planned (ghost) entries are not subject to this constraint.
+    """
 
     def __init__(self, session: Session):
         self.session = session
@@ -88,11 +93,17 @@ class BoxRepository:
 
     def upsert_box_entry(self, box_entry: BoxEntry) -> BoxEntryRecord:
         self.pokemon_repository.upsert(box_entry.pokemon)
-        existing_record = self.session.exec(
-            select(BoxEntryRecord).where(
-                BoxEntryRecord.pokemon_canonical_id == box_entry.pokemon.canonical_id
-            )
-        ).first()
+        # Enforce uniqueness only for real (non-planned) entries
+        if not box_entry.is_planned:
+            existing_record = self.session.exec(
+                select(BoxEntryRecord).where(
+                    BoxEntryRecord.pokemon_canonical_id == box_entry.pokemon.canonical_id,
+                    BoxEntryRecord.is_planned == False,  # noqa: E712
+                )
+            ).first()
+        else:
+            existing_record = None
+
         new_record = BoxEntryRecord.from_domain(box_entry)
 
         if existing_record is None:
@@ -102,15 +113,45 @@ class BoxRepository:
             return new_record
 
         existing_record.pokemon_canonical_id = new_record.pokemon_canonical_id
+        existing_record.notes = new_record.notes
+        existing_record.tags = new_record.tags
+        existing_record.is_favorite = new_record.is_favorite
+        existing_record.is_planned = new_record.is_planned
         existing_record.updated_at = _utc_now()
         self.session.add(existing_record)
         self.session.commit()
         self.session.refresh(existing_record)
         return existing_record
 
+    def create_planned_entry(self, box_entry: BoxEntry) -> BoxEntryRecord:
+        """Insert a ghost/template entry (is_planned=True) without uniqueness checks."""
+        self.pokemon_repository.upsert(box_entry.pokemon)
+        record = BoxEntryRecord.from_domain(box_entry)
+        record.is_planned = True
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
+    def promote_planned_entry(self, box_entry_id: UUID) -> BoxEntryRecord | None:
+        """Promote a ghost entry to a real box entry (is_planned -> False)."""
+        record = self.session.get(BoxEntryRecord, box_entry_id)
+        if record is None or not record.is_planned:
+            return None
+        record.is_planned = False
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
     def get_by_canonical_id(self, canonical_id: str) -> BoxEntryRecord | None:
+        """Returns the real (non-planned) entry for a canonical ID, if any."""
         return self.session.exec(
-            select(BoxEntryRecord).where(BoxEntryRecord.pokemon_canonical_id == canonical_id)
+            select(BoxEntryRecord).where(
+                BoxEntryRecord.pokemon_canonical_id == canonical_id,
+                BoxEntryRecord.is_planned == False,  # noqa: E712
+            )
         ).first()
 
     def resolve(self, identifier: str) -> BoxEntryRecord | None:
@@ -139,9 +180,16 @@ class BoxRepository:
 
         return None
 
-    def list_all(self) -> list[BoxEntryRecord]:
-        records = list(self.session.exec(select(BoxEntryRecord)))
-        return sorted(records, key=lambda record: record.created_at)
+    def list_all(self, include_planned: bool = False) -> list[BoxEntryRecord]:
+        """Returns all real box entries sorted by creation date.
+
+        Set ``include_planned=True`` to also return ghost/template entries.
+        """
+        stmt = select(BoxEntryRecord)
+        if not include_planned:
+            stmt = stmt.where(BoxEntryRecord.is_planned == False)  # noqa: E712
+        records = list(self.session.exec(stmt))
+        return sorted(records, key=lambda r: r.created_at)
 
     def load_entry(self, identifier: str) -> BoxEntry | None:
         record = self.resolve(identifier)
@@ -156,9 +204,14 @@ class BoxRepository:
 
     get = load_entry
 
-    def list_entries(self) -> list[BoxEntry]:
+    def list_entries(self, include_planned: bool = False) -> list[BoxEntry]:
+        """Returns hydrated BoxEntry domain objects.
+
+        ``include_planned=False`` (default) mirrors the main box grid behaviour —
+        ghost entries are hidden unless explicitly requested.
+        """
         entries: list[BoxEntry] = []
-        for record in self.list_all():
+        for record in self.list_all(include_planned=include_planned):
             pokemon_record = self.pokemon_repository.get(record.pokemon_canonical_id)
             if pokemon_record is None:
                 continue
@@ -172,6 +225,7 @@ class BoxRepository:
         notes: str | None = None,
         tags: list[str] | None = None,
         is_favorite: bool | None = None,
+        is_planned: bool | None = None,
     ) -> BoxEntryRecord | None:
         record = self.resolve(identifier)
         if record is None:
@@ -183,6 +237,8 @@ class BoxRepository:
             record.tags = tags
         if is_favorite is not None:
             record.is_favorite = is_favorite
+        if is_planned is not None:
+            record.is_planned = is_planned
 
         record.updated_at = _utc_now()
         self.session.add(record)

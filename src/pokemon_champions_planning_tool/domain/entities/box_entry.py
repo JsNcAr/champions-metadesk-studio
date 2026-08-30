@@ -20,5 +20,6 @@ class BoxEntry:
     notes: str = ""
     tags: list[str] = field(default_factory=list)
     is_favorite: bool = False
+    is_planned: bool = False   # True = template/ghost entry, not actually owned yet
     created_at: datetime = field(default_factory=_utc_now)
     updated_at: datetime = field(default_factory=_utc_now)

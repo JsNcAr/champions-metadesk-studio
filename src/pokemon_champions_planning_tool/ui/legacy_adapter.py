@@ -24,7 +24,6 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
             views.reload_catalogs()
         elif kind == "items":
             views.reload_items()
-            views.render_team_builder()
 
     def on_import_requested(payload: tuple[str, str]) -> None:
         text, title = payload
@@ -32,8 +31,9 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
 
     return [
         bus.on(events.BOX_CHANGED, lambda _payload: views.refresh_box_state()),
-        bus.on(events.BOX_ENTRY_DELETED, lambda _payload: (views.refresh_box_state(), views.refresh_teams())),
-        bus.on(events.TEAMS_CHANGED, lambda _payload: views.refresh_teams()),
+        bus.on(events.BOX_ENTRY_DELETED, lambda _payload: views.refresh_box_state()),
+        bus.on(events.ACTIVE_TEAM, views.set_active_team),
+        bus.on(events.EXPORT_REQUESTED, lambda _payload: views.open_export_modal()),
         bus.on(events.CATALOGS_RELOADED, on_catalogs_reloaded),
         bus.on(events.IMPORT_REQUESTED, on_import_requested),
     ]

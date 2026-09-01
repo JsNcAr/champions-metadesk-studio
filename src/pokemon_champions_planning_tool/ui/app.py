@@ -18,6 +18,8 @@ from .theme import apply_theme
 from .views.box import BoxView
 from .views.meta import MetaView
 from .views.settings import SettingsView
+from .views.team import TeamStore
+from .views.team.view import TeamView
 
 # Headless smoke tests switch this off so construction never touches the network.
 STARTUP_SYNC_ENABLED = True
@@ -59,6 +61,7 @@ def main(page: ft.Page) -> None:
             toast=ctx.legacy_toast,
             confirm=ctx.confirm,
             copy_to_clipboard=ctx.copy_to_clipboard,
+            teams_changed=lambda team_id: ctx.bus.emit(events.TEAMS_CHANGED, team_id),
         ),
     )
     bind_legacy(ctx, views)
@@ -71,12 +74,14 @@ def main(page: ft.Page) -> None:
         control=box_view,
         on_activate=box_view.ensure_loaded,
     )
+    team_view = TeamView(ctx, TeamStore(ctx.catalogs))
     shell.register_view(
         "team",
         label="Teams",
         icon=ft.Icons.GROUPS_OUTLINED,
         selected_icon=ft.Icons.GROUPS,
-        control=views.team,
+        control=team_view,
+        on_activate=team_view.ensure_loaded,
     )
     meta_view = MetaView(ctx)
     shell.register_view(

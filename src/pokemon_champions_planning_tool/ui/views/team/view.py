@@ -1,0 +1,323 @@
+"""Team builder view: header, six slot cards, summary panel, and the slot dialogs."""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+import flet as ft
+
+from ....domain.entities.team_member import TeamMember
+from ... import events
+from ...components import EmptyState, PageHeader, StatusChip
+from ...context import AppContext
+from ...tasks import is_mounted
+from ...theme import Layout, Palette, Space
+from .dialogs.assign import AssignDialog
+from .dialogs.item_picker import ItemPickerDialog
+from .dialogs.spread import SpreadDialog
+from .slot_card import SlotCallbacks, SlotCard
+from .store import TeamStore
+from .summary_panel import SummaryPanel
+
+_STATUS_TONE = {"ok": "success", "warn": "warning", "error": "error", "info": "info"}
+_STATUS_ICON = {"ok": ft.Icons.CHECK, "warn": ft.Icons.WARNING_AMBER_OUTLINED, "error": ft.Icons.ERROR_OUTLINE, "info": ft.Icons.INFO_OUTLINE}
+
+
+class TeamView(ft.Column):
+    def __init__(self, ctx: AppContext, store: TeamStore | None = None) -> None:
+        super().__init__(spacing=Space.MD, expand=True)
+        self.ctx = ctx
+        self.store = store or TeamStore(ctx.catalogs)
+        self.focused: int | None = None
+        self._loaded = False
+
+        # -- header ------------------------------------------------------------------------
+        self._team_select = ft.Dropdown(
+            options=[], width=260, dense=True, enable_filter=True, hint_text="Select a team",
+            on_select=lambda e: self._select_team(e.control.value),
+        )
+        self._rename = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=18, tooltip="Rename team", on_click=lambda _e: self.ctx.page.run_task(self._rename_team))
+        self._health = ft.Row(spacing=Space.XS, tight=True, wrap=True)
+        self._import_button = ft.FilledTonalButton("Import", icon=ft.Icons.DOWNLOAD, tooltip="Import a Showdown paste (Ctrl+I)", on_click=lambda _e: self._import())
+        self._export_menu = ft.PopupMenuButton(
+            content=ft.OutlinedButton("Export", icon=ft.Icons.UPLOAD),
+            tooltip="Export (Ctrl+E)",
+            items=[
+                ft.PopupMenuItem(content=ft.Text("Copy Showdown text"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._copy_export()),
+                ft.PopupMenuItem(content=ft.Text("Show export / publish…"), icon=ft.Icons.OPEN_IN_NEW, on_click=lambda _e: self._open_export()),
+            ],
+        )
+        self._summary_toggle = ft.IconButton(icon=ft.Icons.VIEW_SIDEBAR_OUTLINED, icon_size=20, tooltip="Toggle summary panel", selected=True, on_click=lambda _e: self._toggle_summary())
+        self._more = ft.PopupMenuButton(
+            icon=ft.Icons.MORE_VERT,
+            tooltip="Team actions",
+            items=[
+                ft.PopupMenuItem(content=ft.Text("New team"), icon=ft.Icons.ADD, on_click=lambda _e: self.ctx.page.run_task(self._new_team)),
+                ft.PopupMenuItem(content=ft.Text("Duplicate team"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self.ctx.page.run_task(self._duplicate_team)),
+                ft.PopupMenuItem(content=ft.Text("Delete team"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.ctx.page.run_task(self._delete_team)),
+            ],
+        )
+        self.header = PageHeader("Teams", actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
+        self._team_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True,
+                                controls=[self._team_select, self._rename, self._health])
+
+        # -- body -------------------------------------------------------------------------------
+        callbacks = SlotCallbacks(
+            on_assign=self._open_assign,
+            on_clear=self._clear_slot,
+            on_form=self.store.set_form,
+            on_ability=self.store.set_ability,
+            on_tera=self.store.set_tera,
+            on_item=self._open_item_picker,
+            on_remove_item=lambda p: self.store.set_item(p, None),
+            on_move=self.store.set_move,
+            on_notes=self.store.set_notes,
+            on_spread=self._open_spread,
+            on_swap=self._swap,
+            on_focus=self._focus,
+        )
+        self.cards = [SlotCard(p, callbacks) for p in range(1, 7)]
+        self.grid = ft.GridView(expand=True, max_extent=480, child_aspect_ratio=1.15, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, controls=list(self.cards))
+        self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=self._focus)
+        self._empty = EmptyState(ft.Icons.GROUPS_OUTLINED, "No teams yet", "Create a team, or import one from a Showdown paste or the Meta explorer.",
+                                 action_label="Create team", on_action=lambda: self.ctx.page.run_task(self._new_team),
+                                 secondary_label="Import", on_secondary=self._import)
+        self._empty.visible = False
+        self._body = ft.Row(spacing=Space.LG, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                            controls=[ft.Container(content=ft.Column(expand=True, controls=[self.grid, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty])]), expand=True), self.summary])
+        self.controls = [self.header, self._team_row, self._body]
+
+        self.store.subscribe(self._on_store_change)
+        ctx.bus.on(events.BOX_CHANGED, lambda _p: self._reload_if_loaded())
+        ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._reload_if_loaded())
+        ctx.bus.on(events.TEAMS_CHANGED, self._on_teams_changed)
+        ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
+
+    # -- lifecycle --------------------------------------------------------------------------------
+
+    def ensure_loaded(self) -> None:
+        if not self._loaded:
+            self._loaded = True
+            self.store.load()
+
+    def handle_key(self, e) -> bool:
+        key = (e.key or "")
+        if e.ctrl and key.lower() == "n":
+            self.ctx.page.run_task(self._new_team)
+            return True
+        if e.ctrl and key.lower() == "i":
+            self._import()
+            return True
+        if e.ctrl and key.lower() == "e":
+            self._copy_export()
+            return True
+        if e.alt and key in ("Arrow Left", "Arrow Right", "ArrowLeft", "ArrowRight"):
+            step = -1 if "Left" in key else 1
+            current = self.focused or 1
+            self._focus(((current - 1 + step) % 6) + 1)
+            return True
+        if key == "Escape" and self.focused is not None:
+            self._focus(None)
+            return True
+        return False
+
+    # -- store -> view ------------------------------------------------------------------------------
+
+    def _on_store_change(self, change: tuple) -> None:
+        kind = change[0]
+        if kind == "teams":
+            self._render_teams()
+        elif kind == "all":
+            for card, slot in zip(self.cards, self.store.slots):
+                card.update_from(slot, focused=slot.position == self.focused)
+            self._render_summary()
+            self._load_partners()
+        elif kind == "slot":
+            position = change[1]
+            self.cards[position - 1].update_from(self.store.slot(position), focused=position == self.focused)
+            self._load_partners(position)
+        elif kind == "summary":
+            self._render_summary()
+        self._update_self()
+
+    def _render_teams(self) -> None:
+        self._team_select.options = [ft.DropdownOption(key=str(t.team_id), text=f"{t.name}  ·  {t.filled}/6") for t in self.store.teams]
+        self._team_select.value = str(self.store.active_team_id) if self.store.active_team_id else None
+        has_team = self.store.active_team_id is not None
+        self._empty.visible = not has_team
+        self.grid.visible = has_team
+        self._rename.visible = has_team
+        self.header.set_caption(self.store.active_team_name if has_team else None)
+        self.ctx.bus.emit(events.ACTIVE_TEAM, self.store.active_team_id)
+
+    def _render_summary(self) -> None:
+        summary = self.store.summary
+        self._health.controls = [
+            StatusChip(c.label, _STATUS_TONE[c.status], icon=_STATUS_ICON[c.status], tooltip=c.detail) for c in summary.checks
+        ]
+        self.summary.update_from(self.store.slots, summary, focused=self.focused)
+
+    def _load_partners(self, position: int | None = None) -> None:
+        positions = [position] if position else [s.position for s in self.store.slots if s.filled]
+        for p in positions:
+            if not self.store.slot(p).filled:
+                self.cards[p - 1].set_partners([])
+                continue
+            self.ctx.run_in_background(lambda p=p: self.store.partners(p), on_done=lambda partners, p=p: self.cards[p - 1].set_partners(partners), on_error=lambda _exc: None)
+
+    # -- team actions ------------------------------------------------------------------------------------
+
+    def _select_team(self, value: str | None) -> None:
+        if value:
+            self.store.select_team(UUID(value))
+
+    async def _new_team(self) -> None:
+        name = await self.ctx.prompt_text("New team", "Team name", submit_label="Create", validate=self._validate_name)
+        if name:
+            self.store.create_team(name)
+            self.ctx.toast(f"Created {name}", "success")
+            self._update_self()
+
+    async def _rename_team(self) -> None:
+        if self.store.active_team_id is None:
+            return
+        name = await self.ctx.prompt_text("Rename team", "Team name", value=self.store.active_team_name, submit_label="Rename", validate=self._validate_name)
+        if name and name != self.store.active_team_name:
+            self.store.rename_team(name)
+            self._update_self()
+
+    async def _duplicate_team(self) -> None:
+        if self.store.active_team_id is None:
+            return
+        name = await self.ctx.prompt_text("Duplicate team", "New team name", value=f"{self.store.active_team_name} copy", submit_label="Duplicate", validate=self._validate_name)
+        if name:
+            self.store.duplicate_team(name)
+            self.ctx.toast(f"Duplicated as {name}", "success")
+            self._update_self()
+
+    async def _delete_team(self) -> None:
+        if self.store.active_team_id is None:
+            return
+        name = self.store.active_team_name
+        if await self.ctx.confirm(f"Delete team “{name}”?", "Its six slots and their spreads are deleted. Box entries are kept.", confirm_label="Delete team"):
+            self.store.delete_team()
+            self.ctx.toast(f"Deleted {name}", "info")
+            self._update_self()
+
+    def _validate_name(self, text: str) -> str | None:
+        if not text.strip():
+            return "Enter a name"
+        if any(t.name.lower() == text.strip().lower() and t.team_id != self.store.active_team_id for t in self.store.teams):
+            return "A team with this name already exists"
+        return None
+
+    def _on_teams_changed(self, team_id) -> None:
+        """Another component (the legacy import dialog) changed teams."""
+        self._loaded = True
+        self.store.load(team_id if isinstance(team_id, UUID) else None)
+
+    def _reload_if_loaded(self) -> None:
+        if self._loaded:
+            self.store.load(self.store.active_team_id)
+
+    def _on_catalogs_reloaded(self, kind: str) -> None:
+        if kind in ("items", "megas"):
+            self.store.catalogs = self.ctx.catalogs or self.store.catalogs
+            self._reload_if_loaded()
+
+    # -- slot actions -----------------------------------------------------------------------------------------
+
+    def _focus(self, position: int | None) -> None:
+        self.focused = position
+        for card in self.cards:
+            card.set_focused(card.position == position)
+        self.summary.update_from(self.store.slots, self.store.summary, focused=position)
+        self._update_self()
+
+    def _open_assign(self, position: int) -> None:
+        if self.store.active_team_id is None:
+            self.ctx.toast("Create a team first", "info")
+            return
+        entries = self.store.box_choices(include_planned=True)
+
+        def pick(box_entry_id: UUID) -> None:
+            self.ctx.page.pop_dialog()
+            self.store.assign(position, box_entry_id)
+            self.ctx.toast(f"Assigned to slot {position}", "success")
+
+        self.ctx.page.show_dialog(AssignDialog(slot=position, entries=entries, assigned=self.store.assigned_entry_ids(), on_pick=pick, on_close=self.ctx.page.pop_dialog))
+
+    def _clear_slot(self, position: int) -> None:
+        removed = self.store.clear_slot(position)
+        if removed is not None:
+            self.ctx.toast(f"Cleared slot {position}", "info", action="Undo", on_action=lambda: self._restore(removed))
+
+    def _restore(self, member: TeamMember) -> None:
+        self.store.restore_slot(member)
+        self._update_self()
+
+    def _swap(self, a: int, b: int) -> None:
+        if self.store.swap(a, b):
+            self._focus(b)
+
+    def _open_item_picker(self, position: int) -> None:
+        slot = self.store.slot(position)
+        if not slot.filled:
+            return
+
+        def pick(item_id: str | None) -> None:
+            self.ctx.page.pop_dialog()
+            item = self.store.set_item(position, item_id)
+            self.ctx.toast(f"{slot.entry.pokemon.display_name} holds {item.display_name}" if item else "Item removed", "success")
+
+        self.ctx.page.show_dialog(ItemPickerDialog(
+            catalogs=self.store.catalogs, species_name=slot.species_name,
+            current_item_id=slot.item.canonical_id if slot.item else None,
+            on_pick=pick, on_close=self.ctx.page.pop_dialog,
+        ))
+
+    def _open_spread(self, position: int) -> None:
+        slot = self.store.slot(position)
+        if not slot.filled or slot.base_stats is None:
+            return
+
+        def save(nature: str, level: int, evs: dict[str, int], ivs: dict[str, int]) -> list[str]:
+            problems = self.store.save_spread(position, nature=nature, level=level, evs=evs, ivs=ivs)
+            if not problems:
+                self.ctx.page.pop_dialog()
+                self.ctx.toast("Spread saved", "success")
+            return problems
+
+        self.ctx.page.show_dialog(SpreadDialog(
+            title=slot.entry.pokemon.display_name, base_stats=slot.base_stats,
+            nature=slot.member.nature, level=slot.member.level or 50, evs=slot.member.evs, ivs=slot.member.ivs,
+            on_save=save, on_close=self.ctx.page.pop_dialog,
+        ))
+
+    # -- import / export ----------------------------------------------------------------------------------------
+
+    def _import(self) -> None:
+        self.ctx.bus.emit(events.IMPORT_REQUESTED, ("", ""))
+
+    def _copy_export(self) -> None:
+        if self.store.active_team_id is None:
+            return
+        self.ctx.copy_to_clipboard(self.store.export_text())
+        self.ctx.toast("Showdown text copied", "success")
+
+    def _open_export(self) -> None:
+        self.ctx.bus.emit(events.EXPORT_REQUESTED, self.store.active_team_id)
+
+    # -- helpers ---------------------------------------------------------------------------------------------------
+
+    def _toggle_summary(self) -> None:
+        self.summary.visible = not self.summary.visible
+        self._summary_toggle.selected = self.summary.visible
+        self._update_self()
+
+    def _update_self(self) -> None:
+        if is_mounted(self):
+            self.update()
+
+
+__all__ = ["TeamView", "Layout", "Palette"]

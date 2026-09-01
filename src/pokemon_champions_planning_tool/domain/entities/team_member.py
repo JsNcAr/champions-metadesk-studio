@@ -23,3 +23,5 @@ class TeamMember:
     ivs: dict[str, int] = field(default_factory=dict)
     nature: str | None = None
     level: int = 50
+    # Terastallization type (lowercase type name) or None when unset.
+    tera_type: str | None = None

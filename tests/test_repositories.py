@@ -193,3 +193,69 @@ class TestRepositories(unittest.TestCase):
         # Delete team
         self.assertTrue(team_repo.delete(team_record.team_id))
         self.assertIsNone(team_repo.get(team_record.team_id))
+
+
+class TestTeamSlotSwapAndTera(unittest.TestCase):
+    """swap_slots must respect uq_team_slot, and tera_type must round-trip."""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        db_url = f"sqlite:///{(Path(self.test_dir) / 'swap.db').resolve()}"
+        self.engine = create_engine(db_url, connect_args={"check_same_thread": False})
+        from pokemon_champions_planning_tool.infrastructure.database import models  # noqa: F401
+
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        self.box = BoxRepository(self.session)
+        self.teams = TeamRepository(self.session)
+        self.team = self.teams.create(Team(name="Swap Team"))
+        self.entries = {}
+        for name in ("incineroar", "rillaboom", "amoonguss"):
+            stats = PokemonStats(hp=95, attack=115, defense=90, sp_atk=80, sp_def=90, speed=60)
+            entry = BoxEntry(pokemon=Pokemon(canonical_id=name, display_name=name.title(), stats=stats))
+            self.entries[name] = self.box.upsert_box_entry(entry)
+
+    def tearDown(self):
+        self.session.close()
+        self.engine.dispose()
+        shutil.rmtree(self.test_dir)
+
+    def _assign(self, slot: int, name: str, **kwargs):
+        return self.teams.upsert_member(
+            self.team.team_id,
+            TeamMember(box_entry_id=self.entries[name].box_entry_id, slot_position=slot, **kwargs),
+        )
+
+    def _slots(self):
+        return {m.slot_position: m.box_entry_id for m in self.teams.list_members(self.team.team_id)}
+
+    def test_swap_two_filled_slots(self):
+        self._assign(1, "incineroar")
+        self._assign(2, "rillaboom")
+        self.assertTrue(self.teams.swap_slots(self.team.team_id, 1, 2))
+        slots = self._slots()
+        self.assertEqual(slots[1], self.entries["rillaboom"].box_entry_id)
+        self.assertEqual(slots[2], self.entries["incineroar"].box_entry_id)
+        self.assertEqual(set(slots), {1, 2}, "no parking slot left behind")
+
+    def test_swap_with_empty_slot_moves(self):
+        self._assign(1, "incineroar")
+        self.assertTrue(self.teams.swap_slots(self.team.team_id, 1, 6))
+        self.assertEqual(self._slots(), {6: self.entries["incineroar"].box_entry_id})
+        self.assertTrue(self.teams.move_member(self.team.team_id, 3, 6), "swap from empty into filled pulls it back")
+        self.assertEqual(self._slots(), {3: self.entries["incineroar"].box_entry_id})
+
+    def test_swap_noops(self):
+        self._assign(1, "incineroar")
+        self.assertFalse(self.teams.swap_slots(self.team.team_id, 1, 1))
+        self.assertFalse(self.teams.swap_slots(self.team.team_id, 4, 5))
+        self.assertEqual(self._slots(), {1: self.entries["incineroar"].box_entry_id})
+
+    def test_tera_type_round_trips_through_upsert(self):
+        self._assign(1, "incineroar", tera_type="grass")
+        self.assertEqual(self.teams.get_members(self.team.team_id)[0].tera_type, "grass")
+        # Updating an existing slot must carry the field too (the explicit copy block).
+        self._assign(1, "incineroar", tera_type="fire")
+        self.assertEqual(self.teams.get_members(self.team.team_id)[0].tera_type, "fire")
+        self._assign(1, "incineroar")
+        self.assertIsNone(self.teams.get_members(self.team.team_id)[0].tera_type)

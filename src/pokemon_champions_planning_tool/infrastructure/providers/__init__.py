@@ -29,6 +29,7 @@ _STAT_MODIFIER_MAP: dict[str, dict[str, float]] = {
     "choicespecs":  {"special_attack": 1.5},
     "lifeorb":      {"attack": 1.3, "special_attack": 1.3},
     "ironball":     {"speed": 0.5},
+    "assaultvest":  {"special_defense": 1.5},
 }
 
 # Normalise Showdown compact slug to PokéAPI hyphenated slug

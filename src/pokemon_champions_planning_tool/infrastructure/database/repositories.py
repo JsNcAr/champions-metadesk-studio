@@ -356,10 +356,56 @@ class TeamRepository:
         existing_record.ivs = new_record.ivs
         existing_record.nature = new_record.nature
         existing_record.level = new_record.level
+        existing_record.tera_type = new_record.tera_type
         self.session.add(existing_record)
         self.session.commit()
         self.session.refresh(existing_record)
         return existing_record
+
+    def _member_at(self, team_id: UUID, slot_position: int) -> TeamMemberRecord | None:
+        return self.session.exec(
+            select(TeamMemberRecord).where(
+                TeamMemberRecord.team_id == team_id,
+                TeamMemberRecord.slot_position == slot_position,
+            )
+        ).first()
+
+    def swap_slots(self, team_id: UUID, slot_a: int, slot_b: int) -> bool:
+        """Exchange the members of two slots in one transaction.
+
+        A naive two-write swap violates ``uq_team_slot`` mid-way, so the first member
+        is parked on a temporary negative slot until the other has moved. Swapping
+        with an empty slot moves the member; two empty slots is a no-op. Returns
+        whether anything changed.
+        """
+        if slot_a == slot_b:
+            return False
+        member_a = self._member_at(team_id, slot_a)
+        member_b = self._member_at(team_id, slot_b)
+        if member_a is None and member_b is None:
+            return False
+
+        if member_a is not None and member_b is not None:
+            member_a.slot_position = -slot_a
+            self.session.add(member_a)
+            self.session.flush()
+            member_b.slot_position = slot_a
+            self.session.add(member_b)
+            self.session.flush()
+            member_a.slot_position = slot_b
+            self.session.add(member_a)
+        elif member_a is not None:
+            member_a.slot_position = slot_b
+            self.session.add(member_a)
+        else:
+            member_b.slot_position = slot_a
+            self.session.add(member_b)
+        self.session.commit()
+        return True
+
+    def move_member(self, team_id: UUID, from_slot: int, to_slot: int) -> bool:
+        """Move a member to another slot, swapping if the target is occupied."""
+        return self.swap_slots(team_id, from_slot, to_slot)
 
     def delete_member(self, team_id: UUID, slot_position: int) -> bool:
         record = self.session.exec(

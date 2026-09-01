@@ -68,6 +68,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         # tournament_teams — age division ("masters" only, as of the division-aware sync)
         "ALTER TABLE tournament_teams ADD COLUMN division VARCHAR NOT NULL DEFAULT 'masters';",
         "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
+        # team_members — Terastallization type per slot
+        "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",

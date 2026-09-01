@@ -120,3 +120,17 @@ class TestItemEffectService(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAssaultVestModifier(unittest.TestCase):
+    def test_assault_vest_is_in_the_modifier_map(self):
+        from pokemon_champions_planning_tool.infrastructure.providers import _STAT_MODIFIER_MAP
+
+        self.assertEqual(_STAT_MODIFIER_MAP["assaultvest"], {"special_defense": 1.5})
+
+    def test_assault_vest_boosts_special_defense_only(self):
+        base = PokemonStats(hp=100, attack=100, defense=100, sp_atk=100, sp_def=100, speed=100)
+        vest = Item(canonical_id="assault-vest", display_name="Assault Vest", category="held", stat_modifiers={"special_defense": 1.5})
+        boosted = compute_effective_stats(base, vest)
+        self.assertEqual(boosted.special_defense, 150)
+        self.assertEqual((boosted.hp, boosted.attack, boosted.defense, boosted.special_attack, boosted.speed), (100, 100, 100, 100, 100))

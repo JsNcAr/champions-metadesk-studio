@@ -202,6 +202,7 @@ class TeamMemberRecord(SQLModel, table=True):
     ivs: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     nature: str | None = None
     level: int = Field(default=50)
+    tera_type: str | None = None
 
     @classmethod
     def from_domain(cls, team_id: UUID, team_member: TeamMember) -> "TeamMemberRecord":
@@ -219,6 +220,7 @@ class TeamMemberRecord(SQLModel, table=True):
             ivs=dict(team_member.ivs or {}),
             nature=team_member.nature,
             level=team_member.level,
+            tera_type=team_member.tera_type,
         )
 
     def to_domain(self) -> TeamMember:
@@ -235,6 +237,7 @@ class TeamMemberRecord(SQLModel, table=True):
             ivs=dict(self.ivs or {}),
             nature=self.nature,
             level=self.level or 50,
+            tera_type=self.tera_type,
         )
 
 

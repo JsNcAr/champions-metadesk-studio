@@ -12,8 +12,8 @@ from pathlib import Path
 
 UI_ROOT = Path(__file__).resolve().parents[1] / "src" / "pokemon_champions_planning_tool" / "ui"
 
-# Files that are being migrated away and are allowed literals until they are deleted.
-LEGACY_ALLOWLIST = {"app.py", "legacy.py"}
+# No exemptions remain now that the legacy UI is gone.
+LEGACY_ALLOWLIST: set[str] = set()
 
 _HEX = re.compile(r"#[0-9a-fA-F]{6}\b")
 

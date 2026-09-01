@@ -35,16 +35,42 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
 ```
 
 ### 1. UI Layer (`src/pokemon_champions_planning_tool/ui/`)
-- Built using **Flet (`>=0.85.3,<0.86.0`)** running on `ft.run()`.
-- Implements a reactive single-page interface with 3 main view tabs:
-  1. **Box Roster**: Grid view, type pills, favorites, details drawer, CSV export.
-  2. **Team Builder**: 6-slot preview banner, hero slot cards, held item modal, EV/IV spread modal, Poképaste import/export.
-  3. **Tournament Explorer**: Standings grid, regulation filters, roster search, 1-click import, partner synergy analytics.
-- **Colour palette**: `ui/theme.py` defines a `Colors` class of explicit colour strings
-  (a Tailwind-style dark slate palette plus semantic surface tokens such as `CARD_BG`,
-  `PANEL_BG`, and `DIVIDER` that Material does not provide). The UI imports this palette
-  directly and does **not** patch or read `ft.Colors` — an undefined token must raise
-  `AttributeError` at the call site rather than resolve to an unrenderable colour name.
+- Built using **Flet (`>=0.85.3,<0.86.0`)** running on `ft.run()`, Material 3, dark theme.
+- Layout: a `NavigationRail` shell hosting four views, each owning its page header:
+  1. **Box**: add-by-name with suggestions, one-row toolbar (filter, type/BST/stat drawer,
+     favourites, mega-capable, planned, tags, sort, cards/table), cached cards or a sortable
+     table, multi-select bulk bar, detail panel with forms, stats, abilities, defensive type
+     matrix, notes, tags.
+  2. **Teams**: team switcher and health chips, six slot cards (form/ability/Tera, item with
+     guardrails and stat deltas, moves, spread, partners, notes), summary panel (averages,
+     18×6 defensive grid, health), assign / item / spread / import / export dialogs.
+  3. **Meta**: tournament teams as rows grouped by event with filters, paging and a
+     lazily parsed sheet; Import hands the paste to the team builder.
+  4. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
+- Package layout:
+
+```text
+ui/
+  app.py            entry point: theme, context, catalogues, shell, views, startup sync
+  context.py        AppContext: page, event bus, toast/confirm/prompt/clipboard/background helpers
+  events.py         EventBus + named events for cross-view invalidation
+  tasks.py          run_in_background (page.run_thread + page.run_task), Debouncer, is_mounted
+  dialogs.py        toast / confirm / prompt_text on page.show_dialog
+  catalogs.py       Catalogs: Champions species, megas, items loaded once per session
+  format.py         number/time formatting
+  theme/            tokens.py (single source of colours, spacing, radii, type/stat palettes)
+                    build.py (ft.Theme from tokens)
+  shell/            AppShell: NavigationRail, content host, view registry, shortcuts
+  components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, chips, banner…
+  views/<name>/     store.py (Flet-free data + mutations, one session per call),
+                    view.py (controls; subscribes to its store), dialogs/
+```
+
+- Rules: no `Session` escapes a store; views never import each other (they talk through
+  the bus); components mutate their own children and the owning view calls `update()`;
+  only the shell calls `page.update()`; no hex colour literal outside `ui/theme`.
+- Verification without a browser: `scripts/ui_smoke.py` builds the whole UI against a
+  stub page and pushes every view through Flet's real diff/serialise path.
 
 ### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
 - Pure Python domain rules independent of UI widgets or HTTP APIs.
@@ -107,7 +133,7 @@ src/pokemon_champions_planning_tool/
 - `services/` coordinates workflows such as adding a Pokemon or building a team.
 - `infrastructure/` contains API clients, persistence, and CSV export helpers.
 
-The repository is fully implemented using these package layers. The Flet GUI in `ui/app.py`
+The repository is fully implemented using these package layers. The Flet GUI in `ui/`
 is the primary interface; the interactive terminal shell in `services/terminal_shell.py`
 remains as a secondary, still-supported entry point behind the `--cli` flag. Both drive the
 same services and repositories, so neither requires database or domain changes.

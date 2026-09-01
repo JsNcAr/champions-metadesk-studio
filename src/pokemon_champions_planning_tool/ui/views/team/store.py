@@ -29,7 +29,19 @@ from ....domain.stat_calc import validate_spread
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import ItemRecord
 from ....infrastructure.database.repositories import BoxRepository, MegaEvolutionRepository, TeamRepository
-from ....services.showdown_service import export_team_to_showdown_text
+from ....infrastructure.providers.pokepast_provider import PokepastProvider
+from ....services.showdown_service import (
+    ImportedTeam,
+    ImportReadinessReport,
+    ParsedTeamResult,
+    ShowdownExportResult,
+    commit_team_import,
+    export_team_to_showdown_text,
+    import_from_pokepast_url,
+    parse_showdown_text,
+    publish_to_pokepast,
+    resolve_import_readiness,
+)
 from ....services.tournament_service import PartnerRecommendation, TournamentService
 from ...catalogs import Catalogs
 from .summary import EMPTY_SUMMARY, SlotModel, TeamSummary, summarize, validate_slot
@@ -342,3 +354,40 @@ class TeamStore:
             return []
         with self._sf() as s:
             return TournamentService(s).get_top_partners(slot.entry.pokemon.canonical_id, limit=limit)
+
+    # -- import / export ------------------------------------------------------------------------------
+
+    @staticmethod
+    def parse(text: str) -> ParsedTeamResult:
+        return parse_showdown_text(text)
+
+    @staticmethod
+    def is_paste_url(text: str) -> bool:
+        return PokepastProvider.is_pokepast_url(text.strip())
+
+    @staticmethod
+    def fetch_paste(url_or_id: str) -> ParsedTeamResult:
+        """Blocking (run in the background): fetch and parse a Poképaste."""
+        return import_from_pokepast_url(url_or_id.strip(), PokepastProvider())
+
+    def readiness(self, parsed: ParsedTeamResult) -> ImportReadinessReport:
+        """Cross-reference parsed slots with the box and the Champions catalogue."""
+        legal = self.catalogs.champions_species_names or None
+        with self._sf() as s:
+            return resolve_import_readiness(parsed, BoxRepository(s), legal_species_catalog=legal)
+
+    def import_parsed(self, parsed: ParsedTeamResult, *, use_planned: bool, team_name: str | None = None) -> ImportedTeam:
+        """Create a team from a parsed paste (see showdown_service.commit_team_import)."""
+        with self._sf() as s:
+            result = commit_team_import(s, parsed, use_planned=use_planned, team_name=team_name, legal_species=self.catalogs.champions_species_names or None)
+        self.load(result.team_id)
+        return result
+
+    def publish(self, *, author: str = "Pokémon Champions Planning Tool", notes: str = "") -> ShowdownExportResult:
+        """Blocking (run in the background): publish the active team to Poképast.es."""
+        if self.active_team_id is None:
+            raise ValueError("No team selected")
+        members = [s.member for s in self.slots if s.member is not None]
+        entries = {s.member.box_entry_id: s.entry for s in self.slots if s.member is not None and s.entry is not None}
+        return publish_to_pokepast(members, entries, team_name=self.active_team_name, team_id=str(self.active_team_id),
+                                   pokepast_provider=PokepastProvider(), author=author, notes=notes)

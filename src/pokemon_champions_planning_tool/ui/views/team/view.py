@@ -13,6 +13,8 @@ from ...context import AppContext
 from ...tasks import is_mounted
 from ...theme import Layout, Palette, Space
 from .dialogs.assign import AssignDialog
+from .dialogs.export_dialog import ExportDialog
+from .dialogs.import_dialog import ImportDialog
 from .dialogs.item_picker import ItemPickerDialog
 from .dialogs.spread import SpreadDialog
 from .slot_card import SlotCallbacks, SlotCard
@@ -92,6 +94,7 @@ class TeamView(ft.Column):
         ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._reload_if_loaded())
         ctx.bus.on(events.TEAMS_CHANGED, self._on_teams_changed)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
+        ctx.bus.on(events.IMPORT_REQUESTED, self._on_import_requested)
 
     # -- lifecycle --------------------------------------------------------------------------------
 
@@ -297,7 +300,20 @@ class TeamView(ft.Column):
     # -- import / export ----------------------------------------------------------------------------------------
 
     def _import(self) -> None:
-        self.ctx.bus.emit(events.IMPORT_REQUESTED, ("", ""))
+        self.open_import("", "")
+
+    def _on_import_requested(self, payload) -> None:
+        text, title = payload if isinstance(payload, tuple) else ("", "")
+        self.ensure_loaded()
+        self.open_import(text or "", title or "")
+
+    def open_import(self, text: str, title: str) -> None:
+        def done(team_id: UUID) -> None:
+            self.ctx.bus.emit(events.NAVIGATE, "team")
+            self._focus(None)
+            self._update_self()
+
+        self.ctx.page.show_dialog(ImportDialog(self.ctx, self.store, initial_text=text, initial_title=title, on_done=done))
 
     def _copy_export(self) -> None:
         if self.store.active_team_id is None:
@@ -306,7 +322,10 @@ class TeamView(ft.Column):
         self.ctx.toast("Showdown text copied", "success")
 
     def _open_export(self) -> None:
-        self.ctx.bus.emit(events.EXPORT_REQUESTED, self.store.active_team_id)
+        if self.store.active_team_id is None:
+            self.ctx.toast("No team to export", "info")
+            return
+        self.ctx.page.show_dialog(ExportDialog(self.ctx, self.store))
 
     # -- helpers ---------------------------------------------------------------------------------------------------
 

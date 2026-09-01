@@ -1,8 +1,8 @@
 """Design system: tokens (colour, spacing, radius, type) and the Flet theme built from them.
 
-``Colors`` is the pre-overhaul token class kept only for ``ui/legacy.py``; new code uses
-``Palette``, ``Space``, ``Radius``, ``FontSize``, ``IconSize``, ``Layout``, ``Motion``,
-``TYPE_COLORS``/``type_color``/``on_type_color``, ``STAT_COLORS`` and ``alpha``.
+Views and components use ``Palette``, ``Space``, ``Radius``, ``FontSize``, ``IconSize``,
+``Layout``, ``Motion``, ``TYPE_COLORS``/``type_color``/``on_type_color``, ``STAT_COLORS``
+and ``alpha`` — never literals (``tests/test_ui_theme_lint.py`` enforces it).
 """
 
 from .build import FONT_FAMILY, INTER_FONT_URL, apply_theme, build_color_scheme, build_text_theme, build_theme
@@ -15,7 +15,6 @@ from .tokens import (
     STAT_TRACK,
     TYPE_COLORS,
     TYPE_ORDER,
-    Colors,
     FontSize,
     IconSize,
     Layout,
@@ -39,7 +38,6 @@ __all__ = [
     "STAT_TRACK",
     "TYPE_COLORS",
     "TYPE_ORDER",
-    "Colors",
     "FontSize",
     "IconSize",
     "Layout",

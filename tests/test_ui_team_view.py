@@ -163,12 +163,13 @@ class TestTeamView(unittest.TestCase):
         serialise(dialog)
         dialog._on_pick(self.lucario)
         self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Lucario")
-        requested = []
-        self.ctx.bus.on(events.IMPORT_REQUESTED, requested.append)
-        self.ctx.bus.on(events.EXPORT_REQUESTED, requested.append)
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.export_dialog import ExportDialog
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.import_dialog import ImportDialog
+
         self.view._import()
+        self.assertIsInstance(self.page.dialogs[-1], ImportDialog)
         self.view._open_export()
-        self.assertEqual(requested, [("", ""), self.store.active_team_id])
+        self.assertIsInstance(self.page.dialogs[-1], ExportDialog)
         with patch.object(self.ctx, "copy_to_clipboard") as copy:
             self.view._copy_export()
         self.assertIn("Lucario", copy.call_args.args[0])

@@ -68,7 +68,3 @@ class AppContext:
             except Exception:  # noqa: BLE001 - page may not be mounted yet (tests)
                 pass
         self.page.run_task(self._clipboard.set, text)
-
-    # The legacy views only know ``services.toast(message, is_error)``.
-    def legacy_toast(self, message: str, is_error: bool = False) -> None:
-        self.toast(message, "error" if is_error else "success")

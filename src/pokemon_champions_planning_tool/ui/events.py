@@ -30,8 +30,6 @@ IMPORT_REQUESTED = "import.requested"
 NAVIGATE = "navigate"
 # The team builder's active team changed. Payload: team id (UUID) or None.
 ACTIVE_TEAM = "team.active"
-# Ask for the export dialog for a team. Payload: team id (UUID) or None.
-EXPORT_REQUESTED = "export.requested"
 
 
 class EventBus:

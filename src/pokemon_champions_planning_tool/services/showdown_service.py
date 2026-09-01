@@ -5,7 +5,7 @@ Public surface
 * :func:`export_team_to_showdown_text` — Team → Showdown text string.
 * :func:`parse_showdown_text` — Showdown text → :class:`ParsedTeamResult`.
 * :func:`resolve_import_readiness` — Cross-reference parsed slots vs. the box.
-* :func:`commit_import` — Transactional write of a parsed team to the DB.
+* :func:`commit_team_import` — Write a parsed team (and any missing box entries) to the DB.
 * :func:`import_from_pokepast_url` — Fetch + parse a Pokepast paste.
 * :func:`publish_to_pokepast` — Serialize + publish a team to Pokepast.es.
 
@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 from uuid import UUID
+
+from ..domain.entities.pokemon_move import PokemonMove
 
 if TYPE_CHECKING:
     from ..infrastructure.database.repositories import BoxRepository
@@ -152,6 +154,11 @@ def export_team_to_showdown_text(
         # --- Ability ---
         if member.ability:
             lines.append(f"Ability: {member.ability}")
+
+        # --- Tera Type ---
+        tera = getattr(member, "tera_type", None)
+        if tera:
+            lines.append(f"Tera Type: {str(tera).strip().capitalize()}")
 
         # --- Level (omit if 50, the VGC default) ---
         if member.level != 50:
@@ -559,4 +566,125 @@ def publish_to_pokepast(
         team_name=team_name,
         showdown_text=text,
         pokepast_url=url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Import commit
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ImportedTeam:
+    """Outcome of :func:`commit_team_import`."""
+
+    team_id: UUID
+    team_name: str
+    created_owned: tuple[str, ...]     # display names added to the box as owned entries
+    created_planned: tuple[str, ...]   # display names added as planned (ghost) entries
+    reused: tuple[str, ...]            # display names that were already in the box
+
+
+def commit_team_import(
+    session,
+    parsed: ParsedTeamResult,
+    *,
+    use_planned: bool,
+    team_name: Optional[str] = None,
+    legal_species: Optional[Iterable[str]] = None,
+) -> ImportedTeam:
+    """Create a team from a parsed Showdown paste, adding missing Pokémon to the box.
+
+    Existing box entries are matched by display name or canonical id. Missing species
+    come from the local Pokémon catalogue when known, otherwise a zero-stat stub is
+    created so the slot can still be filled; with ``use_planned`` they become planned
+    (ghost) entries that do not appear in the roster. Slots beyond six are ignored.
+
+    Raises ``ValueError`` when the paste is invalid or, if ``legal_species`` is given,
+    when a species is outside it.
+    """
+    from ..domain.entities.box_entry import BoxEntry
+    from ..domain.entities.pokemon import Pokemon
+    from ..domain.entities.pokemon_stats import PokemonStats
+    from ..domain.entities.team import Team
+    from ..domain.entities.team_member import TeamMember
+    from ..infrastructure.database.repositories import BoxRepository, PokemonRepository, TeamRepository
+
+    if parsed is None or not parsed.is_valid or not parsed.slots:
+        raise ValueError("Nothing to import: the paste did not parse into any Pokémon")
+
+    if legal_species is not None:
+        legal = {name.lower().strip() for name in legal_species}
+        if legal:
+            illegal = [
+                s.species_name for s in parsed.slots[:6]
+                if s.species_name.lower() not in legal
+                and (s.showdown_form_key or "").split("-")[0] not in legal
+                and s.showdown_form_key not in legal
+            ]
+            if illegal:
+                raise ValueError(f"Not in the Champions Pokédex: {', '.join(illegal)}")
+
+    box_repo = BoxRepository(session)
+    team_repo = TeamRepository(session)
+    pokemon_repo = PokemonRepository(session)
+
+    name = (team_name or parsed.title or "Imported Team").strip() or "Imported Team"
+    team = team_repo.create(Team(name=name))
+
+    entries = box_repo.list_entries(include_planned=True)
+    by_name = {e.pokemon.display_name.lower(): e for e in entries}
+    by_cid = {e.pokemon.canonical_id: e for e in entries}
+
+    created_owned: list[str] = []
+    created_planned: list[str] = []
+    reused: list[str] = []
+
+    for index, slot in enumerate(parsed.slots[:6], start=1):
+        existing = by_name.get(slot.species_name.lower()) or by_cid.get(slot.showdown_form_key)
+        if existing is not None:
+            box_entry_id = existing.box_entry_id
+            reused.append(slot.species_name)
+        else:
+            record = pokemon_repo.get(slot.showdown_form_key) or pokemon_repo.get(slot.species_name.lower())
+            if record is not None:
+                pokemon = record.to_domain()
+            else:
+                pokemon = Pokemon(
+                    canonical_id=slot.showdown_form_key,
+                    display_name=slot.species_name,
+                    species_name=(slot.showdown_form_key or "").split("-")[0] or None,
+                    form_name="base",
+                    types=[],
+                    stats=PokemonStats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
+                )
+            entry = BoxEntry(pokemon=pokemon, tags=["imported", name], is_planned=use_planned)
+            saved = box_repo.create_planned_entry(entry) if use_planned else box_repo.upsert_box_entry(entry)
+            box_entry_id = saved.box_entry_id
+            (created_planned if use_planned else created_owned).append(slot.species_name)
+            # Later slots may reference the same species.
+            by_name[slot.species_name.lower()] = entry
+            by_cid[slot.showdown_form_key] = entry
+            entry.box_entry_id = box_entry_id
+
+        member = TeamMember(
+            box_entry_id=box_entry_id,
+            slot_position=index,
+            selected_form=slot.showdown_form_key or "base",
+            item=slot.item_name,
+            ability=slot.ability_name,
+            moveset=[PokemonMove(name=m) for m in slot.moves if m],
+            nature=slot.nature,
+            evs=dict(slot.evs),
+            ivs=dict(slot.ivs),
+            level=slot.level,
+            tera_type=(slot.tera_type or "").strip().lower() or None,
+        )
+        team_repo.upsert_member(team.team_id, member)
+
+    return ImportedTeam(
+        team_id=team.team_id,
+        team_name=name,
+        created_owned=tuple(created_owned),
+        created_planned=tuple(created_planned),
+        reused=tuple(reused),
     )

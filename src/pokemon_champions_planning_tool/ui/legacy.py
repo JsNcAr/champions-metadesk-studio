@@ -53,13 +53,14 @@ from ..services.item_effect_service import (
 )
 from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 from ..services.showdown_service import (
-    export_team_to_showdown_text,
-    parse_showdown_text,
-    resolve_import_readiness,
-    import_from_pokepast_url,
-    publish_to_pokepast,
-    ParsedTeamResult,
     ImportReadinessReport,
+    ParsedTeamResult,
+    commit_team_import,
+    export_team_to_showdown_text,
+    import_from_pokepast_url,
+    parse_showdown_text,
+    publish_to_pokepast,
+    resolve_import_readiness,
 )
 from ..infrastructure.providers.pokepast_provider import (
     PokepastProvider,
@@ -2432,85 +2433,17 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
     def _commit_team_import(use_planned: bool):
         """Write parsed team to DB. use_planned=True → missing entries become ghosts."""
         parsed = _last_parsed[0]
-        readiness = _last_readiness[0]
         if parsed is None or not parsed.is_valid:
             return
-        box_repo5, team_repo5, _, session5 = get_repositories()
         try:
-            from ..domain.entities.team import Team as _Team
-            from ..domain.entities.box_entry import BoxEntry as _BoxEntry
-            from ..domain.entities.team_member import TeamMember as _TM
-
-            # Create the new team
-            team_name = parsed.title or "Imported Team"
-            new_team = team_repo5.create(_Team(name=team_name))
-
-            all_entries = box_repo5.list_entries(include_planned=True)
-            entries_by_name = {e.pokemon.display_name.lower(): e for e in all_entries}
-            entries_by_cid  = {e.pokemon.canonical_id: e for e in all_entries}
-
-            pok_repo5 = PokemonRepository(session5)
-
-            for i, slot in enumerate(parsed.slots[:6]):
-                # Resolve existing box entry
-                existing = (
-                    entries_by_name.get(slot.species_name.lower()) or
-                    entries_by_cid.get(slot.showdown_form_key)
-                )
-                if existing is None:
-                    # Look up species in catalog first
-                    cat_pok_rec = pok_repo5.get(slot.showdown_form_key) or pok_repo5.get(slot.species_name.lower())
-                    if cat_pok_rec:
-                        stub = cat_pok_rec.to_domain()
-                    else:
-                        from ..domain.entities.pokemon import Pokemon as _Pkmn
-                        from ..domain.entities.pokemon_stats import PokemonStats as _Stats
-                        stub = _Pkmn(
-                            canonical_id=slot.showdown_form_key,
-                            display_name=slot.species_name,
-                            species_name=slot.showdown_form_key.split("-")[0],
-                            form_name="base",
-                            types=[],
-                            stats=_Stats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
-                        )
-                    stub_entry = _BoxEntry(
-                        pokemon=stub,
-                        tags=["imported", team_name],
-                        is_planned=use_planned,
-                    )
-                    if use_planned:
-                        record = box_repo5.create_planned_entry(stub_entry)
-                    else:
-                        record = box_repo5.upsert_box_entry(stub_entry)
-                    box_entry_id = record.box_entry_id
-                else:
-                    box_entry_id = existing.box_entry_id
-
-                moves = [PokemonMove(name=m, power=0, accuracy=0, type="") for m in slot.moves]
-                member = _TM(
-                    box_entry_id=box_entry_id,
-                    slot_position=i + 1,
-                    selected_form=slot.showdown_form_key or "base",
-                    item=slot.item_name,
-                    ability=slot.ability_name,
-                    moveset=moves,
-                    nature=slot.nature,
-                    evs=dict(slot.evs),
-                    ivs=dict(slot.ivs),
-                    level=slot.level,
-                )
-                team_repo5.upsert_member(new_team.team_id, member)
-
-
-
-            state["active_team_id"] = new_team.team_id
-            show_toast(f"Team '{team_name}' imported successfully!")
+            with get_session() as session:
+                result = commit_team_import(session, parsed, use_planned=use_planned)
+            state["active_team_id"] = result.team_id
+            show_toast(f"Team '{result.team_name}' imported successfully!")
             _import_modal.open = False
             refresh_teams()
         except Exception as err:
             show_toast(f"Import failed: {err}", is_error=True)
-        finally:
-            session5.close()
 
     def _show_readiness_dialog():
         """Show the 3-option dialog when missing Pokémon are detected."""

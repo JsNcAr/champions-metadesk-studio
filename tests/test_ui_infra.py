@@ -1,0 +1,185 @@
+"""Tests for the UI infrastructure: event bus, background tasks, debouncer, shell."""
+
+import asyncio
+import unittest
+from types import SimpleNamespace
+
+import flet as ft
+
+from pokemon_champions_planning_tool.ui import events
+from pokemon_champions_planning_tool.ui.context import AppContext
+from pokemon_champions_planning_tool.ui.events import EventBus
+from pokemon_champions_planning_tool.ui.shell import AppShell
+from pokemon_champions_planning_tool.ui.tasks import Debouncer, run_in_background
+
+
+class StubPage(SimpleNamespace):
+    """Runs workers inline and coroutines to completion, in the calling thread."""
+
+    def __init__(self):
+        super().__init__(overlay=[], controls=[], on_keyboard_event=None, dialogs=[])
+
+    def run_thread(self, fn, *args):
+        fn(*args)
+
+    def run_task(self, coro_fn, *args):
+        asyncio.run(coro_fn(*args))
+
+    def show_dialog(self, dlg):
+        self.dialogs.append(dlg)
+
+    def pop_dialog(self):
+        return self.dialogs.pop() if self.dialogs else None
+
+    def update(self, *_):
+        pass
+
+    def add(self, *controls):
+        self.controls.extend(controls)
+
+
+def _key(key: str, *, ctrl: bool) -> SimpleNamespace:
+    """The shell reads only .key/.ctrl; a stand-in avoids Flet's event constructor."""
+    return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=False)
+
+
+class TestEventBus(unittest.TestCase):
+    def test_emit_delivers_payload_in_order_and_unsubscribes(self):
+        bus = EventBus()
+        seen = []
+        off = bus.on("x", lambda p: seen.append(("a", p)))
+        bus.on("x", lambda p: seen.append(("b", p)))
+        bus.emit("x", 1)
+        off()
+        bus.emit("x", 2)
+        self.assertEqual(seen, [("a", 1), ("b", 1), ("b", 2)])
+        self.assertEqual(bus.listener_count("x"), 1)
+
+    def test_failing_listener_does_not_block_others(self):
+        bus = EventBus()
+        seen = []
+
+        def boom(_):
+            raise RuntimeError("boom")
+
+        bus.on("x", boom)
+        bus.on("x", lambda p: seen.append(p))
+        with self.assertRaises(RuntimeError):
+            bus.emit("x", 42)
+        self.assertEqual(seen, [42], "listener after the failing one still ran")
+
+    def test_emit_without_listeners_is_a_noop(self):
+        EventBus().emit("nobody-home", None)
+
+
+class TestRunInBackground(unittest.TestCase):
+    def test_success_path_restores_busy_and_spinner(self):
+        page = StubPage()
+        button, spinner = ft.Button("go"), ft.ProgressRing(visible=False)
+        results = []
+        run_in_background(page, lambda: 21 * 2, on_done=results.append, busy=[button], spinner=spinner)
+        self.assertEqual(results, [42])
+        self.assertFalse(button.disabled)
+        self.assertFalse(spinner.visible)
+        self.assertEqual(page.dialogs, [], "no error toast on success")
+
+    def test_error_path_calls_on_error_and_restores_state(self):
+        page = StubPage()
+        button = ft.Button("go")
+        errors = []
+
+        def work():
+            raise ValueError("nope")
+
+        run_in_background(page, work, on_done=lambda _: self.fail("on_done must not run"), on_error=errors.append, busy=[button])
+        self.assertEqual([type(e) for e in errors], [ValueError])
+        self.assertFalse(button.disabled)
+
+    def test_error_without_handler_shows_error_toast(self):
+        page = StubPage()
+
+        def work():
+            raise ValueError("nope")
+
+        run_in_background(page, work)
+        self.assertEqual(len(page.dialogs), 1)
+        self.assertIsInstance(page.dialogs[0], ft.SnackBar)
+
+
+class TestDebouncer(unittest.TestCase):
+    def test_only_the_last_value_fires(self):
+        loop = asyncio.new_event_loop()
+        pending = []
+        page = SimpleNamespace(run_task=lambda fn, *a: pending.append(loop.create_task(fn(*a))))
+        fired = []
+        debounce = Debouncer(page, 20, fired.append)
+        # create_task needs a running loop; drive it manually.
+
+        async def scenario():
+            debounce("a")
+            debounce("ab")
+            debounce("abc")
+            await asyncio.gather(*pending)
+
+        loop.run_until_complete(scenario())
+        loop.close()
+        self.assertEqual(fired, ["abc"])
+
+
+class TestAppShell(unittest.TestCase):
+    def _shell(self):
+        page = StubPage()
+        ctx = AppContext(page)
+        shell = AppShell(ctx)
+        shell.register_view("one", label="One", icon=ft.Icons.INBOX, selected_icon=ft.Icons.INBOX, control=ft.Text("one"))
+        built = []
+
+        def factory():
+            built.append(1)
+            return ft.Text("two")
+
+        shell.register_view("two", label="Two", icon=ft.Icons.GROUPS, selected_icon=ft.Icons.GROUPS, factory=factory)
+        return page, ctx, shell, built
+
+    def test_registration_builds_rail_and_navigates(self):
+        page, ctx, shell, built = self._shell()
+        self.assertEqual([d.label for d in shell.rail.destinations], ["One", "Two"])
+        shell.navigate("one")
+        self.assertEqual(shell.current, "one")
+        self.assertEqual(shell.rail.selected_index, 0)
+        self.assertEqual(built, [], "factory views are lazy")
+        shell.navigate("two")
+        shell.navigate("two")
+        self.assertEqual(built, [1], "factory runs once and the instance is kept")
+        self.assertEqual(shell.host.content.value, "two")
+
+    def test_on_activate_runs_each_visit(self):
+        page, ctx, shell, _ = self._shell()
+        visits = []
+        shell.register_view("three", label="Three", icon=ft.Icons.STAR, selected_icon=ft.Icons.STAR, control=ft.Text("3"), on_activate=lambda: visits.append(1))
+        shell.navigate("three")
+        shell.navigate("one")
+        shell.navigate("three")
+        self.assertEqual(visits, [1, 1])
+
+    def test_navigate_event_and_keyboard_shortcuts(self):
+        page, ctx, shell, _ = self._shell()
+        ctx.bus.emit(events.NAVIGATE, "two")
+        self.assertEqual(shell.current, "two")
+        page.on_keyboard_event(_key("1", ctrl=True))
+        self.assertEqual(shell.current, "one")
+        page.on_keyboard_event(_key("2", ctrl=False))
+        self.assertEqual(shell.current, "one", "digits without ctrl must not navigate — the user may be typing")
+        opened = []
+        shell.register_settings(lambda: opened.append(1))
+        page.on_keyboard_event(_key(",", ctrl=True))
+        self.assertEqual(opened, [1])
+
+    def test_register_view_requires_exactly_one_source(self):
+        page, ctx, shell, _ = self._shell()
+        with self.assertRaises(ValueError):
+            shell.register_view("bad", label="Bad", icon=ft.Icons.STAR, selected_icon=ft.Icons.STAR)
+
+
+if __name__ == "__main__":
+    unittest.main()

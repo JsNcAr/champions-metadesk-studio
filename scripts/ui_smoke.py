@@ -34,7 +34,9 @@ class StubPage(SimpleNamespace):
         super().__init__(
             overlay=[],
             controls=[],
+            dialogs=[],
             services=[],
+            on_keyboard_event=None,
             title="",
             theme=None,
             dark_theme=None,
@@ -66,10 +68,10 @@ class StubPage(SimpleNamespace):
         return asyncio.run(coro_fn(*args))
 
     def show_dialog(self, dlg):
-        self.overlay.append(dlg)
+        self.dialogs.append(dlg)
 
     def pop_dialog(self):
-        return self.overlay.pop() if self.overlay else None
+        return self.dialogs.pop() if self.dialogs else None
 
 
 def _serialise(control) -> int:
@@ -102,36 +104,28 @@ def main() -> int:
     db.initialize_database.__defaults__ = (db_path.name,)
     db.get_engine.__wrapped__.__defaults__ = (db_path.name,)
 
-    from pokemon_champions_planning_tool.ui import legacy
-    from pokemon_champions_planning_tool.ui.app import _TransitionalServices
-    from pokemon_champions_planning_tool.ui.theme import apply_theme
+    from pokemon_champions_planning_tool.ui import app as app_module
 
-    legacy._global_sync_done = True  # never hit the network from a smoke test
+    app_module.STARTUP_SYNC_ENABLED = False  # never hit the network from a smoke test
 
     page = StubPage()
-    apply_theme(page)
-
     t0 = time.perf_counter()
-    views = legacy.build_legacy_views(page, _TransitionalServices(page))
-    print(f"build_legacy_views: {(time.perf_counter() - t0) * 1000:.0f} ms")
+    app_module.main(page)
+    print(f"main(page): {(time.perf_counter() - t0) * 1000:.0f} ms")
 
+    shell = page.controls[0]
     failures = 0
-    for name, control, activate in (
-        ("box", views.box, None),
-        ("team", views.team, None),
-        ("meta", views.meta, views.on_activate_meta),
-    ):
+    for key in ("box", "team", "meta"):
         t = time.perf_counter()
         try:
-            if activate:
-                activate()
-            added = _serialise(control)
-            print(f"  {name:<5} serialised {added:>5} controls  {(time.perf_counter() - t) * 1000:6.0f} ms")
+            shell.navigate(key)
+            added = _serialise(shell)
+            print(f"  {key:<5} serialised {added:>5} controls (whole shell)  {(time.perf_counter() - t) * 1000:6.0f} ms")
         except Exception as exc:  # noqa: BLE001 - report everything
             failures += 1
-            print(f"  {name:<5} FAILED: {type(exc).__name__}: {exc}")
+            print(f"  {key:<5} FAILED: {type(exc).__name__}: {exc}")
 
-    print(f"overlay entries: {len(page.overlay)}")
+    print(f"overlay entries: {len(page.overlay)}  dialogs shown: {len(page.dialogs)}")
     return 1 if failures else 0
 
 

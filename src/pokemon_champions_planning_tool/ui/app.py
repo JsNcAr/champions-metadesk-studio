@@ -1,94 +1,79 @@
-"""Flet application entry point.
-
-Builds the page, then mounts the views. During the UI overhaul the views come from
-``ui/legacy.py``; this module hosts them behind a minimal switcher that will be replaced
-by the new application shell.
-"""
+"""Flet application entry point: theme, context, shell, views, startup sync."""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import flet as ft
 
 from ..config import APP_NAME
-from .legacy import LegacyViews, build_legacy_views
-from .theme import Colors, apply_theme
+from ..services.tournament_sync_service import sync_tournaments_once_per_process
+from . import events
+from .context import AppContext
+from .legacy import build_legacy_views
+from .legacy_adapter import bind_legacy
+from .shell import AppShell
+from .theme import apply_theme
+
+# Headless smoke tests switch this off so construction never touches the network.
+STARTUP_SYNC_ENABLED = True
 
 
-class _TransitionalServices:
-    """The services contract the legacy views expect, pending the real shell."""
+def _start_background_sync(ctx: AppContext) -> None:
+    """Sync tournament data once per process without blocking the UI."""
 
-    def __init__(self, page: ft.Page):
-        self._page = page
+    def work():
+        return sync_tournaments_once_per_process(max_age_days=365, include_official=True)
 
-    def toast(self, message: str, is_error: bool = False) -> None:
-        snack = ft.SnackBar(
-            content=ft.Text(message, color=Colors.WHITE),
-            bgcolor=Colors.RED_ACCENT if is_error else Colors.GREEN_ACCENT_700,
-            duration=3000,
-        )
-        self._page.overlay.append(snack)
-        snack.open = True
-        self._page.update()
+    def done(result) -> None:
+        if result is None:  # another session already ran it
+            return
+        print(f"✅ Startup tournament sync completed: {result}")
+        ctx.bus.emit(events.META_SYNCED, result)
 
+    def failed(exc: BaseException) -> None:
+        print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
 
-def _mount(page: ft.Page, views: LegacyViews) -> None:
-    """Temporary tab switcher: three buttons, a settings button, and a content host."""
-    host = ft.Container(content=views.box, expand=True)
-    tabs = [
-        ("Box Roster", ft.Icons.INBOX, views.box, None),
-        ("Team Builder", ft.Icons.PEOPLE, views.team, None),
-        ("Tournaments & Meta", ft.Icons.EMOJI_EVENTS, views.meta, views.on_activate_meta),
-    ]
-    buttons: list[ft.TextButton] = []
-
-    def select(index: int) -> None:
-        for i, button in enumerate(buttons):
-            button.style = ft.ButtonStyle(
-                color=Colors.WHITE if i == index else Colors.GREY_400,
-                bgcolor=Colors.AMBER_700 if i == index else Colors.CARD_BG,
-            )
-        _label, _icon, content, on_activate = tabs[index]
-        host.content = content
-        if on_activate:
-            on_activate()
-        page.update()
-
-    for i, (label, icon, _content, _on_activate) in enumerate(tabs):
-        buttons.append(ft.TextButton(label, icon=icon, on_click=lambda e, i=i: select(i)))
-
-    header = ft.Container(
-        content=ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            controls=[
-                ft.Row(spacing=12, controls=[
-                    ft.Icon(ft.Icons.CATCHING_POKEMON, color=Colors.AMBER_400, size=28),
-                    ft.Text(APP_NAME, size=20, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400),
-                ]),
-                ft.Row(spacing=8, controls=[
-                    *buttons,
-                    ft.IconButton(
-                        icon=ft.Icons.SETTINGS,
-                        icon_color=Colors.GREY_400,
-                        tooltip="Data & Synchronization Settings",
-                        on_click=lambda e: views.open_settings(),
-                    ),
-                ]),
-            ],
-        ),
-        bgcolor=Colors.CARD_BG,
-        padding=ft.Padding.symmetric(horizontal=20, vertical=12),
-        border_radius=12,
-        border=ft.Border.all(1, Colors.DIVIDER),
-        margin=ft.Margin.only(bottom=14),
-    )
-    select(0)
-    page.add(header, host)
+    ctx.run_in_background(work, on_done=done, on_error=failed)
 
 
 def main(page: ft.Page) -> None:
     page.title = APP_NAME
     apply_theme(page)
-    page.padding = ft.Padding.symmetric(horizontal=20, vertical=16)
+    page.padding = 0
 
-    views = build_legacy_views(page, _TransitionalServices(page))
-    _mount(page, views)
+    ctx = AppContext(page)
+    shell = AppShell(ctx)
+
+    # Legacy views, hosted by the new shell until each is migrated.
+    views = build_legacy_views(page, SimpleNamespace(toast=ctx.legacy_toast))
+    bind_legacy(ctx, views)
+    shell.register_view(
+        "box",
+        label="Box",
+        icon=ft.Icons.INVENTORY_2_OUTLINED,
+        selected_icon=ft.Icons.INVENTORY_2,
+        control=views.box,
+    )
+    shell.register_view(
+        "team",
+        label="Teams",
+        icon=ft.Icons.GROUPS_OUTLINED,
+        selected_icon=ft.Icons.GROUPS,
+        control=views.team,
+    )
+    shell.register_view(
+        "meta",
+        label="Meta",
+        icon=ft.Icons.EMOJI_EVENTS_OUTLINED,
+        selected_icon=ft.Icons.EMOJI_EVENTS,
+        control=views.meta,
+        on_activate=views.on_activate_meta,
+    )
+    shell.register_settings(views.open_settings)
+
+    shell.navigate("box")
+    page.add(shell)
+
+    if STARTUP_SYNC_ENABLED:
+        _start_background_sync(ctx)

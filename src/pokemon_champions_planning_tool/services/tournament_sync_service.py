@@ -12,6 +12,7 @@ Standardizes and normalizes all ingested data into SQLModel entities:
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from sqlmodel import Session, select
 
@@ -22,6 +23,7 @@ from ..infrastructure.database.models import (
     TournamentTeamRecord,
     TournamentTeamMemberRecord,
 )
+from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import TournamentRepository
 from ..infrastructure.providers import (
     LimitlessProvider,
@@ -421,3 +423,34 @@ def sync_tournaments(
         "victory_road": res_official,
         "status": status,
     }
+
+
+# ---------------------------------------------------------------------------
+# Startup sync guard
+# ---------------------------------------------------------------------------
+# The GUI syncs on launch. In web mode main(page) runs once per browser tab, so the
+# guard is process-wide: the first session syncs, later ones get None.
+_STARTUP_SYNC_LOCK = threading.Lock()
+_STARTUP_SYNC_DONE = False
+
+
+def sync_tournaments_once_per_process(**kwargs) -> dict | None:
+    """Run ``sync_tournaments`` in a fresh session, at most once per process.
+
+    Returns the sync result, or ``None`` if a sync has already been started by this
+    process. Safe to call from a worker thread.
+    """
+    global _STARTUP_SYNC_DONE
+    with _STARTUP_SYNC_LOCK:
+        if _STARTUP_SYNC_DONE:
+            return None
+        _STARTUP_SYNC_DONE = True
+    with get_session() as session:
+        return sync_tournaments(session, **kwargs)
+
+
+def reset_startup_sync_guard() -> None:
+    """Test hook: allow ``sync_tournaments_once_per_process`` to run again."""
+    global _STARTUP_SYNC_DONE
+    with _STARTUP_SYNC_LOCK:
+        _STARTUP_SYNC_DONE = False

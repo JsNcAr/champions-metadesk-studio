@@ -14,8 +14,6 @@ from uuid import UUID
 
 from .theme import Colors, STAT_COLORS, TYPE_COLORS
 
-_global_sync_lock = threading.Lock()
-_global_sync_done = False
 
 from ..domain.pokemon_identity import format_api_name, get_pokemon_sprite_url
 from ..domain.entities.box_entry import BoxEntry
@@ -3588,25 +3586,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
     refresh_box()
     refresh_teams()
 
-    # --- Background Sync of Live Tournament Meta (Guarded to 1 run per process) ---
-    def _startup_tourney_sync():
-        global _global_sync_done
-        with _global_sync_lock:
-            if _global_sync_done:
-                return
-            _global_sync_done = True
-
-        try:
-            with get_session() as sync_sess:
-                t_svc = TournamentService(sync_sess)
-                res = t_svc.sync(force=False, max_age_days=365, include_official=True)
-                print(f"✅ Startup tournament sync completed: {res}")
-            # The grid may already have been built from pre-sync data.
-            _invalidate_tourney_cache()
-        except Exception as exc:
-            print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
-
-    threading.Thread(target=_startup_tourney_sync, daemon=True).start()
 
     return LegacyViews(
         box=box_tab_layout,

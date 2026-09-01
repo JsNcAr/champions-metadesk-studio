@@ -49,7 +49,7 @@ class _TempDb:
         shutil.rmtree(self.dir)
 
 
-class TestTeamView(unittest.TestCase):
+class _TeamViewCase(unittest.TestCase):
     def setUp(self):
         self.db = _TempDb()
         with self.db.session() as s:
@@ -70,6 +70,8 @@ class TestTeamView(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
+
+class TestTeamView(_TeamViewCase):
     def test_empty_state_then_create_team(self):
         self.view.ensure_loaded()
         self.assertTrue(self.view._empty.visible)
@@ -181,6 +183,32 @@ class TestTeamView(unittest.TestCase):
         self.ctx.bus.emit(events.TEAMS_CHANGED, other)
         self.assertEqual(self.store.active_team_id, other)
         self.assertEqual(len(self.view._team_select.options), 2)
+
+
+
+class TestSlotDragAndDrop(_TeamViewCase):
+    def test_drop_on_another_card_swaps_and_highlights(self):
+        self.view.ensure_loaded()
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        src = self.view.cards[0]
+        target = self.view.cards[3]
+        event = type("E", (), {"src": src._drag_handle})()
+        target._on_will_accept(event)
+        self.assertTrue(target._drop_hover)
+        target._on_accept(event)
+        self.assertFalse(target._drop_hover)
+        self.assertEqual(self.store.slot(4).entry.pokemon.display_name, "Charizard")
+        self.assertFalse(self.store.slot(1).filled)
+        serialise(self.view)
+
+    def test_drop_on_itself_is_ignored(self):
+        self.view.ensure_loaded()
+        self.store.create_team("Sun")
+        self.store.assign(2, self.lucario)
+        card = self.view.cards[1]
+        card._on_accept(type("E", (), {"src": card._drag_handle})())
+        self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Lucario")
 
 
 if __name__ == "__main__":

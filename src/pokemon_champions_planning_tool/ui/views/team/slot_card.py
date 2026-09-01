@@ -13,7 +13,7 @@ from ...components import Sprite, StatusChip
 from ...components.banner import InlineBanner
 from ...components.pokemon import BstPill, TypeChip
 from ...tasks import is_mounted
-from ...theme import STAT_COLORS, STAT_LABELS, IconSize, Motion, Palette, Radius, Space, alpha, type_color
+from ...theme import IconSize, Motion, OVERLAY_SHADOW, Palette, Radius, STAT_COLORS, STAT_LABELS, Space, alpha, type_color
 from .summary import SlotModel
 
 
@@ -145,7 +145,28 @@ class SlotCard(ft.Container):
             ],
         )
 
-        self.content = self._empty
+        # Drag the header onto another card to swap the two slots (or move into an empty one).
+        self._drag_name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
+        self._drag_handle = ft.Draggable(
+            group="team-slot",
+            data=position,
+            content=self._header,
+            content_feedback=ft.Container(
+                content=ft.Row(spacing=Space.SM, tight=True, controls=[self._badge_copy(), self._drag_name]),
+                bgcolor=Palette.SURFACE_4, border_radius=Radius.MD, padding=Space.SM, shadow=OVERLAY_SHADOW,
+            ),
+        )
+        self._filled_body.controls[0] = self._drag_handle
+        self._drop_hover = False
+        self._inner = ft.Container(content=self._empty, expand=True)
+
+        self.content = ft.DragTarget(
+            group="team-slot",
+            content=self._inner,
+            on_will_accept=self._on_will_accept,
+            on_accept=self._on_accept,
+            on_leave=lambda _e: self._set_drop_hover(False),
+        )
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
@@ -158,7 +179,7 @@ class SlotCard(ft.Container):
         self._focused = focused
         self._filled = slot.filled
         if not slot.filled or slot.form is None:
-            self.content = self._empty
+            self._inner.content = self._empty
             self.padding = Space.LG
             self._apply_frame()
             return
@@ -235,7 +256,8 @@ class SlotCard(ft.Container):
         self._notes_toggle.icon = ft.Icons.NOTES if not member.notes else ft.Icons.STICKY_NOTE_2
         self._notes_toggle.icon_color = Palette.PRIMARY if member.notes else Palette.ON_SURFACE_VARIANT
 
-        self.content = self._filled_body
+        self._drag_name.value = pokemon.display_name
+        self._inner.content = self._filled_body
         self.padding = 0
         self._apply_frame()
 
@@ -275,5 +297,41 @@ class SlotCard(ft.Container):
         if is_mounted(self._notes):
             self._notes.update()
 
+    def _badge_copy(self) -> ft.Container:
+        return ft.Container(content=ft.Text(str(self.position), theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE),
+                            width=22, height=22, border_radius=Radius.PILL, bgcolor=Palette.SURFACE_3, alignment=ft.Alignment.CENTER)
+
+    # -- drag and drop -------------------------------------------------------------------------------
+
+    @staticmethod
+    def _source_position(e) -> int | None:
+        src = getattr(e, "src", None)
+        data = getattr(src, "data", None) if src is not None else getattr(e, "data", None)
+        try:
+            return int(data) if data is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _on_will_accept(self, e) -> None:
+        src = self._source_position(e)
+        self._set_drop_hover(src is not None and src != self.position)
+
+    def _on_accept(self, e) -> None:
+        src = self._source_position(e)
+        self._set_drop_hover(False)
+        if src is not None and src != self.position:
+            self.cb.on_swap(src, self.position)
+
+    def _set_drop_hover(self, hovering: bool) -> None:
+        self._drop_hover = hovering
+        self._apply_frame()
+        if is_mounted(self):
+            self.update()
+
     def _apply_frame(self) -> None:
+        if self._drop_hover:
+            self.border = ft.Border.all(2, Palette.PRIMARY)
+            self.bgcolor = Palette.SURFACE_3
+            return
+        self.bgcolor = Palette.SURFACE_2
         self.border = ft.Border.all(2, Palette.PRIMARY) if self._focused else ft.Border.all(1, Palette.OUTLINE_VARIANT)

@@ -23,6 +23,7 @@ class AppContext:
     page: ft.Page
     bus: EventBus = field(default_factory=EventBus)
     catalogs: Any = None
+    _clipboard: Any = field(default=None, init=False, repr=False)
 
     def toast(
         self,
@@ -52,6 +53,21 @@ class AppContext:
         tasks.run_in_background(
             self.page, work, on_done=on_done, on_error=on_error, busy=busy, spinner=spinner
         )
+
+    def copy_to_clipboard(self, text: str) -> None:
+        """Copy via the ``ft.Clipboard`` service (``page.set_clipboard`` no longer exists).
+
+        The service is registered on first use; ``Clipboard.set`` is a coroutine, so it
+        is scheduled with ``page.run_task`` and works from sync handlers.
+        """
+        if self._clipboard is None:
+            self._clipboard = ft.Clipboard()
+            self.page.services.append(self._clipboard)
+            try:
+                self.page.update()
+            except Exception:  # noqa: BLE001 - page may not be mounted yet (tests)
+                pass
+        self.page.run_task(self._clipboard.set, text)
 
     # The legacy views only know ``services.toast(message, is_error)``.
     def legacy_toast(self, message: str, is_error: bool = False) -> None:

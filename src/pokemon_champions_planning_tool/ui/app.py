@@ -46,7 +46,14 @@ def main(page: ft.Page) -> None:
     shell = AppShell(ctx)
 
     # Legacy views, hosted by the new shell until each is migrated.
-    views = build_legacy_views(page, SimpleNamespace(toast=ctx.legacy_toast))
+    views = build_legacy_views(
+        page,
+        SimpleNamespace(
+            toast=ctx.legacy_toast,
+            confirm=ctx.confirm,
+            copy_to_clipboard=ctx.copy_to_clipboard,
+        ),
+    )
     bind_legacy(ctx, views)
     shell.register_view(
         "box",

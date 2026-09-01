@@ -164,6 +164,20 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
     def show_toast(message: str, is_error: bool = False):
         services.toast(message, is_error)
 
+    def _show_dialog(dialog: ft.AlertDialog):
+        """Open a dialog through the 0.85 dialog stack.
+
+        These dialogs are long-lived instances. The stack entry is only removed when
+        the client reports the dismiss animation finished, so re-opening immediately
+        after a close can still find the instance on the stack; in that case flip
+        it back open instead of raising.
+        """
+        try:
+            page.show_dialog(dialog)
+        except RuntimeError:
+            dialog.open = True
+            page.update()
+
     # --- UI Component Declarations (to be wired later) ---
     suggestion_row = ft.Row(spacing=8, wrap=True, visible=False)
 
@@ -259,7 +273,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         content=ft.Column(scroll=ft.ScrollMode.ALWAYS, height=400, spacing=10),
         actions=[ft.TextButton("Cancel", on_click=close_modal)],
     )
-    page.overlay.append(assign_modal)
 
     # --- Modal: Create Team ---
     new_team_input = ft.TextField(label="Team Name", hint_text="e.g. Electric Storm")
@@ -295,7 +308,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
             ft.ElevatedButton("Create", on_click=create_team_action)
         ]
     )
-    page.overlay.append(new_team_modal)
 
     # --- Data Refresher Functions ---
     def refresh_box():
@@ -553,7 +565,20 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         finally:
             session.close()
 
+    async def _confirm_delete_pokemon(box_entry_id: UUID):
+        entry = next((e for e in state["box_entries"] if e.box_entry_id == box_entry_id), None)
+        name = entry.pokemon.display_name if entry else "this Pokémon"
+        if await services.confirm(
+            f"Remove {name} from your box?",
+            "It will also be removed from every team it is on.",
+            confirm_label="Remove",
+        ):
+            _delete_pokemon_now(box_entry_id)
+
     def handle_delete_pokemon(box_entry_id: UUID):
+        page.run_task(_confirm_delete_pokemon, box_entry_id)
+
+    def _delete_pokemon_now(box_entry_id: UUID):
         box_repo, team_repo, _, session = get_repositories()
         try:
             entry = box_repo.load_entry(str(box_entry_id))
@@ -598,7 +623,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
             session.close()
 
     def handle_open_new_team_modal(e=None):
-        new_team_modal.open = True
+        _show_dialog(new_team_modal)
         page.update()
 
     def handle_team_select(team_id_str: str):
@@ -608,7 +633,20 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
             state["active_team_id"] = None
         render_team_builder()
 
+    async def _confirm_delete_team():
+        team = next((t for t in state["teams"] if t.team_id == state["active_team_id"]), None)
+        name = team.name if team else "this team"
+        if await services.confirm(
+            f"Delete team \"{name}\"?",
+            "Its six slots and their spreads are deleted. Box entries are kept.",
+            confirm_label="Delete team",
+        ):
+            _delete_team_now()
+
     def handle_delete_team():
+        page.run_task(_confirm_delete_team)
+
+    def _delete_team_now():
         if state["active_team_id"] is None:
             return
         box_repo, team_repo, _, session = get_repositories()
@@ -659,7 +697,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
                     )
                 )
         
-        assign_modal.open = True
+        _show_dialog(assign_modal)
         page.update()
 
     def handle_assign_pokemon(box_entry_id: UUID):
@@ -2169,7 +2207,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.overlay.append(_spread_modal)
 
     def _open_spread_modal(slot_pos: int, member_rec_or_dom):
         _spread_slot_pos[0] = slot_pos
@@ -2181,7 +2218,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         for stat, tf in _iv_inputs.items():
             tf.value = str(m_dom.ivs.get(stat, 31))
         _update_ev_total()
-        _spread_modal.open = True
+        _show_dialog(_spread_modal)
         page.update()
 
     # -----------------------------------------------------------------------
@@ -2216,7 +2253,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
                         "📋 Copy to Clipboard",
                         icon=ft.Icons.CONTENT_COPY,
                         on_click=lambda e: (
-                            page.set_clipboard(_export_text_field.value or ""),
+                            services.copy_to_clipboard(_export_text_field.value or ""),
                             show_toast("Copied to clipboard!"),
                         ),
                     ),
@@ -2229,7 +2266,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         actions=[ft.TextButton("Close", on_click=lambda e: setattr(_export_modal, "open", False) or page.update())],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.overlay.append(_export_modal)
 
     def _open_export_modal(e=None):
         """Build Showdown text from the active team and open the export modal."""
@@ -2284,7 +2320,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         finally:
             session2.close()
 
-        _export_modal.open = True
+        _show_dialog(_export_modal)
         page.update()
 
     # -----------------------------------------------------------------------
@@ -2526,8 +2562,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
                 ],
                 actions_alignment=ft.MainAxisAlignment.CENTER,
             )
-            page.overlay.append(readiness_dialog)
-            readiness_dialog.open = True
+            _show_dialog(readiness_dialog)
             page.update()
             return
 
@@ -2582,8 +2617,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
             ],
             actions_alignment=ft.MainAxisAlignment.CENTER,
         )
-        page.overlay.append(readiness_dialog)
-        readiness_dialog.open = True
+        _show_dialog(readiness_dialog)
         page.update()
 
     _import_modal = ft.AlertDialog(
@@ -2608,7 +2642,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
-    page.overlay.append(_import_modal)
 
     def _open_import_modal(e=None):
         _import_input.value = ""
@@ -2618,7 +2651,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         _import_status.value = ""
         _last_parsed[0] = None
         _last_readiness[0] = None
-        _import_modal.open = True
+        _show_dialog(_import_modal)
         page.update()
 
     # VIEW 2: Team Builder Layout
@@ -3280,11 +3313,10 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         ),
         actions=[ft.TextButton("Close", on_click=lambda e: _close_settings())],
     )
-    page.overlay.append(settings_modal)
 
     def _open_settings(e=None):
         _refresh_settings_status()
-        settings_modal.open = True
+        _show_dialog(settings_modal)
         page.update()
 
     def _close_settings(e=None):
@@ -3500,7 +3532,7 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         if _item_search_query.current:
             _item_search_query.current.value = ""
         _render_item_picker_list()
-        item_picker_modal.open = True
+        _show_dialog(item_picker_modal)
         page.update()
 
     # Build category options from existing items
@@ -3566,7 +3598,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
             ]),
         ],
     )
-    page.overlay.append(item_picker_modal)
 
 
     # --- Initial State Load ---

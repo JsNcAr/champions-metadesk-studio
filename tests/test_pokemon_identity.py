@@ -3,6 +3,8 @@ import unittest
 from pokemon_champions_planning_tool.domain.pokemon_identity import (
     format_api_name,
     format_display_name,
+    get_pokemon_sprite_url,
+    get_showdown_sprite_slug,
 )
 
 
@@ -30,3 +32,71 @@ class TestPokemonIdentity(unittest.TestCase):
         self.assertEqual(format_api_name("Paldean Wooper"), "wooper-paldea")
         self.assertEqual(format_api_name("   "), "")
         self.assertEqual(format_api_name(""), "")
+
+
+class TestShowdownSpriteSlug(unittest.TestCase):
+    """Showdown names sprites '<species>-<form>' with each part stripped of
+    non-alphanumerics. PokeAPI uses hyphens for both, so the split has to be right."""
+
+    def test_forms_keep_the_separator(self):
+        """Regression: these all collapsed to one word and 404'd on the CDN."""
+        for canonical, expected in [
+            ("lycanroc-dusk", "lycanroc-dusk"),
+            ("rotom-wash", "rotom-wash"),
+            ("rotom-heat", "rotom-heat"),
+            ("giratina-origin", "giratina-origin"),
+            ("maushold-four", "maushold-four"),
+            ("sinistcha-masterpiece", "sinistcha-masterpiece"),
+            ("tatsugiri-droopy", "tatsugiri-droopy"),
+            ("basculegion-f", "basculegion-f"),
+            ("indeedee-f", "indeedee-f"),
+            ("meowstic-f", "meowstic-f"),
+        ]:
+            self.assertEqual(get_showdown_sprite_slug(canonical), expected, canonical)
+
+    def test_hyphenated_species_lose_the_hyphen(self):
+        """A hyphen inside a species name is not a form separator."""
+        for canonical, expected in [
+            ("chien-pao", "chienpao"),
+            ("wo-chien", "wochien"),
+            ("ting-lu", "tinglu"),
+            ("ho-oh", "hooh"),
+            ("porygon-z", "porygonz"),
+            ("mr-mime", "mrmime"),
+            ("tapu-koko", "tapukoko"),
+            ("roaring-moon", "roaringmoon"),
+            ("iron-hands", "ironhands"),
+            ("great-tusk", "greattusk"),
+            ("type-null", "typenull"),
+        ]:
+            self.assertEqual(get_showdown_sprite_slug(canonical), expected, canonical)
+
+    def test_species_form_ambiguity_is_resolved(self):
+        """'nidoran-f' is a species; 'indeedee-f' is a female form."""
+        self.assertEqual(get_showdown_sprite_slug("nidoran-f"), "nidoranf")
+        self.assertEqual(get_showdown_sprite_slug("indeedee-f"), "indeedee-f")
+
+    def test_multi_word_forms_are_collapsed(self):
+        """Only the species/form separator survives; hyphens inside a form do not."""
+        self.assertEqual(get_showdown_sprite_slug("urshifu-rapid-strike"), "urshifu-rapidstrike")
+        self.assertEqual(get_showdown_sprite_slug("charizard-mega-x"), "charizard-megax")
+        self.assertEqual(get_showdown_sprite_slug("charizard-mega-y"), "charizard-megay")
+        self.assertEqual(get_showdown_sprite_slug("lucario-mega"), "lucario-mega")
+        self.assertEqual(get_showdown_sprite_slug("necrozma-dusk-mane"), "necrozma-duskmane")
+        self.assertEqual(get_showdown_sprite_slug("tauros-paldea-aqua"), "tauros-paldeaaqua")
+
+    def test_overrides(self):
+        """Slugs Showdown does not derive from the PokeAPI identifier."""
+        self.assertEqual(get_showdown_sprite_slug("tauros-paldea"), "tauros-paldeacombat")
+        self.assertEqual(get_showdown_sprite_slug("urshifu-single-strike"), "urshifu")
+
+    def test_plain_species_unchanged(self):
+        self.assertEqual(get_showdown_sprite_slug("incineroar"), "incineroar")
+        self.assertEqual(get_showdown_sprite_slug("Incineroar"), "incineroar")
+
+    def test_url_and_empty_input(self):
+        self.assertEqual(
+            get_pokemon_sprite_url("lycanroc-dusk"),
+            "https://play.pokemonshowdown.com/sprites/gen5/lycanroc-dusk.png",
+        )
+        self.assertIn("poke-ball", get_pokemon_sprite_url(""))

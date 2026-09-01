@@ -1678,7 +1678,10 @@ def main(page: ft.Page):
                             partner_pills.append(
                                 ft.Container(
                                     content=ft.Row(spacing=4, controls=[
-                                        ft.Image(src=p.sprite_url, width=20, height=20, fit=ft.BoxFit.CONTAIN) if p.sprite_url else ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Colors.GREY_500),
+                                        ft.Image(
+                                            src=p.sprite_url, width=20, height=20, fit=ft.BoxFit.CONTAIN,
+                                            error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Colors.GREY_500),
+                                        ) if p.sprite_url else ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Colors.GREY_500),
                                         ft.Text(p.display_name, size=10, weight=ft.FontWeight.W_600),
                                         ft.Text(f"{p.synergy_percentage:.0f}%", size=9, color=Colors.GREEN_400)
                                     ]),
@@ -2942,7 +2945,14 @@ def main(page: ft.Page):
                         or get_pokemon_sprite_url(m.canonical_id or m.species_name)
                     )
 
-                    img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
+                    # Champions-exclusive forms have no sprite on the Showdown CDN, so
+                    # degrade to a placeholder rather than a broken image. Kept to a
+                    # single control: this grid already builds ~2.3k of them per entry,
+                    # and the enclosing Container carries the species tooltip.
+                    img_ctrl = ft.Image(
+                        src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN,
+                        error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=22, color=Colors.GREY_600),
+                    )
 
                     border_color = Colors.RED_700 if not is_leg else Colors.DIVIDER
                     member_controls.append(

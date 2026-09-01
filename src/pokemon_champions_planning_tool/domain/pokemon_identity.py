@@ -77,57 +77,68 @@ _SPECIES_ALIAS_MAP: dict[str, str] = {
 }
 
 
+# PokeAPI species whose own name contains a hyphen. Showdown strips those hyphens
+# ("chien-pao" -> "chienpao"), so they must not be read as species + form. Everything
+# else containing a hyphen is a form, and Showdown keeps that separator.
+# Note the pairs this distinguishes: "nidoran-f" is a species, "indeedee-f" is a form.
+_HYPHENATED_SPECIES: frozenset[str] = frozenset({
+    "nidoran-f", "nidoran-m", "mr-mime", "mime-jr", "mr-rime", "ho-oh", "porygon-z",
+    "type-null", "jangmo-o", "hakamo-o", "kommo-o",
+    "tapu-koko", "tapu-lele", "tapu-bulu", "tapu-fini",
+    "wo-chien", "chien-pao", "ting-lu", "chi-yu",
+    "great-tusk", "scream-tail", "brute-bonnet", "flutter-mane", "slither-wing",
+    "sandy-shocks", "iron-treads", "iron-bundle", "iron-hands", "iron-jugulis",
+    "iron-moth", "iron-thorns", "iron-valiant", "roaring-moon", "walking-wake",
+    "iron-leaves", "gouging-fire", "raging-bolt", "iron-boulder", "iron-crown",
+})
+
+# Forms whose Showdown slug is not derivable from the PokeAPI identifier.
+_SPRITE_SLUG_OVERRIDES: dict[str, str] = {
+    # PokeAPI calls the Combat Breed simply "tauros-paldea"; Showdown names it in full.
+    "tauros-paldea": "tauros-paldeacombat",
+    # Single Strike Urshifu shares the base Urshifu sprite.
+    "urshifu-single-strike": "urshifu",
+}
+
+_FALLBACK_SPRITE_URL = (
+    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
+)
+_SHOWDOWN_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/gen5"
+
+
+def get_showdown_sprite_slug(pokemon_name_or_id: str) -> str:
+    """Converts a species/form identifier into a Showdown sprite slug.
+
+    Showdown names sprite files ``<species><-form>``, where each part has every
+    non-alphanumeric character removed but the separator between species and form is
+    kept: ``lycanroc-dusk``, ``tauros-paldeaaqua``, ``charizard-megax``. PokeAPI uses
+    hyphens for both purposes, so the split is taken at the first hyphen unless the
+    whole identifier is a species that legitimately contains one.
+    """
+    cid = format_api_name(pokemon_name_or_id)
+    if not cid:
+        return ""
+
+    if cid in _SPRITE_SLUG_OVERRIDES:
+        return _SPRITE_SLUG_OVERRIDES[cid]
+
+    if cid in _HYPHENATED_SPECIES or "-" not in cid:
+        return cid.replace("-", "")
+
+    species, form = cid.split("-", 1)
+    return f"{species}-{form.replace('-', '')}"
+
+
 def get_pokemon_sprite_url(pokemon_name_or_id: str) -> str:
     """Returns a robust high-reliability sprite URL for any species or form identifier."""
     if not pokemon_name_or_id:
-        return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
+        return _FALLBACK_SPRITE_URL
 
-    cid = format_api_name(pokemon_name_or_id)
+    slug = get_showdown_sprite_slug(pokemon_name_or_id)
+    if not slug:
+        return _FALLBACK_SPRITE_URL
 
-    # Custom Showdown sprite overrides
-    custom_map = {
-        "urshifu-rapid-strike": "https://play.pokemonshowdown.com/sprites/gen5/urshifu-rapidstrike.png",
-        "urshifu-single-strike": "https://play.pokemonshowdown.com/sprites/gen5/urshifu.png",
-    }
-    if cid in custom_map:
-        return custom_map[cid]
-
-    if "-mega-x" in cid:
-        showdown_slug = cid.replace("-mega-x", "-megax")
-        parts = showdown_slug.rsplit("-", 1)
-        showdown_slug = parts[0].replace("-", "") + "-" + parts[1]
-        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
-
-    if "-mega-y" in cid:
-        showdown_slug = cid.replace("-mega-y", "-megay")
-        parts = showdown_slug.rsplit("-", 1)
-        showdown_slug = parts[0].replace("-", "") + "-" + parts[1]
-        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
-
-    if "-mega" in cid:
-        showdown_slug = cid.replace("-mega", "mega")
-        parts = showdown_slug.rsplit("mega", 1)
-        showdown_slug = parts[0].replace("-", "") + "-mega"
-        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
-
-    form_suffixes = [
-        "-hisui", "-alola", "-galar", "-paldea", "-eternal",
-        "-shadow", "-ice", "-therian", "-hearthflame", "-wellspring",
-        "-cornerstone", "-bloodmoon", "-primal"
-    ]
-    matched_suffix = None
-    for suf in form_suffixes:
-        if cid.endswith(suf):
-            matched_suffix = suf
-            break
-
-    if matched_suffix:
-        base = cid[:-len(matched_suffix)].replace("-", "")
-        showdown_slug = f"{base}{matched_suffix}"
-    else:
-        showdown_slug = cid.replace("-", "")
-
-    return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
+    return f"{_SHOWDOWN_SPRITE_BASE}/{slug}.png"
 
 
 def format_api_name(pokemon_name: str) -> str:

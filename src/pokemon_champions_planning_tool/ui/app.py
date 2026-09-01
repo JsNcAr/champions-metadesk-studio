@@ -5,7 +5,7 @@ from typing import Any
 import flet as ft
 from uuid import UUID
 
-from .theme import Colors
+from .theme import Colors, STAT_COLORS, TYPE_COLORS, apply_theme
 
 _global_sync_lock = threading.Lock()
 _global_sync_done = False
@@ -67,27 +67,6 @@ from pathlib import Path
 SEED_FILE_PATH = Path(__file__).parent.parent / "data" / "seed_tournaments.json"
 
 
-# Pokémon Type Colors
-TYPE_COLORS = {
-    "normal": "#A8A878", "fire": "#F08030", "water": "#6890F0", "grass": "#78C030",
-    "electric": "#F8D030", "ice": "#98D8D8", "fighting": "#C03028", "poison": "#A040A0",
-    "ground": "#E0C068", "flying": "#A890F0", "psychic": "#F85888", "bug": "#A8B820",
-    "rock": "#B8A038", "ghost": "#705898", "dragon": "#7038F8", "dark": "#705848",
-    "steel": "#B8B8D0", "fairy": "#EE99AC", "unknown": "#68A090"
-}
-
-# Pokémon Stat Colors (Official Palette)
-STAT_COLORS = {
-    "hp": "#FF5959",
-    "attack": "#F08030",
-    "defense": "#F8D030",
-    "special_attack": "#6890F0",
-    "special_defense": "#78C850",
-    "speed": "#F85888",
-}
-
-
-# Design constants
 
 def _get_obj_attr(obj: Any, attr_name: str, default: str = "") -> str:
     """Safely retrieve attribute from Pydantic model, dictionary, or primitive string."""
@@ -104,15 +83,8 @@ def _get_obj_attr(obj: Any, attr_name: str, default: str = "") -> str:
 
 def main(page: ft.Page):
     page.title = APP_NAME
-    page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = Colors.BG_BASE
+    apply_theme(page)
     page.padding = ft.Padding.symmetric(horizontal=20, vertical=16)
-    page.window_width = 1280
-    page.window_height = 800
-    page.spacing = 0
-    page.fonts = {
-        "Inter": "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2"
-    }
 
     # --- Application State ---
     state = {

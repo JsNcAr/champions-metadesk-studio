@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
-from ..domain.pokemon_identity import format_api_name
+from ..domain.pokemon_identity import format_api_name, get_pokemon_sprite_url
 from ..infrastructure.database.models import (
     PokemonRecord,
     TournamentRecord,
@@ -32,32 +32,27 @@ class PartnerRecommendation:
     synergy_percentage: float
 
 
+# A species appearing in only a handful of tournament teams produces percentages
+# that look authoritative but mean nothing ("50% Venusaur" off a 2-team sample).
+_DEFAULT_MIN_SAMPLE_TEAMS = 5
+
+
 class MetaSynergyService:
     """Calculates teammate co-occurrence metrics across tournament team rosters."""
 
     def __init__(self, session: Session):
         self.session = session
 
-    def get_top_partners(
-        self,
-        species_identifier: str,
-        limit: int = 6,
-        regulation_filter: str | None = None,
-        min_co_occurrence: int = 1,
-        min_synergy_percent: float = 0.0,
-    ) -> list[PartnerRecommendation]:
-        """Find the most frequent tournament teammates for a target species."""
-        clean_target = format_api_name(species_identifier)
-
-        # 1. Locate all tournament_team_ids containing the target species
-        stmt_target_teams = select(TournamentTeamMemberRecord.tournament_team_id).where(
+    def _target_team_ids_subquery(self, clean_target: str, regulation_filter: str | None):
+        """Distinct tournament team IDs whose roster contains the target species."""
+        stmt = select(TournamentTeamMemberRecord.tournament_team_id).where(
             (TournamentTeamMemberRecord.canonical_id == clean_target)
-            | (TournamentTeamMemberRecord.species_name.ilike(clean_target))
+            | (func.lower(TournamentTeamMemberRecord.species_name) == clean_target)
         )
 
         if regulation_filter and regulation_filter != "All":
-            stmt_target_teams = (
-                stmt_target_teams.join(
+            stmt = (
+                stmt.join(
                     TournamentTeamRecord,
                     TournamentTeamMemberRecord.tournament_team_id
                     == TournamentTeamRecord.tournament_team_id,
@@ -69,46 +64,85 @@ class MetaSynergyService:
                 .where(TournamentRecord.format_regulation == regulation_filter)
             )
 
-        target_team_ids = list(self.session.exec(stmt_target_teams).all())
-        total_teams_count = len(target_team_ids)
-        if total_teams_count == 0:
+        # DISTINCT matters: without it a roster listing the target twice would be
+        # counted twice in the denominator.
+        return stmt.distinct()
+
+    def get_top_partners(
+        self,
+        species_identifier: str,
+        limit: int = 6,
+        regulation_filter: str | None = None,
+        min_co_occurrence: int = 1,
+        min_synergy_percent: float = 0.0,
+        min_sample_teams: int = _DEFAULT_MIN_SAMPLE_TEAMS,
+    ) -> list[PartnerRecommendation]:
+        """Find the most frequent tournament teammates for a target species.
+
+        Co-occurrence is aggregated in SQL rather than by loading every roster row
+        into Python: a widely played species appears in thousands of teams, and this
+        runs synchronously while the Team Builder renders.
+
+        Args:
+            limit: Maximum recommendations to return.
+            regulation_filter: Restrict to one format regulation, or "All"/None.
+            min_co_occurrence: Drop partners seen fewer times than this.
+            min_synergy_percent: Drop partners below this share of target teams.
+            min_sample_teams: Return nothing when the target itself appears in fewer
+                teams than this, since percentages off a tiny sample are misleading.
+        """
+        clean_target = format_api_name(species_identifier)
+        target_teams = self._target_team_ids_subquery(clean_target, regulation_filter)
+
+        total_teams_count = self.session.exec(
+            select(func.count()).select_from(target_teams.subquery())
+        ).one()
+        if not total_teams_count or total_teams_count < min_sample_teams:
             return []
 
-        # 2. Query all other team members in those specific teams
-        stmt_partners = select(TournamentTeamMemberRecord).where(
-            TournamentTeamMemberRecord.tournament_team_id.in_(target_team_ids)
+        # Count teammates per canonical_id in one aggregate query.
+        co_occurrence = func.count().label("co_occurrence")
+        stmt = (
+            select(
+                TournamentTeamMemberRecord.canonical_id,
+                func.min(TournamentTeamMemberRecord.species_name).label("species_name"),
+                co_occurrence,
+            )
+            .where(
+                TournamentTeamMemberRecord.tournament_team_id.in_(target_teams),
+                TournamentTeamMemberRecord.canonical_id != clean_target,
+                func.lower(TournamentTeamMemberRecord.species_name) != clean_target,
+            )
+            .group_by(TournamentTeamMemberRecord.canonical_id)
+            .having(co_occurrence >= min_co_occurrence)
+            .order_by(co_occurrence.desc())
+            .limit(limit)
         )
-        partner_members = list(self.session.exec(stmt_partners).all())
 
-        # 3. Aggregate co-occurrence counts (excluding the target species itself)
-        co_counts: dict[str, int] = {}
-        display_names: dict[str, str] = {}
-
-        for pm in partner_members:
-            c_id = pm.canonical_id
-            if c_id == clean_target or pm.species_name.lower() == clean_target:
-                continue
-            co_counts[c_id] = co_counts.get(c_id, 0) + 1
-            display_names[c_id] = pm.species_name
-
-        # 4. Fetch sprites and assemble PartnerRecommendation objects
         recommendations: list[PartnerRecommendation] = []
-        for c_id, count in co_counts.items():
-            if count < min_co_occurrence:
-                continue
+        for canonical_id, species_name, count in self.session.exec(stmt).all():
             pct = (count / total_teams_count) * 100.0
             if pct < min_synergy_percent:
                 continue
 
-            pok_rec = self.session.get(PokemonRecord, c_id)
-            sprite_url = pok_rec.sprite_url if pok_rec else None
-            disp_name = pok_rec.display_name if pok_rec else display_names.get(c_id, c_id.title())
+            # Most tournament species have no local PokemonRecord (they are only ever
+            # seen in imported rosters), so fall back to the same CDN resolver the
+            # Tournament Explorer uses instead of rendering a blank pill.
+            pokemon_record = self.session.get(PokemonRecord, canonical_id)
+            display_name = (
+                pokemon_record.display_name if pokemon_record else (species_name or canonical_id.title())
+            )
+            sprite_url = (
+                pokemon_record.sprite_url
+                if pokemon_record and pokemon_record.sprite_url
+                else get_pokemon_sprite_url(canonical_id or species_name)
+            )
 
             recommendations.append(
                 PartnerRecommendation(
-                    species_name=display_names.get(c_id, disp_name),
-                    canonical_id=c_id,
-                    display_name=disp_name,
+                    species_name=species_name or display_name,
+                    canonical_id=canonical_id,
+                    display_name=display_name,
                     sprite_url=sprite_url,
                     co_occurrence_count=count,
                     total_target_teams=total_teams_count,
@@ -116,9 +150,7 @@ class MetaSynergyService:
                 )
             )
 
-        # Sort by co-occurrence count descending
-        recommendations.sort(key=lambda r: r.co_occurrence_count, reverse=True)
-        return recommendations[:limit]
+        return recommendations
 
 
 class TournamentService:
@@ -172,11 +204,13 @@ class TournamentService:
         species_identifier: str,
         limit: int = 6,
         regulation_filter: str | None = None,
+        min_sample_teams: int = _DEFAULT_MIN_SAMPLE_TEAMS,
     ) -> list[PartnerRecommendation]:
         return self.synergy_service.get_top_partners(
             species_identifier=species_identifier,
             limit=limit,
             regulation_filter=regulation_filter,
+            min_sample_teams=min_sample_teams,
         )
 
     def sync(

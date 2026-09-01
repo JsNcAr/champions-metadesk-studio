@@ -1694,7 +1694,14 @@ def main(page: ft.Page):
                             content=ft.Column(spacing=6, controls=[
                                 ft.Row(spacing=4, controls=[
                                     ft.Icon(ft.Icons.GROUP_ADD, size=14, color=Colors.AMBER_400),
-                                    ft.Text("Top Tournament Partners", size=10, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
+                                    ft.Text("Top Tournament Partners", size=10, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400),
+                                    # Percentages mean little without the sample they
+                                    # came from, so state it next to the heading.
+                                    ft.Text(
+                                        f"· {partners[0].total_target_teams} teams",
+                                        size=9, color=Colors.GREY_400,
+                                        tooltip=f"Share of the {partners[0].total_target_teams} tournament teams containing this Pokemon",
+                                    ),
                                 ]),
                                 ft.Row(spacing=6, wrap=True, controls=partner_pills)
                             ]),
@@ -2765,7 +2772,9 @@ def main(page: ft.Page):
         on_select=lambda e: _render_tourney_explorer(),
     )
     _tourney_placement_drop = ft.Dropdown(
-        value="all",
+        # Default to Top 8: results are ordered newest-event-first, so "All Placements"
+        # would fill the whole grid with the single most recent event's standings.
+        value="8",
         options=[
             ft.dropdown.Option("all", text="All Placements"),
             ft.dropdown.Option("1", text="🥇 1st Place"),
@@ -2799,17 +2808,21 @@ def main(page: ft.Page):
         _tourney_grid.controls.clear()
         with get_session() as session:
             tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
-            pokemon_repo = PokemonRepository(session)
             champions_repo = ChampionsCatalogRepository(session)
 
+            # Only the Champions catalogue defines legality. Falling back to the user's
+            # own box (as this once did) would compare tournament rosters against a
+            # handful of owned Pokemon and flag almost every team as illegal, so an
+            # empty catalogue disables the check instead of guessing.
             raw_species_names = champions_repo.list_species_names()
-            if not raw_species_names:
-                raw_species_names = [p.species_name for p in pokemon_repo.list_all()]
+            legality_known = bool(raw_species_names)
 
             # Pre-compute legal lookup set for O(1) checking
             champions_legal_set = set()
-            for s in raw_species_names:
-                s_low = s.lower().strip()
+            for name in raw_species_names:
+                if not name:
+                    continue
+                s_low = name.lower().strip()
                 champions_legal_set.add(s_low)
                 champions_legal_set.add(s_low.split("-")[0])
 
@@ -2827,11 +2840,12 @@ def main(page: ft.Page):
                     pass
 
             # Fetch top 60 matched teams to keep UI smooth and prevent crashes
+            # `query` already matches species, player and event name; passing it as
+            # species_filter too would AND the two and reduce the search to species.
             teams = tourney_svc.search_teams(
                 query=q,
                 regulation_filter=reg,
                 placement_filter=place_val,
-                species_filter=q,
                 game_platform_filter=game_plat,
                 max_age_days=max_days,
                 limit=60,
@@ -2912,10 +2926,10 @@ def main(page: ft.Page):
                 has_illegal_species = False
 
                 for m in members:
-                    sname = m.species_name.lower().strip()
-                    ckey = m.canonical_id.lower().strip()
-                    # O(1) set lookup
-                    is_leg = (
+                    sname = (m.species_name or "").lower().strip()
+                    ckey = (m.canonical_id or "").lower().strip()
+                    # O(1) set lookup; unknown legality is never reported as illegal.
+                    is_leg = not legality_known or (
                         sname in champions_legal_set
                         or ckey in champions_legal_set
                         or ckey.split("-")[0] in champions_legal_set
@@ -2949,7 +2963,10 @@ def main(page: ft.Page):
                     padding=ft.Padding.symmetric(horizontal=6, vertical=3),
                     border=ft.Border.all(1, Colors.RED_700),
                 ) if has_illegal_species else ft.Container(
-                    content=ft.Text("✅ Champions Legal", size=9, weight=ft.FontWeight.BOLD, color=Colors.GREEN_300),
+                    content=ft.Text(
+                        "✅ Champions Legal" if legality_known else "• Legality unknown",
+                        size=9, weight=ft.FontWeight.BOLD, color=Colors.GREEN_300,
+                    ),
                     bgcolor="#064e3b",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=3),

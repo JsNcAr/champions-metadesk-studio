@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func
@@ -745,34 +745,21 @@ class TournamentRepository:
         limit: int | None = None,
         offset: int = 0,
     ) -> list[TournamentTeamRecord]:
-        stmt = select(TournamentTeamRecord)
-        joined_tournaments = False
+        # Always join the tournament: recency is part of the ordering, so the join is
+        # needed on every query anyway and the conditional-join bookkeeping only
+        # invited bugs.
+        stmt = select(TournamentTeamRecord).join(
+            TournamentRecord,
+            TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
+        )
 
         if regulation_filter and regulation_filter != "All":
-            stmt = stmt.join(
-                TournamentRecord,
-                TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
-            )
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
-            joined_tournaments = True
 
         if game_platform_filter and game_platform_filter != "All":
-            if not joined_tournaments:
-                stmt = stmt.join(
-                    TournamentRecord,
-                    TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
-                )
-                joined_tournaments = True
             stmt = stmt.where(TournamentRecord.game_platform == game_platform_filter)
 
         if max_age_days is not None and max_age_days > 0:
-            if not joined_tournaments:
-                stmt = stmt.join(
-                    TournamentRecord,
-                    TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
-                )
-                joined_tournaments = True
-            from datetime import timedelta
             cutoff = _utc_now() - timedelta(days=max_age_days)
             stmt = stmt.where(TournamentRecord.event_date >= cutoff)
 
@@ -792,11 +779,12 @@ class TournamentRepository:
             )
             stmt = stmt.where(
                 (TournamentTeamRecord.player_name.ilike(q_pattern))
+                | (TournamentRecord.name.ilike(q_pattern))
                 | (TournamentTeamRecord.tournament_id.ilike(q_pattern))
                 | (TournamentTeamRecord.tournament_team_id.in_(subq_member))
             )
 
-        if species_filter and species_filter != query:
+        if species_filter:
             s_pattern = f"%{species_filter.strip()}%"
             subq_spec = select(TournamentTeamMemberRecord.tournament_team_id).where(
                 (TournamentTeamMemberRecord.species_name.ilike(s_pattern))
@@ -804,7 +792,13 @@ class TournamentRepository:
             )
             stmt = stmt.where(TournamentTeamRecord.tournament_team_id.in_(subq_spec))
 
-        stmt = stmt.order_by(TournamentTeamRecord.placement.asc())
+        # Newest event first, then best placement within that event. Ordering by
+        # placement alone made a capped result set show only the top few finishes of
+        # every event ever recorded, so recent tournaments could never surface.
+        stmt = stmt.order_by(
+            TournamentRecord.event_date.desc(),
+            TournamentTeamRecord.placement.asc(),
+        )
         if offset > 0:
             stmt = stmt.offset(offset)
         if limit is not None:

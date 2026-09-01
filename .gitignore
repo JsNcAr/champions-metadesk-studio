@@ -211,4 +211,7 @@ pyrightconfig.json
 
 ## Custom
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.csv

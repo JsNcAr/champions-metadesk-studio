@@ -348,6 +348,10 @@ class TournamentRecord(SQLModel, table=True):
     location: str = Field(default="Honolulu, HI")
     total_players: int = Field(default=0)
     source_url: str | None = None
+    # False until a standings fetch for this tournament has actually succeeded.
+    # The sync caps standings requests per run to respect rate limits, so unsynced
+    # tournaments form a backlog that later runs drain instead of skipping forever.
+    standings_synced: bool = Field(default=False, index=True)
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
@@ -366,6 +370,9 @@ class TournamentTeamRecord(SQLModel, table=True):
     showdown_text: str = Field(sa_column=Column(Text, nullable=False))
     source_dataset: str = Field(default="seed_v1", index=True)
     sync_source: str = Field(default="seed", index=True)
+    # Age division this roster placed in. Only "masters" is ingested; premier events
+    # publish Seniors/Juniors on the same page with placements restarting at 1.
+    division: str = Field(default="masters", index=True)
     created_at: datetime = Field(default_factory=_utc_now)
 
 

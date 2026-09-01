@@ -214,6 +214,7 @@ class LimitlessProvider:
         self,
         tournament_id: str,
         max_placement: int | None = None,
+        raise_on_error: bool = False,
     ) -> list[LimitlessStanding]:
         """Fetches standings and decklists for a tournament ID.
 
@@ -221,10 +222,16 @@ class LimitlessProvider:
             tournament_id: Limitless tournament identifier.
             max_placement: If given, only return standings up to this placement
                            (e.g. 8 = Top 8 only). Saves filtering downstream.
+            raise_on_error: Propagate LimitlessNetworkError instead of returning an
+                            empty list. Callers that persist a "standings fetched"
+                            flag need to tell a failed request apart from an event
+                            that genuinely published no decklists.
         """
         try:
             data = self._get(f"/tournaments/{tournament_id}/standings")
         except LimitlessNetworkError as exc:
+            if raise_on_error:
+                raise
             print(f"⚠️ Failed to fetch standings for Limitless tourney '{tournament_id}': {exc}")
             return []
 
@@ -308,7 +315,10 @@ class LimitlessProvider:
             delay_between: Seconds to sleep between each request.
 
         Returns:
-            Dict mapping tournament_id -> list of standings (may be empty if failed).
+            Dict mapping tournament_id -> list of standings, containing an entry only
+            for tournaments whose request succeeded. A tournament whose request failed
+            is omitted entirely so callers can retry it on a later run, rather than
+            recording it as an event with no teams.
         """
         results: dict[str, list[LimitlessStanding]] = {}
         fetched = 0
@@ -318,9 +328,13 @@ class LimitlessProvider:
                 print(f"ℹ️ Limitless: standings batch cap ({max_requests}) reached, stopping early.")
                 break
 
-            standings = self.fetch_standings(t_id, max_placement=max_placement)
-            results[t_id] = standings
             fetched += 1
+            try:
+                results[t_id] = self.fetch_standings(
+                    t_id, max_placement=max_placement, raise_on_error=True
+                )
+            except LimitlessNetworkError as exc:
+                print(f"⚠️ Failed to fetch standings for Limitless tourney '{t_id}': {exc}")
 
             if fetched < len(tournament_ids) and fetched < max_requests:
                 time.sleep(delay_between)

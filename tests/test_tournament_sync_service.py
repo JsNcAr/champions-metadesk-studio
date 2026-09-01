@@ -136,3 +136,132 @@ class TestTournamentSyncService(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLimitlessStandingsBacklog(unittest.TestCase):
+    """The standings cap must produce a draining backlog, not permanent orphans."""
+
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+
+    def tearDown(self):
+        self.session.close()
+
+    @staticmethod
+    def _tournament(idx: int) -> LimitlessTournament:
+        return LimitlessTournament(
+            id=f"t{idx}",
+            name=f"Champions Cup #{idx}",
+            date=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            format_code="M-A",
+            player_count=64,
+        )
+
+    @staticmethod
+    def _standing(player: str) -> LimitlessStanding:
+        return LimitlessStanding(
+            player_handle=player,
+            placement=1,
+            members=(
+                LimitlessTeamMember(
+                    canonical_id="incineroar",
+                    display_name="Incineroar",
+                    item="Safety Goggles",
+                    ability="Intimidate",
+                    moves=("Fake Out", "Knock Off", "Parting Shot", "Will-O-Wisp"),
+                ),
+            ),
+        )
+
+    def _provider(self, tournaments, served):
+        """Provider whose standings batch honours a per-run request cap."""
+        provider = MagicMock()
+        provider.fetch_champions_tournaments.return_value = tournaments
+
+        def _batch(tournament_ids, max_placement=None, max_requests=20, **kwargs):
+            return {
+                t_id: [self._standing(f"player-{t_id}")]
+                for t_id in tournament_ids[:max_requests]
+                if t_id in served
+            }
+
+        provider.fetch_standings_batch.side_effect = _batch
+        return provider
+
+    def _counts(self):
+        from pokemon_champions_planning_tool.infrastructure.database.models import (
+            TournamentRecord,
+            TournamentTeamRecord,
+        )
+        from sqlmodel import select
+
+        tournaments = list(self.session.exec(select(TournamentRecord)).all())
+        teams = list(self.session.exec(select(TournamentTeamRecord)).all())
+        synced = [t for t in tournaments if t.standings_synced]
+        return len(tournaments), len(synced), len(teams)
+
+    def test_backlog_drains_across_runs(self):
+        """Tournaments past the per-run cap are retried, not skipped forever."""
+        tournaments = [self._tournament(i) for i in range(5)]
+        served = {f"t{i}" for i in range(5)}
+
+        # Run 1: cap of 2 leaves 3 tournaments awaiting standings.
+        provider = self._provider(tournaments, served)
+        with unittest.mock.patch(
+            "pokemon_champions_planning_tool.services.tournament_sync_service._MAX_STANDINGS_PER_RUN",
+            2,
+        ):
+            res = sync_tournaments(
+                self.session, limitless_provider=provider, include_official=False
+            )
+        self.assertEqual(res["limitless"]["standings_synced"], 2)
+        self.assertEqual(res["limitless"]["backlog_remaining"], 3)
+        self.assertEqual(self._counts(), (5, 2, 2))
+
+        # Run 2: the remaining backlog is picked up rather than skipped as "existing".
+        provider = self._provider(tournaments, served)
+        with unittest.mock.patch(
+            "pokemon_champions_planning_tool.services.tournament_sync_service._MAX_STANDINGS_PER_RUN",
+            2,
+        ):
+            res = sync_tournaments(
+                self.session, limitless_provider=provider, include_official=False
+            )
+        self.assertEqual(res["limitless"]["skipped"], 2, "already-synced ones are skipped")
+        self.assertEqual(res["limitless"]["standings_synced"], 2)
+        self.assertEqual(self._counts(), (5, 4, 4))
+
+        # Run 3 drains the last one.
+        provider = self._provider(tournaments, served)
+        with unittest.mock.patch(
+            "pokemon_champions_planning_tool.services.tournament_sync_service._MAX_STANDINGS_PER_RUN",
+            2,
+        ):
+            sync_tournaments(self.session, limitless_provider=provider, include_official=False)
+        self.assertEqual(self._counts(), (5, 5, 5))
+
+    def test_failed_standings_request_is_retried(self):
+        """A tournament whose standings request failed stays in the backlog."""
+        tournaments = [self._tournament(0)]
+
+        # Provider returns no entry for t0 (request failed) -> must remain unsynced.
+        provider = self._provider(tournaments, served=set())
+        sync_tournaments(self.session, limitless_provider=provider, include_official=False)
+        self.assertEqual(self._counts(), (1, 0, 0))
+
+        # Once the request succeeds the tournament leaves the backlog.
+        provider = self._provider(tournaments, served={"t0"})
+        sync_tournaments(self.session, limitless_provider=provider, include_official=False)
+        self.assertEqual(self._counts(), (1, 1, 1))
+
+    def test_resync_replaces_teams_instead_of_duplicating(self):
+        """Re-ingesting a tournament must not append duplicate rosters."""
+        tournaments = [self._tournament(0)]
+        for _ in range(3):
+            provider = self._provider(tournaments, served={"t0"})
+            sync_tournaments(
+                self.session, force=True, limitless_provider=provider, include_official=False
+            )
+        self.assertEqual(self._counts(), (1, 1, 1), "3 forced syncs must leave 1 team")

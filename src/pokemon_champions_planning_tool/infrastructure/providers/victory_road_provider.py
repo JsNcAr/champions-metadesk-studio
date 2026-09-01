@@ -11,6 +11,17 @@ HTML structure verified 2026-08-31:
 
   Strategy: find first numeric cell = placement, then find the cell containing a
   bracketed handle (e.g. "( Juanfi )"), and extract the handle.
+
+Division handling (verified 2026-09-01):
+  Premier event pages publish several age divisions on one page, each with its own
+  placements restarting at 1. The Masters tables come first, followed by a heading
+  such as "Teams and results - Seniors & Juniors" and then "Seniors Top 32" /
+  "Juniors Top 32". Without division awareness every event yields three "1st place"
+  teams and Junior rosters carry the same weight as Masters in meta analytics.
+
+  Each paste link is therefore labelled with the division of the nearest preceding
+  <h1>-<h4> heading that names one. A page with no such heading is treated as a
+  single-division (Masters) event, so regional/community pages keep every row.
 """
 
 from __future__ import annotations
@@ -74,6 +85,10 @@ OFFICIAL_EVENT_SLUGS: list[dict[str, Any]] = [
 ]
 
 
+DIVISION_MASTERS = "masters"
+DIVISION_OTHER = "seniors_juniors"
+
+
 class VictoryRoadNetworkError(Exception):
     """Raised when Victory Road Pro is unreachable or returns HTTP errors."""
 
@@ -92,6 +107,7 @@ class VRStandingRef:
     paste_url: str = ""
     paste_provider: str = "pokepast"  # "pokepast" | "vrpaste"
     paste_id: str = ""
+    division: str = DIVISION_MASTERS  # DIVISION_MASTERS | DIVISION_OTHER
 
 
 @dataclass(frozen=True)
@@ -115,6 +131,44 @@ _TD_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL)
 _STRIP_TAGS_RE = re.compile(r"<[^>]+>")
 _HANDLE_RE = re.compile(r"\(([^)]+)\)")
 _NUMERIC_RE = re.compile(r"^\d+$")
+_HEADING_RE = re.compile(r"<h[1-4][^>]*>(.*?)</h[1-4]>", re.DOTALL | re.IGNORECASE)
+_MASTERS_KW_RE = re.compile(r"master", re.IGNORECASE)
+_OTHER_DIVISION_KW_RE = re.compile(r"senior|junior", re.IGNORECASE)
+
+
+def _division_boundaries(html: str) -> list[tuple[int, str]]:
+    """Return sorted (offset, division) markers for headings that name a division.
+
+    A heading naming Seniors or Juniors wins over one naming Masters, so a combined
+    "Seniors & Juniors" heading is treated as non-Masters. That bias is deliberate:
+    mislabelling a section as non-Masters drops rows, while the reverse would let
+    Junior teams into the meta statistics.
+    """
+    boundaries: list[tuple[int, str]] = []
+    for match in _HEADING_RE.finditer(html):
+        text = _strip_tags(match.group(1))
+        if not text:
+            continue
+        if _OTHER_DIVISION_KW_RE.search(text):
+            boundaries.append((match.start(), DIVISION_OTHER))
+        elif _MASTERS_KW_RE.search(text):
+            boundaries.append((match.start(), DIVISION_MASTERS))
+    boundaries.sort()
+    return boundaries
+
+
+def _division_at(boundaries: list[tuple[int, str]], offset: int) -> str:
+    """Division of the nearest heading preceding *offset*, defaulting to Masters.
+
+    Defaulting to Masters keeps single-division pages (no division heading at all)
+    fully intact, which is the common case outside premier events.
+    """
+    division = DIVISION_MASTERS
+    for pos, label in boundaries:
+        if pos > offset:
+            break
+        division = label
+    return division
 
 
 def _strip_tags(html: str) -> str:
@@ -166,21 +220,25 @@ class VictoryRoadProvider:
              chars by a pokepaste or vrpaste link.
           2. Use cells backward from the link to extract placement (first numeric
              cell) and player name (cell with bracketed handle).
+          3. Label each link with the division of the nearest preceding heading.
         """
         standings: list[VRStandingRef] = []
+        boundaries = _division_boundaries(html)
 
         # Iterate over all paste link occurrences in the document
         for paste_match in _POKEPAST_RE.finditer(html):
             paste_url = paste_match.group(0)
             paste_id = paste_match.group(1)
             provider = "pokepast"
-            _process_paste_match(html, paste_match, paste_url, paste_id, provider, standings)
+            division = _division_at(boundaries, paste_match.start())
+            _process_paste_match(html, paste_match, paste_url, paste_id, provider, division, standings)
 
         for paste_match in _VRPASTE_RE.finditer(html):
             paste_url = paste_match.group(0)
             paste_id = paste_match.group(1)
             provider = "vrpaste"
-            _process_paste_match(html, paste_match, paste_url, paste_id, provider, standings)
+            division = _division_at(boundaries, paste_match.start())
+            _process_paste_match(html, paste_match, paste_url, paste_id, provider, division, standings)
 
         # Sort by placement ascending, deduplicate by paste_id
         seen_ids: set[str] = set()
@@ -191,8 +249,18 @@ class VictoryRoadProvider:
                 unique.append(s)
         return unique
 
-    def fetch_event(self, event_meta: dict[str, Any]) -> VREventResult | None:
-        """Scrapes standings table for a given event metadata dictionary."""
+    def fetch_event(
+        self, event_meta: dict[str, Any], masters_only: bool = True
+    ) -> VREventResult | None:
+        """Scrapes standings table for a given event metadata dictionary.
+
+        Args:
+            event_meta: Registry entry describing the event (slug, name, date, ...).
+            masters_only: Drop Senior and Junior division rows. Premier events publish
+                all three divisions on one page with placements restarting at 1 per
+                division, so keeping them would produce several "1st place" teams per
+                event and let Junior rosters skew the meta statistics.
+        """
         slug = event_meta["slug"]
         url = f"{self.base_url}/{slug}/"
 
@@ -203,6 +271,16 @@ class VictoryRoadProvider:
             return None
 
         standings = self._parse_standings_from_html(html)
+
+        if masters_only:
+            total = len(standings)
+            standings = [s for s in standings if s.division == DIVISION_MASTERS]
+            dropped = total - len(standings)
+            if dropped:
+                print(
+                    f"ℹ️ Victory Road scraper: '{slug}' — kept {len(standings)} Masters "
+                    f"entries, dropped {dropped} Senior/Junior entries."
+                )
 
         if not standings:
             print(f"ℹ️ Victory Road scraper: zero paste entries found on '{slug}'.")
@@ -226,11 +304,11 @@ class VictoryRoadProvider:
             standings=tuple(standings),
         )
 
-    def fetch_all_known_events(self) -> list[VREventResult]:
+    def fetch_all_known_events(self, masters_only: bool = True) -> list[VREventResult]:
         """Iterates known official event registry and fetches available event standings."""
         results: list[VREventResult] = []
         for meta in OFFICIAL_EVENT_SLUGS:
-            res = self.fetch_event(meta)
+            res = self.fetch_event(meta, masters_only=masters_only)
             if res:
                 results.append(res)
         return results
@@ -242,11 +320,15 @@ def _process_paste_match(
     paste_url: str,
     paste_id: str,
     provider: str,
+    division: str,
     standings: list[VRStandingRef],
 ) -> None:
     """Extracts placement and player name from the HTML context around a paste link."""
-    # Look backwards up to 3000 chars for cells
-    start = max(0, paste_match.start() - 3000)
+    # Prefer the enclosing table row: a fixed-width backward window can spill into the
+    # previous row and pick up its placement, which is wrong whenever rows are compact.
+    window_start = max(0, paste_match.start() - 3000)
+    row_start = html.rfind("<tr", window_start, paste_match.start())
+    start = row_start if row_start != -1 else window_start
     ctx = html[start:paste_match.end()]
 
     # Extract all <td> cell texts in this window
@@ -288,5 +370,6 @@ def _process_paste_match(
             paste_url=paste_url,
             paste_provider=provider,
             paste_id=paste_id,
+            division=division,
         )
     )

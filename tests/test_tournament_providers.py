@@ -26,6 +26,10 @@ from pokemon_champions_planning_tool.infrastructure.providers import (
     VictoryRoadProvider,
     VRPasteProvider,
 )
+from pokemon_champions_planning_tool.infrastructure.providers.victory_road_provider import (
+    DIVISION_MASTERS,
+    DIVISION_OTHER,
+)
 
 
 class TestTournamentProviders(unittest.TestCase):
@@ -173,3 +177,97 @@ class TestTournamentProviders(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _standings_row(placement: int, player: str, paste_id: str) -> str:
+    return (
+        f"<tr><td>{placement}</td><td>9-2</td><td>{player} ( {player}VGC )</td>"
+        f'<td><a href="https://pokepast.es/{paste_id}">paste</a></td></tr>'
+    )
+
+
+class TestVictoryRoadDivisions(unittest.TestCase):
+    """Premier event pages publish Masters, Seniors and Juniors on one page, each
+    with placements restarting at 1. Only Masters may reach the meta statistics."""
+
+    # Masters table, then the Seniors & Juniors section, mirroring victoryroad.pro.
+    MULTI_DIVISION_HTML = f"""
+    <html><body>
+      <h2><div class="title">Teams and results - Masters</div></h2>
+      <h3>Masters Top 2</h3>
+      <table>{_standings_row(1, "Paul", "aaaa1111")}{_standings_row(2, "Zach", "aaaa2222")}</table>
+      <h2><div class="title">Teams and results - Seniors &amp; Juniors</div></h2>
+      <h3>Seniors Top 1</h3>
+      <table>{_standings_row(1, "Sena", "bbbb1111")}</table>
+      <h3>Juniors Top 1</h3>
+      <table>{_standings_row(1, "Juno", "cccc1111")}</table>
+    </body></html>
+    """
+
+    # A community event with a single division and no division heading at all.
+    SINGLE_DIVISION_HTML = f"""
+    <html><body>
+      <h2>Standings</h2>
+      <table>{_standings_row(1, "Ana", "dddd1111")}{_standings_row(2, "Beto", "dddd2222")}</table>
+    </body></html>
+    """
+
+    EVENT_META = {
+        "slug": "2026-euic",
+        "name": "2026 Europe International Championships",
+        "format": "Regulation M-A",
+        "game": "Pokémon Champions",
+    }
+
+    def _fetch(self, html: str, **kwargs):
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".victory_road_provider.requests.get",
+            return_value=_html_response(html),
+        ):
+            return VictoryRoadProvider().fetch_event(self.EVENT_META, **kwargs)
+
+    def test_parser_labels_each_division(self):
+        """Every paste link takes the division of its nearest preceding heading."""
+        standings = VictoryRoadProvider()._parse_standings_from_html(self.MULTI_DIVISION_HTML)
+        by_id = {s.paste_id: s.division for s in standings}
+        self.assertEqual(by_id["aaaa1111"], DIVISION_MASTERS)
+        self.assertEqual(by_id["aaaa2222"], DIVISION_MASTERS)
+        self.assertEqual(by_id["bbbb1111"], DIVISION_OTHER)
+        self.assertEqual(by_id["cccc1111"], DIVISION_OTHER)
+
+    def test_masters_only_drops_seniors_and_juniors(self):
+        """The default fetch keeps a single team per placement."""
+        res = self._fetch(self.MULTI_DIVISION_HTML)
+        self.assertIsNotNone(res)
+        self.assertEqual(len(res.standings), 2)
+        self.assertEqual({s.division for s in res.standings}, {DIVISION_MASTERS})
+        placements = [s.placement for s in res.standings]
+        self.assertEqual(sorted(placements), [1, 2])
+        self.assertEqual(len(placements), len(set(placements)), "no duplicate placements")
+        self.assertEqual(res.standings[0].player_name, "PaulVGC")
+
+    def test_opting_out_keeps_every_division(self):
+        """masters_only=False preserves the raw page contents."""
+        res = self._fetch(self.MULTI_DIVISION_HTML, masters_only=False)
+        self.assertEqual(len(res.standings), 4)
+        self.assertEqual(
+            sum(1 for s in res.standings if s.placement == 1),
+            3,
+            "un-filtered pages really do carry three 1st places",
+        )
+
+    def test_page_without_division_headings_is_kept_whole(self):
+        """A single-division event has no division heading; nothing may be dropped."""
+        res = self._fetch(self.SINGLE_DIVISION_HTML)
+        self.assertIsNotNone(res, "single-division events must not be filtered away")
+        self.assertEqual(len(res.standings), 2)
+        self.assertEqual({s.division for s in res.standings}, {DIVISION_MASTERS})
+
+    def test_combined_heading_is_treated_as_non_masters(self):
+        """A heading naming both Seniors and Juniors must not be read as Masters."""
+        html = f"""<html><body>
+          <h3>Seniors &amp; Juniors Top 1</h3>
+          <table>{_standings_row(1, "Sena", "bbbb1111")}</table>
+        </body></html>"""
+        self.assertIsNone(self._fetch(html), "nothing Masters-eligible remains")

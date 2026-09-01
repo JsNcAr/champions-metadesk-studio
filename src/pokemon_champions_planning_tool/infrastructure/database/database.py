@@ -62,6 +62,12 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE tournaments ADD COLUMN source_url VARCHAR;",
         # tournament_teams — source tag ("seed" | "limitless" | "victory_road")
         "ALTER TABLE tournament_teams ADD COLUMN sync_source VARCHAR DEFAULT 'seed';",
+        # tournaments — standings backlog flag; unsynced rows are retried each run
+        "ALTER TABLE tournaments ADD COLUMN standings_synced BOOLEAN NOT NULL DEFAULT 0;",
+        "CREATE INDEX IF NOT EXISTS ix_tournaments_standings_synced ON tournaments (standings_synced);",
+        # tournament_teams — age division ("masters" only, as of the division-aware sync)
+        "ALTER TABLE tournament_teams ADD COLUMN division VARCHAR NOT NULL DEFAULT 'masters';",
+        "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",

@@ -634,6 +634,9 @@ class TournamentRepository:
             existing.organizer = tournament.organizer
             existing.location = tournament.location
             existing.total_players = tournament.total_players
+            existing.source_url = tournament.source_url
+            # standings_synced is owned by the standings fetch, not by metadata
+            # refreshes, so a re-listed tournament keeps its backlog state.
             existing.updated_at = _utc_now()
             self.session.add(existing)
             target = existing
@@ -646,6 +649,54 @@ class TournamentRepository:
 
     def get_tournament(self, tournament_id: str) -> TournamentRecord | None:
         return self.session.get(TournamentRecord, tournament_id)
+
+    def mark_standings_synced(self, tournament_id: str, synced: bool = True) -> None:
+        """Record whether a standings fetch for this tournament has succeeded."""
+        record = self.session.get(TournamentRecord, tournament_id)
+        if record is None:
+            return
+        record.standings_synced = synced
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+
+    def list_tournament_ids_pending_standings(self, source_prefix: str | None = None) -> set[str]:
+        """Tournament IDs whose standings have never been fetched successfully."""
+        stmt = select(TournamentRecord.tournament_id).where(
+            TournamentRecord.standings_synced == False  # noqa: E712 - SQL boolean column
+        )
+        if source_prefix:
+            stmt = stmt.where(TournamentRecord.tournament_id.startswith(source_prefix))
+        return set(self.session.exec(stmt).all())
+
+    def delete_teams_for_tournament(self, tournament_id: str) -> int:
+        """Delete a tournament's teams and their members. Returns rows removed.
+
+        Re-ingesting an event replaces its teams rather than appending to them, so a
+        forced re-sync cannot duplicate rosters.
+        """
+        teams = list(
+            self.session.exec(
+                select(TournamentTeamRecord).where(
+                    TournamentTeamRecord.tournament_id == tournament_id
+                )
+            ).all()
+        )
+        if not teams:
+            return 0
+
+        team_ids = [t.tournament_team_id for t in teams]
+        members = self.session.exec(
+            select(TournamentTeamMemberRecord).where(
+                TournamentTeamMemberRecord.tournament_team_id.in_(team_ids)
+            )
+        ).all()
+        for member in members:
+            self.session.delete(member)
+        for team in teams:
+            self.session.delete(team)
+        self.session.commit()
+        return len(teams)
 
     def list_tournaments(self) -> list[TournamentRecord]:
         return list(self.session.exec(select(TournamentRecord).order_by(TournamentRecord.event_date.desc())).all())

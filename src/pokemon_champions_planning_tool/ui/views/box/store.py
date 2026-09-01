@@ -7,6 +7,7 @@ only what moved:
     ("all",)              roster reloaded
     ("entry", id)         one entry's metadata changed
     ("selection", id)     selected entry changed (id may be None)
+    ("multi",)            the multi-selection set changed
 """
 
 from __future__ import annotations
@@ -87,6 +88,7 @@ class BoxStore:
         self.filters = BoxFilters()
         self.selected_id: UUID | None = None
         self.selected_form_id: str | None = None
+        self.multi: set[UUID] = set()
         self._listeners: list[Listener] = []
 
     # -- subscription -------------------------------------------------------------------
@@ -106,6 +108,8 @@ class BoxStore:
             self.entries = BoxRepository(s).list_entries(include_planned=True)
         if self.selected_id is not None and self.entry(self.selected_id) is None:
             self.selected_id = None
+        present = {e.box_entry_id for e in self.entries}
+        self.multi &= present
         self._notify(("all",))
         return self.entries
 
@@ -167,6 +171,32 @@ class BoxStore:
 
     def set_filters(self, filters: BoxFilters) -> None:
         self.filters = filters
+
+    # -- multi-selection ------------------------------------------------------------------
+
+    def toggle_multi(self, box_entry_id: UUID, selected: bool | None = None) -> None:
+        if selected is None:
+            selected = box_entry_id not in self.multi
+        (self.multi.add if selected else self.multi.discard)(box_entry_id)
+        self._notify(("multi",))
+
+    def select_all_visible(self) -> None:
+        self.multi = {e.box_entry_id for e in self.visible()}
+        self._notify(("multi",))
+
+    def clear_multi(self) -> None:
+        if self.multi:
+            self.multi = set()
+            self._notify(("multi",))
+
+    def multi_entries(self) -> list[BoxEntry]:
+        return [e for e in self.entries if e.box_entry_id in self.multi]
+
+    def teams_for(self, ids: list[UUID]) -> dict[UUID, list[tuple[str, int]]]:
+        """Teams holding each of the given entries (for a bulk-delete confirmation)."""
+        with self._sf() as s:
+            repo = TeamRepository(s)
+            return {i: repo.teams_containing(i) for i in ids}
 
     # -- mutations (each is one session) ----------------------------------------------------
 

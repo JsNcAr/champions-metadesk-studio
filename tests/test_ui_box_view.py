@@ -49,7 +49,7 @@ class _TempDb:
         shutil.rmtree(self.dir)
 
 
-class TestBoxView(unittest.TestCase):
+class _BoxViewCase(unittest.TestCase):
     def setUp(self):
         self.db = _TempDb()
         with self.db.session() as s:
@@ -69,6 +69,8 @@ class TestBoxView(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
+
+class TestBoxView(_BoxViewCase):
     def test_loads_cards_and_serialises(self):
         self.view.ensure_loaded()
         self.assertEqual(len(self.view.grid.controls), 2)
@@ -100,7 +102,7 @@ class TestBoxView(unittest.TestCase):
         self.assertEqual(len(self.view.table.table.rows), 2)
         serialise(self.view)
         self.view._on_table_sort("attack", ascending=False)
-        self.assertEqual(self.view.table.table.rows[0].cells[0].content.controls[1].controls[0].value, "Rillaboom")
+        self.assertEqual(self.view.table.table.rows[0].cells[1].content.controls[1].controls[0].value, "Rillaboom")
 
     def test_favourite_from_card_updates_store_and_emits(self):
         self.view.ensure_loaded()
@@ -148,3 +150,56 @@ class TestBoxView(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBoxBulkAndRanges(_BoxViewCase):
+    """Multi-selection bar and the range filters (C12)."""
+
+    def test_check_from_card_shows_bulk_bar_and_select_all(self):
+        self.view.ensure_loaded()
+        self.view._check(self.charizard, True)
+        self.assertTrue(self.view.bulk_bar.visible)
+        self.assertEqual(self.view._bulk_count.value, "1 selected")
+        self.assertTrue(self.view._cards[self.charizard]._check.value)
+        self.view.handle_key(type("K", (), {"key": "a", "ctrl": True, "shift": True})())
+        self.assertEqual(self.view._bulk_count.value, "2 selected")
+        serialise(self.view)
+        self.view.handle_key(type("K", (), {"key": "Escape", "ctrl": False, "shift": False})())
+        self.assertFalse(self.view.bulk_bar.visible, "Esc clears the selection first")
+
+    def test_bulk_favourite_and_delete_with_confirmation(self):
+        self.view.ensure_loaded()
+        self.view.store.select_all_visible()
+        self.view._bulk_favorite(True)
+        self.assertTrue(all(e.is_favorite for e in self.view.store.entries))
+        from unittest.mock import AsyncMock
+
+        self.ctx.confirm = AsyncMock(return_value=True)
+        self.view.store.select_all_visible()
+        self.ctx.page.run_task(self.view._bulk_delete)
+        self.ctx.confirm.assert_awaited_once()
+        self.assertIn("Sun", self.ctx.confirm.await_args.args[1], "affected teams are named")
+        self.assertEqual(self.view.store.entries, [])
+        self.assertFalse(self.view.bulk_bar.visible)
+
+    def test_bulk_delete_cancelled_keeps_entries(self):
+        self.view.ensure_loaded()
+        from unittest.mock import AsyncMock
+
+        self.ctx.confirm = AsyncMock(return_value=False)
+        self.view.store.select_all_visible()
+        self.ctx.page.run_task(self.view._bulk_delete)
+        self.assertEqual(len(self.view.store.entries), 2)
+
+    def test_range_filters_apply_and_echo_as_chips(self):
+        self.view.ensure_loaded()
+        self.view.toolbar._set(bst_range=(510, 600))
+        self.assertEqual(len(self.view.grid.controls), 1, "only Rillaboom (BST 525) is in range; Charizard is 500")
+        self.assertIn("BST 510–600", [c.content.controls[0].value for c in self.view.toolbar.active_row.controls if hasattr(c, "content") and hasattr(c.content, "controls")])
+        self.view.toolbar._set_stat_range("speed", 90, 255)
+        self.assertEqual(len(self.view.grid.controls), 0)
+        self.view.toolbar.clear()
+        self.assertEqual(len(self.view.grid.controls), 2)
+        self.view.toolbar._toggle_drawer("stats", True)
+        self.assertTrue(self.view.toolbar.drawer.visible)
+        serialise(self.view)

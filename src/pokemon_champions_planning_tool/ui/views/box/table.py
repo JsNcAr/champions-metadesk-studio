@@ -15,6 +15,7 @@ from .filters import SortKey
 
 # (column label, sort key, numeric)
 _COLUMNS: list[tuple[str, SortKey | None, bool]] = [
+    ("", None, False),
     ("Pokémon", "name", False),
     ("Types", None, False),
     ("HP", "hp", True),
@@ -30,10 +31,17 @@ _COLUMNS: list[tuple[str, SortKey | None, bool]] = [
 
 
 class BoxTable(ft.Container):
-    def __init__(self, *, on_sort: Callable[[SortKey, bool], None], on_select: Callable[[UUID], None]) -> None:
+    def __init__(
+        self,
+        *,
+        on_sort: Callable[[SortKey, bool], None],
+        on_select: Callable[[UUID], None],
+        on_check: Callable[[UUID, bool], None] | None = None,
+    ) -> None:
         super().__init__()
         self._on_sort = on_sort
         self._on_select = on_select
+        self._on_check = on_check
         self._sort_keys: list[SortKey | None] = [key for _label, key, _numeric in _COLUMNS]
         self.table = ft.DataTable(
             columns=[
@@ -55,7 +63,8 @@ class BoxTable(ft.Container):
         self.content = ft.Column(controls=[self.table], scroll=ft.ScrollMode.AUTO, expand=True)
         self.expand = True
 
-    def update_from(self, entries: list[BoxEntry], *, sort: SortKey, descending: bool, selected_id: UUID | None) -> None:
+    def update_from(self, entries: list[BoxEntry], *, sort: SortKey, descending: bool, selected_id: UUID | None, checked: set[UUID] | None = None) -> None:
+        checked = checked or set()
         if sort in self._sort_keys:
             self.table.sort_column_index = self._sort_keys.index(sort)
             self.table.sort_ascending = not descending
@@ -69,6 +78,14 @@ class BoxTable(ft.Container):
                     color=Palette.SURFACE_1 if index % 2 == 0 else None,
                     on_select_change=lambda _e, eid=entry.box_entry_id: self._on_select(eid),
                     cells=[
+                        ft.DataCell(
+                            ft.Checkbox(
+                                value=entry.box_entry_id in checked,
+                                width=32,
+                                height=32,
+                                on_change=(lambda e, eid=entry.box_entry_id: self._on_check(eid, bool(e.control.value))) if self._on_check else None,
+                            )
+                        ),
                         ft.DataCell(
                             ft.Row(
                                 spacing=Space.SM,

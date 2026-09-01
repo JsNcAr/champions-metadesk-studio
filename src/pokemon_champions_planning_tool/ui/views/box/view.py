@@ -12,7 +12,7 @@ from ...components import EmptyState, PageHeader
 from ...components.banner import InlineBanner
 from ...context import AppContext
 from ...tasks import is_mounted
-from ...theme import Layout, Palette, Radius, Space
+from ...theme import OVERLAY_SHADOW, Layout, Motion, Palette, Radius, Space
 from .card import CARD_MAX_EXTENT, PokemonCard
 from .detail_panel import DetailPanel
 from .filters import BoxFilters, SortKey
@@ -53,15 +53,48 @@ class BoxView(ft.Row):
 
         # -- content ---------------------------------------------------------------------------
         self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=0.82, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
-        self.table = BoxTable(on_sort=self._on_table_sort, on_select=self._select)
+        self.table = BoxTable(on_sort=self._on_table_sort, on_select=self._select, on_check=self._check)
         self.table.visible = False
         self._empty = EmptyState(ft.Icons.INVENTORY_2_OUTLINED, "Your box is empty", "Add a Pokémon by name to start planning.", action_label="Add a Pokémon", on_action=self._focus_add)
         self._empty.visible = False
         self._no_match = EmptyState(ft.Icons.SEARCH_OFF, "No Pokémon match", "Try fewer filters or a different search.", action_label="Clear filters", on_action=self.toolbar.clear)
         self._no_match.visible = False
+        # -- bulk selection bar (floats over the content) -------------------------------------
+        self._bulk_count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
+        self.bulk_bar = ft.Container(
+            content=ft.Row(
+                spacing=Space.SM,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                tight=True,
+                controls=[
+                    self._bulk_count,
+                    ft.VerticalDivider(width=Space.LG, thickness=1, color=Palette.OUTLINE_VARIANT),
+                    ft.TextButton("Favourite", icon=ft.Icons.STAR, on_click=lambda _e: self._bulk_favorite(True)),
+                    ft.TextButton("Unfavourite", icon=ft.Icons.STAR_BORDER, on_click=lambda _e: self._bulk_favorite(False)),
+                    ft.TextButton("Tag", icon=ft.Icons.TAG, on_click=lambda _e: self.ctx.page.run_task(self._bulk_tag)),
+                    ft.TextButton("Delete", icon=ft.Icons.DELETE_OUTLINE, style=ft.ButtonStyle(color=Palette.ERROR), on_click=lambda _e: self.ctx.page.run_task(self._bulk_delete)),
+                    ft.VerticalDivider(width=Space.LG, thickness=1, color=Palette.OUTLINE_VARIANT),
+                    ft.TextButton("Clear", on_click=lambda _e: self.store.clear_multi()),
+                ],
+            ),
+            bgcolor=Palette.SURFACE_4,
+            border_radius=Radius.LG,
+            padding=ft.Padding.symmetric(horizontal=Space.LG, vertical=Space.SM),
+            shadow=OVERLAY_SHADOW,
+            visible=False,
+            bottom=Space.LG,
+            animate_opacity=Motion.NORMAL_MS,
+        )
         self._content = ft.Container(
             expand=True,
-            content=ft.Column(expand=True, spacing=0, controls=[self.grid, self.table, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty, self._no_match])]),
+            content=ft.Stack(
+                expand=True,
+                alignment=ft.Alignment.BOTTOM_CENTER,
+                controls=[
+                    ft.Column(expand=True, spacing=0, controls=[self.grid, self.table, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty, self._no_match])]),
+                    self.bulk_bar,
+                ],
+            ),
         )
 
         # -- detail panel ----------------------------------------------------------------------
@@ -93,8 +126,17 @@ class BoxView(ft.Row):
 
     def handle_key(self, e) -> bool:
         """Shell hook for keys the shell itself does not consume."""
+        if e.key == "Escape" and self.store.multi:
+            self.store.clear_multi()
+            return True
         if e.key == "Escape" and self.store.selected_id is not None:
             self._select(None)
+            return True
+        if e.ctrl and e.shift and e.key.lower() == "a":
+            self.store.select_all_visible()
+            return True
+        if e.key == "Delete" and self.store.multi:
+            self.ctx.page.run_task(self._bulk_delete)
             return True
         if e.ctrl and e.key.lower() == "f":
             self._focus(self.toolbar.search)
@@ -114,6 +156,8 @@ class BoxView(ft.Row):
             self._render_entry(change[1])
         elif kind == "selection":
             self._render_selection(change[1])
+        elif kind == "multi":
+            self._render_multi()
         self._update_self()
 
     def _render(self) -> None:
@@ -131,7 +175,7 @@ class BoxView(ft.Row):
         if self.view_mode == "table":
             self.grid.visible = False
             self.table.visible = not (empty or no_match)
-            self.table.update_from(visible, sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id)
+            self.table.update_from(visible, sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi)
         else:
             self.table.visible = False
             self.grid.visible = not (empty or no_match)
@@ -139,14 +183,25 @@ class BoxView(ft.Row):
             for entry in visible:
                 card = self._cards.get(entry.box_entry_id)
                 if card is None:
-                    card = PokemonCard(on_select=self._select, on_favorite=self._set_favorite, on_tag=self._filter_by_tag)
+                    card = PokemonCard(on_select=self._select, on_favorite=self._set_favorite, on_tag=self._filter_by_tag, on_check=self._check)
                     self._cards[entry.box_entry_id] = card
                 card.update_from(entry, selected=entry.box_entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry))
+                card.set_checked(entry.box_entry_id in self.store.multi, selection_mode=bool(self.store.multi))
                 controls.append(card)
             self.grid.controls = controls
             for stale in set(self._cards) - {e.box_entry_id for e in self.store.entries}:
                 self._cards.pop(stale, None)
+        self._render_multi()
         self._render_detail()
+
+    def _render_multi(self) -> None:
+        n = len(self.store.multi)
+        self.bulk_bar.visible = n > 0
+        self._bulk_count.value = f"{n} selected"
+        for eid, card in self._cards.items():
+            card.set_checked(eid in self.store.multi, selection_mode=n > 0)
+        if self.view_mode == "table":
+            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi)
 
     def _render_entry(self, entry_id: UUID) -> None:
         entry = self.store.entry(entry_id)
@@ -260,6 +315,55 @@ class BoxView(ft.Row):
     def _undo_delete(self, removed: list[BoxEntry]) -> None:
         self.store.restore(removed)
         self.ctx.bus.emit(events.BOX_CHANGED, None)
+        self._update_self()
+
+    # -- bulk actions ------------------------------------------------------------------------------------
+
+    def _check(self, entry_id: UUID, checked: bool) -> None:
+        self.store.toggle_multi(entry_id, checked)
+
+    def _bulk_favorite(self, value: bool) -> None:
+        ids = list(self.store.multi)
+        if not ids:
+            return
+        self.store.bulk_update(ids, is_favorite=value)
+        self.ctx.bus.emit(events.BOX_CHANGED, None)
+        self.ctx.toast(f"{len(ids)} {'favourited' if value else 'unfavourited'}", "success")
+        self._update_self()
+
+    async def _bulk_tag(self) -> None:
+        ids = list(self.store.multi)
+        if not ids:
+            return
+        tag = await self.ctx.prompt_text(f"Tag {len(ids)} Pokémon", "Tag", submit_label="Add tag",
+                                         validate=lambda t: None if t.strip() else "Enter a tag")
+        if not tag:
+            return
+        self.store.bulk_update(ids, add_tags=[tag])
+        self.toolbar.set_available_tags(self.store.all_tags())
+        self.ctx.toast(f"Tagged {len(ids)} with #{tag.strip()}", "success")
+        self._update_self()
+
+    async def _bulk_delete(self) -> None:
+        ids = list(self.store.multi)
+        if not ids:
+            return
+        teams = self.store.teams_for(ids)
+        affected = sorted({team for slots in teams.values() for team, _slot in slots})
+        body = f"{len(ids)} Pokémon will be removed from your box."
+        if affected:
+            body += f" They will also leave these teams: {', '.join(affected)}."
+        if not await self.ctx.confirm(f"Remove {len(ids)} Pokémon?", body, confirm_label="Remove"):
+            return
+        removed = self.store.delete(ids)
+        self.store.clear_multi()
+        for entry in removed:
+            self.ctx.bus.emit(events.BOX_ENTRY_DELETED, entry.box_entry_id)
+        self.ctx.bus.emit(events.BOX_CHANGED, None)
+        if affected:
+            self.ctx.toast(f"Removed {len(removed)} Pokémon", "info")
+        else:
+            self.ctx.toast(f"Removed {len(removed)} Pokémon", "info", action="Undo", on_action=lambda: self._undo_delete(removed))
         self._update_self()
 
     # -- add by name -----------------------------------------------------------------------------------

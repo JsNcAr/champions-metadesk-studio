@@ -23,14 +23,18 @@ class PokemonCard(ft.Container):
         on_select: Callable[[UUID], None],
         on_favorite: Callable[[UUID, bool], None],
         on_tag: Callable[[str], None],
+        on_check: Callable[[UUID, bool], None] | None = None,
     ) -> None:
         super().__init__()
         self.entry_id: UUID | None = None
         self._on_select = on_select
         self._on_favorite = on_favorite
         self._on_tag = on_tag
+        self._on_check = on_check
         self._selected = False
         self._favorite = False
+        self._checked = False
+        self._selection_mode = False
 
         self._star = ft.IconButton(
             icon=ft.Icons.STAR_BORDER,
@@ -40,6 +44,14 @@ class PokemonCard(ft.Container):
             padding=0,
             tooltip="Favourite",
             on_click=lambda _e: self._toggle_favorite(),
+        )
+        self._check = ft.Checkbox(
+            value=False,
+            visible=False,
+            width=32,
+            height=32,
+            tooltip="Select",
+            on_change=lambda e: self._on_check(self.entry_id, bool(e.control.value)) if (self._on_check and self.entry_id) else None,
         )
         self._bst = BstPill()
         self._planned = StatusChip("Planned", "tertiary", icon=ft.Icons.EDIT_NOTE)
@@ -58,7 +70,7 @@ class PokemonCard(ft.Container):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             tight=True,
             controls=[
-                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._star, self._planned, self._bst]),
+                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[ft.Row(spacing=0, tight=True, controls=[self._check, self._star]), self._planned, self._bst]),
                 self.sprite,
                 self._name,
                 self._form,
@@ -128,6 +140,13 @@ class PokemonCard(ft.Container):
         self._selected = selected
         self._apply_frame(hovering=False)
 
+    def set_checked(self, checked: bool, *, selection_mode: bool) -> None:
+        """Multi-select state. The checkbox shows while any entry is checked, or on hover."""
+        self._checked = checked
+        self._selection_mode = selection_mode
+        self._check.value = checked
+        self._check.visible = selection_mode or checked
+
     # -- interaction -------------------------------------------------------------------------
 
     def _toggle_favorite(self) -> None:
@@ -138,6 +157,8 @@ class PokemonCard(ft.Container):
     def _hover(self, e: ft.ControlEvent) -> None:
         hovering = getattr(e, "data", None) in ("true", True)
         self._apply_frame(hovering=hovering)
+        if self._on_check is not None:
+            self._check.visible = hovering or self._selection_mode or self._checked
         if is_mounted(self):
             self.update()
 

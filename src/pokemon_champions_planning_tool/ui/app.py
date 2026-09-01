@@ -14,6 +14,7 @@ from .legacy import build_legacy_views
 from .legacy_adapter import bind_legacy
 from .shell import AppShell
 from .theme import apply_theme
+from .views.meta import MetaView
 from .views.settings import SettingsView
 
 # Headless smoke tests switch this off so construction never touches the network.
@@ -70,13 +71,14 @@ def main(page: ft.Page) -> None:
         selected_icon=ft.Icons.GROUPS,
         control=views.team,
     )
+    meta_view = MetaView(ctx)
     shell.register_view(
         "meta",
         label="Meta",
         icon=ft.Icons.EMOJI_EVENTS_OUTLINED,
         selected_icon=ft.Icons.EMOJI_EVENTS,
-        control=views.meta,
-        on_activate=views.on_activate_meta,
+        control=meta_view,
+        on_activate=meta_view.ensure_loaded,
     )
     settings_view = SettingsView(ctx)
     shell.register_view(

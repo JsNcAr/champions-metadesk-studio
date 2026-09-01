@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import func, Session, select
 
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.entities.pokemon import Pokemon
@@ -734,24 +734,18 @@ class TournamentRepository:
         )
         return list(self.session.exec(stmt).all())
 
-    def search_teams(
+    def _apply_search_filters(
         self,
-        query: str | None = None,
-        regulation_filter: str | None = None,
-        placement_filter: int | None = None,
-        species_filter: str | None = None,
-        game_platform_filter: str | None = None,
-        max_age_days: int | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-    ) -> list[TournamentTeamRecord]:
-        # Always join the tournament: recency is part of the ordering, so the join is
-        # needed on every query anyway and the conditional-join bookkeeping only
-        # invited bugs.
-        stmt = select(TournamentTeamRecord).join(
-            TournamentRecord,
-            TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
-        )
+        stmt,
+        *,
+        query: str | None,
+        regulation_filter: str | None,
+        placement_filter: int | None,
+        species_filter: str | None,
+        game_platform_filter: str | None,
+        max_age_days: int | None,
+    ):
+        """Shared WHERE clauses for search_teams and count_teams."""
 
         if regulation_filter and regulation_filter != "All":
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
@@ -792,6 +786,38 @@ class TournamentRepository:
             )
             stmt = stmt.where(TournamentTeamRecord.tournament_team_id.in_(subq_spec))
 
+        return stmt
+
+    def _joined_teams(self):
+        # Always join the tournament: recency is part of the ordering, so the join is
+        # needed on every query anyway and the conditional-join bookkeeping only
+        # invited bugs.
+        return select(TournamentTeamRecord).join(
+            TournamentRecord,
+            TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
+        )
+
+    def search_teams(
+        self,
+        query: str | None = None,
+        regulation_filter: str | None = None,
+        placement_filter: int | None = None,
+        species_filter: str | None = None,
+        game_platform_filter: str | None = None,
+        max_age_days: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[TournamentTeamRecord]:
+        stmt = self._apply_search_filters(
+            self._joined_teams(),
+            query=query,
+            regulation_filter=regulation_filter,
+            placement_filter=placement_filter,
+            species_filter=species_filter,
+            game_platform_filter=game_platform_filter,
+            max_age_days=max_age_days,
+        )
+
         # Newest event first, then best placement within that event. Ordering by
         # placement alone made a capped result set show only the top few finishes of
         # every event ever recorded, so recent tournaments could never surface.
@@ -811,6 +837,36 @@ class TournamentRepository:
             stmt = stmt.limit(limit)
 
         return list(self.session.exec(stmt).all())
+
+    def count_teams(
+        self,
+        query: str | None = None,
+        regulation_filter: str | None = None,
+        placement_filter: int | None = None,
+        species_filter: str | None = None,
+        game_platform_filter: str | None = None,
+        max_age_days: int | None = None,
+    ) -> int:
+        """Number of teams matching the same filters as search_teams."""
+        stmt = self._apply_search_filters(
+            self._joined_teams(),
+            query=query,
+            regulation_filter=regulation_filter,
+            placement_filter=placement_filter,
+            species_filter=species_filter,
+            game_platform_filter=game_platform_filter,
+            max_age_days=max_age_days,
+        )
+        return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
+
+    def list_regulations(self) -> list[str]:
+        """Distinct regulation labels present in the data, most common first."""
+        stmt = (
+            select(TournamentRecord.format_regulation, func.count())
+            .group_by(TournamentRecord.format_regulation)
+            .order_by(func.count().desc())
+        )
+        return [reg for reg, _n in self.session.exec(stmt).all() if reg]
 
     def is_seeded(self, seed_version: str) -> bool:
         meta = self.session.get(TournamentSeedMetaRecord, 1)

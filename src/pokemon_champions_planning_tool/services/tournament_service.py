@@ -10,13 +10,14 @@ from uuid import UUID
 from sqlmodel import Session, func, select
 
 from ..domain.pokemon_identity import format_api_name, get_pokemon_sprite_url
+from datetime import datetime
 from ..infrastructure.database.models import (
     PokemonRecord,
     TournamentRecord,
     TournamentTeamMemberRecord,
     TournamentTeamRecord,
 )
-from ..infrastructure.database.repositories import TournamentRepository
+from ..infrastructure.database.repositories import ChampionsCatalogRepository, TournamentRepository
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,73 @@ class PartnerRecommendation:
     co_occurrence_count: int
     total_target_teams: int
     synergy_percentage: float
+
+
+@dataclass(frozen=True)
+class MetaMemberRow:
+    """One roster slot of a tournament team, ready to render."""
+
+    slot: int
+    species_name: str
+    canonical_id: str
+    sprite_url: str
+    is_legal: bool
+
+
+@dataclass(frozen=True)
+class MetaTeamRow:
+    """A tournament team with its event context, detached from the session."""
+
+    team_id: UUID
+    tournament_id: str
+    tournament_name: str
+    event_date: datetime
+    regulation: str
+    game_platform: str
+    organizer: str
+    location: str
+    total_players: int
+    source_url: str | None
+    player_name: str
+    placement: int
+    standing_label: str
+    pokepast_url: str | None
+    showdown_text: str
+    members: tuple[MetaMemberRow, ...]
+    legality_known: bool
+
+    @property
+    def illegal_species(self) -> list[str]:
+        return [m.species_name for m in self.members if not m.is_legal]
+
+    @property
+    def is_legal(self) -> bool:
+        return self.legality_known and not self.illegal_species
+
+
+@dataclass(frozen=True)
+class MetaSummary:
+    team_count: int
+    event_count: int
+    synced_at: datetime | None
+
+
+def _legal_lookup(names: list[str]) -> set[str]:
+    """Species names and their base species, lowercased, for O(1) legality checks."""
+    lookup: set[str] = set()
+    for name in names:
+        if not name:
+            continue
+        key = name.lower().strip()
+        lookup.add(key)
+        lookup.add(key.split("-")[0])
+    return lookup
+
+
+def _is_legal(species_name: str, canonical_id: str, lookup: set[str]) -> bool:
+    sname = (species_name or "").lower().strip()
+    ckey = (canonical_id or "").lower().strip()
+    return sname in lookup or ckey in lookup or ckey.split("-")[0] in lookup
 
 
 # A species appearing in only a handful of tournament teams produces percentages
@@ -198,6 +266,107 @@ class TournamentService:
             limit=limit,
             offset=offset,
         )
+
+    def count_teams(self, **filters: Any) -> int:
+        return self.repo.count_teams(**filters)
+
+    def list_regulations(self) -> list[str]:
+        return self.repo.list_regulations()
+
+    def search_team_rows(
+        self,
+        query: str | None = None,
+        regulation_filter: str | None = None,
+        placement_filter: int | None = None,
+        game_platform_filter: str | None = None,
+        max_age_days: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[MetaTeamRow]:
+        """Search teams and return detached rows with event context, roster and legality.
+
+        Three queries regardless of page size: teams, their tournaments, their members.
+        Only the Champions catalogue defines legality; when it is empty every member is
+        reported legal and ``legality_known`` is False, so the UI never labels a team
+        illegal on the basis of missing data.
+        """
+        teams = self.repo.search_teams(
+            query=query,
+            regulation_filter=regulation_filter,
+            placement_filter=placement_filter,
+            game_platform_filter=game_platform_filter,
+            max_age_days=max_age_days,
+            limit=limit,
+            offset=offset,
+        )
+        if not teams:
+            return []
+
+        names = ChampionsCatalogRepository(self.session).list_species_names()
+        legality_known = bool(names)
+        lookup = _legal_lookup(names)
+
+        team_ids = [t.tournament_team_id for t in teams]
+        tournament_ids = list({t.tournament_id for t in teams})
+        tournaments = {
+            t.tournament_id: t
+            for t in self.session.exec(
+                select(TournamentRecord).where(TournamentRecord.tournament_id.in_(tournament_ids))
+            ).all()
+        }
+        members_by_team: dict[UUID, list[TournamentTeamMemberRecord]] = {}
+        for m in self.session.exec(
+            select(TournamentTeamMemberRecord).where(
+                TournamentTeamMemberRecord.tournament_team_id.in_(team_ids)
+            )
+        ).all():
+            members_by_team.setdefault(m.tournament_team_id, []).append(m)
+
+        rows: list[MetaTeamRow] = []
+        for team in teams:
+            tournament = tournaments.get(team.tournament_id)
+            members = sorted(members_by_team.get(team.tournament_team_id, []), key=lambda m: m.slot_position)
+            rows.append(
+                MetaTeamRow(
+                    team_id=team.tournament_team_id,
+                    tournament_id=team.tournament_id,
+                    tournament_name=tournament.name if tournament else team.tournament_id,
+                    event_date=tournament.event_date if tournament else team.created_at,
+                    regulation=tournament.format_regulation if tournament else "",
+                    game_platform=tournament.game_platform if tournament else "",
+                    organizer=tournament.organizer if tournament else "",
+                    location=tournament.location if tournament else "",
+                    total_players=tournament.total_players if tournament else 0,
+                    source_url=tournament.source_url if tournament else None,
+                    player_name=team.player_name,
+                    placement=team.placement,
+                    standing_label=team.standing_label,
+                    pokepast_url=team.pokepast_url,
+                    showdown_text=team.showdown_text,
+                    members=tuple(
+                        MetaMemberRow(
+                            slot=m.slot_position,
+                            species_name=m.species_name,
+                            canonical_id=m.canonical_id,
+                            sprite_url=get_pokemon_sprite_url(m.canonical_id or m.species_name),
+                            is_legal=(not legality_known) or _is_legal(m.species_name, m.canonical_id, lookup),
+                        )
+                        for m in members
+                    ),
+                    legality_known=legality_known,
+                )
+            )
+        return rows
+
+    def meta_summary(self) -> MetaSummary:
+        team_count = self.session.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
+        event_count = self.session.exec(
+            select(func.count(func.distinct(TournamentTeamRecord.tournament_id)))
+        ).one()
+        synced_at = self.session.exec(
+            select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
+        ).one()
+        return MetaSummary(team_count=int(team_count or 0), event_count=int(event_count or 0), synced_at=synced_at)
 
     def get_top_partners(
         self,

@@ -26,8 +26,6 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
         elif kind == "items":
             views.reload_items()
             views.render_team_builder()
-        elif kind == "tournaments":
-            views.render_meta(True)
 
     def on_import_requested(payload: tuple[str, str]) -> None:
         text, title = payload
@@ -38,6 +36,5 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
         bus.on(events.BOX_ENTRY_DELETED, lambda _payload: views.refresh_teams()),
         bus.on(events.TEAMS_CHANGED, lambda _payload: views.refresh_teams()),
         bus.on(events.CATALOGS_RELOADED, on_catalogs_reloaded),
-        bus.on(events.META_SYNCED, lambda _payload: views.invalidate_meta()),
         bus.on(events.IMPORT_REQUESTED, on_import_requested),
     ]

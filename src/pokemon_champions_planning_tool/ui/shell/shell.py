@@ -103,9 +103,11 @@ class AppShell(ft.Row):
         factory: ViewFactory | None = None,
         control: ft.Control | None = None,
         on_activate: Callable[[], None] | None = None,
+        in_rail: bool = True,
     ) -> None:
-        """Add a rail destination. Pass either a ready ``control`` or a ``factory``
-        that builds it on first visit."""
+        """Register a view. Pass either a ready ``control`` or a ``factory`` that builds
+        it on first visit. ``in_rail=False`` registers a page reachable by key only
+        (Settings lives in the rail's trailing slot, not among the destinations)."""
         if (factory is None) == (control is None):
             raise ValueError("register_view needs exactly one of factory or control")
         entry = _ViewEntry(
@@ -118,10 +120,11 @@ class AppShell(ft.Row):
             control=control,
         )
         self._entries[key] = entry
-        self._order.append(key)
-        self.rail.destinations.append(
-            ft.NavigationRailDestination(icon=icon, selected_icon=selected_icon, label=label)
-        )
+        if in_rail:
+            self._order.append(key)
+            self.rail.destinations.append(
+                ft.NavigationRailDestination(icon=icon, selected_icon=selected_icon, label=label)
+            )
 
     def register_settings(self, open_settings: Callable[[], None]) -> None:
         self._open_settings = open_settings
@@ -135,7 +138,7 @@ class AppShell(ft.Row):
     def navigate(self, key: str) -> None:
         entry = self._entries[key]
         self.host.content = entry.instance()
-        self.rail.selected_index = self._order.index(key)
+        self.rail.selected_index = self._order.index(key) if key in self._order else None
         self._current = key
         if entry.on_activate is not None:
             entry.on_activate()

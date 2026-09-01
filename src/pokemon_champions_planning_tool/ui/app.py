@@ -14,6 +14,7 @@ from .legacy import build_legacy_views
 from .legacy_adapter import bind_legacy
 from .shell import AppShell
 from .theme import apply_theme
+from .views.settings import SettingsView
 
 # Headless smoke tests switch this off so construction never touches the network.
 STARTUP_SYNC_ENABLED = True
@@ -77,7 +78,17 @@ def main(page: ft.Page) -> None:
         control=views.meta,
         on_activate=views.on_activate_meta,
     )
-    shell.register_settings(views.open_settings)
+    settings_view = SettingsView(ctx)
+    shell.register_view(
+        "settings",
+        label="Settings",
+        icon=ft.Icons.SETTINGS_OUTLINED,
+        selected_icon=ft.Icons.SETTINGS,
+        control=settings_view,
+        on_activate=settings_view.refresh,
+        in_rail=False,
+    )
+    shell.register_settings(lambda: shell.navigate("settings"))
 
     shell.navigate("box")
     page.add(shell)

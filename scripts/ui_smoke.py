@@ -115,7 +115,7 @@ def main() -> int:
 
     shell = page.controls[0]
     failures = 0
-    for key in ("box", "team", "meta"):
+    for key in ("box", "team", "meta", "settings"):
         t = time.perf_counter()
         try:
             shell.navigate(key)

@@ -81,7 +81,6 @@ class LegacyViews:
     team: ft.Control
     meta: ft.Control
     on_activate_meta: Callable[[], None]
-    open_settings: Callable[[], None]
     refresh_box: Callable[[], None]
     refresh_teams: Callable[[], None]
     render_team_builder: Callable[[], None]
@@ -3156,174 +3155,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
 
 
     # -----------------------------------------------------------------------
-    # SETTINGS / DATA MANAGEMENT MODAL
-    # Centralised place for all manual DB sync actions.
-    # -----------------------------------------------------------------------
-
-    # Spinner refs used by Settings modal rows
-    _spinner_megas = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
-    _spinner_items = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
-    _spinner_tourneys = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
-
-    # Status text refs updated after each sync
-    _status_megas = ft.Text("", size=11, color=Colors.GREY_400)
-    _status_items = ft.Text("", size=11, color=Colors.GREY_400)
-    _status_tourneys = ft.Text("", size=11, color=Colors.GREY_400)
-
-    def _count_text(label: str, count: int, unit: str) -> str:
-        return f"{count:,} {unit}" if count > 0 else "Not yet synced"
-
-    def _refresh_settings_status():
-        with get_session() as session:
-            mega_repo = MegaEvolutionRepository(session)
-            item_repo = ItemRepository(session)
-            tourney_svc = TournamentService(session)
-            mega_count = len(mega_repo.list_all())
-            item_count = item_repo.count()
-            tourney_count = len(tourney_svc.list_tournaments())
-        _status_megas.value = _count_text("Megas", mega_count, "forms cached")
-        _status_items.value = _count_text("Items", item_count, "items catalogued")
-        _status_tourneys.value = _count_text("Tournaments", tourney_count, "events synced")
-        page.update()
-
-    def _handle_sync_megas(e=None):
-        _spinner_megas.visible = True
-        _status_megas.value = "Syncing…"
-        page.update()
-        def _bg():
-            try:
-                with get_session() as session:
-                    res = sync_all_champions_megas_on_startup(session)
-                load_champions_catalog()
-                _status_megas.value = f"{res.get('total_local', 0):,} forms cached"
-                show_toast(f"✅ Mega Evolutions synced! ({res.get('total_local', 0)} cached)")
-            except Exception as ex:
-                show_toast(f"Mega sync error: {ex}", is_error=True)
-                _status_megas.value = "Sync failed"
-            finally:
-                _spinner_megas.visible = False
-                page.update()
-        threading.Thread(target=_bg, daemon=True).start()
-
-    def _handle_sync_items(e=None):
-        _spinner_items.visible = True
-        _status_items.value = "Syncing…"
-        page.update()
-        def _bg():
-            try:
-                with get_session() as session:
-                    res = sync_items_catalog(session, force=True)
-                load_items_to_state()
-                _status_items.value = f"{res.get('total', 0):,} items catalogued"
-                show_toast(f"✅ Items catalog synced! ({res.get('added', 0)} added, {res.get('updated', 0)} updated)")
-                render_team_builder()
-            except Exception as ex:
-                show_toast(f"Items sync error: {ex}", is_error=True)
-                _status_items.value = "Sync failed"
-            finally:
-                _spinner_items.visible = False
-                page.update()
-        threading.Thread(target=_bg, daemon=True).start()
-
-    def _handle_sync_tourneys(e=None):
-        _spinner_tourneys.visible = True
-        _status_tourneys.value = "Syncing…"
-        page.update()
-        def _bg():
-            try:
-                with get_session() as session:
-                    tourney_svc = TournamentService(session)
-                    res = tourney_svc.sync(force=True, max_age_days=365, include_official=True)
-                    count = len(tourney_svc.list_tournaments())
-                _status_tourneys.value = f"{count:,} events synced"
-                show_toast("✅ Tournament datasets synced from Limitless & Victory Road!")
-                # New rows landed; bypass the cached grid.
-                _render_tourney_explorer(force=True)
-            except Exception as ex:
-                show_toast(f"Tournament sync error: {ex}", is_error=True)
-                _status_tourneys.value = "Sync failed"
-            finally:
-                _spinner_tourneys.visible = False
-                page.update()
-        threading.Thread(target=_bg, daemon=True).start()
-
-    def _make_settings_row(icon, title: str, status_ref, spinner_ref, on_sync) -> ft.Container:
-        return ft.Container(
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    ft.Row(spacing=10, controls=[
-                        ft.Icon(icon, size=18, color=Colors.AMBER_400),
-                        ft.Column(spacing=2, controls=[
-                            ft.Text(title, size=13, weight=ft.FontWeight.W_600),
-                            status_ref,
-                        ])
-                    ]),
-                    ft.Row(spacing=6, controls=[
-                        spinner_ref,
-                        ft.Container(
-                            content=ft.Row(spacing=4, controls=[
-                                ft.Icon(ft.Icons.SYNC, size=13, color=Colors.WHITE),
-                                ft.Text("Sync", size=11, weight=ft.FontWeight.W_600, color=Colors.WHITE),
-                            ]),
-                            bgcolor=Colors.AMBER_700,
-                            border_radius=6,
-                            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
-                            on_click=on_sync,
-                        )
-                    ])
-                ]
-            ),
-            bgcolor=Colors.CARD_BG,
-            border_radius=8,
-            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border=ft.Border.all(1, Colors.DIVIDER),
-        )
-
-    settings_modal = ft.AlertDialog(
-        title=ft.Row(spacing=10, controls=[
-            ft.Icon(ft.Icons.SETTINGS, color=Colors.AMBER_400),
-            ft.Text("Data & Synchronization", weight=ft.FontWeight.BOLD, size=16),
-        ]),
-        content=ft.Container(
-            width=460,
-            content=ft.Column(
-                spacing=10,
-                tight=True,
-                controls=[
-                    ft.Text(
-                        "Manage the local SQLite catalog. Sync pulls the latest data from PokéAPI, Showdown, Limitless & Victory Road.",
-                        size=12, color=Colors.GREY_400
-                    ),
-                    ft.Divider(height=1, color=Colors.DIVIDER),
-                    _make_settings_row(
-                        ft.Icons.FLASH_ON, "Mega Evolutions",
-                        _status_megas, _spinner_megas, _handle_sync_megas
-                    ),
-                    _make_settings_row(
-                        ft.Icons.DIAMOND, "Held Items Catalog",
-                        _status_items, _spinner_items, _handle_sync_items
-                    ),
-                    _make_settings_row(
-                        ft.Icons.EMOJI_EVENTS, "Live Tournaments Meta",
-                        _status_tourneys, _spinner_tourneys, _handle_sync_tourneys
-                    ),
-                ]
-            )
-        ),
-        actions=[ft.TextButton("Close", on_click=lambda e: _close_settings())],
-    )
-
-    def _open_settings(e=None):
-        _refresh_settings_status()
-        _show_dialog(settings_modal)
-        page.update()
-
-    def _close_settings(e=None):
-        settings_modal.open = False
-        page.update()
-
-    # -----------------------------------------------------------------------
     # ITEM PICKER MODAL
     # Opened when clicking the held-item slot of a team member card.
     # -----------------------------------------------------------------------
@@ -3623,7 +3454,6 @@ def build_legacy_views(page: ft.Page, services: Any) -> LegacyViews:
         team=team_tab_layout,
         meta=tourney_tab_layout,
         on_activate_meta=lambda: _render_tourney_explorer(),
-        open_settings=lambda: _open_settings(),
         refresh_box=refresh_box,
         refresh_teams=refresh_teams,
         render_team_builder=render_team_builder,

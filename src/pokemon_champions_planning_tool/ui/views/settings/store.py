@@ -1,0 +1,82 @@
+"""Settings store: catalogue status and the three sync operations.
+
+Flet-free. Every method opens its own session, so the sync methods are safe to run
+from a worker thread via ``run_in_background``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlmodel import Session, func, select
+
+from ....infrastructure.database.database import get_session
+from ....infrastructure.database.models import (
+    ItemCatalogMetaRecord,
+    ItemRecord,
+    MegaCheckedSpeciesRecord,
+    MegaEvolutionRecord,
+    TournamentRecord,
+    TournamentTeamRecord,
+)
+from ....services.items_catalog_service import sync_items_catalog
+from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
+from ....services.tournament_service import TournamentService
+
+SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+
+@dataclass(frozen=True)
+class SettingsStatus:
+    mega_count: int
+    megas_checked_at: datetime | None
+    item_count: int
+    items_synced_at: datetime | None
+    tournament_count: int
+    tournament_team_count: int
+    tournaments_synced_at: datetime | None
+
+
+class SettingsStore:
+    def __init__(self, session_factory: SessionFactory = get_session) -> None:
+        self._sf = session_factory
+
+    def status(self) -> SettingsStatus:
+        with self._sf() as s:
+            mega_count = s.exec(select(func.count()).select_from(MegaEvolutionRecord)).one()
+            megas_checked_at = s.exec(select(func.max(MegaCheckedSpeciesRecord.checked_at))).one()
+            item_count = s.exec(select(func.count()).select_from(ItemRecord)).one()
+            meta = s.get(ItemCatalogMetaRecord, 1)
+            items_synced_at = meta.last_synced_at if meta and item_count else None
+            tournament_count = s.exec(select(func.count()).select_from(TournamentRecord)).one()
+            team_count = s.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
+            tournaments_synced_at = s.exec(
+                select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
+            ).one()
+        return SettingsStatus(
+            mega_count=int(mega_count or 0),
+            megas_checked_at=megas_checked_at,
+            item_count=int(item_count or 0),
+            items_synced_at=items_synced_at,
+            tournament_count=int(tournament_count or 0),
+            tournament_team_count=int(team_count or 0),
+            tournaments_synced_at=tournaments_synced_at,
+        )
+
+    # -- sync operations (run on a worker thread) ---------------------------------------
+
+    def sync_megas(self) -> dict[str, Any]:
+        with self._sf() as s:
+            return sync_all_champions_megas_on_startup(s)
+
+    def sync_items(self) -> dict[str, Any]:
+        with self._sf() as s:
+            return sync_items_catalog(s, force=True)
+
+    def sync_tournaments(self) -> dict[str, Any]:
+        with self._sf() as s:
+            return TournamentService(s).sync(force=True, max_age_days=365, include_official=True)

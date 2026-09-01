@@ -46,7 +46,7 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 To launch the Flet GUI in your web browser:
 
 ```bash
-PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main --web
+poetry run python -m pokemon_champions_planning_tool.main --web
 ```
 
 The app will open automatically at `http://localhost:8550`.
@@ -66,13 +66,13 @@ pkill -f "pokemon_champions_planning_tool.main"
 ### Running The Interactive CLI
 
 ```bash
-PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main
+poetry run python -m pokemon_champions_planning_tool.main
 ```
 
 ### Running Tests
 
 ```bash
-PYTHONPATH=src poetry run python -m unittest discover -s tests
+poetry run python -m unittest discover -s tests
 ```
 
 ---

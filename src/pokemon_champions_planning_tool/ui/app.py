@@ -1669,7 +1669,7 @@ def main(page: ft.Page):
                 # -----------------------------------------------
                 synergy_controls = []
                 with get_session() as syn_session:
-                    tourney_svc = TournamentService(syn_session, seed_file_path=SEED_FILE_PATH)
+                    tourney_svc = TournamentService(syn_session)
                     partners = tourney_svc.get_top_partners(pokemon.canonical_id, limit=4)
                     
                     if partners:
@@ -2800,6 +2800,12 @@ def main(page: ft.Page):
         run_spacing=14,
     )
 
+    _tourney_more_btn = ft.ElevatedButton(
+        "Load more",
+        icon=ft.Icons.EXPAND_MORE,
+        visible=False,
+    )
+
     def _import_tournament_team(showdown_text: str, team_title: str):
         _open_import_modal()
         _import_input.value = showdown_text
@@ -2807,10 +2813,43 @@ def main(page: ft.Page):
         show_toast(f"Loaded '{team_title}' roster for import preview!")
 
 
-    def _render_tourney_explorer():
+    # Rendering the explorer builds roughly 38 Flet controls per card, so a full grid
+    # is a few thousand. Re-entering the tab with unchanged filters used to rebuild all
+    # of them for an identical result; these hold enough state to skip that and to load
+    # further pages instead of fetching everything up front.
+    _TOURNEY_PAGE_SIZE = 20
+    _tourney_state = {"filter_key": None, "loaded": 0, "exhausted": False}
+
+    def _tourney_filter_key() -> tuple:
+        """Identity of the currently displayed result set."""
+        return (
+            (_tourney_search_tf.value or "").strip(),
+            _tourney_format_drop.value,
+            _tourney_game_drop.value,
+            _tourney_recency_drop.value,
+            _tourney_placement_drop.value,
+        )
+
+    def _invalidate_tourney_cache():
+        """Force a rebuild on the next visit, e.g. after new data is synced."""
+        _tourney_state["filter_key"] = None
+
+    def _render_tourney_explorer(force: bool = False):
+        """Show results for the current filters, reusing the grid when nothing changed."""
+        key = _tourney_filter_key()
+        if not force and key == _tourney_state["filter_key"] and _tourney_grid.controls:
+            page.update()
+            return
+
+        _tourney_state.update({"filter_key": key, "loaded": 0, "exhausted": False})
         _tourney_grid.controls.clear()
+        _load_tourney_page()
+
+    def _load_tourney_page():
         with get_session() as session:
-            tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
+            # Seeding is a startup concern; doing it here re-read and re-parsed the
+            # seed file on every single render.
+            tourney_svc = TournamentService(session)
             champions_repo = ChampionsCatalogRepository(session)
 
             # Only the Champions catalogue defines legality. Falling back to the user's
@@ -2842,7 +2881,7 @@ def main(page: ft.Page):
                 except ValueError:
                     pass
 
-            # Fetch top 60 matched teams to keep UI smooth and prevent crashes
+            # One page at a time; "Load more" appends the next.
             # `query` already matches species, player and event name; passing it as
             # species_filter too would AND the two and reduce the search to species.
             teams = tourney_svc.search_teams(
@@ -2851,10 +2890,16 @@ def main(page: ft.Page):
                 placement_filter=place_val,
                 game_platform_filter=game_plat,
                 max_age_days=max_days,
-                limit=60,
+                limit=_TOURNEY_PAGE_SIZE,
+                offset=_tourney_state["loaded"],
             )
 
             if not teams:
+                _tourney_state["exhausted"] = True
+                _tourney_more_btn.visible = False
+                if _tourney_state["loaded"]:
+                    page.update()
+                    return
                 _tourney_grid.controls.append(
                     ft.Container(
                         content=ft.Column(
@@ -3085,7 +3130,14 @@ def main(page: ft.Page):
                 )
                 _tourney_grid.controls.append(card)
 
+            _tourney_state["loaded"] += len(teams)
+            _tourney_state["exhausted"] = len(teams) < _TOURNEY_PAGE_SIZE
+            _tourney_more_btn.visible = not _tourney_state["exhausted"]
+            _tourney_more_btn.text = f"Load more ({_tourney_state['loaded']} shown)"
+
         page.update()
+
+    _tourney_more_btn.on_click = lambda e: _load_tourney_page()
 
     tourney_tab_layout = ft.Column(
         expand=True,
@@ -3100,10 +3152,11 @@ def main(page: ft.Page):
                     _tourney_recency_drop,
                     _tourney_format_drop,
                     _tourney_placement_drop,
-                    ft.ElevatedButton("Search Roster", icon=ft.Icons.SEARCH, on_click=lambda e: _render_tourney_explorer()),
+                    ft.ElevatedButton("Search Roster", icon=ft.Icons.SEARCH, on_click=lambda e: _render_tourney_explorer(force=True)),
                 ],
             ),
             _tourney_grid,
+            ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[_tourney_more_btn]),
         ],
     )
 
@@ -3152,7 +3205,7 @@ def main(page: ft.Page):
         with get_session() as session:
             mega_repo = MegaEvolutionRepository(session)
             item_repo = ItemRepository(session)
-            tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
+            tourney_svc = TournamentService(session)
             mega_count = len(mega_repo.list_all())
             item_count = item_repo.count()
             tourney_count = len(tourney_svc.list_tournaments())
@@ -3207,12 +3260,13 @@ def main(page: ft.Page):
         def _bg():
             try:
                 with get_session() as session:
-                    tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
+                    tourney_svc = TournamentService(session)
                     res = tourney_svc.sync(force=True, max_age_days=365, include_official=True)
                     count = len(tourney_svc.list_tournaments())
                 _status_tourneys.value = f"{count:,} events synced"
                 show_toast("✅ Tournament datasets synced from Limitless & Victory Road!")
-                _render_tourney_explorer()
+                # New rows landed; bypass the cached grid.
+                _render_tourney_explorer(force=True)
             except Exception as ex:
                 show_toast(f"Tournament sync error: {ex}", is_error=True)
                 _status_tourneys.value = "Sync failed"
@@ -3620,6 +3674,14 @@ def main(page: ft.Page):
     page.add(header, container_holder)
 
     # --- Initial State Load ---
+    # Seed the bundled tournament dataset once per app start. This previously ran on
+    # every Tournament Explorer render, re-reading and re-parsing the file each time.
+    try:
+        with get_session() as seed_session:
+            TournamentService(seed_session, seed_file_path=SEED_FILE_PATH)
+    except Exception as exc:
+        print(f"⚠️ Tournament seed check skipped: {exc}")
+
     load_champions_catalog()
     load_items_to_state()
     # Populate item picker category dropdown after items are loaded
@@ -3638,9 +3700,11 @@ def main(page: ft.Page):
 
         try:
             with get_session() as sync_sess:
-                t_svc = TournamentService(sync_sess, seed_file_path=SEED_FILE_PATH)
+                t_svc = TournamentService(sync_sess)
                 res = t_svc.sync(force=False, max_age_days=365, include_official=True)
                 print(f"✅ Startup tournament sync completed: {res}")
+            # The grid may already have been built from pre-sync data.
+            _invalidate_tourney_cache()
         except Exception as exc:
             print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
 

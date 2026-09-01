@@ -21,22 +21,48 @@ PokéAPI is the main external data source for the project.
 - Repeated calls should eventually be cached.
 - The app should tolerate partial data when some endpoints are unavailable.
 
+## Limitless VGC API
+
+The Limitless API (`play.limitlesstcg.com/api`) supplies official competitive tournament lists and player standings for Pokémon VGC events.
+
+### Features & Rate-Limiting Strategy
+- **Endpoints**: `/tournaments?game=VGC` and `/tournaments/{id}/standings`.
+- **HTTP 429 Exponential Backoff**: Retries failed requests up to 3 times with progressive delays (`1s`, `2s`, `4s`).
+- **Inter-Page Throttling**: Adds a 0.5s pause between paginated requests to prevent hitting server rate limits.
+- **Defensive Parsing**: Safe integer conversion (`_safe_int`) handles missing or `None` values for placement standings gracefully.
+
+---
+
+## Victory Road Provider
+
+Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets and tournament results (e.g. LAIC 2026).
+
+### Features & Web Scraping Strategy
+- **HTML Parsing**: Parses WordPress / Elementor tournament result pages using BeautifulSoup (`bs4`).
+- **Custom User-Agent & Timeouts**: Configured with a 25-second timeout and modern browser headers to reliably parse large event pages.
+- **Poképaste Sheet Extraction**: Extracts Poképaste URLs and player standings directly into `TournamentTeamRecord`.
+
+---
+
+## Showdown & Poképaste Integration
+
+- **Text Export / Import**: Parses standard Pokémon Showdown importable text format into live team slot configurations (species, item, ability, EV/IV spreads, moves).
+- **Direct Poképaste Publishing**: Posts team text to `https://pokepast.es/create` and returns shareable Poképaste URLs.
+- **Showdown Sprite CDN**: High-reliability sprite URL generator (`get_pokemon_sprite_url`) fetching gen5 sprites from `play.pokemonshowdown.com/sprites/gen5/` with 100% form coverage for regional variants (Hisuian Arcanine, Hisuian Samurott), special forms (Floette Eternal, Calyrex forms, Ogerpon masks), and Mega evolutions.
+
+---
+
 ## CSV Export
 
-CSV remains a useful export format because it is simple and compatible with spreadsheets.
+CSV remains a useful export format for spreadsheet tools.
+- Automatically synchronized with `BoxEntryRecord` mutations.
+- Stable column order containing canonical identity, display name, base stats, types, and favorite status.
 
-### Export Goals
+---
 
-- easy external analysis
-- simple import into spreadsheet tools
-- stable column order
-- no loss of core stats data
+## Future Integration Backlog
 
-## Future Integrations
-
-Optional later integrations could include:
-
-- local sqlite file configuration (allowing custom database file paths)
-- image and sprite offline caching (to prevent redownloading from PokéAPI)
-- import from external team planning tools, exportable JSON formats, or team worksheets
-- battle data sources if the project expands beyond planning (e.g. Smogon usage statistics)
+Optional future integrations:
+- Offline sprite disk caching.
+- Custom SQLite database file configuration via environment variables or UI setting.
+- Direct battle log parser (Showdown `.log` file analyzer).

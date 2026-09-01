@@ -137,6 +137,47 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `notes: str`
 - *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
 
+### `TournamentRecord` (Table: `tournaments`)
+- `tournament_id: str` (Primary Key, e.g. `"limitless-NAIC-2026"`)
+- `name: str` (Indexed)
+- `format_regulation: str` (Indexed, e.g. `"Regulation M-A"`)
+- `game_platform: str` (Indexed, e.g. `"VGC"`)
+- `event_date: datetime` (Indexed)
+- `source_provider: str` (`"limitless"` or `"victory_road"`)
+- `source_url: str | None`
+- `created_at: datetime`
+
+### `TournamentTeamRecord` (Table: `tournament_teams`)
+- `tournament_team_id: UUID` (Primary Key, Indexed)
+- `tournament_id: str` (Foreign Key -> `tournaments.tournament_id`, Indexed)
+- `player_name: str` (Indexed)
+- `placement: int` (Indexed)
+- `pokepaste_url: str | None`
+- `created_at: datetime`
+
+### `TournamentTeamMemberRecord` (Table: `tournament_team_members`)
+- `member_id: UUID` (Primary Key, Indexed)
+- `tournament_team_id: UUID` (Foreign Key -> `tournament_teams.tournament_team_id`, Indexed)
+- `slot_position: int`
+- `species_name: str` (Indexed)
+- `canonical_id: str` (Indexed)
+- `form_name: str`
+- `item: str | None`
+- `ability: str | None`
+- `moveset: list[str]` (Stored as JSON array)
+- `tera_type: str | None`
+
+### `ItemRecord` (Table: `item_catalog`)
+- `canonical_id: str` (Primary Key)
+- `name: str` (Indexed)
+- `category: str` (Indexed)
+- `sprite_url: str | None`
+- `effect_description: str | None`
+- `is_champions_legal: bool` (Indexed)
+- `is_mega_stone: bool` (Indexed)
+- `target_species: str | None`
+- `stat_boosts: dict` (Stored as JSON object, e.g. `{"attack": 1.5}`)
+
 ---
 
 ## Derived Values

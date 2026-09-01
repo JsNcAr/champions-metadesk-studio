@@ -1,32 +1,57 @@
-# Architecture Notes
+# Architecture & Component Notes
 
-## Current Architecture
+## Implemented Architecture
 
-The repository currently implements a command shell prototype that:
+The application is structured into a clean **3-Layer Architecture** (UI, Services/Domain, Infrastructure):
 
-- accepts box and team management commands via an interactive prompt
-- normalizes inputs into canonical PokéAPI identifiers
-- fetches official stats, types, abilities, and sprites from PokéAPI
-- stores Pokemon records, box entries, and teams in SQLite using SQLModel
-- exports/mirrors box entries to CSV automatically on modification
+```text
+                  +-----------------------------------+
+                  |      UI Layer (Flet Web/Desktop)  |
+                  |  - Box Roster View               |
+                  |  - Team Builder View             |
+                  |  - Tournament Explorer View      |
+                  +-----------------+-----------------+
+                                    |
+                                    v
+                  +-----------------------------------+
+                  |           Service Layer           |
+                  |  - PokemonImportService           |
+                  |  - TournamentService              |
+                  |  - ItemsCatalogService            |
+                  |  - ShowdownService                |
+                  |  - MetaSynergyService             |
+                  +-----------------+-----------------+
+                                    |
+            +-----------------------+-----------------------+
+            |                                               |
+            v                                               v
++-----------------------+                       +-----------------------+
+|     Domain Layer      |                       | Infrastructure Layer  |
+| - Pokemon Identity    |                       | - SQLModel DB Repos   |
+| - Item Effects        |                       | - Limitless Provider  |
+| - Team Validation     |                       | - Victory Road Scraper|
+| - Synergy Metrics     |                       | - PokéAPI Adapter     |
++-----------------------+                       +-----------------------+
+```
 
-This CLI serves as the application's current user interface, built on top of the target 3-layer architecture.
+### 1. UI Layer (`src/pokemon_champions_planning_tool/ui/`)
+- Built using **Flet (`>=0.80.0`)** running on `ft.run()`.
+- Implements a reactive single-page interface with 3 main view tabs:
+  1. **Box Roster**: Grid view, type pills, favorites, details drawer, CSV export.
+  2. **Team Builder**: 6-slot preview banner, hero slot cards, held item modal, EV/IV spread modal, Poképaste import/export.
+  3. **Tournament Explorer**: Standings grid, regulation filters, roster search, 1-click import, partner synergy analytics.
 
-## Target Architecture
+### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
+- Pure Python domain rules independent of UI widgets or HTTP APIs.
+- Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, EV/IV spread calculations, and co-occurrence synergy scoring.
 
-The GUI should stay simple, testable, and easy to extend. A practical fit for this project is a small Python application with three clear layers.
-
-### UI Layer
-
-This layer handles rendering and user interaction only.
-
-- box viewer
-- Pokemon detail view
-- team builder view
-- filters, sorting, and export controls
-- advanced visualization panels
-
-The UI should not contain business rules or direct API calls.
+### 3. Infrastructure & Provider Layer (`src/pokemon_champions_planning_tool/infrastructure/`)
+- **Persistence**: SQLite database (`pokemon_champions.db`) managed via SQLModel repository abstractions.
+- **External Providers**:
+  - `PokeAPIAdapter`: Fetches official species stats, types, abilities, and sprites.
+  - `LimitlessProvider`: Fetches tournament listings and standings from `play.limitlesstcg.com/api` with exponential backoff on HTTP 429 errors.
+  - `VictoryRoadProvider`: Scrapes event team sheets from `victoryroad.pro` with custom headers and 25s HTTP timeouts.
+- **Background Auto-Sync**: A module-level thread-safe singleton lock (`_global_sync_lock` in `app.py`) triggers a single background sync pass on startup without blocking UI initialization.
 
 ### Domain Layer
 

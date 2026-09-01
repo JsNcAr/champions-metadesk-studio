@@ -55,29 +55,32 @@
   - **EVs, IVs, Nature & Level Tracking**: Full JSON schema for competitive stat spreads on `TeamMemberRecord`.
   - **Spread Editor UI**: Interactive modal with nature selector, level input, EV sliders/presets (Phys Sweeper, Spec Sweeper, Bulky Support) and IV presets (0 Atk, 0 Spe Trick Room, 31 All).
 
+## Phase 5: Meta & Tournament Team Explorer [COMPLETED]
+- **Multi-Source Tournament Sync**: Automated background sync thread fetching official tournament rosters and standings from **Limitless VGC API** (with 429 retry backoff) and **Victory Road** HTML results parser.
+- **SQLite Storage**: `TournamentRecord`, `TournamentTeamRecord`, and `TournamentTeamMemberRecord` persistence models.
+- **Search & Filtering**: Search tournament teams by contained species, player name, tournament title, regulation format (Regulation M-A/M-B), recency, and standing placement.
+- **1-Click Import to Team Builder**: Import any 6-Pokémon tournament roster directly into active Team Builder slots.
+- **PokéPaste Integration**: Direct button to launch original Poképaste event sheets in browser.
+- **Teammate Synergy Analytics**: Surfaces co-occurrence partner recommendations based on tournament usage statistics.
+- **High-Reliability Sprite Rendering**: Pokemon Showdown CDN sprite resolution for all regional/special forms (Hisuian Arcanine, Floette Eternal, Urshifu forms, Mega forms).
+
 ---
 
 ## Upcoming Planned Features (Missing Backlog)
 
 ### 🛡️ Feature 1: Type Coverage & Vulnerability Matrix (Team Builder)
-- **Defensive Type Matrix**: Visual chart showing team-wide weaknesses, resistances, and immunities per attacking type (e.g., *“3 members weak to Ground, 0 immunities”*).
+- **Defensive Type Matrix**: Visual chart showing team-wide weaknesses, resistances, and immunities per attacking type (e.g., *“3 members weak to Ground, 1 immunity”*).
 - **Offensive STAB & Move Coverage**: Summary highlighting uncovered attacking types based on team movesets and primary types.
 
-### 🔄 Feature 3: Quick Slot Reordering & Swapping (Team Builder)
+### 🔄 Feature 2: Quick Slot Reordering & Swapping (Team Builder)
 - Reorder team slots (e.g. *"Move to Lead"*, *"Swap Slot 2 with Slot 5"*) via slot card action buttons without clearing slots.
 
-### 🔍 Feature 4: Move Autocomplete & Move Legality Service
-- Search/autocomplete move catalog service for 4-slot chips to verify move legality for chosen species and active form.
+### 🔍 Feature 3: Move Autocomplete & Move Legality Service
+- Search/autocomplete move catalog service for 4-slot chips to verify move legality for chosen species and active form against PokéAPI learnsets.
 
-### 📊 Feature 5: BST Range Slider Filter (Box Roster)
+### 📊 Feature 4: BST Range Slider Filter (Box Roster)
 - Min/max BST range slider in the Box toolbar to filter entries by base stat total threshold (e.g., BST 500–700).
 
-### 🏷️ Feature 6: Bulk Roster Actions (Box Roster)
-- Multi-select box entries to batch-tag, batch-delete, or assign to teams simultaneously.
-
-### 🏆 Feature 7: Meta & Tournament Team Explorer
-- **Tournament Team Sync**: Fetch and cache official tournament team sheets (Worlds, Internationals, Regionals) via Limitless VGC API and Smogon Stats into local SQLite store (`TournamentRecord` & `TournamentMemberRecord`).
-- **Meta & Placement Search**: Search winning tournament teams by contained Pokémon species, event name, or final standing (e.g. *1st Place / Top 8*).
-- **One-Click Import to Team Builder**: Import any 6-Pokémon tournament roster directly into your active Team Builder slots (with movesets, items, abilities, and forms).
-- **Teammate Synergy Recommendations**: Surface top meta partner recommendations when building slots in the Team Builder based on Smogon/MunchStats data.
+### 🏷️ Feature 5: Bulk Roster Actions (Box Roster)
+- Multi-select box entries to batch-tag, batch-favorite, batch-delete, or assign to teams simultaneously.
 

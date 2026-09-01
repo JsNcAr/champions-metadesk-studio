@@ -1,149 +1,97 @@
 # Pokemon Champions Planning Tool
 
-This repository currently contains a small Python CLI prototype for collecting Pokemon stats from PokéAPI and saving them into a local SQLite database through SQLModel, with CSV kept as a transitional export path. The long-term goal is a GUI tool for managing a Pokemon Champions box and teams.
+The **Pokemon Champions Planning Tool** is a feature-rich desktop and web planning application for competitive Pokémon VGC and Champions format players. Built with Python, Flet, SQLModel, and SQLite, it offers box roster management, team building, Poképaste/Showdown competitive imports, and live tournament meta analytics with automated background synchronization from external sources like Limitless VGC and Victory Road.
 
 ## Current State
 
-The codebase is intentionally small and early-stage.
+The project is fully functional as a modern **Flet Web/Desktop GUI** and interactive CLI shell.
 
-- Main entry point: [src/pokemon_champions_planning_tool/main.py](src/pokemon_champions_planning_tool/main.py)
-- Packaging: Poetry-based project in [pyproject.toml](pyproject.toml)
-- Python version: `>=3.13`
-- Runtime dependencies: `requests`, `pydantic`, `sqlmodel`
-- Primary local storage: `pokemon_champions.db` in the repository root
-- CSV export: `pokemon_team_stats.csv` in the repository root
-- GUI status: not implemented yet
-- Tests: Automated unit and repository integration tests cover name normalization and database operations.
+- **Main Entry Point**: [src/pokemon_champions_planning_tool/main.py](src/pokemon_champions_planning_tool/main.py)
+- **GUI Engine**: Flet (`>=0.80.0`) running on `ft.run()` with web support.
+- **Packaging & Environment**: Poetry-based project in [pyproject.toml](pyproject.toml) (Python `>=3.13`)
+- **Primary Database**: `pokemon_champions.db` (SQLite managed via SQLModel)
+- **Transitional Data Exports**: `pokemon_team_stats.csv` automatically synchronized with box state
+- **Test Suite**: Automated unit and integration test suite (**68 passing tests**)
 
-## What The Prototype Does
+## Key Features
 
-- Launches an interactive command shell for Pokemon box and team management.
-- Normalizes Pokemon names (e.g. regional variants and Mega forms) before querying PokéAPI.
-- Fetches official base stats, types, abilities, and sprites from PokéAPI.
-- Persists Pokemon records, box entries, and team structures locally in SQLite via SQLModel.
-- Synchronizes the box state to `pokemon_team_stats.csv` automatically when changes occur.
-- Exposes terminal commands to add, inspect, delete, note, tag, and favorite box entries.
-- Supports team creation, slot assignment (with item, moveset, and ability configuration), and team list/show commands.
+### 📦 1. Box Roster Management
+- **PokéAPI Integration**: Add species by name with automatic normalization for Mega forms and regional variants.
+- **Advanced Filtering**: Filter by 17 type pills, ★ Favorites, ⚡ Mega-Capable status, and custom tag chips.
+- **Details Drawer**: Inspect base stats, types, abilities, notes, and tags in an interactive panel.
+- **CSV Snapshot Export**: Export box data to CSV for external spreadsheet analysis.
 
-## Planned Product
+### ⚔️ 2. Team Builder & Competitive Spreads
+- **Multi-Team Squads**: Create, rename, switch, and delete competitive teams.
+- **Visual Roster Banner**: 6-slot preview rings with real-time stat progress bars and Mega indicator badges.
+- **Hero Slot Cards**: Auto-saving form/ability selectors, 4-slot move fields, and held item picker with Champions format legality guardrails.
+- **Stat Modifier Badges**: Automatic delta display (+50% Atk/SpA/SpD/Spe) when Choice items or Assault Vest are equipped.
+- **EV/IV Spread Editor**: Nature selector, level input, EV sliders/presets, and IV presets (e.g. 0 Speed TR, 0 Atk).
+- **Showdown & Poképaste Integration**: 1-click text export/import and direct publishing to Pokepast.es.
+- **Planned Pokémon (Ghost Entries)**: Store non-owned Pokémon templates (`is_planned=True`) without cluttering the Box roster.
 
-The target product is a GUI tool for:
+### 🏆 3. Tournament Explorer & Meta Analytics
+- **Live Tournament Sync**: Background thread automatically fetches official standings and team sheets from **Limitless VGC API** and **Victory Road**.
+- **Rate-Limit & Robust Retries**: Implements exponential backoff on HTTP 429 rate limits and 25s timeouts for heavy event pages.
+- **Search & Filtering**: Search tournament teams by contained species, player name, tournament title, regulation format, and placement.
+- **1-Click Roster Import**: Instantly copy any winning 6-Pokémon tournament team directly into your active Team Builder slots.
+- **Teammate Synergy Analytics**: Surfaces top co-occurring partner recommendations based on tournament usage data.
 
-- managing a Pokemon box
-- building and editing multiple teams
-- viewing stats, abilities, moves, typing, and coverage
-- sorting and filtering box entries
-- viewing and exporting data from the local SQLite-backed box
-- exporting data to CSV for external analysis
+---
 
-The product planning documents live in [docs/README.md](docs/README.md).
+## Running The Application
 
-## Running The GUI
+### Running The GUI
 
-To launch the Flet web/desktop GUI:
+To launch the Flet GUI in your web browser:
 
 ```bash
 PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main --web
 ```
 
-The GUI will open in your browser at `http://localhost:8550`.
+The app will open automatically at `http://localhost:8550`.
 
-### Troubleshooting: Stopping an Active Server / Port Conflict
+#### Stopping an Active Server / Port Conflict
 
-If the server is already running in another terminal window or process, you may see a port conflict or want to restart the application. To locate and stop the active process:
-
-1. **Find and kill the process using port 8550**:
-   ```bash
-   fuser -k 8550/tcp
-   ```
-
-2. **Or kill by process search**:
-   ```bash
-   pkill -f "pokemon_champions_planning_tool.main"
-   ```
-
-3. **Or inspect the Process ID (PID) first**:
-   ```bash
-   lsof -i :8550
-   # Then kill using the PID found:
-   kill -9 <PID>
-   ```
-
-## Running The CLI
+If port `8550` is already in use by a background process:
 
 ```bash
-poetry install
+# Kill process using port 8550:
+fuser -k 8550/tcp
+
+# Or kill by module name:
+pkill -f "pokemon_champions_planning_tool.main"
+```
+
+### Running The Interactive CLI
+
+```bash
 PYTHONPATH=src poetry run python -m pokemon_champions_planning_tool.main
 ```
 
-Example session:
-
-```text
-========================================================
-  Pokemon Champions Box & Team Terminal  
-========================================================
-Type 'help' to see commands, or 'exit' to close.
-
-pokemon> add Pikachu
-🔍 Querying PokéAPI endpoint for 'Pikachu'...
-✅ Success: Saved 'Pikachu' to SQLite and CSV.
-
-pokemon> box list
-Pokemon | Form | Types    | Total | Fav
---------+------+----------+-------+----
-Pikachu | Base | electric | 320   | no 
-
-pokemon> box favorite Pikachu on
-✅ Favorite status updated for 'Pikachu'.
-
-pokemon> team create "Electric Storm"
-✅ Created team 'Electric Storm'.
-
-pokemon> team add "Electric Storm" 1 Pikachu --item "Light Ball" --ability "Static" --notes "Lead sweeper"
-✅ Added 'Pikachu' to team 'Electric Storm' in slot 1.
-
-pokemon> team show "Electric Storm"
-Team: Electric Storm
-ID: d079234b-4860-4966-8968-3e4cb418df4f
-Description: None
-Slot | Pokemon | Item       | Ability | Moves | Total
------+---------+------------+---------+-------+------
-1    | Pikachu | Light Ball | Static  | -     | 320  
-Team totals: HP 35 | Atk 55 | Def 40 | SpA 50 | SpD 50 | Spe 90
-
-pokemon> exit
-Shutting down data pipeline...
-```
-
-## Running Tests
-
-To run the automated unit and integration tests:
+### Running Tests
 
 ```bash
 PYTHONPATH=src poetry run python -m unittest discover -s tests
 ```
 
+---
+
 ## Repository Layout
 
 ```text
-pokemon_champions.db          # Local SQLite Database
+pokemon_champions.db          # SQLite Database (Source of Truth)
 pokemon_team_stats.csv        # Transitional CSV Export
-pyproject.toml                # Poetry configuration
-README.md                     # Root project documentation
-docs/                         # Detailed design and vision documents
-src/                          # Main source directory
+pyproject.toml                # Poetry dependencies and configuration
+README.md                     # Main documentation
+docs/                         # Architecture, Data Model, Requirements, and Roadmap
+src/
     pokemon_champions_planning_tool/
-        main.py               # Application entry point
-        config.py             # Global configurations & constants
-        domain/               # Core business entities & domain logic
-        infrastructure/       # PokéAPI client, database schemas, and CSV operations
-        services/             # Orchestrating workflows and interactive shell CLI
-        ui/                   # UI placeholder for future GUI
-tests/                        # Automated unit & integration tests
+        main.py               # Main entry point (GUI / CLI selector)
+        config.py             # Global constants & environment settings
+        domain/               # Core entities & domain rules (Pokemon, Team, Identity)
+        infrastructure/       # Database models, repositories, PokéAPI, Limitless & Victory Road providers
+        services/             # Business orchestrators (Import, Tournament, Item Catalog, Showdown)
+        ui/                   # Flet GUI views and components (app.py)
+tests/                        # Automated unit & integration test suite
 ```
-
-## Notes
-
-- The interactive CLI serves as a fully functional domain, service, and persistence prototype.
-- The package structure under `src/pokemon_champions_planning_tool/` implements a clean 3-layer architecture (UI, Domain, Infrastructure) to support the eventual GUI transition.
-- SQLite is the source of truth for all stored box and team data, while CSV remains a derived export-friendly snapshot.

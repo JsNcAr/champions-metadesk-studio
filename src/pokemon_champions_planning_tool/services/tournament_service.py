@@ -153,6 +153,8 @@ class TournamentService:
         species_filter: str | None = None,
         game_platform_filter: str | None = None,
         max_age_days: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[TournamentTeamRecord]:
         return self.repo.search_teams(
             query=query,
@@ -161,6 +163,8 @@ class TournamentService:
             species_filter=species_filter,
             game_platform_filter=game_platform_filter,
             max_age_days=max_age_days,
+            limit=limit,
+            offset=offset,
         )
 
     def get_top_partners(
@@ -174,3 +178,20 @@ class TournamentService:
             limit=limit,
             regulation_filter=regulation_filter,
         )
+
+    def sync(
+        self,
+        force: bool = False,
+        max_age_days: int = 365,
+        include_official: bool = True,
+    ) -> dict[str, Any]:
+        """Syncs live tournament data from Limitless and Victory Road into local SQLite DB."""
+        from .tournament_sync_service import sync_tournaments
+
+        return sync_tournaments(
+            self.session,
+            force=force,
+            max_age_days=max_age_days,
+            include_official=include_official,
+        )
+

@@ -347,6 +347,7 @@ class TournamentRecord(SQLModel, table=True):
     organizer: str = Field(default="Official VGC")
     location: str = Field(default="Honolulu, HI")
     total_players: int = Field(default=0)
+    source_url: str | None = None
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
@@ -364,7 +365,9 @@ class TournamentTeamRecord(SQLModel, table=True):
     pokepast_url: str | None = None
     showdown_text: str = Field(sa_column=Column(Text, nullable=False))
     source_dataset: str = Field(default="seed_v1", index=True)
+    sync_source: str = Field(default="seed", index=True)
     created_at: datetime = Field(default_factory=_utc_now)
+
 
 
 class TournamentTeamMemberRecord(SQLModel, table=True):

@@ -217,3 +217,46 @@ class HybridItemProvider:
     def clear_cache(self) -> None:
         """Evicts all Showdown in-memory caches for manual refresh."""
         self._showdown.clear_cache()
+
+
+from .pokepast_provider import PokepastProvider, PokepastNetworkError
+from .limitless_provider import (
+    LimitlessProvider,
+    LimitlessNetworkError,
+    LimitlessParseError,
+    LimitlessStanding,
+    LimitlessTeamMember,
+    LimitlessTournament,
+)
+from .vrpaste_provider import VRPasteProvider, VRPasteNetworkError, VRPasteResult, VRPasteTeamMember
+from .victory_road_provider import (
+    VictoryRoadProvider,
+    VictoryRoadNetworkError,
+    VictoryRoadParseError,
+    VREventResult,
+    VRStandingRef,
+)
+
+__all__ = [
+    "HybridItemProvider",
+    "PokepastProvider",
+    "PokepastNetworkError",
+    "LimitlessProvider",
+    "LimitlessNetworkError",
+    "LimitlessParseError",
+    "LimitlessStanding",
+    "LimitlessTeamMember",
+    "LimitlessTournament",
+    "VRPasteProvider",
+    "VRPasteNetworkError",
+    "VRPasteResult",
+    "VRPasteTeamMember",
+    "VictoryRoadProvider",
+    "VictoryRoadNetworkError",
+    "VictoryRoadParseError",
+    "VREventResult",
+    "VRStandingRef",
+]
+
+
+

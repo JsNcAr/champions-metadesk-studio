@@ -691,6 +691,8 @@ class TournamentRepository:
         species_filter: str | None = None,
         game_platform_filter: str | None = None,
         max_age_days: int | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[TournamentTeamRecord]:
         stmt = select(TournamentTeamRecord)
         joined_tournaments = False
@@ -747,6 +749,11 @@ class TournamentRepository:
             stmt = stmt.where(TournamentTeamRecord.tournament_team_id.in_(subq_spec))
 
         stmt = stmt.order_by(TournamentTeamRecord.placement.asc())
+        if offset > 0:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
         return list(self.session.exec(stmt).all())
 
     def is_seeded(self, seed_version: str) -> bool:

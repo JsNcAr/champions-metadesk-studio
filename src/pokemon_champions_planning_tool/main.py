@@ -20,7 +20,7 @@ def run():
         from .ui.app import main as gui_main
 
         view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
-        ft.app(target=gui_main, view=view_mode, port=8550)
+        ft.run(gui_main, view=view_mode, port=8550)
 
 
 if __name__ == "__main__":

@@ -51,12 +51,22 @@ class ColorsBypass(metaclass=MetaColors):
 
 ft.Colors = ColorsBypass
 
+_global_sync_lock = threading.Lock()
+_global_sync_done = False
+
 from ..config import APP_NAME
 from ..domain.entities.box_entry import BoxEntry
 from ..domain.entities.team import Team
 from ..domain.entities.team_member import TeamMember
 from ..domain.entities.pokemon_move import PokemonMove
+from sqlmodel import select
 from ..infrastructure.database.database import get_session
+from ..infrastructure.database.models import (
+    TournamentRecord,
+    TournamentTeamRecord,
+    TournamentTeamMemberRecord,
+    PokemonRecord,
+)
 from ..infrastructure.database.repositories import (
     BoxRepository,
     TeamRepository,
@@ -2786,7 +2796,10 @@ def main(page: ft.Page):
         value="All",
         options=[
             ft.dropdown.Option("All", text="All Formats"),
+            ft.dropdown.Option("Regulation M-A", text="Regulation M-A"),
+            ft.dropdown.Option("Regulation M-B", text="Regulation M-B"),
             ft.dropdown.Option("Regulation H", text="Regulation H"),
+            ft.dropdown.Option("Regulation F", text="Regulation F"),
             ft.dropdown.Option("Regulation G", text="Regulation G"),
             ft.dropdown.Option("Champions Season 1", text="Champions Season 1"),
         ],
@@ -2814,7 +2827,7 @@ def main(page: ft.Page):
     _tourney_grid = ft.GridView(
         expand=True,
         max_extent=520,
-        child_aspect_ratio=1.35,
+        child_aspect_ratio=1.22,
         spacing=14,
         run_spacing=14,
     )
@@ -2833,9 +2846,16 @@ def main(page: ft.Page):
             pokemon_repo = PokemonRepository(session)
             champions_repo = ChampionsCatalogRepository(session)
 
-            champions_legal_set = set(champions_repo.list_species_names())
-            if not champions_legal_set:
-                champions_legal_set = {p.species_name for p in pokemon_repo.list_all()}
+            raw_species_names = champions_repo.list_species_names()
+            if not raw_species_names:
+                raw_species_names = [p.species_name for p in pokemon_repo.list_all()]
+
+            # Pre-compute legal lookup set for O(1) checking
+            champions_legal_set = set()
+            for s in raw_species_names:
+                s_low = s.lower().strip()
+                champions_legal_set.add(s_low)
+                champions_legal_set.add(s_low.split("-")[0])
 
             q = _tourney_search_tf.value
             reg = _tourney_format_drop.value
@@ -2850,6 +2870,7 @@ def main(page: ft.Page):
                 except ValueError:
                     pass
 
+            # Fetch top 60 matched teams to keep UI smooth and prevent crashes
             teams = tourney_svc.search_teams(
                 query=q,
                 regulation_filter=reg,
@@ -2857,6 +2878,7 @@ def main(page: ft.Page):
                 species_filter=q,
                 game_platform_filter=game_plat,
                 max_age_days=max_days,
+                limit=60,
             )
 
             if not teams:
@@ -2877,8 +2899,37 @@ def main(page: ft.Page):
                 page.update()
                 return
 
+            # Batch pre-fetch all tournaments, members, and sprites in 3 fast SQL queries
+            team_ids = [t.tournament_team_id for t in teams]
+            tourney_ids = list({t.tournament_id for t in teams})
+
+            # 1. Fetch tournaments dict
+            tourneys = session.exec(
+                select(TournamentRecord).where(TournamentRecord.tournament_id.in_(tourney_ids))
+            ).all()
+            tourney_dict = {t.tournament_id: t for t in tourneys}
+
+            # 2. Fetch all members for these teams
+            all_members = session.exec(
+                select(TournamentTeamMemberRecord).where(TournamentTeamMemberRecord.tournament_team_id.in_(team_ids))
+            ).all()
+            members_by_team: dict[UUID, list[TournamentTeamMemberRecord]] = {}
+            for m in all_members:
+                members_by_team.setdefault(m.tournament_team_id, []).append(m)
+
+            # Sort members by slot_position
+            for tid in members_by_team:
+                members_by_team[tid].sort(key=lambda x: x.slot_position)
+
+            # 3. Fetch all sprites
+            all_canon_ids = list({m.canonical_id for m in all_members if m.canonical_id})
+            pokemons = session.exec(
+                select(PokemonRecord).where(PokemonRecord.canonical_id.in_(all_canon_ids))
+            ).all()
+            sprite_dict = {p.canonical_id: p.sprite_url for p in pokemons if p.sprite_url}
+
             for team in teams:
-                tourney_rec = tourney_svc.repo.get_tournament(team.tournament_id)
+                tourney_rec = tourney_dict.get(team.tournament_id)
                 tourney_name = tourney_rec.name if tourney_rec else team.tournament_id
                 tourney_reg = tourney_rec.format_regulation if tourney_rec else "VGC"
 
@@ -2900,36 +2951,25 @@ def main(page: ft.Page):
                     badge_icon = "🏆"
 
                 # Members sprite row & legality check
-                members = tourney_svc.get_team_members(team.tournament_team_id)
+                members = members_by_team.get(team.tournament_team_id, [])
                 member_controls = []
                 has_illegal_species = False
 
                 for m in members:
                     sname = m.species_name.lower().strip()
                     ckey = m.canonical_id.lower().strip()
-                    is_leg = any(
-                        sname == c.lower() or ckey == c.lower() or
-                        ckey.startswith(c.lower().split("-")[0]) or
-                        c.lower().startswith(ckey.split("-")[0])
-                        for c in champions_legal_set
+                    # O(1) set lookup
+                    is_leg = (
+                        sname in champions_legal_set
+                        or ckey in champions_legal_set
+                        or ckey.split("-")[0] in champions_legal_set
                     )
                     if not is_leg:
                         has_illegal_species = True
 
-                    pok_rec = pokemon_repo.get(m.canonical_id)
-                    sprite_url = pok_rec.sprite_url if pok_rec else None
+                    sprite_url = sprite_dict.get(m.canonical_id) or f"https://img.pokemondb.net/sprites/home/normal/{m.canonical_id}.png"
 
-                    if sprite_url:
-                        img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
-                    else:
-                        img_ctrl = ft.Container(
-                            content=ft.Text(m.species_name[:3].upper(), size=10, weight=ft.FontWeight.BOLD),
-                            bgcolor="#1e293b",
-                            border_radius=19,
-                            width=38,
-                            height=38,
-                            alignment=ft.Alignment.CENTER,
-                        )
+                    img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
 
                     border_color = ft.Colors.RED_700 if not is_leg else ft.Colors.DIVIDER
                     member_controls.append(
@@ -2966,9 +3006,12 @@ def main(page: ft.Page):
                             # Header Row: Placement & Player Info
                             ft.Row(
                                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                vertical_alignment=ft.CrossAxisAlignment.START,
+                                spacing=8,
                                 controls=[
                                     ft.Row(
                                         spacing=8,
+                                        expand=True,
                                         controls=[
                                             ft.Container(
                                                 content=ft.Text(
@@ -2983,9 +3026,23 @@ def main(page: ft.Page):
                                             ),
                                             ft.Column(
                                                 spacing=1,
+                                                expand=True,
                                                 controls=[
-                                                    ft.Text(team.player_name, size=13, weight=ft.FontWeight.BOLD),
-                                                    ft.Text(tourney_name, size=10, color=ft.Colors.GREY_400),
+                                                    ft.Text(
+                                                        team.player_name,
+                                                        size=13,
+                                                        weight=ft.FontWeight.BOLD,
+                                                        max_lines=1,
+                                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                                    ),
+                                                    ft.Text(
+                                                        tourney_name,
+                                                        size=10,
+                                                        color=ft.Colors.GREY_400,
+                                                        max_lines=1,
+                                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                                        tooltip=tourney_name,
+                                                    ),
                                                 ],
                                             ),
                                         ],
@@ -3095,10 +3152,12 @@ def main(page: ft.Page):
     # Spinner refs used by Settings modal rows
     _spinner_megas = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
     _spinner_items = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
+    _spinner_tourneys = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
 
     # Status text refs updated after each sync
     _status_megas = ft.Text("", size=11, color=ft.Colors.GREY_400)
     _status_items = ft.Text("", size=11, color=ft.Colors.GREY_400)
+    _status_tourneys = ft.Text("", size=11, color=ft.Colors.GREY_400)
 
     def _count_text(label: str, count: int, unit: str) -> str:
         return f"{count:,} {unit}" if count > 0 else "Not yet synced"
@@ -3107,10 +3166,13 @@ def main(page: ft.Page):
         with get_session() as session:
             mega_repo = MegaEvolutionRepository(session)
             item_repo = ItemRepository(session)
+            tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
             mega_count = len(mega_repo.list_all())
             item_count = item_repo.count()
+            tourney_count = len(tourney_svc.list_tournaments())
         _status_megas.value = _count_text("Megas", mega_count, "forms cached")
         _status_items.value = _count_text("Items", item_count, "items catalogued")
+        _status_tourneys.value = _count_text("Tournaments", tourney_count, "events synced")
         page.update()
 
     def _handle_sync_megas(e=None):
@@ -3149,6 +3211,27 @@ def main(page: ft.Page):
                 _status_items.value = "Sync failed"
             finally:
                 _spinner_items.visible = False
+                page.update()
+        threading.Thread(target=_bg, daemon=True).start()
+
+    def _handle_sync_tourneys(e=None):
+        _spinner_tourneys.visible = True
+        _status_tourneys.value = "Syncing…"
+        page.update()
+        def _bg():
+            try:
+                with get_session() as session:
+                    tourney_svc = TournamentService(session, seed_file_path=SEED_FILE_PATH)
+                    res = tourney_svc.sync(force=True, max_age_days=365, include_official=True)
+                    count = len(tourney_svc.list_tournaments())
+                _status_tourneys.value = f"{count:,} events synced"
+                show_toast("✅ Tournament datasets synced from Limitless & Victory Road!")
+                _render_tourney_explorer()
+            except Exception as ex:
+                show_toast(f"Tournament sync error: {ex}", is_error=True)
+                _status_tourneys.value = "Sync failed"
+            finally:
+                _spinner_tourneys.visible = False
                 page.update()
         threading.Thread(target=_bg, daemon=True).start()
 
@@ -3197,7 +3280,7 @@ def main(page: ft.Page):
                 tight=True,
                 controls=[
                     ft.Text(
-                        "Manage the local SQLite catalog. Sync pulls the latest data from PokéAPI & Pokémon Showdown.",
+                        "Manage the local SQLite catalog. Sync pulls the latest data from PokéAPI, Showdown, Limitless & Victory Road.",
                         size=12, color=ft.Colors.GREY_400
                     ),
                     ft.Divider(height=1, color=ft.Colors.DIVIDER),
@@ -3208,6 +3291,10 @@ def main(page: ft.Page):
                     _make_settings_row(
                         ft.Icons.DIAMOND, "Held Items Catalog",
                         _status_items, _spinner_items, _handle_sync_items
+                    ),
+                    _make_settings_row(
+                        ft.Icons.EMOJI_EVENTS, "Live Tournaments Meta",
+                        _status_tourneys, _spinner_tourneys, _handle_sync_tourneys
                     ),
                 ]
             )
@@ -3555,6 +3642,25 @@ def main(page: ft.Page):
     refresh_box()
     refresh_teams()
 
+    # --- Background Sync of Live Tournament Meta (Guarded to 1 run per process) ---
+    def _startup_tourney_sync():
+        global _global_sync_done
+        with _global_sync_lock:
+            if _global_sync_done:
+                return
+            _global_sync_done = True
+
+        try:
+            with get_session() as sync_sess:
+                t_svc = TournamentService(sync_sess, seed_file_path=SEED_FILE_PATH)
+                res = t_svc.sync(force=False, max_age_days=365, include_official=True)
+                print(f"✅ Startup tournament sync completed: {res}")
+        except Exception as exc:
+            print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
+
+    threading.Thread(target=_startup_tourney_sync, daemon=True).start()
+
+
 
 if __name__ == "__main__":
-    ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550)
+    ft.run(main, view=ft.AppView.WEB_BROWSER, port=8550)

@@ -26,13 +26,12 @@ Real API shape (verified 2026-08-31):
 
 from __future__ import annotations
 
-import json
 import time
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import requests
 
 from ...config import (
     LIMITLESS_API_BASE_URL,
@@ -105,7 +104,7 @@ def _safe_int(val: Any, default: int = 0) -> int:
 
 
 class LimitlessProvider:
-    """Thin urllib-based client for play.limitlesstcg.com/api."""
+    """Thin requests-based client for play.limitlesstcg.com/api."""
 
     def __init__(
         self,
@@ -120,31 +119,23 @@ class LimitlessProvider:
     def _get(self, endpoint: str, params: dict[str, Any] | None = None, retries: int = 3) -> Any:
         """Executes HTTP GET and returns parsed JSON response with HTTP 429 retry backoff."""
         url = f"{self.base_url}{endpoint}"
-        if params:
-            query = urllib.parse.urlencode(params)
-            url = f"{url}?{query}"
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
 
         for attempt in range(1, retries + 1):
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": self.user_agent,
-                    "Accept": "application/json",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
-            )
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    raw = resp.read().decode("utf-8")
-                    return json.loads(raw)
-            except urllib.error.HTTPError as exc:
-                if exc.code == 429 and attempt < retries:
-                    retry_after = exc.headers.get("Retry-After")
+                resp = requests.get(url, params=params, headers=headers, timeout=self.timeout)
+                if resp.status_code == 429 and attempt < retries:
+                    retry_after = resp.headers.get("Retry-After")
                     delay = float(retry_after) if (retry_after and retry_after.isdigit()) else (attempt * 2.0)
                     print(f"⚠️ Limitless API rate-limited (HTTP 429). Retrying attempt {attempt}/{retries} in {delay:.1f}s...")
                     time.sleep(delay)
                     continue
-                raise LimitlessNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc
+                resp.raise_for_status()
+                return resp.json()
             except Exception as exc:
                 if attempt < retries:
                     time.sleep(attempt * 1.5)

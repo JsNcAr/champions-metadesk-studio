@@ -1,8 +1,25 @@
 """Unit tests for Limitless, Victory Road, and VRPaste HTTP providers."""
 
-import json
 import unittest
 from unittest.mock import MagicMock, patch
+
+
+def _json_response(payload, status_code: int = 200) -> MagicMock:
+    """Builds a stub `requests.Response` returning *payload* from `.json()`."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = payload
+    resp.raise_for_status.return_value = None
+    return resp
+
+
+def _html_response(html: str, status_code: int = 200) -> MagicMock:
+    """Builds a stub `requests.Response` carrying raw HTML bytes."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.content = html.encode("utf-8")
+    resp.raise_for_status.return_value = None
+    return resp
 
 from pokemon_champions_planning_tool.infrastructure.providers import (
     LimitlessProvider,
@@ -26,15 +43,15 @@ class TestTournamentProviders(unittest.TestCase):
             }
         ]
 
-        def _mock_urlopen(req, timeout=None):
-            resp = MagicMock()
-            if "page=1" in req.full_url:
-                resp.read.return_value = json.dumps(mock_payload).encode("utf-8")
-            else:
-                resp.read.return_value = json.dumps([]).encode("utf-8")
-            return MagicMock(__enter__=MagicMock(return_value=resp))
+        def _mock_get(url, params=None, headers=None, timeout=None):
+            page = (params or {}).get("page")
+            return _json_response(mock_payload if page == 1 else [])
 
-        with patch("urllib.request.urlopen", side_effect=_mock_urlopen):
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".limitless_provider.requests.get",
+            side_effect=_mock_get,
+        ):
             provider = LimitlessProvider()
             tournaments = provider.fetch_champions_tournaments(max_age_days=365)
 
@@ -68,11 +85,11 @@ class TestTournamentProviders(unittest.TestCase):
             }
         ]
 
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_payload).encode("utf-8")
-            mock_urlopen.return_value.__enter__.return_value = mock_response
-
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".limitless_provider.requests.get",
+            return_value=_json_response(mock_payload),
+        ):
             provider = LimitlessProvider()
             standings = provider.fetch_standings("12345")
 
@@ -101,11 +118,11 @@ class TestTournamentProviders(unittest.TestCase):
             ],
         }
 
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = json.dumps(mock_payload).encode("utf-8")
-            mock_urlopen.return_value.__enter__.return_value = mock_response
-
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".vrpaste_provider.requests.get",
+            return_value=_json_response(mock_payload),
+        ):
             provider = VRPasteProvider()
             result = provider.fetch_by_id("abc12345")
 
@@ -132,11 +149,11 @@ class TestTournamentProviders(unittest.TestCase):
         </html>
         """
 
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = mock_html.encode("utf-8")
-            mock_urlopen.return_value.__enter__.return_value = mock_response
-
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".victory_road_provider.requests.get",
+            return_value=_html_response(mock_html),
+        ):
             provider = VictoryRoadProvider()
             event_meta = {
                 "slug": "2026-laic",

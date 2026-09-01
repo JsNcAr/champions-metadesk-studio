@@ -355,7 +355,11 @@ class TestPokepastProviderExtractId(unittest.TestCase):
 class TestPokepastProviderNetwork(unittest.TestCase):
     def test_publish_network_error_raises(self):
         provider = PokepastProvider()
-        with patch("urllib.request.urlopen", side_effect=Exception("timeout")):
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".pokepast_provider.requests.post",
+            side_effect=Exception("timeout"),
+        ):
             with self.assertRaises(PokepastNetworkError):
                 provider.publish(
                     title="Test",
@@ -364,7 +368,11 @@ class TestPokepastProviderNetwork(unittest.TestCase):
 
     def test_fetch_network_error_raises(self):
         provider = PokepastProvider()
-        with patch("urllib.request.urlopen", side_effect=Exception("connection refused")):
+        with patch(
+            "pokemon_champions_planning_tool.infrastructure.providers"
+            ".pokepast_provider.requests.get",
+            side_effect=Exception("connection refused"),
+        ):
             with self.assertRaises(PokepastNetworkError):
                 provider.fetch_by_id("abc123")
 

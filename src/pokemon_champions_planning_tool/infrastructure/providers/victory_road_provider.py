@@ -16,10 +16,12 @@ HTML structure verified 2026-08-31:
 from __future__ import annotations
 
 import re
-import urllib.request
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+import requests
 
 from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
@@ -145,14 +147,13 @@ class VictoryRoadProvider:
         retries = 2
 
         for attempt in range(1, retries + 1):
-            req = urllib.request.Request(url, headers=headers)
             try:
-                with urllib.request.urlopen(req, timeout=fetch_timeout) as resp:
-                    return resp.read().decode("utf-8", errors="ignore")
+                resp = requests.get(url, headers=headers, timeout=fetch_timeout)
+                resp.raise_for_status()
+                return resp.content.decode("utf-8", errors="ignore")
             except Exception as exc:
                 if attempt < retries:
                     print(f"⚠️ Victory Road fetch attempt {attempt} failed ({exc}). Retrying in 2.0s...")
-                    import time
                     time.sleep(2.0)
                     continue
                 raise VictoryRoadNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc

@@ -10,11 +10,10 @@ free of network concerns and easy to test with mocks.
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.parse
-import urllib.request
 from typing import Optional
+
+import requests
 
 
 _BASE_URL = "https://pokepast.es"
@@ -31,7 +30,7 @@ class PokepastProvider:
     """Thin HTTP wrapper around the Pokepast.es public API.
 
     Methods raise :exc:`PokepastNetworkError` on any network or HTTP failure so
-    callers can handle them uniformly without catching low-level urllib errors.
+    callers can handle them uniformly without catching low-level HTTP errors.
     """
 
     # ------------------------------------------------------------------
@@ -60,28 +59,29 @@ class PokepastProvider:
         Raises:
             PokepastNetworkError: On any network failure or unexpected HTTP status.
         """
-        payload = urllib.parse.urlencode({
+        payload = {
             "title": title,
             "author": author,
             "notes": notes,
             "paste": paste_text,
-        }).encode("utf-8")
+        }
 
-        req = urllib.request.Request(
-            f"{_BASE_URL}/create",
-            data=payload,
-            headers={"User-Agent": _USER_AGENT},
-        )
         try:
-            with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:
-                # The endpoint issues a 302 redirect; urlopen follows it and
-                # the final URL is the generated paste page.
-                final_url = resp.geturl()
-                if not final_url or "pokepast.es" not in final_url:
-                    raise PokepastNetworkError(
-                        f"Unexpected redirect target: {final_url!r}"
-                    )
-                return final_url
+            resp = requests.post(
+                f"{_BASE_URL}/create",
+                data=payload,
+                headers={"User-Agent": _USER_AGENT},
+                timeout=_TIMEOUT_SECONDS,
+            )
+            resp.raise_for_status()
+            # The endpoint issues a 302 redirect; requests follows it and
+            # the final URL is the generated paste page.
+            final_url = resp.url
+            if not final_url or "pokepast.es" not in final_url:
+                raise PokepastNetworkError(
+                    f"Unexpected redirect target: {final_url!r}"
+                )
+            return final_url
         except PokepastNetworkError:
             raise
         except Exception as exc:
@@ -100,11 +100,14 @@ class PokepastProvider:
             PokepastNetworkError: On any network failure or unexpected HTTP status.
         """
         url = f"{_BASE_URL}/{paste_id}/json"
-        req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
         try:
-            with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw)
+            resp = requests.get(
+                url,
+                headers={"User-Agent": _USER_AGENT},
+                timeout=_TIMEOUT_SECONDS,
+            )
+            resp.raise_for_status()
+            return resp.json()
         except Exception as exc:
             raise PokepastNetworkError(
                 f"Failed to fetch paste '{paste_id}': {exc}"

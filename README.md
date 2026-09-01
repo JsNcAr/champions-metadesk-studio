@@ -7,7 +7,7 @@ The **Pokemon Champions Planning Tool** is a feature-rich desktop and web planni
 The project is fully functional as a modern **Flet Web/Desktop GUI** and interactive CLI shell.
 
 - **Main Entry Point**: [src/pokemon_champions_planning_tool/main.py](src/pokemon_champions_planning_tool/main.py)
-- **GUI Engine**: Flet (`>=0.80.0`) running on `ft.run()` with web support.
+- **GUI Engine**: Flet (`>=0.85.3,<0.86.0`) running on `ft.run()` with web support.
 - **Packaging & Environment**: Poetry-based project in [pyproject.toml](pyproject.toml) (Python `>=3.13`)
 - **Primary Database**: `pokemon_champions.db` (SQLite managed via SQLModel)
 - **Transitional Data Exports**: `pokemon_team_stats.csv` automatically synchronized with box state
@@ -41,6 +41,14 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 
 ## Running The Application
 
+The entry point selects its interface from the command-line flag:
+
+| Command | Interface |
+| --- | --- |
+| `poetry run python -m pokemon_champions_planning_tool.main` | Flet desktop app (default) |
+| `poetry run python -m pokemon_champions_planning_tool.main --web` | Flet GUI in the web browser |
+| `poetry run python -m pokemon_champions_planning_tool.main --cli` | Interactive terminal shell |
+
 ### Running The GUI
 
 To launch the Flet GUI in your web browser:
@@ -50,6 +58,8 @@ poetry run python -m pokemon_champions_planning_tool.main --web
 ```
 
 The app will open automatically at `http://localhost:8550`.
+
+Without a flag, the same GUI opens as a native desktop window instead.
 
 #### Stopping an Active Server / Port Conflict
 
@@ -65,8 +75,10 @@ pkill -f "pokemon_champions_planning_tool.main"
 
 ### Running The Interactive CLI
 
+The terminal shell requires the `--cli` flag; without it the GUI launches instead.
+
 ```bash
-poetry run python -m pokemon_champions_planning_tool.main
+poetry run python -m pokemon_champions_planning_tool.main --cli
 ```
 
 ### Running Tests

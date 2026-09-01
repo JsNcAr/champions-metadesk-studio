@@ -35,11 +35,16 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
 ```
 
 ### 1. UI Layer (`src/pokemon_champions_planning_tool/ui/`)
-- Built using **Flet (`>=0.80.0`)** running on `ft.run()`.
+- Built using **Flet (`>=0.85.3,<0.86.0`)** running on `ft.run()`.
 - Implements a reactive single-page interface with 3 main view tabs:
   1. **Box Roster**: Grid view, type pills, favorites, details drawer, CSV export.
   2. **Team Builder**: 6-slot preview banner, hero slot cards, held item modal, EV/IV spread modal, Poképaste import/export.
   3. **Tournament Explorer**: Standings grid, regulation filters, roster search, 1-click import, partner synergy analytics.
+- **Colour palette**: `ui/theme.py` defines a `Colors` class of explicit colour strings
+  (a Tailwind-style dark slate palette plus semantic surface tokens such as `CARD_BG`,
+  `PANEL_BG`, and `DIVIDER` that Material does not provide). The UI imports this palette
+  directly and does **not** patch or read `ft.Colors` — an undefined token must raise
+  `AttributeError` at the call site rather than resolve to an unrenderable colour name.
 
 ### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
 - Pure Python domain rules independent of UI widgets or HTTP APIs.
@@ -47,10 +52,12 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
 
 ### 3. Infrastructure & Provider Layer (`src/pokemon_champions_planning_tool/infrastructure/`)
 - **Persistence**: SQLite database (`pokemon_champions.db`) managed via SQLModel repository abstractions.
+- **HTTP**: every outbound call uses the `requests` library; each provider translates
+  transport failures into its own domain exception type.
 - **External Providers**:
   - `PokeAPIAdapter`: Fetches official species stats, types, abilities, and sprites.
   - `LimitlessProvider`: Fetches tournament listings and standings from `play.limitlesstcg.com/api` with exponential backoff on HTTP 429 errors.
-  - `VictoryRoadProvider`: Scrapes event team sheets from `victoryroad.pro` with custom headers and 25s HTTP timeouts.
+  - `VictoryRoadProvider`: Scrapes event team sheets from `victoryroad.pro` using stdlib `re` patterns, custom headers, and 25s HTTP timeouts.
 - **Background Auto-Sync**: A module-level thread-safe singleton lock (`_global_sync_lock` in `app.py`) triggers a single background sync pass on startup without blocking UI initialization.
 
 ### Domain Layer
@@ -75,7 +82,7 @@ This layer is responsible for talking to external systems and reading or writing
 - CSV export generation
 - PokéAPI client
 
-## Suggested Python Project Structure
+## Python Project Structure
 
 ```text
 src/pokemon_champions_planning_tool/
@@ -100,7 +107,10 @@ src/pokemon_champions_planning_tool/
 - `services/` coordinates workflows such as adding a Pokemon or building a team.
 - `infrastructure/` contains API clients, persistence, and CSV export helpers.
 
-The repository is fully implemented using these package layers, allowing the interactive CLI (contained in `services/terminal_shell.py`) to serve as the temporary UI layer, while leaving `ui/` open for the future desktop/web GUI without requiring any database or domain changes.
+The repository is fully implemented using these package layers. The Flet GUI in `ui/app.py`
+is the primary interface; the interactive terminal shell in `services/terminal_shell.py`
+remains as a secondary, still-supported entry point behind the `--cli` flag. Both drive the
+same services and repositories, so neither requires database or domain changes.
 
 ## Recommended Boundaries
 
@@ -131,7 +141,7 @@ The repository is fully implemented using these package layers, allowing the int
 
 ## Practical Implementation Notes
 
-- The CLI prototype uses `requests`, SQLModel, SQLite, and CSV export.
+- The application uses `requests`, SQLModel, SQLite, Flet, and CSV export.
 - The service layer (`pokemon_import_service.py`, `terminal_shell.py`) orchestrates business flows and persistence transitions.
 - SQLite is the source of truth for stored box and team data, while the CSV is kept in sync as a derived export file.
 

@@ -6,9 +6,9 @@ Used by Victory Road Pro for 2026+ major events (e.g. NAIC 2026, EUIC 2026).
 
 from __future__ import annotations
 
-import json
-import urllib.request
 from dataclasses import dataclass, field
+
+import requests
 
 from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
@@ -59,17 +59,14 @@ class VRPasteProvider:
     def fetch_by_id(self, paste_id: str) -> VRPasteResult:
         """GET /api/paste/{paste_id} and return parsed VRPasteResult DTO."""
         url = f"{self.base_url}/{paste_id}"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": self.user_agent,
-                "Accept": "application/json",
-            },
-        )
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "application/json",
+        }
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                raw = resp.read().decode("utf-8")
-                data = json.loads(raw)
+            resp = requests.get(url, headers=headers, timeout=self.timeout)
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as exc:
             raise VRPasteNetworkError(f"Failed to fetch VRPaste '{paste_id}': {exc}") from exc
 

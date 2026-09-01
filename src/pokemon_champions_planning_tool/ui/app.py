@@ -5,51 +5,7 @@ from typing import Any
 import flet as ft
 from uuid import UUID
 
-class MetaColors(type):
-    def __getattr__(cls, name: str) -> str:
-        return name.lower()
-
-# Bypass Flet's buggy deprecation wrapper on colors
-class ColorsBypass(metaclass=MetaColors):
-    WHITE = "white"
-    BLACK = "black"
-    RED_ACCENT = "redaccent"
-    GREEN_ACCENT_700 = "#16a34a"
-    GREY_400 = "#9ca3af"
-    YELLOW = "#fbbf24"
-    GREY_600 = "#6b7280"
-    AMBER_400 = "#fbbf24"
-    AMBER_700 = "#d97706"
-    AMBER_100 = "#fef3c7"
-    CYAN_400 = "#22d3ee"
-    RED_200 = "#fecaca"
-    RED_900 = "#7f1d1d"
-    # Surfaces
-    BG_BASE = "#0f172a"         # page background
-    CARD_BG = "#1e293b"         # default card surface
-    CARD_SELECTED = "#1e3a5f"   # selected card highlight (blue tinted)
-    PANEL_BG = "#111827"        # right panel / drawer
-    TOOLBAR_BG = "#1e293b"      # filter toolbar bar
-    HEADER_BG = "#0f172a"
-    BLUE_GREY_900 = "#1e293b"
-    BLUE_GREY_950 = "#111827"
-    SURFACE_VARIANT = "#1e293b"
-    DIVIDER = "#334155"
-    # Text
-    GREY_500 = "#6b7280"
-    GREY_300 = "#d1d5db"
-    # Semantic
-    RED_400 = "#f87171"
-    RED_700 = "#b91c1c"
-    ORANGE_400 = "#fb923c"
-    YELLOW_400 = "#facc15"
-    BLUE_400 = "#60a5fa"
-    BLUE_300 = "#93c5fd"
-    GREEN_400 = "#4ade80"
-    PINK_400 = "#f472b6"
-    GREY_800 = "#374151"
-
-ft.Colors = ColorsBypass
+from .theme import Colors
 
 _global_sync_lock = threading.Lock()
 _global_sync_done = False
@@ -132,7 +88,6 @@ STAT_COLORS = {
 
 
 # Design constants
-_C = ft.Colors  # alias
 
 def _get_obj_attr(obj: Any, attr_name: str, default: str = "") -> str:
     """Safely retrieve attribute from Pydantic model, dictionary, or primitive string."""
@@ -150,7 +105,7 @@ def _get_obj_attr(obj: Any, attr_name: str, default: str = "") -> str:
 def main(page: ft.Page):
     page.title = APP_NAME
     page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor = ft.Colors.BG_BASE
+    page.bgcolor = Colors.BG_BASE
     page.padding = ft.Padding.symmetric(horizontal=20, vertical=16)
     page.window_width = 1280
     page.window_height = 800
@@ -212,8 +167,8 @@ def main(page: ft.Page):
     # --- Notifications ---
     def show_toast(message: str, is_error: bool = False):
         snack = ft.SnackBar(
-            content=ft.Text(message, color=ft.Colors.WHITE),
-            bgcolor=ft.Colors.RED_ACCENT if is_error else ft.Colors.GREEN_ACCENT_700,
+            content=ft.Text(message, color=Colors.WHITE),
+            bgcolor=Colors.RED_ACCENT if is_error else Colors.GREEN_ACCENT_700,
             duration=3000
         )
         page.overlay.append(snack)
@@ -280,10 +235,10 @@ def main(page: ft.Page):
         content=detail_container,
         width=310,
         expand=True,
-        bgcolor=ft.Colors.PANEL_BG,
+        bgcolor=Colors.PANEL_BG,
         padding=ft.Padding.all(16),
         border_radius=12,
-        border=ft.Border.all(1, ft.Colors.DIVIDER),
+        border=ft.Border.all(1, Colors.DIVIDER),
         visible=False
     )
 
@@ -417,14 +372,14 @@ def main(page: ft.Page):
                     spacing=5,
                     tight=True,
                     controls=[
-                        ft.Icon(ft.Icons.CATCHING_POKEMON, size=13, color=ft.Colors.AMBER_400),
-                        ft.Text(rec.display_name, size=12, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE)
+                        ft.Icon(ft.Icons.CATCHING_POKEMON, size=13, color=Colors.AMBER_400),
+                        ft.Text(rec.display_name, size=12, weight=ft.FontWeight.W_600, color=Colors.WHITE)
                     ]
                 ),
-                bgcolor=ft.Colors.CARD_SELECTED,
+                bgcolor=Colors.CARD_SELECTED,
                 padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                 border_radius=16,
-                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                border=ft.Border.all(1, Colors.AMBER_700),
                 on_click=lambda e, name=rec.display_name: select_suggestion(name)
             )
             for rec in matches
@@ -519,9 +474,9 @@ def main(page: ft.Page):
         type_filter_row.controls.append(
             ft.Container(
                 content=ft.Text("All", size=10, weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.WHITE if all_active else ft.Colors.GREY_400),
-                bgcolor=ft.Colors.AMBER_700 if all_active else "#1e293b",
-                border=ft.Border.all(1, ft.Colors.AMBER_700 if all_active else "#334155"),
+                                color=Colors.WHITE if all_active else Colors.GREY_400),
+                bgcolor=Colors.AMBER_700 if all_active else "#1e293b",
+                border=ft.Border.all(1, Colors.AMBER_700 if all_active else "#334155"),
                 border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                 on_click=lambda e: handle_type_filter_change("all"), ink=True,
             )
@@ -534,7 +489,7 @@ def main(page: ft.Page):
             type_filter_row.controls.append(
                 ft.Container(
                     content=ft.Text(type_name.title(), size=10, weight=ft.FontWeight.BOLD,
-                                    color=ft.Colors.WHITE),
+                                    color=Colors.WHITE),
                     bgcolor=type_color if active else type_color + "44",
                     border=ft.Border.all(1, type_color),
                     border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
@@ -548,12 +503,12 @@ def main(page: ft.Page):
             ft.Container(
                 content=ft.Row(spacing=4, controls=[
                     ft.Icon(ft.Icons.STAR, size=12,
-                            color=ft.Colors.YELLOW if fav_active else ft.Colors.GREY_500),
+                            color=Colors.YELLOW if fav_active else Colors.GREY_500),
                     ft.Text("Favorites", size=10, weight=ft.FontWeight.W_600,
-                            color=ft.Colors.WHITE if fav_active else ft.Colors.GREY_400),
+                            color=Colors.WHITE if fav_active else Colors.GREY_400),
                 ]),
-                bgcolor=ft.Colors.AMBER_700 + "33" if fav_active else "#1e293b",
-                border=ft.Border.all(1, ft.Colors.AMBER_700 if fav_active else "#334155"),
+                bgcolor=Colors.AMBER_700 + "33" if fav_active else "#1e293b",
+                border=ft.Border.all(1, Colors.AMBER_700 if fav_active else "#334155"),
                 border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                 on_click=lambda e: handle_toggle_favorites_only(), ink=True,
             )
@@ -564,12 +519,12 @@ def main(page: ft.Page):
             ft.Container(
                 content=ft.Row(spacing=4, controls=[
                     ft.Icon(ft.Icons.FLASH_ON, size=12,
-                            color=ft.Colors.AMBER_400 if mega_active else ft.Colors.GREY_500),
+                            color=Colors.AMBER_400 if mega_active else Colors.GREY_500),
                     ft.Text("Mega Capable", size=10, weight=ft.FontWeight.W_600,
-                            color=ft.Colors.WHITE if mega_active else ft.Colors.GREY_400),
+                            color=Colors.WHITE if mega_active else Colors.GREY_400),
                 ]),
                 bgcolor="#291d03" if mega_active else "#1e293b",
-                border=ft.Border.all(1, ft.Colors.AMBER_700 if mega_active else "#334155"),
+                border=ft.Border.all(1, Colors.AMBER_700 if mega_active else "#334155"),
                 border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                 on_click=lambda e: handle_toggle_megas_only(), ink=True,
             )
@@ -581,12 +536,12 @@ def main(page: ft.Page):
             quick_toggles_row.controls.append(
                 ft.Container(
                     content=ft.Row(spacing=4, controls=[
-                        ft.Icon(ft.Icons.CLEAR, size=12, color=ft.Colors.RED_400),
-                        ft.Text("Clear Filters", size=10, color=ft.Colors.RED_400,
+                        ft.Icon(ft.Icons.CLEAR, size=12, color=Colors.RED_400),
+                        ft.Text("Clear Filters", size=10, color=Colors.RED_400,
                                 weight=ft.FontWeight.W_600),
                     ]),
                     bgcolor="#1e293b",
-                    border=ft.Border.all(1, ft.Colors.RED_400),
+                    border=ft.Border.all(1, Colors.RED_400),
                     border_radius=12, padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                     on_click=lambda e: handle_clear_filters(), ink=True,
                 )
@@ -858,7 +813,7 @@ def main(page: ft.Page):
                 spacing=5,
                 controls=[
                     ft.Container(
-                        content=ft.Text(t.upper(), size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                        content=ft.Text(t.upper(), size=10, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                         bgcolor=TYPE_COLORS.get(t.lower(), "#68A090"),
                         padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                         border_radius=5
@@ -880,7 +835,7 @@ def main(page: ft.Page):
                                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                                 controls=[
                                     ft.Text(lbl, size=9, weight=ft.FontWeight.BOLD, color=hex_col),
-                                    ft.Text(str(val), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                    ft.Text(str(val), size=9, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                                 ]
                             ),
                             ft.ProgressBar(
@@ -938,19 +893,19 @@ def main(page: ft.Page):
                             spacing=2,
                             tight=True,
                             controls=[
-                                ft.Icon(ft.Icons.FLASH_ON, size=10, color=ft.Colors.AMBER_400),
-                                ft.Text("Mega Available", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+                                ft.Icon(ft.Icons.FLASH_ON, size=10, color=Colors.AMBER_400),
+                                ft.Text("Mega Available", size=10, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
                             ]
                         ),
                         bgcolor="#291d03",
                         border_radius=10,
                         padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                        border=ft.Border.all(1, ft.Colors.AMBER_400)
+                        border=ft.Border.all(1, Colors.AMBER_400)
                     )
                 )
             else:
                 card_info_controls.append(
-                    ft.Text(f"Form: {entry.pokemon.form_name}", size=11, color=ft.Colors.GREY_400)
+                    ft.Text(f"Form: {entry.pokemon.form_name}", size=11, color=Colors.GREY_400)
                 )
 
             card_info_controls.extend([stats_block, types_row])
@@ -962,9 +917,9 @@ def main(page: ft.Page):
                         wrap=True, spacing=4, run_spacing=4,
                         controls=[
                             ft.Container(
-                                content=ft.Text(tag, size=9, color=ft.Colors.BLUE_400),
+                                content=ft.Text(tag, size=9, color=Colors.BLUE_400),
                                 bgcolor="#1e3a5f",
-                                border=ft.Border.all(1, ft.Colors.BLUE_400),
+                                border=ft.Border.all(1, Colors.BLUE_400),
                                 border_radius=6,
                                 padding=ft.Padding.symmetric(horizontal=6, vertical=2),
                                 on_click=lambda e, t=tag: handle_filter_change(t),
@@ -985,11 +940,11 @@ def main(page: ft.Page):
                                 controls=[
                                     ft.IconButton(
                                         icon=ft.Icons.STAR if entry.is_favorite else ft.Icons.STAR_BORDER,
-                                        icon_color=ft.Colors.YELLOW if entry.is_favorite else ft.Colors.GREY_600,
+                                        icon_color=Colors.YELLOW if entry.is_favorite else Colors.GREY_600,
                                         on_click=lambda e, ent=entry: handle_toggle_favorite(ent, not ent.is_favorite),
                                         tooltip="Favorite"
                                     ),
-                                    ft.Text(f"BST {entry.pokemon.total}", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+                                    ft.Text(f"BST {entry.pokemon.total}", size=12, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
                                 ]
                             ),
                             ft.Container(
@@ -1010,7 +965,7 @@ def main(page: ft.Page):
                     padding=8,
                     on_click=make_select_handler()
                 ),
-                bgcolor=ft.Colors.CARD_SELECTED if state["selected_pokemon_id"] == entry.box_entry_id else ft.Colors.CARD_BG
+                bgcolor=Colors.CARD_SELECTED if state["selected_pokemon_id"] == entry.box_entry_id else Colors.CARD_BG
             )
             new_cards.append(card)
         
@@ -1056,21 +1011,21 @@ def main(page: ft.Page):
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     controls=[
                         ft.Row(spacing=8, controls=[
-                            ft.Icon(ft.Icons.CATCHING_POKEMON, color=ft.Colors.AMBER_400, size=16),
+                            ft.Icon(ft.Icons.CATCHING_POKEMON, color=Colors.AMBER_400, size=16),
                             ft.Text("POKÉMON DETAILS", weight=ft.FontWeight.BOLD, size=13,
-                                    color=ft.Colors.AMBER_400)
+                                    color=Colors.AMBER_400)
                         ]),
                         ft.IconButton(
                             icon=ft.Icons.CLOSE, icon_size=18,
-                            icon_color=ft.Colors.GREY_400,
+                            icon_color=Colors.GREY_400,
                             on_click=lambda e: close_detail_container()
                         )
                     ]
                 ),
-                bgcolor=ft.Colors.CARD_BG,
+                bgcolor=Colors.CARD_BG,
                 border_radius=8,
                 padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-                border=ft.Border.all(1, ft.Colors.DIVIDER)
+                border=ft.Border.all(1, Colors.DIVIDER)
             )
         )
 
@@ -1108,11 +1063,11 @@ def main(page: ft.Page):
             base_active = (active_form_id == "base")
             form_pills.append(
                 ft.Container(
-                    content=ft.Text("Base Form", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400 if base_active else ft.Colors.WHITE),
+                    content=ft.Text("Base Form", size=11, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400 if base_active else Colors.WHITE),
                     bgcolor="#78350f" if base_active else "#1e293b",
                     padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                     border_radius=12,
-                    border=ft.Border.all(1, ft.Colors.AMBER_400 if base_active else ft.Colors.DIVIDER),
+                    border=ft.Border.all(1, Colors.AMBER_400 if base_active else Colors.DIVIDER),
                     on_click=lambda e: set_detail_form("base")
                 )
             )
@@ -1120,11 +1075,11 @@ def main(page: ft.Page):
                 m_active = (active_form_id == m.canonical_id)
                 form_pills.append(
                     ft.Container(
-                        content=ft.Text(f"⚡ {m.form_name}", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400 if m_active else ft.Colors.WHITE),
+                        content=ft.Text(f"⚡ {m.form_name}", size=11, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400 if m_active else Colors.WHITE),
                         bgcolor="#78350f" if m_active else "#1e293b",
                         padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                         border_radius=12,
-                        border=ft.Border.all(1, ft.Colors.AMBER_400 if m_active else ft.Colors.DIVIDER),
+                        border=ft.Border.all(1, Colors.AMBER_400 if m_active else Colors.DIVIDER),
                         on_click=lambda e, fid=m.canonical_id: set_detail_form(fid)
                     )
                 )
@@ -1140,11 +1095,11 @@ def main(page: ft.Page):
                     src=display_sprite, width=110, height=110,
                     fit=ft.BoxFit.CONTAIN
                 ) if display_sprite else ft.Icon(ft.Icons.IMAGE, size=80),
-                bgcolor=ft.Colors.CARD_BG,
+                bgcolor=Colors.CARD_BG,
                 border_radius=55,
                 width=130, height=130,
                 alignment=ft.Alignment.CENTER,
-                border=ft.Border.all(2, ft.Colors.DIVIDER),
+                border=ft.Border.all(2, Colors.DIVIDER),
                 margin=ft.Margin.symmetric(vertical=6)
             )
         )
@@ -1155,7 +1110,7 @@ def main(page: ft.Page):
             bg_col = TYPE_COLORS.get(t.lower(), "#777777")
             type_badges.append(
                 ft.Container(
-                    content=ft.Text(t.upper(), size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                    content=ft.Text(t.upper(), size=10, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                     bgcolor=bg_col,
                     border_radius=4,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=2)
@@ -1170,8 +1125,8 @@ def main(page: ft.Page):
                     ft.Text(entry.pokemon.display_name, size=20, weight=ft.FontWeight.BOLD),
                     ft.Row(controls=type_badges, alignment=ft.MainAxisAlignment.CENTER, spacing=4),
                     ft.Container(
-                        content=ft.Text(display_sub, size=12, color=ft.Colors.GREY_400),
-                        bgcolor=ft.Colors.CARD_BG,
+                        content=ft.Text(display_sub, size=12, color=Colors.GREY_400),
+                        bgcolor=Colors.CARD_BG,
                         border_radius=6,
                         padding=ft.Padding.symmetric(horizontal=10, vertical=4)
                     ),
@@ -1183,20 +1138,20 @@ def main(page: ft.Page):
         def _section(label):
             return ft.Container(
                 content=ft.Text(label, size=11, weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREY_400),
-                border=ft.Border(bottom=ft.BorderSide(1, ft.Colors.DIVIDER)),
+                                color=Colors.GREY_400),
+                border=ft.Border(bottom=ft.BorderSide(1, Colors.DIVIDER)),
                 padding=ft.Padding.only(bottom=4)
             )
 
         # Base Stats
         detail_container.controls.append(_section("STAT OVERVIEW"))
         stats_list = [
-            ("HP",  display_hp,  ft.Colors.RED_400),
-            ("Atk", display_atk, ft.Colors.ORANGE_400),
-            ("Def", display_def, ft.Colors.YELLOW_400),
-            ("SpA", display_spa, ft.Colors.BLUE_400),
-            ("SpD", display_spd, ft.Colors.GREEN_400),
-            ("Spe", display_spe, ft.Colors.PINK_400),
+            ("HP",  display_hp,  Colors.RED_400),
+            ("Atk", display_atk, Colors.ORANGE_400),
+            ("Def", display_def, Colors.YELLOW_400),
+            ("SpA", display_spa, Colors.BLUE_400),
+            ("SpD", display_spd, Colors.GREEN_400),
+            ("Spe", display_spe, Colors.PINK_400),
         ]
         stats_column = ft.Column(spacing=6)
         for label, val, color in stats_list:
@@ -1212,7 +1167,7 @@ def main(page: ft.Page):
                         ft.ProgressBar(
                             value=min(val / 255.0, 1.0),
                             color=color,
-                            bgcolor=ft.Colors.GREY_800,
+                            bgcolor=Colors.GREY_800,
                             expand=True,
                             height=7,
                             border_radius=4
@@ -1261,10 +1216,10 @@ def main(page: ft.Page):
             ft.Container(
                 content=ft.Text(
                     "TODO: Type Effectiveness Matrix (Backend Integration)",
-                    size=11, color=ft.Colors.GREY_500, italic=True
+                    size=11, color=Colors.GREY_500, italic=True
                 ),
-                bgcolor=ft.Colors.CARD_BG,
-                border=ft.Border.all(1, ft.Colors.DIVIDER),
+                bgcolor=Colors.CARD_BG,
+                border=ft.Border.all(1, Colors.DIVIDER),
                 padding=ft.Padding.all(10),
                 border_radius=8
             )
@@ -1277,7 +1232,7 @@ def main(page: ft.Page):
                     "Delete From Box",
                     icon=ft.Icons.DELETE,
                     bgcolor="#991b1b",
-                    color=ft.Colors.WHITE,
+                    color=Colors.WHITE,
                     on_click=lambda e, e_id=entry.box_entry_id: handle_delete_pokemon(e_id)
                 ),
                 alignment=ft.Alignment.CENTER,
@@ -1329,16 +1284,16 @@ def main(page: ft.Page):
                         spacing=6,
                         controls=[
                             ft.Container(
-                                content=ft.Text(f"{slot}", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_500),
+                                content=ft.Text(f"{slot}", size=10, weight=ft.FontWeight.BOLD, color=Colors.GREY_500),
                                 bgcolor="#1e293b", border_radius=10,
                                 padding=ft.Padding.symmetric(horizontal=8, vertical=2),
                             ),
-                            ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=32, color=ft.Colors.GREY_500),
-                            ft.Text("Empty Slot", size=11, color=ft.Colors.GREY_500),
+                            ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=32, color=Colors.GREY_500),
+                            ft.Text("Empty Slot", size=11, color=Colors.GREY_500),
                             ft.Container(
-                                content=ft.Text("Assign Pokémon", size=11, color=ft.Colors.AMBER_400,
+                                content=ft.Text("Assign Pokémon", size=11, color=Colors.AMBER_400,
                                                 weight=ft.FontWeight.W_600),
-                                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                border=ft.Border.all(1, Colors.AMBER_700),
                                 border_radius=6,
                                 padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                                 on_click=make_open_handler(),
@@ -1456,11 +1411,11 @@ def main(page: ft.Page):
                 # Item slot button label
                 if current_item_rec:
                     item_label_txt = current_item_rec.display_name
-                    item_label_col = ft.Colors.WHITE
+                    item_label_col = Colors.WHITE
                     item_icon_src = current_item_rec.sprite_url
                 else:
                     item_label_txt = "Select Held Item…"
-                    item_label_col = ft.Colors.GREY_500
+                    item_label_col = Colors.GREY_500
                     item_icon_src = None
 
                 # Guardrail badge
@@ -1469,12 +1424,12 @@ def main(page: ft.Page):
                     guardrail_controls.append(
                         ft.Container(
                             content=ft.Row(spacing=4, controls=[
-                                ft.Icon(ft.Icons.ERROR, size=12, color=ft.Colors.RED_400),
-                                ft.Text(validation.error, size=10, color=ft.Colors.RED_400,
+                                ft.Icon(ft.Icons.ERROR, size=12, color=Colors.RED_400),
+                                ft.Text(validation.error, size=10, color=Colors.RED_400,
                                         overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
                             ]),
                             bgcolor="#3b0000",
-                            border=ft.Border.all(1, ft.Colors.RED_400),
+                            border=ft.Border.all(1, Colors.RED_400),
                             border_radius=5,
                             padding=ft.Padding.symmetric(horizontal=6, vertical=4),
                         )
@@ -1483,12 +1438,12 @@ def main(page: ft.Page):
                     guardrail_controls.append(
                         ft.Container(
                             content=ft.Row(spacing=4, controls=[
-                                ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=ft.Colors.AMBER_400),
-                                ft.Text(validation.warning, size=10, color=ft.Colors.AMBER_400,
+                                ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=Colors.AMBER_400),
+                                ft.Text(validation.warning, size=10, color=Colors.AMBER_400,
                                         overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
                             ]),
                             bgcolor="#291d03",
-                            border=ft.Border.all(1, ft.Colors.AMBER_400),
+                            border=ft.Border.all(1, Colors.AMBER_400),
                             border_radius=5,
                             padding=ft.Padding.symmetric(horizontal=6, vertical=4),
                         )
@@ -1512,7 +1467,7 @@ def main(page: ft.Page):
                             badges.append(ft.Container(
                                 content=ft.Text(f"{label} {eff} ({sign}{delta}%)", size=9,
                                                 weight=ft.FontWeight.BOLD, color=color),
-                                bgcolor=ft.Colors.CARD_BG,
+                                bgcolor=Colors.CARD_BG,
                                 border=ft.Border.all(1, color),
                                 border_radius=4,
                                 padding=ft.Padding.symmetric(horizontal=4, vertical=2),
@@ -1527,10 +1482,10 @@ def main(page: ft.Page):
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                             controls=[
                                 ft.Text("Held Item", size=10, weight=ft.FontWeight.BOLD,
-                                        color=ft.Colors.GREY_400),
+                                        color=Colors.GREY_400),
                                 ft.IconButton(
                                     icon=ft.Icons.CLOSE, icon_size=14,
-                                    icon_color=ft.Colors.GREY_500,
+                                    icon_color=Colors.GREY_500,
                                     tooltip="Remove Item",
                                     visible=current_item_rec is not None,
                                     on_click=lambda e, s=slot: _apply_item_to_slot(s, None),
@@ -1540,14 +1495,14 @@ def main(page: ft.Page):
                         ft.Container(
                             content=ft.Row(spacing=8, controls=[
                                 ft.Image(src=item_icon_src, width=24, height=24, fit=ft.BoxFit.CONTAIN)
-                                if item_icon_src else ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=20, color=ft.Colors.GREY_500),
+                                if item_icon_src else ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=20, color=Colors.GREY_500),
                                 ft.Text(item_label_txt, size=12, color=item_label_col, expand=True,
                                         overflow=ft.TextOverflow.ELLIPSIS),
-                                ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=12, color=ft.Colors.GREY_500),
+                                ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=12, color=Colors.GREY_500),
                             ]),
-                            bgcolor=ft.Colors.CARD_BG,
+                            bgcolor=Colors.CARD_BG,
                             border_radius=6,
-                            border=ft.Border.all(1, ft.Colors.DIVIDER),
+                            border=ft.Border.all(1, Colors.DIVIDER),
                             padding=ft.Padding.symmetric(horizontal=8, vertical=8),
                             on_click=lambda e, s=slot: _open_item_picker(s),
                             ink=True,
@@ -1596,7 +1551,7 @@ def main(page: ft.Page):
                     for i in range(2, 4)
                 ])
                 moves_widget = ft.Column(spacing=4, controls=[
-                    ft.Text("Moves", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400),
+                    ft.Text("Moves", size=10, weight=ft.FontWeight.BOLD, color=Colors.GREY_400),
                     move_chips_row1,
                     move_chips_row2,
                 ])
@@ -1621,7 +1576,7 @@ def main(page: ft.Page):
 
                 type_badges_header = [
                     ft.Container(
-                        content=ft.Text(t.upper(), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                        content=ft.Text(t.upper(), size=9, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                         bgcolor=TYPE_COLORS.get(t.lower(), "#777777"),
                         border_radius=4,
                         padding=ft.Padding.symmetric(horizontal=5, vertical=2)
@@ -1638,32 +1593,32 @@ def main(page: ft.Page):
                                 ft.Column(spacing=2, controls=[
                                     ft.Row(spacing=4, controls=[
                                         ft.Container(
-                                            content=ft.Text(str(slot), size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                            content=ft.Text(str(slot), size=9, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                                             bgcolor=type_col + "aa", border_radius=8,
                                             padding=ft.Padding.symmetric(horizontal=6, vertical=2),
                                         ),
                                         *([ft.Container(
-                                            content=ft.Text("⚡ MEGA", size=8, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400),
+                                            content=ft.Text("⚡ MEGA", size=8, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400),
                                             bgcolor="#291d03", border_radius=8,
-                                            border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                            border=ft.Border.all(1, Colors.AMBER_700),
                                             padding=ft.Padding.symmetric(horizontal=5, vertical=2),
                                         )] if active_mega else []),
                                         *([ft.Container(
-                                            content=ft.Text("📋 PLANNED", size=8, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_300),
+                                            content=ft.Text("📋 PLANNED", size=8, weight=ft.FontWeight.BOLD, color=Colors.AMBER_300),
                                             bgcolor="#3b2d00", border_radius=8,
-                                            border=ft.Border.all(1, ft.Colors.AMBER_500),
+                                            border=ft.Border.all(1, Colors.AMBER_500),
                                             padding=ft.Padding.symmetric(horizontal=5, vertical=2),
                                             tooltip="This Pokémon is a planned template entry and is not in your live Box roster.",
                                         )] if getattr(box_entry, "is_planned", False) else [])
                                     ]),
-                                    ft.Text(pokemon.display_name, size=13, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                    ft.Text(pokemon.display_name, size=13, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                                     ft.Row(spacing=3, controls=type_badges_header),
-                                    ft.Text(f"BST {card_bst}", size=10, color=ft.Colors.GREY_300),
+                                    ft.Text(f"BST {card_bst}", size=10, color=Colors.GREY_300),
                                 ])
                             ]),
                             ft.IconButton(
                                 icon=ft.Icons.DELETE_OUTLINE, icon_size=16,
-                                icon_color=ft.Colors.RED_400,
+                                icon_color=Colors.RED_400,
                                 tooltip="Remove Member",
                                 on_click=make_remove_handler()
                             )
@@ -1691,13 +1646,13 @@ def main(page: ft.Page):
                         controls=[
                             ft.Column(spacing=2, expand=True, controls=[
                                 ft.Row(spacing=6, controls=[
-                                    ft.Text(f"{nature_str} Nature", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400),
-                                    ft.Text(f"• {level_str}", size=11, color=ft.Colors.GREY_400),
+                                    ft.Text(f"{nature_str} Nature", size=11, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400),
+                                    ft.Text(f"• {level_str}", size=11, color=Colors.GREY_400),
                                 ]),
-                                ft.Text(f"EVs: {ev_str}", size=10, color=ft.Colors.GREY_300, overflow=ft.TextOverflow.ELLIPSIS),
+                                ft.Text(f"EVs: {ev_str}", size=10, color=Colors.GREY_300, overflow=ft.TextOverflow.ELLIPSIS),
                             ]),
                             ft.IconButton(
-                                icon=ft.Icons.TUNE, icon_size=16, icon_color=ft.Colors.AMBER_400,
+                                icon=ft.Icons.TUNE, icon_size=16, icon_color=Colors.AMBER_400,
                                 tooltip="Edit Competitive Spread & EVs/IVs",
                                 on_click=lambda e, s=slot, m=matching_member: _open_spread_modal(s, m),
                             )
@@ -1706,7 +1661,7 @@ def main(page: ft.Page):
                     bgcolor="#1e293b",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=8, vertical=6),
-                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                    border=ft.Border.all(1, Colors.DIVIDER),
                 )
 
                 # -----------------------------------------------
@@ -1723,14 +1678,14 @@ def main(page: ft.Page):
                             partner_pills.append(
                                 ft.Container(
                                     content=ft.Row(spacing=4, controls=[
-                                        ft.Image(src=p.sprite_url, width=20, height=20, fit=ft.BoxFit.CONTAIN) if p.sprite_url else ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=ft.Colors.GREY_500),
+                                        ft.Image(src=p.sprite_url, width=20, height=20, fit=ft.BoxFit.CONTAIN) if p.sprite_url else ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Colors.GREY_500),
                                         ft.Text(p.display_name, size=10, weight=ft.FontWeight.W_600),
-                                        ft.Text(f"{p.synergy_percentage:.0f}%", size=9, color=ft.Colors.GREEN_400)
+                                        ft.Text(f"{p.synergy_percentage:.0f}%", size=9, color=Colors.GREEN_400)
                                     ]),
-                                    bgcolor=ft.Colors.CARD_BG,
+                                    bgcolor=Colors.CARD_BG,
                                     border_radius=12,
                                     padding=ft.Padding.only(left=2, top=2, bottom=2, right=8),
-                                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                                    border=ft.Border.all(1, Colors.DIVIDER),
                                     tooltip=f"Appears together in {p.co_occurrence_count} teams",
                                 )
                             )
@@ -1738,15 +1693,15 @@ def main(page: ft.Page):
                         synergy_widget = ft.Container(
                             content=ft.Column(spacing=6, controls=[
                                 ft.Row(spacing=4, controls=[
-                                    ft.Icon(ft.Icons.GROUP_ADD, size=14, color=ft.Colors.AMBER_400),
-                                    ft.Text("Top Tournament Partners", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+                                    ft.Icon(ft.Icons.GROUP_ADD, size=14, color=Colors.AMBER_400),
+                                    ft.Text("Top Tournament Partners", size=10, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
                                 ]),
                                 ft.Row(spacing=6, wrap=True, controls=partner_pills)
                             ]),
                             bgcolor="#1e293b",
                             border_radius=8,
                             padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-                            border=ft.Border.all(1, ft.Colors.DIVIDER),
+                            border=ft.Border.all(1, Colors.DIVIDER),
                         )
                         synergy_controls.append(synergy_widget)
 
@@ -1767,7 +1722,7 @@ def main(page: ft.Page):
                 ])
 
 
-                card_border_col = ft.Colors.AMBER_600 if getattr(box_entry, "is_planned", False) else type_col + "55"
+                card_border_col = Colors.AMBER_600 if getattr(box_entry, "is_planned", False) else type_col + "55"
                 slot_card = ft.Container(
                     content=ft.Column(
                         spacing=0,
@@ -1780,7 +1735,7 @@ def main(page: ft.Page):
                             )
                         ]
                     ),
-                    bgcolor=ft.Colors.CARD_BG,
+                    bgcolor=Colors.CARD_BG,
                     border_radius=10,
                     border=ft.Border.all(1 if not getattr(box_entry, "is_planned", False) else 2, card_border_col),
                 )
@@ -1837,13 +1792,13 @@ def main(page: ft.Page):
         ]
         n = max(len(members), 1)
         team_totals_row.controls.append(
-            ft.Text("TEAM TOTALS", weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400, size=11)
+            ft.Text("TEAM TOTALS", weight=ft.FontWeight.BOLD, color=Colors.AMBER_400, size=11)
         )
         for label, val, color in stat_rows:
             team_totals_row.controls.append(
                 ft.Row(spacing=6, controls=[
                     ft.Container(content=ft.Text(label, size=10, weight=ft.FontWeight.BOLD, color=color), width=28),
-                    ft.ProgressBar(value=min(val / MAX_STAT, 1.0), color=color, bgcolor=ft.Colors.GREY_800,
+                    ft.ProgressBar(value=min(val / MAX_STAT, 1.0), color=color, bgcolor=Colors.GREY_800,
                                    expand=True, height=6, border_radius=3),
                     ft.Text(str(val), size=10, width=36, text_align=ft.TextAlign.RIGHT),
                 ])
@@ -1865,14 +1820,14 @@ def main(page: ft.Page):
                     sprite = b_entry.pokemon.sprite_url if b_entry else None
                     ptype = (b_entry.pokemon.types[0].lower() if b_entry and b_entry.pokemon.types else "normal")
                     is_planned = getattr(b_entry, "is_planned", False)
-                    ring_col = ft.Colors.AMBER_500 if is_planned else TYPE_COLORS.get(ptype, "#A8A878")
+                    ring_col = Colors.AMBER_500 if is_planned else TYPE_COLORS.get(ptype, "#A8A878")
                     team_banner_row.controls.append(
                         ft.Container(
                             content=ft.Stack(controls=[
                                 ft.Image(src=sprite, width=44, height=44, fit=ft.BoxFit.CONTAIN)
-                                if sprite else ft.Icon(ft.Icons.CATCHING_POKEMON, size=28, color=ft.Colors.GREY_500),
+                                if sprite else ft.Icon(ft.Icons.CATCHING_POKEMON, size=28, color=Colors.GREY_500),
                                 ft.Container(
-                                    content=ft.Text(f"{slot}📋" if is_planned else str(slot), size=8, color=ft.Colors.WHITE),
+                                    content=ft.Text(f"{slot}📋" if is_planned else str(slot), size=8, color=Colors.WHITE),
                                     bgcolor="#3b2d00" if is_planned else ring_col + "cc", border_radius=6,
                                     padding=ft.Padding.symmetric(horizontal=3, vertical=1),
                                     bottom=0, right=0,
@@ -1889,7 +1844,7 @@ def main(page: ft.Page):
                 else:
                     team_banner_row.controls.append(
                         ft.Container(
-                            content=ft.Text(str(slot), size=10, color=ft.Colors.GREY_500),
+                            content=ft.Text(str(slot), size=10, color=Colors.GREY_500),
                             width=52, height=52, border_radius=26,
                             border=ft.Border.all(1, "#334155"),
                             bgcolor="#111827",
@@ -1947,11 +1902,11 @@ def main(page: ft.Page):
 
 
         team_validation_col.controls.append(
-            ft.Text("TEAM HEALTH", size=10, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+            ft.Text("TEAM HEALTH", size=10, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
         )
         for ok, msg in checks:
             icon = ft.Icons.CHECK_CIRCLE if ok else (ft.Icons.WARNING_ROUNDED if ok is None else ft.Icons.ERROR)
-            col = ft.Colors.GREEN_400 if ok else (ft.Colors.AMBER_400 if ok is None else ft.Colors.RED_400)
+            col = Colors.GREEN_400 if ok else (Colors.AMBER_400 if ok is None else Colors.RED_400)
             team_validation_col.controls.append(
                 ft.Row(spacing=6, controls=[
                     ft.Icon(icon, size=12, color=col),
@@ -1968,15 +1923,15 @@ def main(page: ft.Page):
             content=ft.Row(
                 spacing=6,
                 controls=[
-                    ft.Icon(icon, size=16, color=ft.Colors.WHITE if active else ft.Colors.GREY_400),
+                    ft.Icon(icon, size=16, color=Colors.WHITE if active else Colors.GREY_400),
                     ft.Text(label, size=13, weight=ft.FontWeight.W_600,
-                            color=ft.Colors.WHITE if active else ft.Colors.GREY_400)
+                            color=Colors.WHITE if active else Colors.GREY_400)
                 ]
             ),
-            bgcolor=ft.Colors.AMBER_700 if active else ft.Colors.CARD_BG,
+            bgcolor=Colors.AMBER_700 if active else Colors.CARD_BG,
             border_radius=20,
             padding=ft.Padding.symmetric(horizontal=16, vertical=8),
-            border=ft.Border.all(1, ft.Colors.AMBER_700 if active else ft.Colors.DIVIDER)
+            border=ft.Border.all(1, Colors.AMBER_700 if active else Colors.DIVIDER)
         )
 
     box_tab_btn = ft.GestureDetector(
@@ -2017,8 +1972,8 @@ def main(page: ft.Page):
                                                 "Add to Box",
                                                 icon=ft.Icons.ADD,
                                                 on_click=lambda e: handle_add_pokemon(),
-                                                bgcolor=ft.Colors.AMBER_700,
-                                                color=ft.Colors.WHITE,
+                                                bgcolor=Colors.AMBER_700,
+                                                color=Colors.WHITE,
                                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8))
                                             ),
                                         ),
@@ -2028,10 +1983,10 @@ def main(page: ft.Page):
                                 suggestion_row
                             ]
                         ),
-                        bgcolor=ft.Colors.CARD_BG,
+                        bgcolor=Colors.CARD_BG,
                         border_radius=10,
                         padding=ft.Padding.symmetric(horizontal=12, vertical=10),
-                        border=ft.Border.all(1, ft.Colors.DIVIDER)
+                        border=ft.Border.all(1, Colors.DIVIDER)
                     ),
                     # Filters toolbar
                     ft.Container(
@@ -2043,16 +1998,16 @@ def main(page: ft.Page):
                                 all_stats_switch,
                                 ft.IconButton(
                                     icon=ft.Icons.DOWNLOAD,
-                                    icon_color=ft.Colors.BLUE_300,
+                                    icon_color=Colors.BLUE_300,
                                     on_click=lambda e: handle_export_csv(),
                                     tooltip="Export Box to CSV"
                                 )
                             ]
                         ),
-                        bgcolor=ft.Colors.CARD_BG,
+                        bgcolor=Colors.CARD_BG,
                         border_radius=10,
                         padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-                        border=ft.Border.all(1, ft.Colors.DIVIDER)
+                        border=ft.Border.all(1, Colors.DIVIDER)
                     ),
                     # Type filter pills
                     ft.Container(
@@ -2060,10 +2015,10 @@ def main(page: ft.Page):
                             quick_toggles_row,
                             type_filter_row,
                         ]),
-                        bgcolor=ft.Colors.CARD_BG,
+                        bgcolor=Colors.CARD_BG,
                         border_radius=10,
                         padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-                        border=ft.Border.all(1, ft.Colors.DIVIDER),
+                        border=ft.Border.all(1, Colors.DIVIDER),
                     ),
                     box_grid
                 ]
@@ -2105,7 +2060,7 @@ def main(page: ft.Page):
             ("special_attack", "SpA"), ("special_defense", "SpD"), ("speed", "Spe")
         ]
     }
-    _ev_total_text = ft.Text("Total EVs: 0 / 510", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.AMBER_400)
+    _ev_total_text = ft.Text("Total EVs: 0 / 510", size=11, weight=ft.FontWeight.BOLD, color=Colors.AMBER_400)
 
     def _update_ev_total(e=None):
         tot = 0
@@ -2115,7 +2070,7 @@ def main(page: ft.Page):
             except ValueError:
                 pass
         _ev_total_text.value = f"Total EVs: {tot} / 510"
-        _ev_total_text.color = ft.Colors.RED_400 if tot > 510 else ft.Colors.AMBER_400
+        _ev_total_text.color = Colors.RED_400 if tot > 510 else Colors.AMBER_400
         page.update()
 
     for tf in _ev_inputs.values():
@@ -2217,7 +2172,7 @@ def main(page: ft.Page):
                     _ev_total_text,
                 ]),
                 ft.Row(spacing=4, controls=[
-                    ft.Text("Presets:", size=10, color=ft.Colors.GREY_400),
+                    ft.Text("Presets:", size=10, color=Colors.GREY_400),
                     ft.OutlinedButton("Phys Sweeper", on_click=lambda e: _apply_preset_evs("physical_sweeper")),
                     ft.OutlinedButton("Spec Sweeper", on_click=lambda e: _apply_preset_evs("special_sweeper")),
                     ft.OutlinedButton("Bulky Support", on_click=lambda e: _apply_preset_evs("bulky_support")),
@@ -2239,7 +2194,7 @@ def main(page: ft.Page):
         ),
         actions=[
             ft.ElevatedButton("Save Spread", icon=ft.Icons.CHECK, on_click=_save_spread_modal,
-                              style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE)),
+                              style=ft.ButtonStyle(bgcolor=Colors.AMBER_700, color=Colors.WHITE)),
             ft.TextButton("Cancel", on_click=lambda e: setattr(_spread_modal, "open", False) or page.update()),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
@@ -2266,17 +2221,17 @@ def main(page: ft.Page):
     _export_text_field = ft.TextField(
         multiline=True, read_only=True, min_lines=12, max_lines=20,
         text_style=ft.TextStyle(font_family="monospace", size=11),
-        bgcolor="#0f172a", border_color=ft.Colors.DIVIDER,
+        bgcolor="#0f172a", border_color=Colors.DIVIDER,
         expand=True,
     )
     _export_pokepast_btn = ft.ElevatedButton(
         "🌐 Publish to Poképast.es",
         icon=ft.Icons.UPLOAD,
-        style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+        style=ft.ButtonStyle(bgcolor=Colors.AMBER_700, color=Colors.WHITE),
     )
     _export_pokepast_link = ft.TextButton(
         "🔗 Open Paste", visible=False,
-        style=ft.ButtonStyle(color=ft.Colors.BLUE_400),
+        style=ft.ButtonStyle(color=Colors.BLUE_400),
     )
     _export_spinner = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
 
@@ -2370,13 +2325,13 @@ def main(page: ft.Page):
         multiline=True, min_lines=8, max_lines=14,
         hint_text="https://pokepast.es/abc123  —  or paste raw Showdown text here",
         text_style=ft.TextStyle(font_family="monospace", size=11),
-        bgcolor="#0f172a", border_color=ft.Colors.DIVIDER,
+        bgcolor="#0f172a", border_color=Colors.DIVIDER,
         expand=True, on_change=lambda e: _on_import_input_change(),
     )
     _import_preview_row = ft.Row(wrap=True, spacing=8, run_spacing=8)
     _import_warning_col = ft.Column(spacing=4, visible=False)
     _import_spinner = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
-    _import_status = ft.Text("", size=11, color=ft.Colors.GREY_400)
+    _import_status = ft.Text("", size=11, color=Colors.GREY_400)
     # Holds the last successfully parsed result for use by confirm buttons
     _last_parsed: list[ParsedTeamResult] = [None]
     _last_readiness: list[ImportReadinessReport] = [None]
@@ -2393,15 +2348,15 @@ def main(page: ft.Page):
                 ft.Container(
                     content=ft.Column(spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                         ft.Text(slot.species_name, size=11, weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_400 if has_warn else ft.Colors.WHITE,
+                                color=Colors.RED_400 if has_warn else Colors.WHITE,
                                 text_align=ft.TextAlign.CENTER),
-                        ft.Text(slot.item_name or "—", size=9, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
-                        ft.Text(slot.ability_name or "", size=9, color=ft.Colors.GREY_400, text_align=ft.TextAlign.CENTER),
-                        *[ft.Text(f"• {m}", size=9, color=ft.Colors.BLUE_300) for m in slot.moves],
+                        ft.Text(slot.item_name or "—", size=9, color=Colors.GREY_400, text_align=ft.TextAlign.CENTER),
+                        ft.Text(slot.ability_name or "", size=9, color=Colors.GREY_400, text_align=ft.TextAlign.CENTER),
+                        *[ft.Text(f"• {m}", size=9, color=Colors.BLUE_300) for m in slot.moves],
                     ]),
                     bgcolor="#1e293b" if not has_warn else "#3b0000",
                     border_radius=8,
-                    border=ft.Border.all(1, ft.Colors.RED_400 if has_warn else ft.Colors.DIVIDER),
+                    border=ft.Border.all(1, Colors.RED_400 if has_warn else Colors.DIVIDER),
                     padding=ft.Padding.all(8),
                     width=120,
                 )
@@ -2412,8 +2367,8 @@ def main(page: ft.Page):
             for w in parsed.warnings:
                 _import_warning_col.controls.append(
                     ft.Row(spacing=4, controls=[
-                        ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=ft.Colors.AMBER_400),
-                        ft.Text(w, size=10, color=ft.Colors.AMBER_400),
+                        ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=Colors.AMBER_400),
+                        ft.Text(w, size=10, color=Colors.AMBER_400),
                     ])
                 )
 
@@ -2567,8 +2522,8 @@ def main(page: ft.Page):
             illegal_names = [s.species_name for s in readiness.illegal_species]
             illegal_list = ft.Column(spacing=3, controls=[
                 ft.Row(spacing=6, controls=[
-                    ft.Icon(ft.Icons.CANCEL, size=14, color=ft.Colors.RED_400),
-                    ft.Text(n, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_300),
+                    ft.Icon(ft.Icons.CANCEL, size=14, color=Colors.RED_400),
+                    ft.Text(n, size=12, weight=ft.FontWeight.BOLD, color=Colors.RED_300),
                 ]) for n in illegal_names
             ])
 
@@ -2578,8 +2533,8 @@ def main(page: ft.Page):
 
             readiness_dialog = ft.AlertDialog(
                 title=ft.Row(spacing=8, controls=[
-                    ft.Icon(ft.Icons.BLOCK, color=ft.Colors.RED_400, size=22),
-                    ft.Text("Cannot Import — Non-Champions Team", weight=ft.FontWeight.BOLD, color=ft.Colors.RED_400),
+                    ft.Icon(ft.Icons.BLOCK, color=Colors.RED_400, size=22),
+                    ft.Text("Cannot Import — Non-Champions Team", weight=ft.FontWeight.BOLD, color=Colors.RED_400),
                 ]),
                 content=ft.Column(spacing=10, width=460, controls=[
                     ft.Text(f"This team contains {len(illegal_names)} Pokémon that are NOT legal in Pokémon Champions:", size=12),
@@ -2588,12 +2543,12 @@ def main(page: ft.Page):
                         content=ft.Text(
                             "Pokémon Champions only supports species in the official Champions Pokédex catalog. "
                             "Rosters containing unreleased or illegal species cannot be imported into your Box or Team Builder.",
-                            size=11, color=ft.Colors.GREY_300
+                            size=11, color=Colors.GREY_300
                         ),
                         bgcolor="#2a1215",
                         border_radius=6,
                         padding=ft.Padding.all(8),
-                        border=ft.Border.all(1, ft.Colors.RED_700),
+                        border=ft.Border.all(1, Colors.RED_700),
                     )
                 ]),
                 actions=[
@@ -2622,7 +2577,7 @@ def main(page: ft.Page):
 
         # Build the readiness decision dialog
         missing_list = ft.Column(spacing=2, controls=[
-            ft.Text(f"• {n}", size=11, color=ft.Colors.AMBER_400)
+            ft.Text(f"• {n}", size=11, color=Colors.AMBER_400)
             for n in problem_names
         ])
 
@@ -2645,12 +2600,12 @@ def main(page: ft.Page):
             actions=[
                 ft.ElevatedButton(
                     "📥 Add to Box & Import",
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_ACCENT_700, color=ft.Colors.WHITE),
+                    style=ft.ButtonStyle(bgcolor=Colors.GREEN_ACCENT_700, color=Colors.WHITE),
                     on_click=lambda e: _handle_choice(use_planned=False),
                 ),
                 ft.ElevatedButton(
                     "📋 Import as Template",
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+                    style=ft.ButtonStyle(bgcolor=Colors.AMBER_700, color=Colors.WHITE),
                     on_click=lambda e: _handle_choice(use_planned=True),
                 ),
                 ft.TextButton("✖ Cancel", on_click=_close_readiness),
@@ -2676,7 +2631,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "✅ Import Team",
                 icon=ft.Icons.DOWNLOAD,
-                style=ft.ButtonStyle(bgcolor=ft.Colors.AMBER_700, color=ft.Colors.WHITE),
+                style=ft.ButtonStyle(bgcolor=Colors.AMBER_700, color=Colors.WHITE),
                 on_click=lambda e: _show_readiness_dialog(),
             ),
             ft.TextButton("Cancel", on_click=lambda e: setattr(_import_modal, "open", False) or page.update()),
@@ -2712,19 +2667,19 @@ def main(page: ft.Page):
                     ),
                     ft.IconButton(
                         icon=ft.Icons.DELETE_FOREVER,
-                        icon_color=ft.Colors.RED_400,
+                        icon_color=Colors.RED_400,
                         on_click=lambda e: handle_delete_team(),
                         tooltip="Delete Active Team"
                     ),
                     ft.IconButton(
                         icon=ft.Icons.UPLOAD_FILE,
-                        icon_color=ft.Colors.BLUE_300,
+                        icon_color=Colors.BLUE_300,
                         on_click=_open_export_modal,
                         tooltip="Export team to Showdown / Poképast.es",
                     ),
                     ft.IconButton(
                         icon=ft.Icons.DOWNLOAD_FOR_OFFLINE,
-                        icon_color=ft.Colors.GREEN_400,
+                        icon_color=Colors.GREEN_400,
                         on_click=_open_import_modal,
                         tooltip="Import team from Showdown paste or Poképast URL",
                     ),
@@ -2734,27 +2689,27 @@ def main(page: ft.Page):
             # Team overview banner — 6 sprite circles
             ft.Container(
                 content=team_banner_row,
-                bgcolor=ft.Colors.CARD_BG,
+                bgcolor=Colors.CARD_BG,
                 border_radius=10,
                 padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-                border=ft.Border.all(1, ft.Colors.DIVIDER),
+                border=ft.Border.all(1, Colors.DIVIDER),
             ),
             # Stat distribution totals
             ft.Container(
                 content=team_totals_row,
-                bgcolor=ft.Colors.CARD_BG,
+                bgcolor=Colors.CARD_BG,
                 border_radius=10,
                 padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-                border=ft.Border.all(1, ft.Colors.DIVIDER),
+                border=ft.Border.all(1, Colors.DIVIDER),
             ),
             team_grid,
             # Team health validation summary
             ft.Container(
                 content=team_validation_col,
-                bgcolor=ft.Colors.CARD_BG,
+                bgcolor=Colors.CARD_BG,
                 border_radius=10,
                 padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-                border=ft.Border.all(1, ft.Colors.DIVIDER),
+                border=ft.Border.all(1, Colors.DIVIDER),
             ),
         ]
     )
@@ -2889,8 +2844,8 @@ def main(page: ft.Page):
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             spacing=10,
                             controls=[
-                                ft.Icon(ft.Icons.EMOJI_EVENTS_OUTLINED, size=48, color=ft.Colors.GREY_500),
-                                ft.Text("No tournament teams matched your filters.", size=14, color=ft.Colors.GREY_400),
+                                ft.Icon(ft.Icons.EMOJI_EVENTS_OUTLINED, size=48, color=Colors.GREY_500),
+                                ft.Text("No tournament teams matched your filters.", size=14, color=Colors.GREY_400),
                             ],
                         ),
                         alignment=ft.Alignment.CENTER,
@@ -2935,20 +2890,20 @@ def main(page: ft.Page):
                 tourney_reg = tourney_rec.format_regulation if tourney_rec else "VGC"
 
                 # Placement badge color
-                badge_bg = ft.Colors.PURPLE_900
-                badge_color = ft.Colors.WHITE
+                badge_bg = Colors.PURPLE_900
+                badge_color = Colors.WHITE
                 badge_icon = "🏅"
                 if team.placement == 1:
-                    badge_bg = ft.Colors.AMBER_700
-                    badge_color = ft.Colors.BLACK
+                    badge_bg = Colors.AMBER_700
+                    badge_color = Colors.BLACK
                     badge_icon = "🥇"
                 elif team.placement == 2:
-                    badge_bg = ft.Colors.BLUE_GREY_600
-                    badge_color = ft.Colors.WHITE
+                    badge_bg = Colors.BLUE_GREY_600
+                    badge_color = Colors.WHITE
                     badge_icon = "🥈"
                 elif team.placement <= 4:
-                    badge_bg = ft.Colors.BLUE_700
-                    badge_color = ft.Colors.WHITE
+                    badge_bg = Colors.BLUE_700
+                    badge_color = Colors.WHITE
                     badge_icon = "🏆"
 
                 # Members sprite row & legality check
@@ -2975,7 +2930,7 @@ def main(page: ft.Page):
 
                     img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
 
-                    border_color = ft.Colors.RED_700 if not is_leg else ft.Colors.DIVIDER
+                    border_color = Colors.RED_700 if not is_leg else Colors.DIVIDER
                     member_controls.append(
                         ft.Container(
                             content=img_ctrl,
@@ -2988,17 +2943,17 @@ def main(page: ft.Page):
                     )
 
                 legality_badge = ft.Container(
-                    content=ft.Text("⚠️ Non-Champions Roster", size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                    content=ft.Text("⚠️ Non-Champions Roster", size=9, weight=ft.FontWeight.BOLD, color=Colors.WHITE),
                     bgcolor="#881337",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=3),
-                    border=ft.Border.all(1, ft.Colors.RED_700),
+                    border=ft.Border.all(1, Colors.RED_700),
                 ) if has_illegal_species else ft.Container(
-                    content=ft.Text("✅ Champions Legal", size=9, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_300),
+                    content=ft.Text("✅ Champions Legal", size=9, weight=ft.FontWeight.BOLD, color=Colors.GREEN_300),
                     bgcolor="#064e3b",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=3),
-                    border=ft.Border.all(1, ft.Colors.GREEN_700),
+                    border=ft.Border.all(1, Colors.GREEN_700),
                 )
 
                 # Card assembly
@@ -3042,7 +2997,7 @@ def main(page: ft.Page):
                                                     ft.Text(
                                                         tourney_name,
                                                         size=10,
-                                                        color=ft.Colors.GREY_400,
+                                                        color=Colors.GREY_400,
                                                         max_lines=1,
                                                         overflow=ft.TextOverflow.ELLIPSIS,
                                                         tooltip=tourney_name,
@@ -3056,11 +3011,11 @@ def main(page: ft.Page):
                                         spacing=2,
                                         controls=[
                                             ft.Container(
-                                                content=ft.Text(tourney_reg, size=10, weight=ft.FontWeight.W_600, color=ft.Colors.AMBER_400),
+                                                content=ft.Text(tourney_reg, size=10, weight=ft.FontWeight.W_600, color=Colors.AMBER_400),
                                                 bgcolor="#1e293b",
                                                 border_radius=6,
                                                 padding=ft.Padding.symmetric(horizontal=6, vertical=3),
-                                                border=ft.Border.all(1, ft.Colors.AMBER_700),
+                                                border=ft.Border.all(1, Colors.AMBER_700),
                                             ),
                                             legality_badge,
                                         ],
@@ -3081,8 +3036,8 @@ def main(page: ft.Page):
                                         "⚠️ Import (Validation Check)" if has_illegal_species else "📥 Import Team",
                                         icon=ft.Icons.DOWNLOAD,
                                         style=ft.ButtonStyle(
-                                            bgcolor=ft.Colors.RED_900 if has_illegal_species else ft.Colors.AMBER_700,
-                                            color=ft.Colors.WHITE
+                                            bgcolor=Colors.RED_900 if has_illegal_species else Colors.AMBER_700,
+                                            color=Colors.WHITE
                                         ),
                                         on_click=lambda e, t_text=team.showdown_text, t_name=team.player_name: _import_tournament_team(t_text, t_name),
                                     ),
@@ -3096,10 +3051,10 @@ def main(page: ft.Page):
                             ),
                         ],
                     ),
-                    bgcolor=ft.Colors.CARD_BG,
+                    bgcolor=Colors.CARD_BG,
                     border_radius=12,
                     padding=ft.Padding.all(14),
-                    border=ft.Border.all(1, ft.Colors.DIVIDER),
+                    border=ft.Border.all(1, Colors.DIVIDER),
                 )
                 _tourney_grid.controls.append(card)
 
@@ -3159,9 +3114,9 @@ def main(page: ft.Page):
     _spinner_tourneys = ft.ProgressRing(visible=False, width=14, height=14, stroke_width=2)
 
     # Status text refs updated after each sync
-    _status_megas = ft.Text("", size=11, color=ft.Colors.GREY_400)
-    _status_items = ft.Text("", size=11, color=ft.Colors.GREY_400)
-    _status_tourneys = ft.Text("", size=11, color=ft.Colors.GREY_400)
+    _status_megas = ft.Text("", size=11, color=Colors.GREY_400)
+    _status_items = ft.Text("", size=11, color=Colors.GREY_400)
+    _status_tourneys = ft.Text("", size=11, color=Colors.GREY_400)
 
     def _count_text(label: str, count: int, unit: str) -> str:
         return f"{count:,} {unit}" if count > 0 else "Not yet synced"
@@ -3245,7 +3200,7 @@ def main(page: ft.Page):
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 controls=[
                     ft.Row(spacing=10, controls=[
-                        ft.Icon(icon, size=18, color=ft.Colors.AMBER_400),
+                        ft.Icon(icon, size=18, color=Colors.AMBER_400),
                         ft.Column(spacing=2, controls=[
                             ft.Text(title, size=13, weight=ft.FontWeight.W_600),
                             status_ref,
@@ -3255,10 +3210,10 @@ def main(page: ft.Page):
                         spinner_ref,
                         ft.Container(
                             content=ft.Row(spacing=4, controls=[
-                                ft.Icon(ft.Icons.SYNC, size=13, color=ft.Colors.WHITE),
-                                ft.Text("Sync", size=11, weight=ft.FontWeight.W_600, color=ft.Colors.WHITE),
+                                ft.Icon(ft.Icons.SYNC, size=13, color=Colors.WHITE),
+                                ft.Text("Sync", size=11, weight=ft.FontWeight.W_600, color=Colors.WHITE),
                             ]),
-                            bgcolor=ft.Colors.AMBER_700,
+                            bgcolor=Colors.AMBER_700,
                             border_radius=6,
                             padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                             on_click=on_sync,
@@ -3266,15 +3221,15 @@ def main(page: ft.Page):
                     ])
                 ]
             ),
-            bgcolor=ft.Colors.CARD_BG,
+            bgcolor=Colors.CARD_BG,
             border_radius=8,
             padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border=ft.Border.all(1, ft.Colors.DIVIDER),
+            border=ft.Border.all(1, Colors.DIVIDER),
         )
 
     settings_modal = ft.AlertDialog(
         title=ft.Row(spacing=10, controls=[
-            ft.Icon(ft.Icons.SETTINGS, color=ft.Colors.AMBER_400),
+            ft.Icon(ft.Icons.SETTINGS, color=Colors.AMBER_400),
             ft.Text("Data & Synchronization", weight=ft.FontWeight.BOLD, size=16),
         ]),
         content=ft.Container(
@@ -3285,9 +3240,9 @@ def main(page: ft.Page):
                 controls=[
                     ft.Text(
                         "Manage the local SQLite catalog. Sync pulls the latest data from PokéAPI, Showdown, Limitless & Victory Road.",
-                        size=12, color=ft.Colors.GREY_400
+                        size=12, color=Colors.GREY_400
                     ),
-                    ft.Divider(height=1, color=ft.Colors.DIVIDER),
+                    ft.Divider(height=1, color=Colors.DIVIDER),
                     _make_settings_row(
                         ft.Icons.FLASH_ON, "Mega Evolutions",
                         _status_megas, _spinner_megas, _handle_sync_megas
@@ -3318,7 +3273,7 @@ def main(page: ft.Page):
 
     settings_btn = ft.IconButton(
         icon=ft.Icons.SETTINGS,
-        icon_color=ft.Colors.GREY_400,
+        icon_color=Colors.GREY_400,
         tooltip="Data & Synchronization Settings",
         on_click=_open_settings,
     )
@@ -3349,7 +3304,7 @@ def main(page: ft.Page):
         if not source:
             _item_list_col.controls.append(
                 ft.Container(
-                    content=ft.Text("No items found.", size=12, color=ft.Colors.GREY_500, italic=True),
+                    content=ft.Text("No items found.", size=12, color=Colors.GREY_500, italic=True),
                     alignment=ft.Alignment.CENTER, padding=ft.Padding.all(20)
                 )
             )
@@ -3375,22 +3330,22 @@ def main(page: ft.Page):
 
             if is_incompatible_mega:
                 bg_col = "#241618"  # Dark muted red background
-                border_col = ft.Colors.RED_900
-                badge_col = ft.Colors.RED_400
+                border_col = Colors.RED_900
+                badge_col = Colors.RED_400
                 badge_txt = f"Species Mismatch (Requires {item.target_species.title()})"
                 badge_icon = ft.Icons.ERROR_OUTLINE
-                title_col = ft.Colors.RED_200
+                title_col = Colors.RED_200
             else:
-                bg_col = ft.Colors.CARD_BG
-                border_col = ft.Colors.DIVIDER
-                badge_col = ft.Colors.GREEN_400 if is_legal else ft.Colors.AMBER_400
+                bg_col = Colors.CARD_BG
+                border_col = Colors.DIVIDER
+                badge_col = Colors.GREEN_400 if is_legal else Colors.AMBER_400
                 badge_txt = "Champions Legal" if is_legal else "Banned in Champions"
                 badge_icon = ft.Icons.CHECK_CIRCLE if is_legal else ft.Icons.WARNING_ROUNDED
                 if item.target_species and target_species and item.target_species.lower() == target_species.lower():
                     badge_txt += f" — Compatible with {target_species.title()}"
-                    badge_col = ft.Colors.CYAN_400
+                    badge_col = Colors.CYAN_400
                     badge_icon = ft.Icons.FLASH_ON
-                title_col = ft.Colors.WHITE
+                title_col = Colors.WHITE
 
             return ft.Container(
                 content=ft.Row(
@@ -3401,11 +3356,11 @@ def main(page: ft.Page):
                         ft.Icon(
                             ft.Icons.FLASH_ON if item.target_species else ft.Icons.DIAMOND,
                             size=24,
-                            color=ft.Colors.RED_400 if is_incompatible_mega else ft.Colors.AMBER_400
+                            color=Colors.RED_400 if is_incompatible_mega else Colors.AMBER_400
                         ),
                         ft.Column(spacing=2, expand=True, controls=[
                             ft.Text(item.display_name, size=13, weight=ft.FontWeight.W_600, color=title_col),
-                            ft.Text(item.short_effect or "", size=11, color=ft.Colors.GREY_400,
+                            ft.Text(item.short_effect or "", size=11, color=Colors.GREY_400,
                                     overflow=ft.TextOverflow.ELLIPSIS, max_lines=2),
                             ft.Row(spacing=4, controls=[
                                 ft.Icon(badge_icon, size=11, color=badge_col),
@@ -3416,10 +3371,10 @@ def main(page: ft.Page):
                                 ft.Container(
                                     content=ft.Text(
                                         f"{'+'if round((mult-1)*100)>=0 else ''}{round((mult-1)*100)}% {k.replace('_',' ').title()}",
-                                        size=9, color=STAT_COLORS.get(k, ft.Colors.GREY_400)
+                                        size=9, color=STAT_COLORS.get(k, Colors.GREY_400)
                                     ),
-                                    bgcolor=ft.Colors.CARD_BG,
-                                    border=ft.Border.all(1, STAT_COLORS.get(k, ft.Colors.GREY_400)),
+                                    bgcolor=Colors.CARD_BG,
+                                    border=ft.Border.all(1, STAT_COLORS.get(k, Colors.GREY_400)),
                                     border_radius=4,
                                     padding=ft.Padding.symmetric(horizontal=4, vertical=2),
                                 )
@@ -3449,13 +3404,13 @@ def main(page: ft.Page):
                         spacing=8,
                         alignment=ft.MainAxisAlignment.CENTER,
                         controls=[
-                            ft.Divider(height=1, expand=True, color=ft.Colors.RED_900),
-                            ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=14, color=ft.Colors.RED_400),
+                            ft.Divider(height=1, expand=True, color=Colors.RED_900),
+                            ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=14, color=Colors.RED_400),
                             ft.Text(
                                 f"Incompatible Mega Stones ({len(incompatible_megas)})",
-                                size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_400
+                                size=11, weight=ft.FontWeight.BOLD, color=Colors.RED_400
                             ),
-                            ft.Divider(height=1, expand=True, color=ft.Colors.RED_900),
+                            ft.Divider(height=1, expand=True, color=Colors.RED_900),
                         ]
                     ),
                     padding=ft.Padding.symmetric(vertical=10)
@@ -3548,7 +3503,7 @@ def main(page: ft.Page):
 
     item_picker_modal = ft.AlertDialog(
         title=ft.Row(spacing=8, controls=[
-            ft.Icon(ft.Icons.DIAMOND, color=ft.Colors.AMBER_400),
+            ft.Icon(ft.Icons.DIAMOND, color=Colors.AMBER_400),
             ft.Text("Select Held Item", weight=ft.FontWeight.BOLD, size=16),
         ]),
         content=ft.Container(
@@ -3581,7 +3536,7 @@ def main(page: ft.Page):
                         value=True,
                         on_change=lambda e: _render_item_picker_list(),
                     ),
-                    ft.Divider(height=1, color=ft.Colors.DIVIDER),
+                    ft.Divider(height=1, color=Colors.DIVIDER),
                     _item_list_col,
                 ]
             )
@@ -3609,7 +3564,7 @@ def main(page: ft.Page):
                     spacing=12,
                     controls=[
                         ft.Container(
-                            content=ft.Icon(ft.Icons.CATCHING_POKEMON, color=ft.Colors.AMBER_400, size=28),
+                            content=ft.Icon(ft.Icons.CATCHING_POKEMON, color=Colors.AMBER_400, size=28),
                             bgcolor="#1e293b",
                             border_radius=10,
                             padding=ft.Padding.all(8)
@@ -3618,9 +3573,9 @@ def main(page: ft.Page):
                             spacing=0,
                             controls=[
                                 ft.Text(APP_NAME, size=20, weight=ft.FontWeight.BOLD,
-                                        color=ft.Colors.AMBER_400),
+                                        color=Colors.AMBER_400),
                                 ft.Text("Box & Team Planner", size=11,
-                                        color=ft.Colors.GREY_400)
+                                        color=Colors.GREY_400)
                             ]
                         )
                     ]
@@ -3628,10 +3583,10 @@ def main(page: ft.Page):
                 ft.Row(spacing=10, controls=[tabs_row, settings_btn])
             ]
         ),
-        bgcolor=ft.Colors.CARD_BG,
+        bgcolor=Colors.CARD_BG,
         padding=ft.Padding.symmetric(horizontal=20, vertical=12),
         border_radius=12,
-        border=ft.Border.all(1, ft.Colors.DIVIDER),
+        border=ft.Border.all(1, Colors.DIVIDER),
         margin=ft.Margin.only(bottom=14)
     )
 

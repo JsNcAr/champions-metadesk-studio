@@ -56,7 +56,7 @@ The project uses Python's standard `unittest` library for test runner execution 
 
 To run the automated tests:
 ```bash
-PYTHONPATH=src poetry run python -m unittest discover -s tests
+poetry run python -m unittest discover -s tests
 ```
 
 - `unittest.TestCase` is used for unit and database integration tests.

@@ -16,6 +16,10 @@ PokéAPI is the main external data source for the project.
 
 ### Integration Concerns
 
+- All outbound HTTP in the project goes through the `requests` library; providers wrap
+  failures in their own domain exception type (`LimitlessNetworkError`,
+  `VictoryRoadNetworkError`, `VRPasteNetworkError`, `PokepastNetworkError`) so services
+  never handle transport-level errors directly.
 - Network failures must be handled gracefully.
 - API naming rules must be normalized consistently.
 - Repeated calls should eventually be cached.
@@ -38,9 +42,19 @@ The Limitless API (`play.limitlesstcg.com/api`) supplies official competitive to
 Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets and tournament results (e.g. LAIC 2026).
 
 ### Features & Web Scraping Strategy
-- **HTML Parsing**: Parses WordPress / Elementor tournament result pages using BeautifulSoup (`bs4`).
-- **Custom User-Agent & Timeouts**: Configured with a 25-second timeout and modern browser headers to reliably parse large event pages.
+- **HTML Parsing**: Parses WordPress / Elementor tournament result pages with pre-compiled
+  `re` patterns from the standard library — no HTML parsing dependency is used. The strategy
+  is *link-anchored*: it locates every Poképaste/VRPaste URL in the document, then walks
+  backwards through the preceding ~3000 characters of `<td>` cells to recover the placement
+  (first purely numeric cell) and the player handle (cell containing a bracketed `( handle )`).
+- **Custom User-Agent & Timeouts**: Configured with a 25-second timeout, two retries, and
+  modern browser headers to reliably fetch large event pages.
 - **Poképaste Sheet Extraction**: Extracts Poképaste URLs and player standings directly into `TournamentTeamRecord`.
+
+> **Fragility note**: the cell layout was hand-verified against victoryroad.pro on 2026-08-31
+> (see the module docstring in `victory_road_provider.py`). Any site redesign will silently
+> yield zero standings rather than an error, so `fetch_event` logs and returns `None` when no
+> paste entries are found.
 
 ---
 

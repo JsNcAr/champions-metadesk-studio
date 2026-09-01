@@ -50,6 +50,22 @@ _SPECIES_ALIAS_MAP: dict[str, str] = {
     "eternal flower floette": "floette-eternal",
     "floette eternal": "floette-eternal",
     "floette-eternal": "floette-eternal",
+    "floette eternal flower": "floette-eternal",
+    "hisuian arcanine": "arcanine-hisui",
+    "arcanine hisuian": "arcanine-hisui",
+    "arcanine hisui": "arcanine-hisui",
+    "arcanine-hisui": "arcanine-hisui",
+    "hisuian-arcanine": "arcanine-hisui",
+    "hisuian samurott": "samurott-hisui",
+    "samurott-hisui": "samurott-hisui",
+    "hisuian zoroark": "zoroark-hisui",
+    "zoroark-hisui": "zoroark-hisui",
+    "hisuian goodra": "goodra-hisui",
+    "goodra-hisui": "goodra-hisui",
+    "hisuian decidueye": "decidueye-hisui",
+    "decidueye-hisui": "decidueye-hisui",
+    "hisuian typhlosion": "typhlosion-hisui",
+    "typhlosion-hisui": "typhlosion-hisui",
     "shadow rider calyrex": "calyrex-shadow",
     "calyrex shadow": "calyrex-shadow",
     "ice rider calyrex": "calyrex-ice",
@@ -59,6 +75,59 @@ _SPECIES_ALIAS_MAP: dict[str, str] = {
     "tornadus therian": "tornadus-therian",
     "enamorus therian": "enamorus-therian",
 }
+
+
+def get_pokemon_sprite_url(pokemon_name_or_id: str) -> str:
+    """Returns a robust high-reliability sprite URL for any species or form identifier."""
+    if not pokemon_name_or_id:
+        return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
+
+    cid = format_api_name(pokemon_name_or_id)
+
+    # Custom Showdown sprite overrides
+    custom_map = {
+        "urshifu-rapid-strike": "https://play.pokemonshowdown.com/sprites/gen5/urshifu-rapidstrike.png",
+        "urshifu-single-strike": "https://play.pokemonshowdown.com/sprites/gen5/urshifu.png",
+    }
+    if cid in custom_map:
+        return custom_map[cid]
+
+    if "-mega-x" in cid:
+        showdown_slug = cid.replace("-mega-x", "-megax")
+        parts = showdown_slug.rsplit("-", 1)
+        showdown_slug = parts[0].replace("-", "") + "-" + parts[1]
+        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
+
+    if "-mega-y" in cid:
+        showdown_slug = cid.replace("-mega-y", "-megay")
+        parts = showdown_slug.rsplit("-", 1)
+        showdown_slug = parts[0].replace("-", "") + "-" + parts[1]
+        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
+
+    if "-mega" in cid:
+        showdown_slug = cid.replace("-mega", "mega")
+        parts = showdown_slug.rsplit("mega", 1)
+        showdown_slug = parts[0].replace("-", "") + "-mega"
+        return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
+
+    form_suffixes = [
+        "-hisui", "-alola", "-galar", "-paldea", "-eternal",
+        "-shadow", "-ice", "-therian", "-hearthflame", "-wellspring",
+        "-cornerstone", "-bloodmoon", "-primal"
+    ]
+    matched_suffix = None
+    for suf in form_suffixes:
+        if cid.endswith(suf):
+            matched_suffix = suf
+            break
+
+    if matched_suffix:
+        base = cid[:-len(matched_suffix)].replace("-", "")
+        showdown_slug = f"{base}{matched_suffix}"
+    else:
+        showdown_slug = cid.replace("-", "")
+
+    return f"https://play.pokemonshowdown.com/sprites/gen5/{showdown_slug}.png"
 
 
 def format_api_name(pokemon_name: str) -> str:

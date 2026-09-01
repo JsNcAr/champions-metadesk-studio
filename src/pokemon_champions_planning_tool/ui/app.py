@@ -55,6 +55,7 @@ _global_sync_lock = threading.Lock()
 _global_sync_done = False
 
 from ..config import APP_NAME
+from ..domain.pokemon_identity import format_api_name, get_pokemon_sprite_url
 from ..domain.entities.box_entry import BoxEntry
 from ..domain.entities.team import Team
 from ..domain.entities.team_member import TeamMember
@@ -2967,7 +2968,10 @@ def main(page: ft.Page):
                     if not is_leg:
                         has_illegal_species = True
 
-                    sprite_url = sprite_dict.get(m.canonical_id) or f"https://img.pokemondb.net/sprites/home/normal/{m.canonical_id}.png"
+                    sprite_url = (
+                        sprite_dict.get(m.canonical_id)
+                        or get_pokemon_sprite_url(m.canonical_id or m.species_name)
+                    )
 
                     img_ctrl = ft.Image(src=sprite_url, width=38, height=38, fit=ft.BoxFit.CONTAIN)
 

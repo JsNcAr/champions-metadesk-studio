@@ -729,10 +729,15 @@ class TournamentRepository:
             stmt = stmt.where(TournamentTeamRecord.placement <= placement_filter)
 
         if query:
-            q_pattern = f"%{query.strip()}%"
+            q_raw = query.strip()
+            q_pattern = f"%{q_raw}%"
+            q_canon = format_api_name(q_raw)
+            c_pattern = f"%{q_canon}%" if q_canon else q_pattern
+
             subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(
                 (TournamentTeamMemberRecord.species_name.ilike(q_pattern))
                 | (TournamentTeamMemberRecord.canonical_id.ilike(q_pattern))
+                | (TournamentTeamMemberRecord.canonical_id.ilike(c_pattern))
             )
             stmt = stmt.where(
                 (TournamentTeamRecord.player_name.ilike(q_pattern))

@@ -795,9 +795,15 @@ class TournamentRepository:
         # Newest event first, then best placement within that event. Ordering by
         # placement alone made a capped result set show only the top few finishes of
         # every event ever recorded, so recent tournaments could never surface.
+        #
+        # The team ID is a tiebreaker rather than decoration: bracket ties put several
+        # teams on the same placement in the same event, and without a total order the
+        # database may return equal rows in a different sequence per query, which makes
+        # LIMIT/OFFSET paging skip and repeat rows.
         stmt = stmt.order_by(
             TournamentRecord.event_date.desc(),
             TournamentTeamRecord.placement.asc(),
+            TournamentTeamRecord.tournament_team_id.asc(),
         )
         if offset > 0:
             stmt = stmt.offset(offset)

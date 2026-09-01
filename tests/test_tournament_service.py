@@ -237,5 +237,60 @@ class TestTournamentSearchOrdering(unittest.TestCase):
         self.assertEqual(len(self.repo.search_teams(query="t-old Championship")), 3)
 
 
+
+class TestSearchPagination(unittest.TestCase):
+    """LIMIT/OFFSET paging is only safe when the sort is a total order."""
+
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        self.repo = TournamentRepository(self.session)
+        self.repo.upsert_tournament(
+            TournamentRecord(
+                tournament_id="t-ties",
+                name="Tie Cup",
+                event_date=datetime(2026, 8, 5, tzinfo=timezone.utc),
+                format_regulation="Regulation M-A",
+            )
+        )
+        # Bracket ties: many teams share a placement inside one event, so event_date
+        # and placement alone cannot distinguish them.
+        for i in range(30):
+            team = TournamentTeamRecord(
+                tournament_id="t-ties",
+                player_name=f"player-{i:02d}",
+                placement=9,
+                showdown_text="x",
+            )
+            self.repo.save_team(
+                team,
+                [TournamentTeamMemberRecord(slot_position=1, canonical_id="incineroar", species_name="Incineroar")],
+            )
+
+    def tearDown(self):
+        self.session.close()
+        self.engine.dispose()
+
+    def test_pages_do_not_overlap_or_skip(self):
+        seen = []
+        for offset in range(0, 30, 10):
+            seen += [t.tournament_team_id for t in self.repo.search_teams(limit=10, offset=offset)]
+        self.assertEqual(len(seen), 30)
+        self.assertEqual(len(set(seen)), 30, "tied rows were skipped or repeated across pages")
+
+    def test_paging_matches_one_large_query(self):
+        whole = [t.tournament_team_id for t in self.repo.search_teams(limit=30)]
+        paged = []
+        for offset in range(0, 30, 7):
+            paged += [t.tournament_team_id for t in self.repo.search_teams(limit=7, offset=offset)]
+        self.assertEqual(paged, whole)
+
+    def test_order_is_stable_across_identical_queries(self):
+        first = [t.tournament_team_id for t in self.repo.search_teams(limit=30)]
+        for _ in range(5):
+            self.assertEqual([t.tournament_team_id for t in self.repo.search_teams(limit=30)], first)
+
+
 if __name__ == "__main__":
     unittest.main()

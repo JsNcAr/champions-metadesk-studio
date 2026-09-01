@@ -1,0 +1,139 @@
+"""Headless smoke test for the UI.
+
+In an environment without a browser, ``--web`` never gets a client session, so
+``main(page)`` never runs and a server boot proves nothing about the control tree. This
+script builds the UI against a stub page and walks every view through Flet's real
+diff/serialise path (``ObjectPatch.from_diff`` — what ``Session.patch_control`` calls at
+runtime), which is where invalid control or theme values actually fail.
+
+Usage (from the repo root, against a COPY of the real database):
+
+    cp pokemon_champions.db /tmp/smoke.db
+    poetry run python scripts/ui_smoke.py --db /tmp/smoke.db
+
+Exit status is non-zero on any exception. Prints control counts and timings.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+
+class StubPage(SimpleNamespace):
+    """Just enough of ``ft.Page`` for view construction; no session, no client."""
+
+    def __init__(self):
+        super().__init__(
+            overlay=[],
+            controls=[],
+            services=[],
+            title="",
+            theme=None,
+            dark_theme=None,
+            theme_mode=None,
+            fonts=None,
+            bgcolor=None,
+            padding=None,
+            spacing=None,
+            width=1440,
+            height=900,
+            window=SimpleNamespace(width=None, height=None),
+        )
+
+    def update(self, *_controls):
+        pass
+
+    def add(self, *controls):
+        self.controls.extend(controls)
+
+    def launch_url(self, url):
+        print(f"[stub] launch_url({url})")
+
+    def run_thread(self, fn, *args):
+        return fn(*args)
+
+    def run_task(self, coro_fn, *args):
+        import asyncio
+
+        return asyncio.run(coro_fn(*args))
+
+    def show_dialog(self, dlg):
+        self.overlay.append(dlg)
+
+    def pop_dialog(self):
+        return self.overlay.pop() if self.overlay else None
+
+
+def _serialise(control) -> int:
+    from flet.controls.base_control import BaseControl
+    from flet.controls.object_patch import ObjectPatch
+
+    patch, added, _removed = ObjectPatch.from_diff(None, control, control_cls=BaseControl)
+    patch.to_message()
+    return len(added)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--db", required=True, help="path to a COPY of the SQLite database")
+    args = parser.parse_args()
+
+    db_path = Path(args.db).resolve()
+    if not db_path.exists():
+        print(f"database not found: {db_path}", file=sys.stderr)
+        return 2
+    # The app resolves the DB relative to cwd; point it at the copy.
+    os.chdir(db_path.parent)
+    import pokemon_champions_planning_tool.config as config
+
+    config.DEFAULT_DATABASE_FILENAME = db_path.name
+    import pokemon_champions_planning_tool.infrastructure.database.database as db
+
+    db.DEFAULT_DATABASE_FILENAME = db_path.name  # the module bound the name at import
+    db.get_session.__defaults__ = (db_path.name,)
+    db.initialize_database.__defaults__ = (db_path.name,)
+    db.get_engine.__wrapped__.__defaults__ = (db_path.name,)
+
+    from pokemon_champions_planning_tool.ui import legacy
+    from pokemon_champions_planning_tool.ui.app import _TransitionalServices
+    from pokemon_champions_planning_tool.ui.theme import apply_theme
+
+    legacy._global_sync_done = True  # never hit the network from a smoke test
+
+    page = StubPage()
+    apply_theme(page)
+
+    t0 = time.perf_counter()
+    views = legacy.build_legacy_views(page, _TransitionalServices(page))
+    print(f"build_legacy_views: {(time.perf_counter() - t0) * 1000:.0f} ms")
+
+    failures = 0
+    for name, control, activate in (
+        ("box", views.box, None),
+        ("team", views.team, None),
+        ("meta", views.meta, views.on_activate_meta),
+    ):
+        t = time.perf_counter()
+        try:
+            if activate:
+                activate()
+            added = _serialise(control)
+            print(f"  {name:<5} serialised {added:>5} controls  {(time.perf_counter() - t) * 1000:6.0f} ms")
+        except Exception as exc:  # noqa: BLE001 - report everything
+            failures += 1
+            print(f"  {name:<5} FAILED: {type(exc).__name__}: {exc}")
+
+    print(f"overlay entries: {len(page.overlay)}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

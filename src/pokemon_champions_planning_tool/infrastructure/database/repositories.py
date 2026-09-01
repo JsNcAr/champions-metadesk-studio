@@ -31,6 +31,7 @@ from .models import (
 )
 import json
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any
 
 
@@ -213,18 +214,69 @@ class BoxRepository:
     get = load_entry
 
     def list_entries(self, include_planned: bool = False) -> list[BoxEntry]:
-        """Returns hydrated BoxEntry domain objects.
+        """Returns hydrated BoxEntry domain objects in creation order, in one query.
 
         ``include_planned=False`` (default) mirrors the main box grid behaviour —
         ghost entries are hidden unless explicitly requested.
         """
-        entries: list[BoxEntry] = []
-        for record in self.list_all(include_planned=include_planned):
-            pokemon_record = self.pokemon_repository.get(record.pokemon_canonical_id)
-            if pokemon_record is None:
-                continue
-            entries.append(record.to_domain(pokemon_record.to_domain()))
-        return entries
+        stmt = select(BoxEntryRecord, PokemonRecord).join(
+            PokemonRecord, BoxEntryRecord.pokemon_canonical_id == PokemonRecord.canonical_id
+        )
+        if not include_planned:
+            stmt = stmt.where(BoxEntryRecord.is_planned == False)  # noqa: E712
+        rows = sorted(self.session.exec(stmt).all(), key=lambda pair: pair[0].created_at)
+        return [record.to_domain(pokemon.to_domain()) for record, pokemon in rows]
+
+    def update_many(
+        self,
+        box_entry_ids: Iterable[UUID],
+        *,
+        add_tags: Iterable[str] = (),
+        remove_tags: Iterable[str] = (),
+        is_favorite: bool | None = None,
+        is_planned: bool | None = None,
+    ) -> int:
+        """Apply the same metadata change to several entries in one commit."""
+        ids = list(box_entry_ids)
+        if not ids:
+            return 0
+        add = [t.strip() for t in add_tags if t and t.strip()]
+        remove = {t.strip().lower() for t in remove_tags if t and t.strip()}
+        records = self.session.exec(
+            select(BoxEntryRecord).where(BoxEntryRecord.box_entry_id.in_(ids))
+        ).all()
+        for record in records:
+            tags = [t for t in (record.tags or []) if t.lower() not in remove]
+            for tag in add:
+                if tag.lower() not in {t.lower() for t in tags}:
+                    tags.append(tag)
+            record.tags = tags
+            if is_favorite is not None:
+                record.is_favorite = is_favorite
+            if is_planned is not None:
+                record.is_planned = is_planned
+            record.updated_at = _utc_now()
+            self.session.add(record)
+        self.session.commit()
+        return len(records)
+
+    def delete_many(self, box_entry_ids: Iterable[UUID]) -> int:
+        """Delete entries and every team member referencing them, in one commit."""
+        ids = list(box_entry_ids)
+        if not ids:
+            return 0
+        members = self.session.exec(
+            select(TeamMemberRecord).where(TeamMemberRecord.box_entry_id.in_(ids))
+        ).all()
+        for member in members:
+            self.session.delete(member)
+        records = self.session.exec(
+            select(BoxEntryRecord).where(BoxEntryRecord.box_entry_id.in_(ids))
+        ).all()
+        for record in records:
+            self.session.delete(record)
+        self.session.commit()
+        return len(records)
 
     def update_metadata(
         self,
@@ -420,6 +472,16 @@ class TeamRepository:
         self.session.delete(record)
         self.session.commit()
         return True
+
+    def teams_containing(self, box_entry_id: UUID) -> list[tuple[str, int]]:
+        """(team name, slot) for every team slot holding this box entry."""
+        stmt = (
+            select(TeamRecord.name, TeamMemberRecord.slot_position)
+            .join(TeamMemberRecord, TeamMemberRecord.team_id == TeamRecord.team_id)
+            .where(TeamMemberRecord.box_entry_id == box_entry_id)
+            .order_by(TeamRecord.name, TeamMemberRecord.slot_position)
+        )
+        return [(name, slot) for name, slot in self.session.exec(stmt).all()]
 
     def delete_members_by_box_entry_id(self, box_entry_id: UUID) -> int:
         records = list(

@@ -18,7 +18,32 @@ class StubPage(SimpleNamespace):
         fn(*args)
 
     def run_task(self, coro_fn, *args):
-        asyncio.run(coro_fn(*args))
+        """Run the coroutine to completion before returning.
+
+        A real page's run_task is re-entrant (run_coroutine_threadsafe onto the session
+        loop). Inside an already-running loop asyncio.run() would raise, so fall back to
+        a helper thread with its own loop and wait for it.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(coro_fn(*args))
+            return
+        import threading
+
+        failure: list[BaseException] = []
+
+        def _run():
+            try:
+                asyncio.run(coro_fn(*args))
+            except BaseException as exc:  # noqa: BLE001 - re-raised on the caller's thread
+                failure.append(exc)
+
+        worker = threading.Thread(target=_run)
+        worker.start()
+        worker.join()
+        if failure:
+            raise failure[0]
 
     def show_dialog(self, dlg):
         self.dialogs.append(dlg)

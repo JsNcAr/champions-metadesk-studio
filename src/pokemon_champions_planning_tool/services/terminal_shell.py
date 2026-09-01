@@ -108,7 +108,14 @@ Notes:
             print("❌ Usage: add <pokemon name>")
             return
 
-        add_pokemon_to_box(pokemon_name)
+        try:
+            entry = add_pokemon_to_box(pokemon_name)
+        except Exception as exc:  # noqa: BLE001 - the shell reports every failure the same way
+            print(f"❌ Error: {exc}")
+            return
+        with get_session() as session:
+            export_box_entries_to_csv(BoxRepository(session).list_entries())
+        print(f"✅ Success: Saved '{entry.pokemon.display_name}' to SQLite and CSV.")
 
     def _handle_box(self, args: list[str]):
         if not args:

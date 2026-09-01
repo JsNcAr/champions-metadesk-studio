@@ -22,7 +22,6 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
     def on_catalogs_reloaded(kind: str) -> None:
         if kind == "megas":
             views.reload_catalogs()
-            views.refresh_box()
         elif kind == "items":
             views.reload_items()
             views.render_team_builder()
@@ -32,8 +31,8 @@ def bind_legacy(ctx: AppContext, views: LegacyViews) -> list[Callable[[], None]]
         views.import_showdown_text(text, title)
 
     return [
-        bus.on(events.BOX_CHANGED, lambda _payload: views.refresh_box()),
-        bus.on(events.BOX_ENTRY_DELETED, lambda _payload: views.refresh_teams()),
+        bus.on(events.BOX_CHANGED, lambda _payload: views.refresh_box_state()),
+        bus.on(events.BOX_ENTRY_DELETED, lambda _payload: (views.refresh_box_state(), views.refresh_teams())),
         bus.on(events.TEAMS_CHANGED, lambda _payload: views.refresh_teams()),
         bus.on(events.CATALOGS_RELOADED, on_catalogs_reloaded),
         bus.on(events.IMPORT_REQUESTED, on_import_requested),

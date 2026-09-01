@@ -154,14 +154,19 @@ class AppShell(ft.Row):
             self.navigate(self._order[index])
 
     def _on_key(self, e: ft.KeyboardEvent) -> None:
-        if not e.ctrl:
-            return
-        if e.key in _DIGIT_KEYS:
+        if e.ctrl and e.key in _DIGIT_KEYS:
             index = int(e.key) - 1
             if index < len(self._order):
                 self.navigate(self._order[index])
-        elif e.key == ",":
+            return
+        if e.ctrl and e.key == ",":
             self.open_settings()
+            return
+        # Anything else goes to the current view if it declares handle_key(event) -> bool.
+        entry = self._entries.get(self._current) if self._current else None
+        handler = getattr(entry.control, "handle_key", None) if entry and entry.control is not None else None
+        if callable(handler):
+            handler(e)
 
     def _update_if_mounted(self) -> None:
         # Before page.add the controls have no page; Flet auto-updates after the

@@ -9,11 +9,13 @@ import flet as ft
 from ..config import APP_NAME
 from ..services.tournament_sync_service import sync_tournaments_once_per_process
 from . import events
+from .catalogs import Catalogs
 from .context import AppContext
 from .legacy import build_legacy_views
 from .legacy_adapter import bind_legacy
 from .shell import AppShell
 from .theme import apply_theme
+from .views.box import BoxView
 from .views.meta import MetaView
 from .views.settings import SettingsView
 
@@ -45,6 +47,9 @@ def main(page: ft.Page) -> None:
     page.padding = 0
 
     ctx = AppContext(page)
+    ctx.catalogs = Catalogs.load()
+    # Subscribed before any view so a reloaded catalogue is in place when views react.
+    ctx.bus.on(events.CATALOGS_RELOADED, lambda _kind: setattr(ctx, "catalogs", Catalogs.load()))
     shell = AppShell(ctx)
 
     # Legacy views, hosted by the new shell until each is migrated.
@@ -57,12 +62,14 @@ def main(page: ft.Page) -> None:
         ),
     )
     bind_legacy(ctx, views)
+    box_view = BoxView(ctx)
     shell.register_view(
         "box",
         label="Box",
         icon=ft.Icons.INVENTORY_2_OUTLINED,
         selected_icon=ft.Icons.INVENTORY_2,
-        control=views.box,
+        control=box_view,
+        on_activate=box_view.ensure_loaded,
     )
     shell.register_view(
         "team",

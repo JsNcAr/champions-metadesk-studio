@@ -1,18 +1,31 @@
-"""Use-case orchestration for adding a Pokemon to the CSV box."""
+"""Use case: add a Pokémon to the box by name.
 
-from ..config import DEFAULT_CSV_FILENAME
+Looks the species up in the local cache first and falls back to PokéAPI. Returns the
+resulting box entry; callers decide about side effects such as the CSV export.
+"""
+
+from __future__ import annotations
+
 from ..domain.entities.box_entry import BoxEntry
 from ..domain.pokemon_identity import format_api_name
-from ..infrastructure.csv.csv_operations import export_box_entries_to_csv
 from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import BoxRepository, PokemonRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import get_official_stats
 
 
-def add_pokemon_to_box(pokemon_name, filename=DEFAULT_CSV_FILENAME):
-    formatted_name = pokemon_name.strip().title()
+class PokemonNotFoundError(LookupError):
+    """The name did not resolve locally or on PokéAPI."""
+
+
+def add_pokemon_to_box(pokemon_name: str) -> BoxEntry:
+    """Add ``pokemon_name`` to the box and return the stored entry.
+
+    Raises ``ValueError`` for a blank name and ``PokemonNotFoundError`` when neither the
+    local catalogue nor PokéAPI knows the species. Network errors propagate.
+    """
+    formatted_name = (pokemon_name or "").strip().title()
     if not formatted_name:
-        return
+        raise ValueError("Enter a Pokémon name")
 
     api_name = format_api_name(formatted_name)
 
@@ -20,23 +33,23 @@ def add_pokemon_to_box(pokemon_name, filename=DEFAULT_CSV_FILENAME):
         pokemon_repo = PokemonRepository(session)
         box_repo = BoxRepository(session)
 
-        # 1. Check local SQLite cache first (0ms latency)
         existing_record = pokemon_repo.get(api_name) if api_name else None
         if existing_record:
             official_data = existing_record.to_domain()
         else:
-            print(f"🔍 Querying PokéAPI endpoint for '{formatted_name}'...")
             official_data = get_official_stats(formatted_name)
             if official_data:
                 pokemon_repo.upsert(official_data)
 
-        if official_data:
-            box_repo.upsert_box_entry(BoxEntry(pokemon=official_data))
-            export_box_entries_to_csv(box_repo.list_entries(), filename)
-            print(f"✅ Success: Saved '{official_data.display_name}' to SQLite and CSV.")
-        else:
-            print(f"❌ Error: '{formatted_name}' could not be found. Check your spelling.")
+        if not official_data:
+            raise PokemonNotFoundError(f"'{formatted_name}' could not be found — check the spelling")
+
+        record = box_repo.upsert_box_entry(BoxEntry(pokemon=official_data))
+        entry = box_repo.load_entry(str(record.box_entry_id))
+        if entry is None:  # pragma: no cover - the entry was just written
+            raise PokemonNotFoundError(f"'{formatted_name}' was not saved")
+        return entry
 
 
+# Kept for the terminal shell, which reports and exports the CSV itself.
 append_to_spreadsheet = add_pokemon_to_box
-

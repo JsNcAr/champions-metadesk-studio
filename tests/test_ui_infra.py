@@ -181,5 +181,18 @@ class TestAppShell(unittest.TestCase):
             shell.register_view("bad", label="Bad", icon=ft.Icons.STAR, selected_icon=ft.Icons.STAR)
 
 
+
+
+class TestLayoutLint(unittest.TestCase):
+    def test_expand_child_inside_wrapping_row_is_rejected(self):
+        from _ui_stubs import check_layout
+
+        bad = ft.Column(controls=[ft.Row(wrap=True, controls=[ft.Text("a"), ft.Container(expand=True)])])
+        with self.assertRaises(AssertionError) as ctx:
+            check_layout(bad)
+        self.assertIn("Row(wrap=True)", str(ctx.exception))
+        check_layout(ft.Row(controls=[ft.Row(wrap=True, expand=True, controls=[ft.Text("a")]), ft.Container(expand=True)]))
+
+
 if __name__ == "__main__":
     unittest.main()

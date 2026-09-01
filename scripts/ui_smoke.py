@@ -74,7 +74,16 @@ class StubPage(SimpleNamespace):
         return self.dialogs.pop() if self.dialogs else None
 
 
+def _check_layout(control) -> None:
+    """Same Flutter-side layout lint the unit tests run (tests/_ui_stubs.check_layout)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
+    from _ui_stubs import check_layout
+
+    check_layout(control)
+
+
 def _serialise(control) -> int:
+    _check_layout(control)
     from flet.controls.base_control import BaseControl
     from flet.controls.object_patch import ObjectPatch
 

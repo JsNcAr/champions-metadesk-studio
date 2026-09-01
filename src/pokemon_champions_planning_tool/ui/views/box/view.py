@@ -13,7 +13,7 @@ from ...components.banner import InlineBanner
 from ...context import AppContext
 from ...tasks import is_mounted
 from ...theme import OVERLAY_SHADOW, Layout, Motion, Palette, Radius, Space
-from .card import CARD_MAX_EXTENT, PokemonCard
+from .card import CARD_ASPECT, CARD_ASPECT_WITH_STATS, CARD_MAX_EXTENT, PokemonCard
 from .detail_panel import DetailPanel
 from .filters import BoxFilters, SortKey
 from .store import BoxStore
@@ -52,7 +52,7 @@ class BoxView(ft.Row):
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats)
 
         # -- content ---------------------------------------------------------------------------
-        self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=0.82, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
+        self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=CARD_ASPECT, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
         self.table = BoxTable(on_sort=self._on_table_sort, on_select=self._select, on_check=self._check)
         self.table.visible = False
         self._empty = EmptyState(ft.Icons.INVENTORY_2_OUTLINED, "Your box is empty", "Add a Pokémon by name to start planning.", action_label="Add a Pokémon", on_action=self._focus_add)
@@ -259,7 +259,7 @@ class BoxView(ft.Row):
 
     def _set_show_stats(self, show: bool) -> None:
         self.show_stats = show
-        self.grid.child_aspect_ratio = 0.62 if show else 0.82
+        self.grid.child_aspect_ratio = CARD_ASPECT_WITH_STATS if show else CARD_ASPECT
         self._render()
         self._update_self()
 

@@ -11,9 +11,11 @@ from ....domain.entities.box_entry import BoxEntry
 from ...components import Sprite, StatusChip
 from ...components.pokemon import BstPill, StatBlock, TypeChip
 from ...tasks import is_mounted
-from ...theme import IconSize, Motion, Palette, Radius, Space
+from ...theme import IconSize, Motion, Palette, Radius, Space, alpha, type_color
 
 CARD_MAX_EXTENT = 210
+CARD_ASPECT = 0.88             # band + sprite + name + caption + types + tags
+CARD_ASPECT_WITH_STATS = 0.66  # tags row hidden, six stat bars shown
 
 
 class PokemonCard(ft.Container):
@@ -56,7 +58,7 @@ class PokemonCard(ft.Container):
         self._bst = BstPill()
         self._planned = StatusChip("Planned", "tertiary", icon=ft.Icons.EDIT_NOTE)
         self._planned.visible = False
-        self.sprite = Sprite(size=72)
+        self.sprite = Sprite(size=76)
         self._name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, text_align=ft.TextAlign.CENTER)
         self._form = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False, text_align=ft.TextAlign.CENTER)
         self._types = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.CENTER, tight=True)
@@ -65,24 +67,40 @@ class PokemonCard(ft.Container):
         self._stats = StatBlock(spacing=2)
         self._stats.visible = False
 
-        self.content = ft.Column(
-            spacing=Space.XS,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            tight=True,
-            controls=[
-                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[ft.Row(spacing=0, tight=True, controls=[self._check, self._star]), self._planned, self._bst]),
-                self.sprite,
-                self._name,
-                self._form,
-                ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.CENTER, tight=True, controls=[self._types, self._mega]),
-                self._tags,
-                self._stats,
-            ],
+        # Header band tinted by the primary type (like the team slot cards); body below.
+        self._band = ft.Container(
+            content=ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[ft.Row(spacing=0, tight=True, controls=[self._check, self._star]), self._planned, self._bst],
+            ),
+            padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS),
+            border_radius=ft.BorderRadius.only(top_left=Radius.MD, top_right=Radius.MD),
+            bgcolor=Palette.SURFACE_3,
         )
+        self._body = ft.Container(
+            padding=ft.Padding.only(left=Space.CARD_PADDING, right=Space.CARD_PADDING, top=Space.SM, bottom=Space.CARD_PADDING),
+            content=ft.Column(
+                spacing=Space.XS,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                tight=True,
+                controls=[
+                    self.sprite,
+                    self._name,
+                    self._form,
+                    ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.CENTER, tight=True, controls=[self._types, self._mega]),
+                    self._tags,
+                    self._stats,
+                ],
+            ),
+        )
+        self.content = ft.Column(spacing=0, tight=True, controls=[self._band, self._body])
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
-        self.padding = Space.CARD_PADDING
+        self.padding = 0
+        self.clip_behavior = ft.ClipBehavior.ANTI_ALIAS
+        self.ink = True
         self.animate = ft.Animation(Motion.FAST_MS, Motion.CURVE)
         self.on_click = lambda _e: self._on_select(self.entry_id) if self.entry_id else None
         self.on_hover = self._hover
@@ -101,14 +119,18 @@ class PokemonCard(ft.Container):
         self._planned.visible = entry.is_planned
 
         primary_type = pokemon.types[0] if pokemon.types else None
+        self._band.bgcolor = alpha(Palette.TERTIARY if entry.is_planned else type_color(primary_type), 0.22)
         self.sprite.set_src(pokemon.sprite_url)
         self.sprite.set_tooltip(pokemon.display_name)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if mega_capable else "type"), primary_type)
 
         self._name.value = pokemon.display_name
         form = pokemon.form_name or ""
-        self._form.value = form
-        self._form.visible = bool(form) and form.lower() != "base"
+        caption = [f"#{pokemon.dex_number:03d}"] if pokemon.dex_number else []
+        if form and form.lower() != "base":
+            caption.append(form)
+        self._form.value = " · ".join(caption)
+        self._form.visible = bool(caption)
         self._types.controls = [TypeChip(t, size="sm") for t in pokemon.types]
         self._mega.visible = mega_capable
 

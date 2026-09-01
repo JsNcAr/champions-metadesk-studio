@@ -29,6 +29,27 @@ class _FilterChip(ft.Chip):
         )
 
 
+def _menu_chip(icon: str, label: ft.Text) -> ft.Container:
+    """Chip-shaped trigger for a PopupMenuButton.
+
+    A real ``ft.Chip`` with no handler paints as disabled inside a menu button, so the
+    trigger is a Container styled to the same 32px pill, with a caret to signal a menu.
+    """
+    return ft.Container(
+        content=ft.Row(
+            spacing=Space.XS,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[ft.Icon(icon, size=16, color=Palette.ON_SURFACE_VARIANT), label, ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=18, color=Palette.ON_SURFACE_VARIANT)],
+        ),
+        # No ``alignment`` or ``height``: a Container with alignment fills the width a Wrap
+        # offers it. Vertical padding brings the pill to the row's 32px.
+        padding=ft.Padding.only(left=Space.MD, right=Space.XS, top=5, bottom=5),
+        border_radius=Radius.SM,
+        border=ft.Border.all(1, Palette.OUTLINE),
+    )
+
+
 class BoxToolbar(ft.Column):
     def __init__(
         self,
@@ -48,7 +69,7 @@ class BoxToolbar(ft.Column):
         self.search = ft.TextField(
             hint_text="Filter box…",
             prefix_icon=ft.Icons.FILTER_LIST,
-            width=300,
+            width=260,
             dense=True,
             height=Layout.TOOLBAR_HEIGHT - 8,
             on_change=lambda e: self._debounce(e.control.value or ""),
@@ -79,21 +100,15 @@ class BoxToolbar(ft.Column):
         )
         self._fav_chip = _FilterChip("Favourites", icon=ft.Icons.STAR_OUTLINE, on_toggle=lambda v: self._set(favourites_only=v))
         self._mega_chip = _FilterChip("Mega-capable", icon=ft.Icons.BOLT, on_toggle=lambda v: self._set(mega_capable_only=v))
-        self._planned_chip = _FilterChip("Show planned", icon=ft.Icons.EDIT_NOTE, on_toggle=lambda v: self._set(show_planned=v))
-        self._tags_menu = ft.PopupMenuButton(
-            content=ft.Chip(label=ft.Text("Tags"), leading=ft.Icon(ft.Icons.TAG, size=16), show_checkmark=False),
-            items=[],
-            tooltip="Filter by tag",
-        )
+        self._tags_label = ft.Text("Tags", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
+        self._tags_menu = ft.PopupMenuButton(content=_menu_chip(ft.Icons.TAG, self._tags_label), items=[], tooltip="Filter by tag")
 
-        self._sort = ft.Dropdown(
-            value="name",
-            options=[ft.DropdownOption(key=k, text=label) for k, label in SORT_LABELS.items()],
-            width=150,
-            dense=True,
-            leading_icon=ft.Icons.SORT,
-            on_select=lambda e: self._set(sort=e.control.value or "name"),
-        )
+        self._sort_label = ft.Text(SORT_LABELS["name"], theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
+        self._sort_items = {
+            key: ft.PopupMenuItem(content=ft.Text(label), checked=(key == "name"), on_click=lambda _e, key=key: self._set(sort=key))
+            for key, label in SORT_LABELS.items()
+        }
+        self._sort = ft.PopupMenuButton(content=_menu_chip(ft.Icons.SORT, self._sort_label), items=list(self._sort_items.values()), tooltip="Sort by")
         self._direction = ft.IconButton(
             icon=ft.Icons.ARROW_UPWARD,
             icon_size=20,
@@ -112,12 +127,18 @@ class BoxToolbar(ft.Column):
             on_change=lambda e: self._on_view_mode(next(iter(e.control.selected or ["grid"]))),
         )
         self._stats_item = ft.PopupMenuItem(content=ft.Text("Show stats on cards"), checked=False, on_click=lambda _e: self._toggle_stats())
-        self._view_menu = ft.PopupMenuButton(icon=ft.Icons.TUNE, tooltip="View options", items=[self._stats_item])
+        self._planned_item = ft.PopupMenuItem(content=ft.Text("Show planned Pokémon"), checked=False, on_click=lambda _e: self._set(show_planned=not self._filters.show_planned))
+        self._view_menu = ft.PopupMenuButton(icon=ft.Icons.TUNE, tooltip="View options", items=[self._stats_item, self._planned_item])
 
-        self.row = ft.Row(
+        # Two groups: the filter chips wrap when the panel narrows; sort/view stay pinned right.
+        # A wrapping Row must never hold an ``expand`` child — Flutter's Wrap rejects Expanded
+        # and renders the whole view as an error box (see tests/_ui_stubs.check_layout).
+        self.filter_group = ft.Row(
             spacing=Space.SM,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            run_spacing=Space.SM,
             wrap=True,
+            expand=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 self.search,
                 self._type_chip,
@@ -125,14 +146,19 @@ class BoxToolbar(ft.Column):
                 self._stats_chip,
                 self._fav_chip,
                 self._mega_chip,
-                self._planned_chip,
                 self._tags_menu,
-                ft.Container(expand=True),
-                self._sort,
-                self._direction,
-                self._view_mode,
-                self._view_menu,
             ],
+        )
+        self.view_group = ft.Row(
+            spacing=Space.SM,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[self._sort, self._direction, self._view_mode, self._view_menu],
+        )
+        self.row = ft.Row(
+            spacing=Space.LG,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+            controls=[self.filter_group, self.view_group],
         )
 
         self._type_chips: dict[str, ft.Chip] = {}
@@ -287,7 +313,7 @@ class BoxToolbar(ft.Column):
         self.search.value = f.text
         self._fav_chip.selected = f.favourites_only
         self._mega_chip.selected = f.mega_capable_only
-        self._planned_chip.selected = f.show_planned
+        self._planned_item.checked = f.show_planned
         for t, chip in self._type_chips.items():
             chip.selected = t in f.types
         self._type_chip.label = ft.Text(f"Type · {len(f.types)}" if f.types else "Type")
@@ -295,7 +321,10 @@ class BoxToolbar(ft.Column):
         active_stats = [k for k, v in f.stat_ranges.items() if v != (STAT_MIN, STAT_MAX)]
         self._stats_chip.label = ft.Text(f"Stats · {len(active_stats)}" if active_stats else "Stats")
         self._sync_range_labels()
-        self._sort.value = f.sort
+        self._sort_label.value = SORT_LABELS.get(f.sort, f.sort)
+        self._tags_label.value = f"Tags · {len(f.tags)}" if f.tags else "Tags"
+        for key, item in self._sort_items.items():
+            item.checked = key == f.sort
         self._direction.icon = ft.Icons.ARROW_DOWNWARD if f.descending else ft.Icons.ARROW_UPWARD
         self._direction.tooltip = "Descending — click for ascending" if f.descending else "Ascending — click for descending"
         chips: list[ft.Control] = [ActiveFilterChip(label, on_remove=lambda k=key: self.remove(k)) for key, label in f.active_labels()]

@@ -29,15 +29,19 @@ class Sprite(ft.Container):
     ) -> None:
         super().__init__()
         self._size = size
+        # An empty ``src`` makes Flutter render "A valid src value must be specified" in red,
+        # so the image is hidden and the fallback icon shown whenever there is no URL.
         self._image = ft.Image(
             src=src or "",
             width=int(size * 0.85),
             height=int(size * 0.85),
             fit=ft.BoxFit.CONTAIN,
+            visible=bool(src),
             error_content=ft.Icon(
                 ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED
             ),
         )
+        self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not src)
         self._badge = ft.Container(
             width=max(14, size // 3),
             height=max(14, size // 3),
@@ -61,6 +65,7 @@ class Sprite(ft.Container):
         self.content = ft.Stack(
             controls=[
                 ft.Container(content=self._image, alignment=ft.Alignment.CENTER, width=size, height=size),
+                ft.Container(content=self._fallback, alignment=ft.Alignment.CENTER, width=size, height=size),
                 self._badge,
                 self._number,
             ],
@@ -78,6 +83,8 @@ class Sprite(ft.Container):
 
     def set_src(self, src: str | None) -> None:
         self._image.src = src or ""
+        self._image.visible = bool(src)
+        self._fallback.visible = not src
 
     def set_tooltip(self, tooltip: str | None) -> None:
         self.tooltip = tooltip

@@ -81,11 +81,16 @@
 - **Move picker**: legal moves per species (megas use the base form), ranked by tournament usage, illegal moves hidden unless "Show all moves" is on, warnings on cards, in the health checks and in the import preview.
 - **Persisted view preferences**: box layout and stats-on-cards, team summary panel and show-all-moves, meta layout and collapsed state.
 
+## Phase 8: Insight & Workflow Backlog [COMPLETED — 2026-09-02]
+- **Offensive coverage (FR-12)**: per-slot "Hits SE" row and a team-level attacking grid with uncovered types and health chips.
+- **Bulk "Add to team"** from the Box selection bar and the detail panel, with "New team…".
+- **Extra table columns (FR-6)**: Abilities, Dex #, Added, Notes, remembered in preferences.
+- **Filtered CSV export (FR-7)**: visible or selected entries.
+- **Compare teams (FR-13)**: side-by-side rosters, averages, health, coverage and shared weaknesses.
+- **Saved filter views** in the Box toolbar.
+- **Configurable database path** (`PCPT_DATABASE`, `PCPT_PREFERENCES`).
+
 ## Remaining Backlog
-- **Offensive coverage (FR-12)**: team-level attacking matrix from assigned moves; the slot card reserves a caption row for it. All prerequisites (move types, categories) now exist.
-- **Bulk "Add to team"** from the Box multi-select bar (fill empty slots or a chosen slot).
-- **Extra stat columns (FR-6)**: choosing table columns (abilities, Pokédex number, date added).
-- **Filtered CSV export (FR-7)**: export the visible or selected entries rather than the whole box.
-- **Team comparison (FR-13)**: side-by-side totals for two teams.
-- **Saved filter views** (user story), **offline sprite caching**, **configurable database path**, **battle-log parser** (integration backlog).
-- **Victory Road registry**: only Internationals and Worlds are listed; Regional and Special Event pages must be added to the registry for those tiers to fill.
+- **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
+- **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.
+- **Victory Road registry**: only Internationals and Worlds are listed; Regional and Special Event pages must be added to `OFFICIAL_EVENT_SLUGS` for those tiers to fill.

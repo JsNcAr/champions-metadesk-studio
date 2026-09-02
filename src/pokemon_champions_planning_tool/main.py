@@ -6,13 +6,42 @@ from .services.move_catalog_service import sync_move_catalog_on_startup
 from .services.terminal_shell import TerminalShell
 
 
+STARTUP_CHECK_HOURS = 24
+
+
+def _startup_check_due(session, key: str, hours: int = STARTUP_CHECK_HOURS) -> bool:
+    """True at most once per ``hours`` per key; records the check time when due."""
+    from datetime import datetime, timedelta, timezone
+
+    from .infrastructure.database.repositories import TournamentRepository
+
+    repo = TournamentRepository(session)
+    stamp = repo.get_state(key)
+    now = datetime.now(timezone.utc)
+    if stamp:
+        try:
+            last = datetime.fromisoformat(stamp)
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if now - last < timedelta(hours=hours):
+                return False
+        except ValueError:
+            pass
+    repo.set_state(key, now.isoformat())
+    return True
+
+
 def run():
     # Initialize DB schema once before anything else (DDL, migrations)
     initialize_database()
 
     with get_session() as session:
-        sync_champions_catalog_on_startup(session)
-        sync_items_catalog(session)
+        # PokéAPI and Showdown are only asked once a day at launch; Settings can force a
+        # refresh any time. Without the gate an offline start waited on both timeouts.
+        if _startup_check_due(session, "startup.champions_checked_at"):
+            sync_champions_catalog_on_startup(session)
+        if _startup_check_due(session, "startup.items_checked_at"):
+            sync_items_catalog(session)
         sync_move_catalog_on_startup(session)
 
     if "--cli" in sys.argv:

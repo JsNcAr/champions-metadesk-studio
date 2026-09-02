@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, delete, func, select
 
 from ...domain.entities.box_entry import BoxEntry
@@ -983,6 +983,21 @@ class TournamentRepository:
         )
         return list(self.session.exec(stmt).all())
 
+    def _species_ids_matching(self, raw: str, canon: str) -> list[str]:
+        """Champions species whose name or id contains the query (208 rows: cheap)."""
+        needle = raw.strip().lower()
+        if len(needle) < 2:
+            return []
+        stmt = select(ChampionsSpeciesRecord.species_name, ChampionsSpeciesRecord.display_name)
+        ids: list[str] = []
+        for species_name, display_name in self.session.exec(stmt).all():
+            sid = (species_name or "").lower()
+            if not sid:
+                continue
+            if needle in sid or needle in (display_name or "").lower() or (canon and canon in sid):
+                ids.append(sid)
+        return ids
+
     def _apply_search_filters(
         self,
         stmt,
@@ -1023,11 +1038,23 @@ class TournamentRepository:
             q_canon = format_api_name(q_raw)
             c_pattern = f"%{q_canon}%" if q_canon else q_pattern
 
-            subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(
-                (TournamentTeamMemberRecord.species_name.ilike(q_pattern))
-                | (TournamentTeamMemberRecord.canonical_id.ilike(q_pattern))
-                | (TournamentTeamMemberRecord.canonical_id.ilike(c_pattern))
-            )
+            # Resolve the text against the (small) species catalogue first: a match turns the
+            # roster clause into an indexed id lookup (forms included via a prefix GLOB)
+            # instead of a substring scan over every roster row. Unknown names fall back to
+            # the scan so rosters from other games stay searchable.
+            species_ids = self._species_ids_matching(q_raw, q_canon)
+            if species_ids:
+                member_clause = or_(
+                    TournamentTeamMemberRecord.canonical_id.in_(species_ids),
+                    *[TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{sid}-*") for sid in species_ids],
+                )
+            else:
+                member_clause = (
+                    (TournamentTeamMemberRecord.species_name.ilike(q_pattern))
+                    | (TournamentTeamMemberRecord.canonical_id.ilike(q_pattern))
+                    | (TournamentTeamMemberRecord.canonical_id.ilike(c_pattern))
+                )
+            subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(member_clause)
             stmt = stmt.where(
                 (TournamentTeamRecord.player_name.ilike(q_pattern))
                 | (TournamentRecord.name.ilike(q_pattern))

@@ -89,6 +89,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
         # team_members — Terastallization type per slot
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+        # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
+        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
         # tournament_team_members — moves per roster slot (usage ranking in the move picker)
         "ALTER TABLE tournament_team_members ADD COLUMN moves JSON NOT NULL DEFAULT '[]';",
         # tournaments — official tier (worlds/international/regional/special) or community

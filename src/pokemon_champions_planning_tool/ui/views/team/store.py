@@ -76,6 +76,9 @@ class TeamStore:
         self.active_team_name: str = ""
         self.slots: list[SlotModel] = [SlotModel(p) for p in range(1, 7)]
         self.summary: TeamSummary = EMPTY_SUMMARY
+        # Partner recommendations per species; the query costs ~200 ms and every slot edit
+        # re-renders the card, so answers are kept until tournament data changes.
+        self._partner_cache: dict[tuple[str, int], list[PartnerRecommendation]] = {}
         self._listeners: list[Listener] = []
 
     # -- subscription ---------------------------------------------------------------------
@@ -426,8 +429,18 @@ class TeamStore:
         slot = self.slot(position)
         if slot.entry is None:
             return []
+        key = (base_canonical_id(slot.entry.pokemon.canonical_id), limit)
+        cached = self._partner_cache.get(key)
+        if cached is not None:
+            return cached
         with self._sf() as s:
-            return TournamentService(s).get_top_partners(slot.entry.pokemon.canonical_id, limit=limit)
+            partners = TournamentService(s).get_top_partners(slot.entry.pokemon.canonical_id, limit=limit)
+        self._partner_cache[key] = partners
+        return partners
+
+    def invalidate_partners(self) -> None:
+        """New tournament data landed: recompute recommendations on the next request."""
+        self._partner_cache.clear()
 
     # -- import / export ------------------------------------------------------------------------------
 

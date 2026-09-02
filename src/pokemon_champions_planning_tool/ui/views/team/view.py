@@ -110,6 +110,7 @@ class TeamView(ft.Column):
         ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._reload_if_loaded())
         ctx.bus.on(events.TEAMS_CHANGED, self._on_teams_changed)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
+        ctx.bus.on(events.META_SYNCED, lambda _r: self.store.invalidate_partners())
         ctx.bus.on(events.IMPORT_REQUESTED, self._on_import_requested)
 
     # -- lifecycle --------------------------------------------------------------------------------
@@ -240,6 +241,11 @@ class TeamView(ft.Column):
             self.store.load(self.store.active_team_id)
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
+        if kind == "tournaments":
+            self.store.invalidate_partners()
+            if self._loaded:
+                self._load_partners()
+            return
         if kind in ("items", "megas", "moves"):
             self.store.catalogs = self.ctx.catalogs or self.store.catalogs
             self._reload_if_loaded()

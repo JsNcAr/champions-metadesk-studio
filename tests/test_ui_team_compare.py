@@ -43,7 +43,7 @@ class TestCompare(_Base):
 for _name in [n for n in dir(_Base) if n.startswith("test_")]:
     for _cls in [c for c in list(globals().values()) if isinstance(c, type) and issubclass(c, _Base) and c is not _Base]:
         setattr(_cls, _name, None)
-del _Base  # not collected again under this module's name
+del _Base, _cls, _name  # loop names would be collected again by the loader
 
 
 if __name__ == "__main__":

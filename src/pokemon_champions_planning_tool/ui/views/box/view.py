@@ -132,6 +132,7 @@ class BoxView(ft.Row):
             on_toggle_planned=self._toggle_planned,
             on_delete=self._delete,
             on_add_to_team=self._add_to_team,
+            on_calc=self._open_calc,
             on_refresh=self._refresh_entry,
         )
 
@@ -530,6 +531,21 @@ class BoxView(ft.Row):
         self._update_self()
 
     # -- placeholder repair -----------------------------------------------------------------------
+
+    def _open_calc(self) -> None:
+        """Send the selected box Pokémon (in its selected form) to the damage calculator."""
+        from ..calc.state import CalcRequest, pokemon_from_species_id
+
+        detail = self.detail.detail
+        if detail is None:
+            return
+        form_id = self.detail.form_id or "base"
+        canonical_id = form_id if form_id != "base" else detail.entry.pokemon.canonical_id
+        species = self.ctx.catalogs.species_for(canonical_id)
+        if species is None:
+            self.ctx.toast(f"{detail.entry.pokemon.display_name} is not in the species catalogue yet — sync in Settings", "warning")
+            return
+        self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=pokemon_from_species_id(species.canonical_id, species, source="Box")))
 
     def _refresh_entry(self, entry_id: UUID) -> None:
         entry = self.store.entry(entry_id)

@@ -317,7 +317,7 @@ class MetaView(ft.Column):
                 card = EventCard(row, shown=0, on_open=self._open_event, on_import=self._import)
                 self._cards[row.tournament_id] = card
                 self._grid.controls.append(card)
-            group.add_row(TeamRow(row, on_import=self._import))
+            group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs))
             self._cards[row.tournament_id].set_shown(len(group.rows))
         self._list.visible = self.view_mode == "rows"
         self._grid.visible = self.view_mode == "cards"
@@ -399,7 +399,7 @@ class MetaView(ft.Column):
             page.pop_dialog()
             self._import(row)
 
-        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog)
+        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog, on_calc=self._calc_vs)
         page.show_dialog(dialog)
         self.ctx.run_in_background(lambda: self.store.teams_for_event(tournament_id), on_done=dialog.set_rows, on_error=dialog.set_error)
 
@@ -444,6 +444,27 @@ class MetaView(ft.Column):
         )
 
     # -- import handoff --------------------------------------------------------------------
+
+    def _calc_vs(self, row: MetaTeamRow, index: int) -> None:
+        """Send one roster member to the damage calculator as the defender (with the paste's set)."""
+        from ....services.showdown_service import parse_showdown_text
+        from ..calc.state import CalcRequest, pokemon_from_parsed
+
+        if index >= len(row.members):
+            return
+        member = row.members[index]
+        parsed = None
+        if row.showdown_text:
+            try:
+                slots = parse_showdown_text(row.showdown_text).slots
+                parsed = slots[index] if index < len(slots) else None
+            except Exception:  # noqa: BLE001 - a paste that does not parse just means defaults
+                parsed = None
+        pokemon = pokemon_from_parsed(parsed, member.canonical_id, self.ctx.catalogs, source=f"{row.player_name} · {row.tournament_name}")
+        if pokemon is None:
+            self.ctx.toast(f"{member.display_name} is not in the species catalogue", "warning")
+            return
+        self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))
 
     def _import(self, row: MetaTeamRow) -> None:
         title = f"{row.player_name} — {row.tournament_name}"

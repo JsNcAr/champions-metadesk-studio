@@ -32,6 +32,7 @@ class SlotCallbacks:
     on_swap: Callable[[int, int], None]
     on_focus: Callable[[int], None]
     on_move_pick: Callable[[int, int], None] = lambda position, index: None
+    on_calc: Callable[[int], None] = lambda position: None
 
 
 
@@ -349,6 +350,7 @@ class SlotCard(ft.Container):
     def _menu_items(self) -> list[ft.PopupMenuItem]:
         others = [p for p in range(1, 7) if p != self.position]
         return [
+            ft.PopupMenuItem(content=ft.Text("Open in damage calc"), icon=ft.Icons.CALCULATE_OUTLINED, on_click=lambda _e: self.cb.on_calc(self.position)),
             ft.PopupMenuItem(content=ft.Text("Replace Pokémon…"), icon=ft.Icons.SWAP_HORIZ, on_click=lambda _e: self.cb.on_assign(self.position)),
             *([ft.PopupMenuItem(content=ft.Text("Move to lead"), icon=ft.Icons.VERTICAL_ALIGN_TOP, on_click=lambda _e: self.cb.on_swap(self.position, 1))] if self.position != 1 else []),
             *[ft.PopupMenuItem(content=ft.Text(f"Swap with slot {p}"), icon=ft.Icons.SWAP_VERT, on_click=lambda _e, p=p: self.cb.on_swap(self.position, p)) for p in others],

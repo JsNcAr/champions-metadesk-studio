@@ -68,6 +68,7 @@ class Palette:
     ON_INFO_CONTAINER = ON_SECONDARY_CONTAINER
 
     # Placement badge for 2nd place (silver); 1st uses PRIMARY, top 4 TERTIARY_CONTAINER.
+    TEAL = "#2DD4BF"           # damage calculator accent
     SILVER = "#CBD5E1"
     ON_SILVER = "#0B1220"
 
@@ -79,6 +80,7 @@ class Accent:
     BOX = Palette.SECONDARY
     TEAMS = Palette.SUCCESS
     META = Palette.TERTIARY
+    CALC = Palette.TEAL
     SETTINGS = Palette.ON_SURFACE_VARIANT
 
 

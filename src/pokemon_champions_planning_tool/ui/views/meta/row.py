@@ -214,9 +214,10 @@ class EventCard(ft.Container):
 class EventDialog(ft.AlertDialog):
     """Whole standings of one event, every placement, with the same team rows."""
 
-    def __init__(self, first: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_close: Callable[[], None]) -> None:
+    def __init__(self, first: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_close: Callable[[], None], on_calc: Callable[[MetaTeamRow, int], None] | None = None) -> None:
         super().__init__(modal=False, scrollable=False)
         self._on_import = on_import
+        self._on_calc = on_calc
         self._list = ft.ListView(spacing=0, expand=True)
         self._status = ft.Text("Loading standings…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2)
@@ -245,7 +246,7 @@ class EventDialog(ft.AlertDialog):
         self.actions_alignment = ft.MainAxisAlignment.END
 
     def set_rows(self, rows: list[MetaTeamRow]) -> None:
-        self._list.controls = [TeamRow(r, on_import=self._on_import) for r in rows]
+        self._list.controls = [TeamRow(r, on_import=self._on_import, on_calc=self._on_calc) for r in rows]
         self._spinner.visible = False
         self._status.value = plural(len(rows), "team") + " · best placement first"
         if is_mounted(self):
@@ -262,7 +263,7 @@ class EventDialog(ft.AlertDialog):
 class TeamRow(ft.Container):
     """48px row: placement · player · six sprites · legality · Poképaste · Import."""
 
-    def __init__(self, row: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None]) -> None:
+    def __init__(self, row: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_calc: Callable[[MetaTeamRow, int], None] | None = None) -> None:
         super().__init__()
         self.row = row
         self._on_import = on_import
@@ -282,6 +283,11 @@ class TeamRow(ft.Container):
         actions: list[ft.Control] = []
         if row.pokepast_url:
             actions.append(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_size=IconSize.MD, tooltip="Open Poképaste", on_click=lambda e, url=row.pokepast_url: e.control.page.launch_url(url)))
+        if on_calc is not None and row.members:
+            actions.append(ft.PopupMenuButton(
+                icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs…",
+                items=[ft.PopupMenuItem(content=ft.Text(m.display_name), on_click=lambda _e, i=i: on_calc(self.row, i)) for i, m in enumerate(row.members)],
+            ))
         if row.legality_known and not row.is_legal:
             actions.append(ft.OutlinedButton("Can't import", disabled=True, tooltip="Contains species outside the Champions Pokédex"))
         else:

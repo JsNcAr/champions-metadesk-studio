@@ -89,6 +89,7 @@ class TeamView(ft.Column):
             on_spread=self._open_spread,
             on_swap=self._swap,
             on_focus=self._focus,
+            on_calc=self._open_calc,
         )
         self.cards = [SlotCard(p, callbacks) for p in range(1, 7)]
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
@@ -321,6 +322,19 @@ class TeamView(ft.Column):
             on_show_all=self._set_show_all_moves,
         )
         page.show_dialog(dialog)
+
+    def _open_calc(self, position: int) -> None:
+        """Send this slot to the damage calculator as the attacker."""
+        from ..calc.state import CalcRequest, pokemon_from_slot
+
+        slot = self.store.slot(position)
+        if not slot.filled:
+            return
+        pokemon = pokemon_from_slot(slot, self.store.catalogs, source=f"{self.store.active_team_name or 'Team'} · slot {position}")
+        if pokemon is None:
+            self.ctx.toast("This slot cannot be calculated", "warning")
+            return
+        self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=pokemon))
 
     def _open_item_picker(self, position: int) -> None:
         slot = self.store.slot(position)

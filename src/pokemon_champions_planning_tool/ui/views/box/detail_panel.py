@@ -34,6 +34,7 @@ class DetailPanel(SidePanel):
         on_toggle_planned: Callable[[UUID, bool], None],
         on_delete: Callable[[UUID], None],
         on_add_to_team: Callable[[UUID, UUID | None], None] | None = None,
+        on_calc: Callable[[], None] | None = None,
         on_refresh: Callable[[UUID], None] | None = None,
     ) -> None:
         super().__init__("Details", on_close=on_close, accent=Accent.BOX)
@@ -86,6 +87,8 @@ class DetailPanel(SidePanel):
             tooltip="Add to a team's first empty slot",
             visible=on_add_to_team is not None,
         )
+        self._calc_button = ft.FilledTonalButton("Damage calc", icon=ft.Icons.CALCULATE_OUTLINED, visible=on_calc is not None,
+                                                 tooltip="Open in the damage calculator", on_click=lambda _e: on_calc() if on_calc else None)
         self._delete_button = ft.TextButton(
             "Remove from box", icon=ft.Icons.DELETE_OUTLINE,
             style=ft.ButtonStyle(color=Palette.ERROR),
@@ -109,6 +112,7 @@ class DetailPanel(SidePanel):
             self._refresh_banner,
             self._refresh_button,
             self._add_to_team,
+            self._calc_button,
             ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._planned_button, self._delete_button]),
             ft.Container(height=Space.XL),
         ]

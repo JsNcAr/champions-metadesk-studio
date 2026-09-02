@@ -28,6 +28,8 @@ META_SYNCED = "meta.synced"
 IMPORT_REQUESTED = "import.requested"
 # Ask the shell to show a view. Payload: view key.
 NAVIGATE = "navigate"
+# Ask the damage calculator to load Pokémon; payload: ui.views.calc.CalcRequest.
+CALC_REQUESTED = "calc.requested"
 # The team builder's active team changed. Payload: team id (UUID) or None.
 ACTIVE_TEAM = "team.active"
 

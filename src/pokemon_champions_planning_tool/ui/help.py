@@ -9,10 +9,11 @@ from .components import SectionHeader
 from .theme import Accent, Palette, Radius, Space
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
-    ("Ctrl+1 / 2 / 3", "Box · Teams · Meta"),
+    ("Ctrl+1 / 2 / 3 / 4", "Box · Teams · Meta · Calc"),
     ("Ctrl+,", "Settings"),
     ("F1 or Ctrl+/", "This help"),
-    ("Ctrl+F", "Focus the search or filter field (Box, Meta)"),
+    ("Ctrl+F", "Focus the search or filter field (Box, Meta, Calc)"),
+    ("Ctrl+Shift+S", "Swap attacker and defender (Calc)"),
     ("Ctrl+K", "Add a Pokémon to the box"),
     ("Ctrl+Shift+A", "Select every visible box entry"),
     ("Delete", "Delete the selected box entries (with Undo)"),
@@ -45,6 +46,13 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Search matches species, players and event names; the Search button re-queries even when nothing changed.",
         "Box ▾ finds teams you can build: all six in your box, or one to three missing. Greyed sprites are the ones you lack; the chip says how many you have. Owned entries only; Megas count as their base species.",
     ),
+    "Calc": (
+        "Both directions at once: every move of the attacker against the defender and the other way round, with the 16 rolls, the description and the KO chance when a row is expanded.",
+        "Weather, terrain, screens, Tailwind, Helping Hand, hazards and Leech Seed live in the Field panel; \"Active\" next to an ability means it has already triggered (Intimidate applied, Flash Fire lit).",
+        "HP scaling moves (Eruption, Flail, Hard Press), weight moves (Heavy Slam, Low Kick) and abilities such as Multiscale read the HP sliders and each species' weight.",
+        "Open in damage calc from a team slot's menu, Damage calc vs… on a Meta team, or Damage calc in the Box detail panel; the last calculation is remembered.",
+        "The numbers come from a port of the Smogon calculator's Pokémon Champions module and are checked against it; Terastallization is not in Champions and is not modelled.",
+    ),
     "Data & syncing": (
         "Tournaments sync at launch when the last sync is older than six hours or a backlog is waiting; Settings › Sync now always runs.",
         "Limitless allows 50 requests per 5 minutes, so a sync fetches standings in slices and continues next time.",
@@ -67,7 +75,7 @@ class HelpDialog(ft.AlertDialog):
             for keys, what in SHORTCUTS
         ]
         sections: list[ft.Control] = [SectionHeader("Keyboard shortcuts", accent=Accent.SETTINGS), ft.Column(spacing=Space.XS, tight=True, controls=rows)]
-        accents = {"Box": Accent.BOX, "Teams": Accent.TEAMS, "Meta": Accent.META, "Data & syncing": Accent.SETTINGS}
+        accents = {"Box": Accent.BOX, "Teams": Accent.TEAMS, "Meta": Accent.META, "Calc": Accent.CALC, "Data & syncing": Accent.SETTINGS}
         for title, tips in TIPS.items():
             sections.append(SectionHeader(title, accent=accents.get(title, Palette.SECONDARY)))
             sections.append(ft.Column(spacing=Space.XS, tight=True, controls=[

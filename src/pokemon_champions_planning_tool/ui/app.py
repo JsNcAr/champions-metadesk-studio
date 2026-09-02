@@ -17,6 +17,7 @@ from .preferences import Preferences
 from .shell import AppShell
 from .theme import apply_theme
 from .views.box import BoxView
+from .views.calc import CalcStore, CalcView
 from .views.meta import MetaView
 from .views.settings import SettingsView
 from .views.team import TeamStore
@@ -77,6 +78,9 @@ def main(page: ft.Page) -> None:
     meta_view = MetaView(ctx)
     shell.register_view("meta", label="Meta", icon=ft.Icons.EMOJI_EVENTS_OUTLINED, selected_icon=ft.Icons.EMOJI_EVENTS,
                         control=meta_view, on_activate=meta_view.ensure_loaded)
+    calc_view = CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs))
+    shell.register_view("calc", label="Calc", icon=ft.Icons.CALCULATE_OUTLINED, selected_icon=ft.Icons.CALCULATE,
+                        control=calc_view, on_activate=calc_view.ensure_loaded)
     settings_view = SettingsView(ctx)
     shell.register_view("settings", label="Settings", icon=ft.Icons.SETTINGS_OUTLINED, selected_icon=ft.Icons.SETTINGS,
                         control=settings_view, on_activate=settings_view.refresh, in_rail=False)

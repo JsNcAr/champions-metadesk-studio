@@ -26,6 +26,7 @@ Real API shape (verified 2026-08-31):
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -38,15 +39,22 @@ from ...config import (
     LIMITLESS_CHAMPIONS_FORMATS,
     LIMITLESS_MAX_AGE_DAYS,
     LIMITLESS_PAGE_SIZE,
+    LIMITLESS_RATE_RESERVE,
+    LIMITLESS_STANDINGS_PER_RUN,
     TOURNAMENT_SYNC_TIMEOUT,
     TOURNAMENT_USER_AGENT,
 )
 
-# Max standings requests per sync run to avoid 429 rate-limiting.
-# At ~1 req/s this caps a single sync at ~20 s of standings I/O.
-_MAX_STANDINGS_PER_SYNC = 20
+# Standings requests per batch unless the rate budget runs out first.
+_MAX_STANDINGS_PER_SYNC = LIMITLESS_STANDINGS_PER_RUN
 # Delay (seconds) between consecutive standings requests.
 _STANDINGS_DELAY_S = 0.6
+# Listing pages per call (200 tournaments each). Only the first full sync goes deep;
+# afterwards paging stops at the first page made entirely of known tournaments.
+_MAX_LIST_PAGES = 12
+
+_RATELIMIT_FIELD_RE = re.compile(r"\b([rt])=(\d+)")
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 class LimitlessNetworkError(Exception):
@@ -115,9 +123,38 @@ class LimitlessProvider:
         self.base_url = base_url.rstrip("/")
         self.user_agent = user_agent
         self.timeout = timeout
+        self.rate_reserve = LIMITLESS_RATE_RESERVE
+        # From the ``ratelimit`` response header ("50-in-5min"; r=<remaining>; t=<reset s>).
+        self.rate_remaining: int | None = None
+        self.rate_reset_s: int | None = None
+        self.requests_made = 0
+
+    # -- rate budget -------------------------------------------------------------------
+
+    def _note_rate_headers(self, headers: Any) -> None:
+        value = headers.get("ratelimit") if headers is not None else None
+        if not value:
+            return
+        fields = dict(_RATELIMIT_FIELD_RE.findall(str(value)))
+        if "r" in fields:
+            self.rate_remaining = int(fields["r"])
+        if "t" in fields:
+            self.rate_reset_s = int(fields["t"])
+
+    @property
+    def budget(self) -> int | None:
+        """Requests this client may still make before touching the reserve; None if unknown."""
+        if self.rate_remaining is None:
+            return None
+        return max(0, self.rate_remaining - self.rate_reserve)
 
     def _get(self, endpoint: str, params: dict[str, Any] | None = None, retries: int = 3) -> Any:
-        """Executes HTTP GET and returns parsed JSON response with HTTP 429 retry backoff."""
+        """HTTP GET returning parsed JSON.
+
+        Retries only what can succeed on a retry: HTTP 429 (honouring ``Retry-After`` or
+        the window reset), 5xx, connection errors and timeouts. A 4xx such as 404 is
+        raised at once — retrying it only burned three requests of the rate budget.
+        """
         url = f"{self.base_url}{endpoint}"
         headers = {
             "User-Agent": self.user_agent,
@@ -125,34 +162,58 @@ class LimitlessProvider:
             "Accept-Language": "en-US,en;q=0.9",
         }
 
+        last_error: Exception | None = None
         for attempt in range(1, retries + 1):
             try:
                 resp = requests.get(url, params=params, headers=headers, timeout=self.timeout)
-                if resp.status_code == 429 and attempt < retries:
-                    retry_after = resp.headers.get("Retry-After")
-                    delay = float(retry_after) if (retry_after and retry_after.isdigit()) else (attempt * 2.0)
-                    print(f"⚠️ Limitless API rate-limited (HTTP 429). Retrying attempt {attempt}/{retries} in {delay:.1f}s...")
-                    time.sleep(delay)
-                    continue
-                resp.raise_for_status()
-                return resp.json()
-            except Exception as exc:
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+                last_error = exc
                 if attempt < retries:
                     time.sleep(attempt * 1.5)
                     continue
+                break
+            except Exception as exc:  # noqa: BLE001 - anything else is not retryable
                 raise LimitlessNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc
+
+            self.requests_made += 1
+            self._note_rate_headers(getattr(resp, "headers", None) or {})
+            status = getattr(resp, "status_code", 200)
+            if status in _RETRYABLE_STATUS and attempt < retries:
+                retry_after = (resp.headers.get("Retry-After") or "") if resp.headers is not None else ""
+                if status == 429:
+                    delay = float(retry_after) if retry_after.isdigit() else float(self.rate_reset_s or attempt * 5)
+                    delay = min(max(delay, 1.0), 90.0)
+                    print(f"⚠️ Limitless API rate-limited (HTTP 429). Waiting {delay:.0f}s before retry {attempt}/{retries}…")
+                else:
+                    delay = attempt * 1.5
+                time.sleep(delay)
+                last_error = LimitlessNetworkError(f"HTTP {status}")
+                continue
+            try:
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as exc:  # noqa: BLE001 - surfaced as one error type
+                raise LimitlessNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc
+        raise LimitlessNetworkError(f"HTTP GET failed for '{url}': {last_error}")
 
     def fetch_champions_tournaments(
         self,
         max_age_days: int = LIMITLESS_MAX_AGE_DAYS,
         target_formats: set[str] | None = None,
+        known_ids: set[str] | None = None,
     ) -> list[LimitlessTournament]:
         """Fetches VGC tournaments filtered to Champions formats within max_age_days.
+
+        The listing is newest-first, so paging stops at the first page that holds no
+        tournament outside ``known_ids``: everything below it was listed by an earlier
+        sync and any still-missing standings are tracked in the database backlog. In
+        steady state that is one request instead of a dozen.
 
         Returns newest-first list of LimitlessTournament DTOs.
         """
         if target_formats is None:
             target_formats = LIMITLESS_CHAMPIONS_FORMATS
+        known = known_ids or set()
 
         cutoff_ts = datetime.now(timezone.utc).timestamp() - (max_age_days * 86400)
         tournaments: list[LimitlessTournament] = []
@@ -169,6 +230,7 @@ class LimitlessProvider:
             if not isinstance(data, list) or not data:
                 break  # Empty page = exhausted
 
+            page_has_new = False
             for item in data:
                 try:
                     format_code = str(item.get("format", ""))
@@ -187,6 +249,11 @@ class LimitlessProvider:
                         break
 
                     if format_code in target_formats or any(tf in format_code for tf in target_formats):
+                        # Only Champions-format events count as "new": the feed also lists
+                        # other VGC formats that are never stored, and they must not keep
+                        # the paging going.
+                        if str(item.get("id", "")) not in known:
+                            page_has_new = True
                         tournaments.append(
                             LimitlessTournament(
                                 id=str(item.get("id", "")),
@@ -201,8 +268,12 @@ class LimitlessProvider:
                     print(f"⚠️ Skipping malformed Limitless tourney item: {exc}")
                     continue
 
+            if known and not page_has_new:
+                break  # every tournament on this page was listed by an earlier sync
+            if len(data) < LIMITLESS_PAGE_SIZE:
+                break  # short page = last page
             page += 1
-            if page > 10:  # safety page cap per sync run
+            if page > _MAX_LIST_PAGES:
                 break
 
             # Throttle requests between pages to respect API limits
@@ -322,10 +393,16 @@ class LimitlessProvider:
         """
         results: dict[str, list[LimitlessStanding]] = {}
         fetched = 0
+        self.last_batch_stop: str | None = None
 
         for t_id in tournament_ids:
             if fetched >= max_requests:
+                self.last_batch_stop = "cap"
                 print(f"ℹ️ Limitless: standings batch cap ({max_requests}) reached, stopping early.")
+                break
+            if self.budget is not None and self.budget <= 0:
+                self.last_batch_stop = "rate"
+                print(f"ℹ️ Limitless: rate budget exhausted ({self.rate_remaining} left in window, reserve {self.rate_reserve}); resuming next run.")
                 break
 
             fetched += 1

@@ -780,6 +780,27 @@ class TournamentRepository:
             stmt = stmt.where(TournamentRecord.tournament_id.startswith(source_prefix))
         return set(self.session.exec(stmt).all())
 
+    def list_tournament_ids(self, source_prefix: str | None = None) -> set[str]:
+        """Every stored tournament ID, optionally limited to one source prefix."""
+        stmt = select(TournamentRecord.tournament_id)
+        if source_prefix:
+            stmt = stmt.where(TournamentRecord.tournament_id.startswith(source_prefix))
+        return set(self.session.exec(stmt).all())
+
+    def list_paste_urls_for_tournament(self, tournament_id: str) -> set[str]:
+        """Paste URLs already stored for an event, so a partial ingest can resume."""
+        stmt = select(TournamentTeamRecord.pokepast_url).where(
+            TournamentTeamRecord.tournament_id == tournament_id,
+            TournamentTeamRecord.pokepast_url.is_not(None),
+        )
+        return {url for url in self.session.exec(stmt).all() if url}
+
+    def last_standings_sync_at(self) -> datetime | None:
+        """When standings were last fetched successfully for any tournament."""
+        return self.session.exec(
+            select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
+        ).one()
+
     def delete_teams_for_tournament(self, tournament_id: str) -> int:
         """Delete a tournament's teams and their members. Returns rows removed.
 

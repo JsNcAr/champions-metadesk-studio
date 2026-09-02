@@ -13,10 +13,16 @@ Standardizes and normalizes all ingested data into SQLModel entities:
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, select
 
-from ..config import LIMITLESS_MAX_AGE_DAYS
+from ..config import (
+    LIMITLESS_MAX_AGE_DAYS,
+    LIMITLESS_STANDINGS_PER_RUN,
+    RECENT_EVENT_GRACE_DAYS,
+    STARTUP_SYNC_MIN_INTERVAL_HOURS,
+)
 from ..domain.event_tier import classify_event_tier
 from ..domain.pokemon_identity import format_api_name, normalize_format_regulation
 from ..infrastructure.database.models import (
@@ -34,10 +40,15 @@ from ..infrastructure.providers import (
     LimitlessStanding,
     VRPasteResult,
 )
+from ..infrastructure.providers.victory_road_provider import OFFICIAL_EVENT_SLUGS
 
-# Standings requests issued per sync run. The Limitless API rate-limits aggressively,
-# so a run drains part of the backlog rather than trying to fetch everything at once.
-_MAX_STANDINGS_PER_RUN = 20
+# Standings requests issued per sync run. Limitless allows 50 requests per 5 minutes; the
+# provider also stops on its own when the window's budget is nearly spent, so a run
+# drains part of the backlog and the next run continues.
+_MAX_STANDINGS_PER_RUN = LIMITLESS_STANDINGS_PER_RUN
+# Pause between paste fetches for official events (Poképaste / VRPaste are separate
+# hosts from Limitless, but they are still someone else's servers).
+_PASTE_DELAY_S = 0.25
 
 
 def _assemble_showdown_from_limitless(standing: LimitlessStanding) -> str:
@@ -156,11 +167,18 @@ def _sync_limitless(
     skipping those tournaments forever as "already known".
     """
     provider = limitless_provider or LimitlessProvider()
-    tournaments = provider.fetch_champions_tournaments(max_age_days=max_age_days)
+    known_ids = {t_id.removeprefix("limitless-") for t_id in repo.list_tournament_ids(source_prefix="limitless-")}
+    # The listing stops at the first page of already-known tournaments (unless forced,
+    # when metadata such as player counts is refreshed all the way back).
+    tournaments = provider.fetch_champions_tournaments(
+        max_age_days=max_age_days, known_ids=None if force else known_ids
+    )
 
     fetched_count = len(tournaments)
     teams_added = 0
     skipped_count = 0
+    now = datetime.now(timezone.utc)
+    grace = timedelta(days=RECENT_EVENT_GRACE_DAYS)
 
     pending_ids = repo.list_tournament_ids_pending_standings(source_prefix="limitless-")
 
@@ -168,9 +186,11 @@ def _sync_limitless(
     # standings. Tournaments are returned newest-first, so the backlog drains from
     # the most recent events downwards.
     needs_standings: list[str] = []
+    listed_dates: dict[str, datetime] = {}
     for t_dto in tournaments:
         t_id = f"limitless-{t_dto.id}"
         existing = repo.get_tournament(t_id)
+        listed_dates[t_dto.id] = t_dto.date
 
         if existing and existing.standings_synced and not force:
             skipped_count += 1
@@ -193,6 +213,31 @@ def _sync_limitless(
         if existing is None or t_id in pending_ids or force:
             needs_standings.append(t_dto.id)
 
+    # Tournaments listed by an earlier run whose standings are still pending are part
+    # of the backlog even though the incremental listing no longer returns them.
+    listed_now = set(needs_standings)
+    for t_id in sorted(pending_ids):
+        raw = t_id.removeprefix("limitless-")
+        if raw not in listed_now:
+            needs_standings.append(raw)
+            listed_now.add(raw)
+
+    # An event that has not started has no standings to fetch; requesting them only
+    # spends the rate budget. It stays pending and is fetched once its date has passed.
+    def _has_started(raw_id: str) -> bool:
+        date = listed_dates.get(raw_id)
+        if date is None:
+            record = repo.get_tournament(f"limitless-{raw_id}")
+            date = record.event_date if record else None
+        if date is None:
+            return True
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        return date <= now
+
+    not_started = [raw for raw in needs_standings if not _has_started(raw)]
+    needs_standings = [raw for raw in needs_standings if raw not in set(not_started)]
+
     # Batch-fetch standings with rate-limiting. Tournaments not reached this run keep
     # standings_synced=False and are retried by the next run.
     standings_batch = provider.fetch_standings_batch(
@@ -201,7 +246,8 @@ def _sync_limitless(
         max_requests=_MAX_STANDINGS_PER_RUN,
     )
 
-    backlog_remaining = len(needs_standings) - len(standings_batch)
+    backlog_remaining = len(needs_standings) - len(standings_batch) + len(not_started)
+    retry_recent = 0
 
     for raw_id, standings_list in standings_batch.items():
         t_id = f"limitless-{raw_id}"
@@ -241,14 +287,26 @@ def _sync_limitless(
 
         # The request succeeded, so this tournament leaves the backlog even when the
         # event published no decklists at all — otherwise it would be retried forever.
+        # The one exception is an event that ran in the last few days: decklists are
+        # published when it finishes, so an empty answer that soon is "not yet".
+        date = listed_dates.get(raw_id)
+        if date is not None and date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        if not standings_list and date is not None and now - date < grace:
+            retry_recent += 1
+            backlog_remaining += 1
+            continue
         repo.mark_standings_synced(t_id, True)
 
     return {
         "fetched": fetched_count,
         "added": teams_added,
         "skipped": skipped_count,
-        "standings_synced": len(standings_batch),
+        "standings_synced": len(standings_batch) - retry_recent,
         "backlog_remaining": backlog_remaining,
+        "not_started": len(not_started),
+        "requests": getattr(provider, "requests_made", None),
+        "rate_remaining": getattr(provider, "rate_remaining", None),
     }
 
 
@@ -266,20 +324,31 @@ def _sync_victory_road(
     pokepast = pokepast_provider or PokepastProvider()
     vrpaste = vrpaste_provider or VRPasteProvider()
 
+    # Events already ingested completely are not even requested: their pages are heavy
+    # WordPress renders and the results never change. An event whose pastes partly
+    # failed stays unsynced and is re-read, fetching only the pastes still missing.
+    skipped_count = 0
+    skip_slugs: set[str] = set()
+    if not force:
+        for meta in OFFICIAL_EVENT_SLUGS:
+            record = repo.get_tournament(f"vr-{meta['slug']}")
+            if record is not None and record.standings_synced:
+                skip_slugs.add(meta["slug"])
+                skipped_count += 1
+
     # Masters only: premier event pages carry Seniors and Juniors with placements
     # restarting at 1 per division.
-    events = vr.fetch_all_known_events(masters_only=True)
+    events = vr.fetch_all_known_events(masters_only=True, skip_slugs=skip_slugs)
     fetched_count = len(events)
     added_count = 0
     teams_added = 0
-    skipped_count = 0
     paste_errors = 0
 
     for ev in events:
         t_id = f"vr-{ev.slug}"
         existing_tourney = repo.get_tournament(t_id)
 
-        if existing_tourney and not force:
+        if existing_tourney is not None and existing_tourney.standings_synced and not force:
             skipped_count += 1
             continue
 
@@ -297,8 +366,14 @@ def _sync_victory_road(
             event_tier=classify_event_tier(ev.name, "Play! Pokémon Premier Events"),
         )
         repo.upsert_tournament(t_record)
-        # Replace rather than append, so re-ingesting an event cannot duplicate rosters.
-        repo.delete_teams_for_tournament(t_id)
+        if force:
+            # Replace rather than append, so a forced re-sync cannot duplicate rosters.
+            repo.delete_teams_for_tournament(t_id)
+            already_stored: set[str] = set()
+        else:
+            # Resume: keep the teams a previous run managed to fetch.
+            already_stored = repo.list_paste_urls_for_tournament(t_id)
+        event_errors = 0
 
         for st in ev.standings:
             if not st.paste_id:
@@ -307,30 +382,36 @@ def _sync_victory_road(
             max_per_event = 50 if force else 16
             if st.placement > max_per_event:
                 continue
+            if st.paste_url and st.paste_url in already_stored:
+                continue
 
             showdown_text = ""
             members_raw: list[tuple[str, str]] = []  # (canonical_id, species_name)
 
             if st.paste_provider == "pokepast":
                 try:
-                    pdata = pokepast.fetch_by_id(st.paste_id)
+                    pdata = _with_one_retry(lambda: pokepast.fetch_by_id(st.paste_id))
                     showdown_text = pdata.get("paste", "")
                     members_raw = _parse_showdown_members(showdown_text)
                 except Exception as exc:
                     print(f"⚠️ Could not fetch Pokepast '{st.paste_id}' for {st.player_name}: {exc}")
                     paste_errors += 1
+                    event_errors += 1
                     continue
 
             elif st.paste_provider == "vrpaste":
                 try:
-                    vr_data = vrpaste.fetch_by_id(st.paste_id)
+                    vr_data = _with_one_retry(lambda: vrpaste.fetch_by_id(st.paste_id))
                     showdown_text = _assemble_showdown_from_vrpaste(vr_data)
                     for m in vr_data.members:
                         members_raw.append((format_api_name(m.display_name), m.display_name))
                 except Exception as exc:
                     print(f"⚠️ Could not fetch VRPaste '{st.paste_id}' for {st.player_name}: {exc}")
                     paste_errors += 1
+                    event_errors += 1
                     continue
+            if _PASTE_DELAY_S:
+                time.sleep(_PASTE_DELAY_S)
 
             if not showdown_text:
                 continue
@@ -360,7 +441,9 @@ def _sync_victory_road(
             teams_added += 1
 
         added_count += 1
-        repo.mark_standings_synced(t_id, True)
+        # Only a complete event leaves the backlog; a partial one is re-read next run
+        # and just the missing pastes are fetched.
+        repo.mark_standings_synced(t_id, event_errors == 0)
 
     return {
         "fetched": fetched_count,
@@ -369,6 +452,15 @@ def _sync_victory_road(
         "skipped": skipped_count,
         "paste_errors": paste_errors,
     }
+
+
+def _with_one_retry(call, pause_s: float = 1.0):
+    """Run ``call``; on failure wait briefly and try once more (paste hosts hiccup)."""
+    try:
+        return call()
+    except Exception:  # noqa: BLE001 - retried once, then surfaced by the caller
+        time.sleep(pause_s)
+        return call()
 
 
 def sync_tournaments(
@@ -437,11 +529,38 @@ _STARTUP_SYNC_LOCK = threading.Lock()
 _STARTUP_SYNC_DONE = False
 
 
-def sync_tournaments_once_per_process(**kwargs) -> dict | None:
+def startup_sync_due(session: Session, min_interval_hours: float = STARTUP_SYNC_MIN_INTERVAL_HOURS) -> bool:
+    """Whether the launch-time sync should run.
+
+    It runs when nothing has ever synced, when the last successful sync is older than
+    the interval, or when standings are still pending from an earlier run (the backlog
+    drains a slice per run and the provider's rate budget keeps that safe).
+    """
+    repo = TournamentRepository(session)
+    last = repo.last_standings_sync_at()
+    if last is None:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - last >= timedelta(hours=min_interval_hours):
+        return True
+    return bool(repo.list_tournament_ids_pending_standings())
+
+
+def _skipped_result(reason: str) -> dict:
+    zero_l = {"fetched": 0, "added": 0, "skipped": 0, "standings_synced": 0, "backlog_remaining": 0}
+    zero_v = {"fetched": 0, "added": 0, "events_ingested": 0, "skipped": 0, "paste_errors": 0}
+    return {"limitless": zero_l, "victory_road": zero_v, "status": reason}
+
+
+def sync_tournaments_once_per_process(
+    *, min_interval_hours: float = STARTUP_SYNC_MIN_INTERVAL_HOURS, **kwargs
+) -> dict | None:
     """Run ``sync_tournaments`` in a fresh session, at most once per process.
 
-    Returns the sync result, or ``None`` if a sync has already been started by this
-    process. Safe to call from a worker thread.
+    Returns the sync result, ``None`` if a sync has already been started by this
+    process, or a zero result with status "recent" when the last sync is fresh and
+    no backlog is waiting. Safe to call from a worker thread.
     """
     global _STARTUP_SYNC_DONE
     with _STARTUP_SYNC_LOCK:
@@ -449,6 +568,8 @@ def sync_tournaments_once_per_process(**kwargs) -> dict | None:
             return None
         _STARTUP_SYNC_DONE = True
     with get_session() as session:
+        if not startup_sync_due(session, min_interval_hours):
+            return _skipped_result("recent")
         return sync_tournaments(session, **kwargs)
 
 

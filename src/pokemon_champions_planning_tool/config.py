@@ -33,5 +33,18 @@ VRPASTE_BACKEND_URL = "https://vrpaste-backend.vercel.app/api/paste"
 POKEPAST_JSON_URL = "https://pokepast.es/{id}/json"
 
 TOURNAMENT_SYNC_TIMEOUT = 12
+
+# Limitless allows 50 requests per 5 minutes (``ratelimit`` response header). A sync
+# never spends the last LIMITLESS_RATE_RESERVE of that window, so a second launch or a
+# manual "Sync now" shortly afterwards still has room instead of hitting 429s.
+LIMITLESS_RATE_RESERVE = 8
+# Standings requests per sync run (the rate budget above may stop a run earlier).
+LIMITLESS_STANDINGS_PER_RUN = 40
+# A tournament with no published standings is retried while it is this recent — events
+# are listed on the day they run and decklists appear when they finish.
+RECENT_EVENT_GRACE_DAYS = 3
+# The launch-time sync is skipped when a sync completed this recently and no backlog
+# is waiting; "Sync now" in Settings always runs.
+STARTUP_SYNC_MIN_INTERVAL_HOURS = 6
 TOURNAMENT_USER_AGENT = "PokemonChampionsPlanningTool/1.0 (https://github.com)"
 

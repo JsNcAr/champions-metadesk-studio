@@ -304,10 +304,19 @@ class VictoryRoadProvider:
             standings=tuple(standings),
         )
 
-    def fetch_all_known_events(self, masters_only: bool = True) -> list[VREventResult]:
-        """Iterates known official event registry and fetches available event standings."""
+    def fetch_all_known_events(
+        self, masters_only: bool = True, skip_slugs: set[str] | frozenset[str] | None = None
+    ) -> list[VREventResult]:
+        """Iterates the official event registry and fetches each event's standings page.
+
+        ``skip_slugs`` names events already ingested; their pages (heavy WordPress
+        renders of 20 s or more) are not requested at all.
+        """
         results: list[VREventResult] = []
+        skip = skip_slugs or set()
         for meta in OFFICIAL_EVENT_SLUGS:
+            if meta["slug"] in skip:
+                continue
             res = self.fetch_event(meta, masters_only=masters_only)
             if res:
                 results.append(res)

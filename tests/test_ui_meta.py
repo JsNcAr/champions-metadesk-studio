@@ -167,9 +167,8 @@ class TestMetaView(unittest.TestCase):
     def test_loads_groups_rows_by_event_and_serialises(self):
         self.view.ensure_loaded()
         kinds = [type(c).__name__ for c in self.view._list.controls]
-        self.assertEqual(kinds[0], "EventHeader")
-        self.assertEqual(kinds.count("EventHeader"), 2, "two events in the first page")
-        self.assertEqual(kinds.count("TeamRow"), 16)
+        self.assertEqual(kinds, ["EventGroup", "EventGroup"], "two events in the first page")
+        self.assertEqual(sum(len(g.rows) for g in self.view._groups.values()), 16)
         self.assertEqual(self.view.header._count.content.value, "50")
         self.assertGreater(serialise(self.view), 200)
         self.assertFalse(self.view._more_button.visible, "16 rows fit in one page")
@@ -178,7 +177,7 @@ class TestMetaView(unittest.TestCase):
         self.view.ensure_loaded()
         got = []
         self.ctx.bus.on(events.IMPORT_REQUESTED, got.append)
-        row = next(c for c in self.view._list.controls if type(c).__name__ == "TeamRow")
+        row = next(iter(self.view._groups.values())).rows[0]
         row._on_import(row.row)
         self.assertEqual(len(got), 1)
         text, title = got[0]
@@ -187,7 +186,7 @@ class TestMetaView(unittest.TestCase):
 
     def test_row_expands_to_parsed_sheet(self):
         self.view.ensure_loaded()
-        row = next(c for c in self.view._list.controls if type(c).__name__ == "TeamRow")
+        row = next(iter(self.view._groups.values())).rows[0]
         row.toggle()
         self.assertTrue(row._expanded)
         self.assertEqual(len(row._body.controls), 2)
@@ -195,11 +194,11 @@ class TestMetaView(unittest.TestCase):
 
     def test_meta_synced_shows_banner_instead_of_reshuffling(self):
         self.view.ensure_loaded()
-        first_ids = [c.row.team_id for c in self.view._list.controls if type(c).__name__ == "TeamRow"]
+        first_ids = [r.row.team_id for g in self.view._groups.values() for r in g.rows]
         self.ctx.bus.emit(events.META_SYNCED, {"limitless": {"added": 12}, "victory_road": {"added": 0}})
         self.assertTrue(self.view.banner.visible)
         self.assertIn("12 new teams", self.view.banner._text.value)
-        self.assertEqual([c.row.team_id for c in self.view._list.controls if type(c).__name__ == "TeamRow"], first_ids)
+        self.assertEqual([r.row.team_id for g in self.view._groups.values() for r in g.rows], first_ids)
         self.assertTrue(self.view.store.needs_load)
 
     def test_empty_database_shows_first_run_state(self):
@@ -258,6 +257,66 @@ class TestEventTierFilters(unittest.TestCase):
         self.assertFalse(view._tier.visible)
         self.assertEqual(view.store.filters.tier, "All")
         serialise(view)
+
+
+
+
+class TestGroupingAndCards(unittest.TestCase):
+    def setUp(self):
+        self.db = _TempDb()
+        _seed(self.db, teams_per_event=25, events=2)
+        self.page = StubPage()
+        self.ctx = AppContext(self.page)
+        self.ctx.run_in_background = lambda work, on_done=None, on_error=None, **kw: on_done(work()) if on_done else work()
+        from pokemon_champions_planning_tool.ui.views.meta.row import EventDialog
+
+        self.EventDialog = EventDialog
+        self.view = MetaView(self.ctx, MetaStore(self.db.session))
+        self.view.ensure_loaded()
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_groups_collapse_to_the_winner_until_expanded(self):
+        groups = self.view._groups
+        self.assertEqual(set(groups), {"t0", "t1"})
+        for group in groups.values():
+            self.assertTrue(group.collapsed)
+            self.assertEqual(len(group._rows_column.controls), 1)
+            self.assertEqual(group._rows_column.controls[0].row.placement, 1)
+            self.assertEqual(group.header._toggle.content, "Show 7 more")
+        self.view._toggle_group("t0")
+        self.assertEqual(len(groups["t0"]._rows_column.controls), 8)
+        self.assertEqual(groups["t0"].header._toggle.content, "Show less")
+        self.assertEqual(len(groups["t1"]._rows_column.controls), 1)
+        self.view._toggle_all()
+        self.assertFalse(self.view.collapsed)
+        self.assertEqual(len(groups["t1"]._rows_column.controls), 8)
+        self.assertEqual(self.view._collapse_button.content, "Collapse all")
+        self.assertIn("16 teams shown", self.view._order_caption.value)
+        serialise(self.view)
+
+    def test_cards_mode_and_event_dialog_list_all_placements(self):
+        self.view._set_view_mode("cards")
+        self.assertTrue(self.view._grid.visible)
+        self.assertFalse(self.view._list.visible)
+        self.assertFalse(self.view._collapse_button.visible)
+        self.assertEqual(len(self.view._grid.controls), 2)
+        card = self.view._cards["t0"]
+        self.assertEqual(card.row.placement, 1)
+        self.assertIn("2 events shown", self.view._order_caption.value)
+        serialise(self.view)
+        self.view._open_event("t0")
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, self.EventDialog)
+        self.assertEqual(len(dialog._list.controls), 25, "dialog ignores the Top 8 filter")
+        self.assertEqual([r.row.placement for r in dialog._list.controls[:3]], [1, 2, 3])
+        serialise(dialog)
+        emitted = []
+        self.ctx.bus.on(events.IMPORT_REQUESTED, emitted.append)
+        dialog._list.controls[1]._on_import(dialog._list.controls[1].row)
+        self.assertEqual(len(emitted), 1)
+        self.assertNotIn(dialog, self.page.dialogs)
 
 
 if __name__ == "__main__":

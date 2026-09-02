@@ -258,6 +258,7 @@ class TournamentService:
         limit: int | None = None,
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
     ) -> list[TournamentTeamRecord]:
         return self.repo.search_teams(
             query=query,
@@ -269,6 +270,7 @@ class TournamentService:
             limit=limit,
             offset=offset,
             event_tiers=event_tiers,
+            tournament_id_filter=tournament_id_filter,
         )
 
     def count_teams(self, **filters: Any) -> int:
@@ -287,6 +289,7 @@ class TournamentService:
         limit: int | None = None,
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
     ) -> list[MetaTeamRow]:
         """Search teams and return detached rows with event context, roster and legality.
 
@@ -304,6 +307,7 @@ class TournamentService:
             limit=limit,
             offset=offset,
             event_tiers=event_tiers,
+            tournament_id_filter=tournament_id_filter,
         )
         if not teams:
             return []

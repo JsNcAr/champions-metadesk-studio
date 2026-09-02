@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import flet as ft
 
-from .tokens import FontSize, Layout, Palette, Radius
+from .tokens import FontSize, Layout, Palette, Radius, Space
 
 # Inter variable font (latin subset). Declared once on the page; referenced by family name.
 INTER_FONT_URL = (
@@ -152,8 +152,17 @@ def build_theme() -> ft.Theme:
             heading_text_style=_style(FontSize.LABEL, 16, ft.FontWeight.W_500, Palette.ON_SURFACE_VARIANT),
             data_text_style=_style(FontSize.BODY, 20, ft.FontWeight.W_400, Palette.ON_SURFACE),
         ),
+        # Without a decoration Flutter falls back to its light tooltip, which put
+        # near-white text on a white box.
         tooltip_theme=ft.TooltipTheme(
-            text_style=_style(FontSize.CAPTION, 14, ft.FontWeight.W_400, Palette.ON_SURFACE),
+            text_style=_style(FontSize.CAPTION, 16, ft.FontWeight.W_500, Palette.ON_SURFACE),
+            decoration=ft.BoxDecoration(
+                bgcolor=Palette.SURFACE_4,
+                border_radius=ft.BorderRadius.all(Radius.SM),
+                border=ft.Border.all(1, Palette.OUTLINE),
+            ),
+            padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS),
+            wait_duration=400,
         ),
     )
 

@@ -42,15 +42,28 @@ def _tier_chip(tier: str) -> StatusChip:
     )
 
 
+EVENT_CARD_MAX_EXTENT = 340
+EVENT_CARD_HEIGHT = 262
+
+
+def _event_meta_bits(row: MetaTeamRow) -> list[str]:
+    bits = [absolute_time(row.event_date).split(",")[0]]
+    if row.organizer:
+        bits.append(row.organizer)
+    if row.location:
+        bits.append(row.location)
+    return bits
+
+
 class EventHeader(ft.Container):
-    def __init__(self, row: MetaTeamRow, shown: int) -> None:
+    def __init__(self, row: MetaTeamRow, shown: int, *, on_toggle: Callable[[], None] | None = None) -> None:
         super().__init__()
         self._count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
-        meta_bits = [absolute_time(row.event_date).split(",")[0]]
-        if row.organizer:
-            meta_bits.append(row.organizer)
-        if row.location:
-            meta_bits.append(row.location)
+        self._toggle = ft.TextButton(
+            "Show more", icon=ft.Icons.EXPAND_MORE, visible=False,
+            on_click=(lambda _e: on_toggle()) if on_toggle else None,
+        )
+        meta_bits = _event_meta_bits(row)
         controls: list[ft.Control] = [
             ft.Icon(ft.Icons.EMOJI_EVENTS, size=IconSize.SM, color=Palette.TERTIARY),
             ft.Text(row.tournament_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip=row.tournament_name),
@@ -58,6 +71,7 @@ class EventHeader(ft.Container):
             StatusChip(row.regulation or "Unknown format", "tertiary"),
             ft.Text(" · ".join(meta_bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
             self._count,
+            self._toggle,
         ]
         if row.source_url:
             controls.append(
@@ -82,6 +96,146 @@ class EventHeader(ft.Container):
             self._count.value = f"{shown} of {self.total_players:,} players"
         else:
             self._count.value = plural(shown, "team")
+
+    def set_collapsed(self, collapsed: bool, hidden: int) -> None:
+        """Toggle label: "Show 7 more" while collapsed, "Show less" while open."""
+        self._toggle.visible = hidden > 0 or not collapsed
+        self._toggle.content = f"Show {hidden} more" if collapsed else "Show less"
+        self._toggle.icon = ft.Icons.EXPAND_MORE if collapsed else ft.Icons.EXPAND_LESS
+
+
+class EventGroup(ft.Column):
+    """One event in the list: header plus its team rows, collapsible to the winner."""
+
+    def __init__(self, header: EventHeader) -> None:
+        super().__init__(spacing=0, tight=True)
+        self.header = header
+        self.rows: list[TeamRow] = []
+        self.collapsed = False
+        self._rows_column = ft.Column(spacing=0, tight=True)
+        self.controls = [header, self._rows_column]
+
+    @property
+    def first_row(self) -> MetaTeamRow:
+        return self.rows[0].row
+
+    def add_row(self, row: "TeamRow") -> None:
+        self.rows.append(row)
+        self.header.set_shown(len(self.rows))
+        self.set_collapsed(self.collapsed)
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        self.collapsed = collapsed
+        self._rows_column.controls = self.rows[:1] if collapsed else list(self.rows)
+        self.header.set_collapsed(collapsed, max(0, len(self.rows) - 1))
+
+
+class EventCard(ft.Container):
+    """Event as a card: tier, name, winner's roster; click to open the whole standings."""
+
+    def __init__(self, row: MetaTeamRow, shown: int, *, on_open: Callable[[str], None], on_import: Callable[[MetaTeamRow], None]) -> None:
+        super().__init__()
+        self.row = row
+        self._count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
+        winner_actions: list[ft.Control] = []
+        if not row.legality_known or row.is_legal:
+            winner_actions.append(ft.IconButton(icon=ft.Icons.DOWNLOAD, icon_size=IconSize.MD, tooltip=f"Import {row.player_name}'s team", on_click=lambda _e: on_import(self.row)))
+        caption_bits = [row.regulation or "Unknown format"]
+        if row.total_players:
+            caption_bits.append(f"{row.total_players:,} players")
+        if row.location:
+            caption_bits.append(row.location)
+        self.content = ft.Column(
+            spacing=Space.SM,
+            tight=True,
+            controls=[
+                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    _tier_chip(row.event_tier),
+                    ft.Text(absolute_time(row.event_date).split(",")[0], theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
+                ]),
+                ft.Text(row.tournament_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, tooltip=row.tournament_name),
+                ft.Text(" · ".join(caption_bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    PlacementBadge(row.placement, row.standing_label if row.standing_label and not row.standing_label.startswith("Place #") else ""),
+                    ft.Text(row.player_name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip=row.player_name),
+                    *winner_actions,
+                ]),
+                ft.Row(spacing=4, controls=[
+                    Sprite(m.sprite_url, size=36, ring="none" if m.is_legal else "error", tooltip=m.species_name) for m in row.members
+                ]),
+                ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    self._count,
+                    ft.TextButton("View standings", icon=ft.Icons.LIST_ALT, on_click=lambda _e: on_open(self.row.tournament_id)),
+                ]),
+            ],
+        )
+        self.bgcolor = Palette.SURFACE_2
+        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
+        self.border_radius = Radius.MD
+        self.padding = Space.CARD_PADDING
+        self.ink = True
+        self.animate = ft.Animation(Motion.FAST_MS, Motion.CURVE)
+        self.on_click = lambda _e: on_open(self.row.tournament_id)
+        self.on_hover = self._hover
+        self.set_shown(shown)
+
+    def set_shown(self, shown: int) -> None:
+        self._count.value = f"{shown} of {self.row.total_players:,} players" if self.row.total_players else plural(shown, "team")
+
+    def _hover(self, e: ft.ControlEvent) -> None:
+        hovering = getattr(e, "data", None) in ("true", True)
+        self.bgcolor = Palette.SURFACE_3 if hovering else Palette.SURFACE_2
+        self.border = ft.Border.all(1, Palette.OUTLINE if hovering else Palette.OUTLINE_VARIANT)
+        if is_mounted(self):
+            self.update()
+
+
+class EventDialog(ft.AlertDialog):
+    """Whole standings of one event, every placement, with the same team rows."""
+
+    def __init__(self, first: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_close: Callable[[], None]) -> None:
+        super().__init__(modal=False, scrollable=False)
+        self._on_import = on_import
+        self._list = ft.ListView(spacing=0, expand=True)
+        self._status = ft.Text("Loading standings…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
+        self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2)
+        meta = _event_meta_bits(first)
+        header_controls: list[ft.Control] = [
+            _tier_chip(first.event_tier),
+            StatusChip(first.regulation or "Unknown format", "tertiary"),
+            ft.Text(" · ".join(meta), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True),
+        ]
+        if first.source_url:
+            header_controls.append(ft.TextButton("Open results", icon=ft.Icons.OPEN_IN_NEW, on_click=lambda e, url=first.source_url: e.control.page.launch_url(url)))
+        self.title = ft.Text(first.tournament_name, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        self.content = ft.Container(
+            width=960,
+            height=560,
+            content=ft.Column(
+                spacing=Space.SM,
+                controls=[
+                    ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=header_controls),
+                    ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
+                    self._list,
+                ],
+            ),
+        )
+        self.actions = [ft.TextButton("Close", on_click=lambda _e: on_close())]
+        self.actions_alignment = ft.MainAxisAlignment.END
+
+    def set_rows(self, rows: list[MetaTeamRow]) -> None:
+        self._list.controls = [TeamRow(r, on_import=self._on_import) for r in rows]
+        self._spinner.visible = False
+        self._status.value = plural(len(rows), "team") + " · best placement first"
+        if is_mounted(self):
+            self.update()
+
+    def set_error(self, exc: BaseException) -> None:
+        self._spinner.visible = False
+        self._status.value = f"Couldn't load standings: {exc}"
+        self._status.color = Palette.ERROR
+        if is_mounted(self):
+            self.update()
 
 
 class TeamRow(ft.Container):

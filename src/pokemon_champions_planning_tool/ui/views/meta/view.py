@@ -12,13 +12,17 @@ from ...components import ActiveFilterChip, EmptyState, PageHeader, skeleton_row
 from ...components.banner import InlineBanner
 from ...context import AppContext
 from ...format import plural, relative_time
-from ...tasks import Debouncer, is_mounted
-from ...theme import Accent, IconSize, Layout, Palette, Space
+from ...tasks import Debouncer, grid_tile_aspect, is_mounted
+from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
-from .row import EventHeader, TeamRow
+from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
 from .store import TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
+# With groups collapsed (or as cards) a 20-team page shows only two or three events, so
+# pages keep loading until this many events are on screen or the results run out.
+MIN_VISIBLE_GROUPS = 6
+_MAX_FILL_PAGES = 4
 
 
 class MetaView(ft.Column):
@@ -28,8 +32,12 @@ class MetaView(ft.Column):
         self.store = store or MetaStore()
         self._sync_store = SettingsStore()
         self._loading = False
-        self._groups: dict[str, EventHeader] = {}
-        self._group_counts: dict[str, int] = {}
+        self._groups: dict[str, EventGroup] = {}
+        self._cards: dict[str, EventCard] = {}
+        self.view_mode = "rows"     # "rows" | "cards"
+        self.collapsed = True       # rows mode: only the winner of each event until expanded
+        self._fill_pages = 0
+        self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
 
         # -- header -------------------------------------------------------------------
         self._sync_button = ft.IconButton(
@@ -104,11 +112,24 @@ class MetaView(ft.Column):
         )
         self._active_chips = ft.Row(spacing=Space.SM, wrap=True, visible=False)
         self._order_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
+        self._collapse_button = ft.TextButton("Expand all", icon=ft.Icons.UNFOLD_MORE, on_click=lambda _e: self._toggle_all())
+        self._layout_toggle = ft.SegmentedButton(
+            selected=["rows"],
+            allow_multiple_selection=False,
+            allow_empty_selection=False,
+            show_selected_icon=False,
+            segments=[
+                ft.Segment(value="rows", icon=ft.Icon(ft.Icons.VIEW_LIST), tooltip="Events as rows"),
+                ft.Segment(value="cards", icon=ft.Icon(ft.Icons.GRID_VIEW), tooltip="Events as cards"),
+            ],
+            on_change=lambda e: self._set_view_mode(next(iter(e.control.selected or ["rows"]))),
+        )
 
         # -- results ------------------------------------------------------------------
         self.banner = InlineBanner(visible=False)
         self._progress = ft.ProgressBar(visible=False, bar_height=2, color=Palette.PRIMARY, bgcolor=Palette.OUTLINE_VARIANT)
         self._list = ft.ListView(expand=True, spacing=0, padding=ft.Padding.only(bottom=Space.XL))
+        self._grid = ft.GridView(expand=True, max_extent=EVENT_CARD_MAX_EXTENT, child_aspect_ratio=1.3, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, visible=False)
         self._more_ring = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._more_button = ft.FilledTonalButton("Show more", icon=ft.Icons.EXPAND_MORE, visible=False, on_click=lambda _e: self._load_more())
         self._more_row = ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=Space.SM, controls=[self._more_ring, self._more_button])
@@ -119,10 +140,16 @@ class MetaView(ft.Column):
             self._active_chips,
             self.banner,
             self._progress,
-            ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._order_caption]),
+            ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[self._order_caption, ft.Row(spacing=Space.SM, tight=True, controls=[self._collapse_button, self._layout_toggle])],
+            ),
             self._list,
+            self._grid,
             self._more_row,
         ]
+        self._relayout()
 
         ctx.bus.on(events.META_SYNCED, self._on_meta_synced)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
@@ -197,8 +224,11 @@ class MetaView(ft.Column):
 
     def _reload(self) -> None:
         self._loading = True
+        self._fill_pages = 0
         self.banner.hide()
         self._list.controls = [skeleton_rows(8)]
+        self._list.visible = True
+        self._grid.visible = False
         self._more_button.visible = False
         self._render_active_chips()
         self._update_self()
@@ -212,6 +242,7 @@ class MetaView(ft.Column):
             self._refresh_header()
             self._render_rows(reset=True)
             self._update_self()
+            self._maybe_fill()
 
         def failed(exc: BaseException) -> None:
             self._loading = False
@@ -230,6 +261,7 @@ class MetaView(ft.Column):
             self._loading = False
             self._render_rows(reset=False, start=before)
             self._update_self()
+            self._maybe_fill()
 
         def failed(exc: BaseException) -> None:
             self._loading = False
@@ -242,27 +274,110 @@ class MetaView(ft.Column):
         rows = self.store.rows
         if reset:
             self._list.controls = []
-            self._groups: dict[str, EventHeader] = {}
-            self._group_counts: dict[str, int] = {}
+            self._grid.controls = []
+            self._groups = {}
+            self._cards = {}
             start = 0
         if not rows:
             self._list.controls = [self._empty_state()]
+            self._grid.controls = []
+            self._list.visible = True
+            self._grid.visible = False
             self._more_button.visible = False
             self._order_caption.value = ""
             return
         for row in rows[start:]:
-            header = self._groups.get(row.tournament_id)
-            if header is None:
-                header = EventHeader(row, shown=0)
-                self._groups[row.tournament_id] = header
-                self._group_counts[row.tournament_id] = 0
-                self._list.controls.append(header)
-            self._group_counts[row.tournament_id] += 1
-            header.set_shown(self._group_counts[row.tournament_id])
-            self._list.controls.append(TeamRow(row, on_import=self._import))
+            group = self._groups.get(row.tournament_id)
+            if group is None:
+                header = EventHeader(row, shown=0, on_toggle=lambda tid=row.tournament_id: self._toggle_group(tid))
+                group = EventGroup(header)
+                group.collapsed = self.collapsed
+                self._groups[row.tournament_id] = group
+                self._list.controls.append(group)
+                card = EventCard(row, shown=0, on_open=self._open_event, on_import=self._import)
+                self._cards[row.tournament_id] = card
+                self._grid.controls.append(card)
+            group.add_row(TeamRow(row, on_import=self._import))
+            self._cards[row.tournament_id].set_shown(len(group.rows))
+        self._list.visible = self.view_mode == "rows"
+        self._grid.visible = self.view_mode == "cards"
+        self._collapse_button.visible = self.view_mode == "rows"
         self._more_button.visible = not self.store.exhausted
         self._more_button.content = f"Show more · {self.store.loaded:,} of {self.store.total:,}"
-        self._order_caption.value = f"Newest events first · {self.store.loaded:,} of {plural(self.store.total, 'team')}"
+        unit = "event" if self.view_mode == "cards" or self.collapsed else "team"
+        shown = len(self._groups) if unit == "event" else self.store.loaded
+        self._order_caption.value = f"Newest events first · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
+
+    # -- grouping, layout and the event dialog ------------------------------------------------
+
+    def _maybe_fill(self) -> None:
+        """Collapsed rows and cards show one line per event; keep paging until enough events are visible."""
+        if self.view_mode == "rows" and not self.collapsed:
+            return
+        if self.store.exhausted or self._loading or self._fill_pages >= _MAX_FILL_PAGES:
+            return
+        if len(self._groups) >= MIN_VISIBLE_GROUPS:
+            return
+        self._fill_pages += 1
+        self._load_more()
+
+    def _toggle_group(self, tournament_id: str) -> None:
+        group = self._groups.get(tournament_id)
+        if group is None:
+            return
+        group.set_collapsed(not group.collapsed)
+        if is_mounted(group):
+            group.update()
+
+    def _toggle_all(self) -> None:
+        self.collapsed = not self.collapsed
+        self._collapse_button.content = "Expand all" if self.collapsed else "Collapse all"
+        self._collapse_button.icon = ft.Icons.UNFOLD_MORE if self.collapsed else ft.Icons.UNFOLD_LESS
+        for group in self._groups.values():
+            group.set_collapsed(self.collapsed)
+        if self.store.rows:
+            self._render_caption_only()
+        self._update_self()
+        self._maybe_fill()
+
+    def _render_caption_only(self) -> None:
+        unit = "event" if self.view_mode == "cards" or self.collapsed else "team"
+        shown = len(self._groups) if unit == "event" else self.store.loaded
+        self._order_caption.value = f"Newest events first · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
+
+    def _set_view_mode(self, mode: str) -> None:
+        self.view_mode = "cards" if mode == "cards" else "rows"
+        self._layout_toggle.selected = [self.view_mode]
+        has_rows = bool(self.store.rows)
+        self._list.visible = self.view_mode == "rows" or not has_rows
+        self._grid.visible = self.view_mode == "cards" and has_rows
+        self._collapse_button.visible = self.view_mode == "rows"
+        if has_rows:
+            self._render_caption_only()
+        self._update_self()
+        self._maybe_fill()
+
+    def handle_resize(self, width: float, height: float) -> None:
+        self._page_width = width
+        self._relayout()
+
+    def _relayout(self) -> None:
+        available = self._page_width - Layout.RAIL_WIDTH - 1 - 2 * Space.PAGE_PADDING
+        self._grid.child_aspect_ratio = grid_tile_aspect(available, max_extent=EVENT_CARD_MAX_EXTENT, spacing=Space.GRID_GAP, tile_height=EVENT_CARD_HEIGHT)
+
+    def _open_event(self, tournament_id: str) -> None:
+        group = self._groups.get(tournament_id)
+        if group is None or not group.rows:
+            return
+        page = self.ctx.page
+
+        def import_and_close(row: MetaTeamRow) -> None:
+            page.pop_dialog()
+            self._import(row)
+
+        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog)
+        page.show_dialog(dialog)
+        self.ctx.run_in_background(lambda: self.store.teams_for_event(tournament_id), on_done=dialog.set_rows, on_error=dialog.set_error)
 
     def _empty_state(self) -> ft.Control:
         if self.store.total == 0 and not self.store.filters.active():

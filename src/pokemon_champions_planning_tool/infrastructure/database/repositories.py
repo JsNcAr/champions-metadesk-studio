@@ -856,8 +856,12 @@ class TournamentRepository:
         game_platform_filter: str | None,
         max_age_days: int | None,
         event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
     ):
         """Shared WHERE clauses for search_teams and count_teams."""
+
+        if tournament_id_filter:
+            stmt = stmt.where(TournamentTeamRecord.tournament_id == tournament_id_filter)
 
         if regulation_filter and regulation_filter != "All":
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
@@ -923,6 +927,7 @@ class TournamentRepository:
         limit: int | None = None,
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
     ) -> list[TournamentTeamRecord]:
         stmt = self._apply_search_filters(
             self._joined_teams(),
@@ -933,6 +938,7 @@ class TournamentRepository:
             game_platform_filter=game_platform_filter,
             max_age_days=max_age_days,
             event_tiers=event_tiers,
+            tournament_id_filter=tournament_id_filter,
         )
 
         # Newest event first, then best placement within that event. Ordering by
@@ -964,6 +970,7 @@ class TournamentRepository:
         game_platform_filter: str | None = None,
         max_age_days: int | None = None,
         event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
     ) -> int:
         """Number of teams matching the same filters as search_teams."""
         stmt = self._apply_search_filters(
@@ -975,6 +982,7 @@ class TournamentRepository:
             game_platform_filter=game_platform_filter,
             max_age_days=max_age_days,
             event_tiers=event_tiers,
+            tournament_id_filter=tournament_id_filter,
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
 

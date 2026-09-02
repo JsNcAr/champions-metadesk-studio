@@ -143,6 +143,12 @@ class MetaStore:
         self.exhausted = not batch or len(self.rows) >= self.total
         return batch
 
+    def teams_for_event(self, tournament_id: str) -> list[MetaTeamRow]:
+        """Every Masters team recorded for one event, best placement first, ignoring the
+        list filters — the event dialog shows the whole standings."""
+        with self._sf() as s:
+            return TournamentService(s).search_team_rows(tournament_id_filter=tournament_id)
+
     def summary(self) -> MetaSummary:
         with self._sf() as s:
             return TournamentService(s).meta_summary()

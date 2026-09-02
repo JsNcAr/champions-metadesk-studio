@@ -30,6 +30,12 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Showdown & Poképaste Integration**: 1-click text export/import and direct publishing to Pokepast.es.
 - **Planned Pokémon (Ghost Entries)**: Store non-owned Pokémon templates (`is_planned=True`) without cluttering the Box roster.
 
+### 🧮 4. Damage Calculator
+- **Both directions at once**: every move of the attacker against the defender and back, with the 16 rolls, the Smogon-style description and the KO chance.
+- **Full Champions mechanics**: weather, terrain, screens, Tailwind, Helping Hand, hazards, Leech Seed, status, stat stages, current HP (Eruption, Flail, Hard Press, Multiscale…), weight (Heavy Slam, Low Kick…), abilities, held items, critical hits, doubles spread, multi-hit and Parental Bond.
+- **Verified**: a Python port of the Smogon calculator's Pokémon Champions module, replayed against ~1000 golden scenarios generated from the calculator itself.
+- **Entry points**: "Open in damage calc" on a team slot, "Damage calc vs…" on a Meta team (with the paste's set), "Damage calc" in the Box detail panel; the last calculation is remembered.
+
 ### 🏆 3. Tournament Explorer & Meta Analytics
 - **Live Tournament Sync**: Background thread automatically fetches official standings and team sheets from **Limitless VGC API** and **Victory Road**.
 - **Rate-Limit & Robust Retries**: Implements exponential backoff on HTTP 429 rate limits and 25s timeouts for heavy event pages.
@@ -110,7 +116,7 @@ tests/                        # Automated unit & integration test suite
 
 ## Keyboard shortcuts
 
-Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials: Ctrl+1/2/3 switch sections, Ctrl+, opens Settings, Ctrl+F focuses the search, Ctrl+K adds to the box, Ctrl+N/I/E create, import and export a team, Escape closes dialogs and panels, Delete removes the selection with Undo.
+Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials: Ctrl+1/2/3/4 switch sections (Box, Teams, Meta, Calc), Ctrl+, opens Settings, Ctrl+F focuses the search, Ctrl+K adds to the box, Ctrl+N/I/E create, import and export a team, Escape closes dialogs and panels, Delete removes the selection with Undo.
 
 ## Configuration
 

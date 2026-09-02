@@ -61,7 +61,8 @@ ui/
   theme/            tokens.py (single source of colours, spacing, radii, type/stat palettes)
                     build.py (ft.Theme from tokens)
   shell/            AppShell: NavigationRail, content host, view registry, shortcuts
-  components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, chips, banner…
+  components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
+  views/calc/       state (Flet-free, JSON round-trippable), store (mutations → recompute → persist), attacker/defender panels, field panel, results list
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```
@@ -80,7 +81,7 @@ ui/
 
 ### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
 - Pure Python domain rules independent of UI widgets or HTTP APIs.
-- Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, Champions stat-point calculations (`domain/stat_calc.py`: `champions_stats`, `validate_points`, `points_from_evs`), and co-occurrence synergy scoring.
+- Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, Champions stat-point calculations (`domain/stat_calc.py`: `champions_stats`, `validate_points`, `points_from_evs`), and co-occurrence synergy scoring. `domain/damage/` is the Champions damage engine (a port of the Smogon calculator's Champions module: working state, JS-faithful maths, mechanics, KO chance, descriptions); `domain/species.py` the species catalogue types and Showdown-id rules; `services/damage_calc_service.py` builds engine inputs from team slots and rosters and runs matchups.
 
 ### 3. Infrastructure & Provider Layer (`src/pokemon_champions_planning_tool/infrastructure/`)
 - **Persistence**: SQLite database (`pokemon_champions.db`) managed via SQLModel repository abstractions.

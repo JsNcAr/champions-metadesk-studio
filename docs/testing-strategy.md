@@ -20,6 +20,7 @@ Use unit tests for:
 - name normalization
 - display-name generation
 - damage multiplier calculations
+- the damage engine: `tests/test_damage_fixtures.py` replays ~1000 golden scenarios generated from the Smogon calculator's Champions module (`scripts/damage_fixtures/`, Node, dev-only) and must match roll for roll, in the description and the KO text; regenerate only when `CALC_COMMIT` is bumped
 - stat totals
 - coverage summaries
 

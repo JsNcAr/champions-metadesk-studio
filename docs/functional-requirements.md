@@ -81,6 +81,14 @@
 - Only owned box entries count; planned entries do not. A Mega form counts as its base species; other forms are distinct.
 - The filter must keep exact counts and paging (it is applied in the query, not after).
 
+### FR-15 Damage calculator
+- The user must be able to compute the damage of every move of one Pokémon against another, in both directions at once, with the sixteen rolls, a description and the KO chance.
+- The calculation must follow Pokémon Champions rules (stat points, level 50) and account for weather, terrain, screens, Tailwind, Helping Hand, hazards, Leech Seed, status, stat stages, current HP (HP-scaling moves and abilities), weight (weight-based moves), abilities, held items, critical hits and doubles spread damage.
+- Any Champions species or Mega must be selectable on either side, with its base stats, abilities and weight.
+- A team slot, a tournament roster member (with the paste's set when present) and a box entry must be sendable to the calculator.
+- The last calculation must be remembered between launches.
+- The engine must be verified against the Smogon damage calculator's Champions module.
+
 ## Quality and Usability Requirements
 
 ### QR-1 Fast lookup workflow

@@ -86,7 +86,9 @@ Three static files, fetched at most every 30 days or from Settings:
 - `data/mods/champions/learnsets.ts` (Showdown repository) — the moves each species can learn in Champions. Mega forms use their base species' learnset.
 - `data/mods/champions/moves.ts` — moves Champions removed (`isNonstandard: "Past"`) or rebalanced. Removed moves are never offered.
 
-Stored in `moves`, `learnsets` and `move_catalog_meta`. Species keys are Showdown's (`urshifurapidstrike`); `domain/moves.py` maps our PokéAPI-style ids to them with a fallback to the nearest keyed form. Per-species move usage comes from the `moves` column on `tournament_team_members`, aggregated with `json_each`.
+Stored in `moves` (with a `mechanics` JSON column: flags, secondaries, recoil, drain, multihit, stat overrides… for the damage formula), `learnsets` and `move_catalog_meta`. A `schema_version` on the meta row forces one re-sync when the stored shape changes; legality is "not removed by the mod and (current in the base data or restored by the mod)".
+
+**Species catalogue** — `pokedex.json` from the same bundle plus `data/mods/champions/formats-data.ts` for Champions legality: base stats, types, abilities, weight, forms and required Mega Stones for every species (stored in `species_catalog`, ~1.4k rows, 314 legal), synced with the moves. `domain/species.py` maps our ids onto Showdown's (basculegion-male → basculegion, urshifu-single-strike → urshifu…). Species keys are Showdown's (`urshifurapidstrike`); `domain/moves.py` maps our PokéAPI-style ids to them with a fallback to the nearest keyed form. Per-species move usage comes from the `moves` column on `tournament_team_members`, aggregated with `json_each`.
 
 ---
 

@@ -142,6 +142,17 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `evs`, `ivs` (JSON) and `level: int` — legacy mainline spread columns. The initialisation backfill converts an EV dict into `points` with `(EV + 4) // 8` (which keeps every level-50 stat), then clears the legacy columns and pins `level` to 50.
 - *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
 
+### `MoveRecord` (Table: `moves`) — `mechanics: dict` (JSON)
+Damage-formula fields beyond power/type/category, stored as non-default keys only and read back as `domain.moves.MoveMechanics`: contact/sound/punch/bite/bullet/pulse/slicing/wind flags, `secondaries`, `recoil`, `drain`, `multihit`, `multiaccuracy`, `will_crit`, `ignore_defensive`, `override_offensive_stat`, `override_defensive_stat`, `override_offensive_pokemon`, `breaks_protect`, `has_crash_damage`, `struggle_recoil`, `mind_blown_recoil`, `self_boosts`, `ohko`. `MoveCatalogMetaRecord.schema_version` triggers one re-sync when this shape changes.
+
+### `SpeciesRecord` (Table: `species_catalog`)
+- `showdown_id: str` (Primary Key) — "charizardmegay"; `canonical_id: str` (Indexed) — "charizard-mega-y"; `name: str` — "Charizard-Mega-Y"
+- `dex_number: int`, `base_species_id: str`, `forme: str | None`, `types: list[str]` (JSON, capitalised)
+- `hp, attack, defense, special_attack, special_defense, speed: int` — base stats
+- `abilities: list[str]` (JSON, slots 0/1/H), `hidden_ability: str | None`, `weightkg: float`, `gender: str | None`
+- `required_item: str | None` (Mega Stone), `battle_only: str | None`, `is_mega: bool`, `is_legal: bool` (Champions legality from the mod's formats data)
+- `SpeciesCatalogMetaRecord` (`species_catalog_meta`): `species_count`, `legal_count`, `last_synced_at`, `schema_version`.
+
 ### `TournamentRecord` (Table: `tournaments`)
 - `tournament_id: str` (Primary Key, `"limitless-<id>"` or `"vr-<slug>"`)
 - `name: str` (Indexed)

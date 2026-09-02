@@ -393,6 +393,48 @@ class TournamentTeamMemberRecord(SQLModel, table=True):
     slot_position: int = Field(default=1)
     canonical_id: str = Field(index=True)
     species_name: str = Field(index=True)
+    # Move names as written in the paste, so per-species usage can be aggregated with
+    # json_each() instead of re-parsing every Showdown text.
+    moves: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+
+
+class MoveRecord(SQLModel, table=True):
+    """One move from Showdown's data, with Champions overrides applied."""
+
+    __tablename__: ClassVar[str] = "moves"
+
+    move_id: str = Field(primary_key=True)   # Showdown id, e.g. "fakeout"
+    name: str = Field(index=True)
+    type: str | None = None
+    category: str | None = None
+    power: int | None = None
+    accuracy: int | None = None
+    pp: int | None = None
+    priority: int = Field(default=0)
+    target: str | None = None
+    short_desc: str | None = None
+    is_legal: bool = Field(default=True, index=True)  # False: removed from Champions
+
+
+class LearnsetRecord(SQLModel, table=True):
+    """A (species key, move id) pair: the species can learn the move in Champions."""
+
+    __tablename__: ClassVar[str] = "learnsets"
+
+    species_key: str = Field(primary_key=True)
+    move_id: str = Field(primary_key=True)
+
+
+class MoveCatalogMetaRecord(SQLModel, table=True):
+    """Singleton row: when the move catalogue was last synced and how big it is."""
+
+    __tablename__: ClassVar[str] = "move_catalog_meta"
+
+    id: int = Field(default=1, primary_key=True)
+    move_count: int = Field(default=0)
+    learnset_count: int = Field(default=0)
+    species_count: int = Field(default=0)
+    last_synced_at: datetime = Field(default_factory=_utc_now)
 
 
 class TournamentSeedMetaRecord(SQLModel, table=True):

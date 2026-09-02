@@ -151,6 +151,25 @@ def _assemble_showdown_from_vrpaste(vr_result: VRPasteResult) -> str:
     return "\n".join(lines).strip()
 
 
+def _moves_by_slot(showdown_text: str) -> list[list[str]]:
+    """Move names per Pokémon block, in paste order."""
+    out: list[list[str]] = []
+    current: list[str] | None = None
+    for raw in showdown_text.splitlines():
+        line = raw.strip()
+        if not line:
+            current = None
+            continue
+        if current is None:
+            current = []
+            out.append(current)
+        if line.startswith("-"):
+            move = line[1:].strip()
+            if move:
+                current.append(move)
+    return out
+
+
 def _parse_showdown_members(showdown_text: str) -> list[tuple[str, str]]:
     """Extract (canonical_id, display_name) pairs from Showdown-format paste text.
 
@@ -337,6 +356,7 @@ def _sync_limitless(
                         slot_position=idx,
                         canonical_id=canon_id,
                         species_name=m.display_name,
+                        moves=[mv for mv in m.moves if mv],
                     )
                 )
 
@@ -495,11 +515,13 @@ def _sync_victory_road(
                 division=st.division,
             )
 
+            member_moves = _moves_by_slot(showdown_text)
             members: list[TournamentTeamMemberRecord] = [
                 TournamentTeamMemberRecord(
                     slot_position=pos,
                     canonical_id=cid,
                     species_name=sname,
+                    moves=member_moves[pos - 1] if pos - 1 < len(member_moves) else [],
                 )
                 for pos, (cid, sname) in enumerate(members_raw[:6], start=1)
             ]

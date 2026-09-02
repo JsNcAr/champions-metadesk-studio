@@ -279,6 +279,22 @@ class TournamentService:
     def list_regulations(self) -> list[str]:
         return self.repo.list_regulations()
 
+    def move_usage(self, canonical_id: str) -> dict[str, float]:
+        """Share of stored rosters of this species (megas included) carrying each move,
+        keyed by the move's Showdown id so it matches the catalogue regardless of spelling."""
+        from ..domain.moves import move_key
+
+        counts = self.repo.move_usage(canonical_id)
+        if not counts:
+            return {}
+        # Every roster has four moves; teams ≈ total move slots / 4.
+        teams = max(1.0, sum(n for _m, n in counts) / 4)
+        usage: dict[str, float] = {}
+        for name, n in counts:
+            key = move_key(name)
+            usage[key] = usage.get(key, 0.0) + n / teams
+        return usage
+
     def search_team_rows(
         self,
         query: str | None = None,

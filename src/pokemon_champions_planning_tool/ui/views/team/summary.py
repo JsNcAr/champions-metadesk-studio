@@ -12,6 +12,7 @@ from typing import Literal
 
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
+from ....domain.moves import MoveInfo
 from ....domain.entities.team_member import TeamMember
 from ....domain.stat_calc import calc_all
 from ....domain.type_chart import team_defensive_matrix, team_weakness_summary
@@ -33,6 +34,15 @@ class FormChoice:
     is_mega: bool
 
 
+@dataclass(frozen=True)
+class SlotMove:
+    """One move on a slot, with what the catalogue knows about it."""
+
+    name: str
+    info: MoveInfo | None = None
+    legal: bool | None = None   # None: the catalogue has no learnset for this species
+
+
 @dataclass
 class SlotModel:
     """Everything a slot card needs, resolved once per load."""
@@ -43,12 +53,17 @@ class SlotModel:
     megas: list[MegaEvolutionRecord] = field(default_factory=list)
     item: ItemRecord | None = None
     validation: ValidationResult | None = None
+    moves: tuple[SlotMove, ...] = ()
 
     # -- derived -------------------------------------------------------------------------
 
     @property
     def filled(self) -> bool:
         return self.member is not None and self.entry is not None
+
+    @property
+    def illegal_moves(self) -> list[str]:
+        return [m.name for m in self.moves if m.legal is False]
 
     @property
     def is_planned(self) -> bool:
@@ -196,6 +211,10 @@ def summarize(slots: list[SlotModel]) -> TeamSummary:
         checks.append(HealthCheck("warn", f"{mega_stones} Mega Stones", "Only one Pokémon per team may Mega Evolve"))
     elif mega_stones == 1:
         checks.append(HealthCheck("ok", "1 Mega Stone", "One Mega Evolution available"))
+    flagged = [(s.species_name, m) for s in filled for m in s.illegal_moves]
+    if flagged:
+        detail = "; ".join(f"{sp.title()}: {m}" for sp, m in flagged[:6])
+        checks.append(HealthCheck("warn", f"{len(flagged)} move{'s' if len(flagged) != 1 else ''} flagged", f"Not in the Champions learnset — {detail}"))
     if planned:
         checks.append(HealthCheck("info", f"{planned} planned", f"{planned} template{'s' if planned != 1 else ''} not yet in your box"))
 

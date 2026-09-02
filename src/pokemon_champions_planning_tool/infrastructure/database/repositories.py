@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlmodel import func, Session, select
+from sqlmodel import Session, delete, func, select
 
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.event_tier import classify_event_tier
@@ -21,15 +21,18 @@ from .models import (
     ChampionsSpeciesRecord,
     ItemCatalogMetaRecord,
     ItemRecord,
+    LearnsetRecord,
     MegaCheckedSpeciesRecord,
     MegaEvolutionRecord,
+    MoveCatalogMetaRecord,
+    MoveRecord,
     PokemonRecord,
     TeamMemberRecord,
     TeamRecord,
     TournamentRecord,
-    TournamentTeamRecord,
-    TournamentTeamMemberRecord,
     TournamentSeedMetaRecord,
+    TournamentTeamMemberRecord,
+    TournamentTeamRecord,
 )
 import json
 from pathlib import Path
@@ -728,6 +731,54 @@ class ItemRepository:
 # ---------------------------------------------------------------------------
 
 
+class MoveRepository:
+    """Move catalogue: moves, Champions learnsets and the sync sentinel."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def count_moves(self) -> int:
+        return int(self.session.exec(select(func.count()).select_from(MoveRecord)).one() or 0)
+
+    def count_learnsets(self) -> int:
+        return int(self.session.exec(select(func.count()).select_from(LearnsetRecord)).one() or 0)
+
+    def get_meta(self) -> MoveCatalogMetaRecord | None:
+        return self.session.get(MoveCatalogMetaRecord, 1)
+
+    def list_moves(self) -> list[MoveRecord]:
+        records = list(self.session.exec(select(MoveRecord)).all())
+        for r in records:
+            self.session.expunge(r)
+        return records
+
+    def list_learnsets(self) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
+        for species_key, move_id in self.session.exec(select(LearnsetRecord.species_key, LearnsetRecord.move_id)).all():
+            out.setdefault(species_key, []).append(move_id)
+        return out
+
+    def replace_all(self, moves: list[MoveRecord], learnsets: dict[str, list[str]]) -> tuple[int, int]:
+        """Swap the whole catalogue in one transaction (it is small: ~950 moves, ~16k pairs)."""
+        self.session.exec(delete(LearnsetRecord))
+        self.session.exec(delete(MoveRecord))
+        for m in moves:
+            self.session.add(m)
+        pairs = 0
+        for species_key, move_ids in learnsets.items():
+            for move_id in dict.fromkeys(move_ids):
+                self.session.add(LearnsetRecord(species_key=species_key, move_id=move_id))
+                pairs += 1
+        meta = self.get_meta() or MoveCatalogMetaRecord(id=1)
+        meta.move_count = len(moves)
+        meta.learnset_count = pairs
+        meta.species_count = len(learnsets)
+        meta.last_synced_at = _utc_now()
+        self.session.add(meta)
+        self.session.commit()
+        return len(moves), pairs
+
+
 class TournamentRepository:
     """Persistence operations for VGC Tournament metadata, teams, and seed datasets."""
 
@@ -1031,6 +1082,24 @@ class TournamentRepository:
             tournament_id_filter=tournament_id_filter,
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
+
+    def move_usage(self, canonical_id: str, *, include_megas: bool = True) -> list[tuple[str, int]]:
+        """(move name, rosters using it) for a species across every stored team, most used first.
+
+        Mega forms share the base species' moves, so "charizard" counts "charizard-mega-y"
+        rosters too when ``include_megas`` is set.
+        """
+        from sqlalchemy import text as _text
+
+        base = canonical_id.lower()
+        clause = "m.canonical_id = :cid OR m.canonical_id LIKE :mega" if include_megas else "m.canonical_id = :cid"
+        rows = self.session.exec(
+            _text(
+                "SELECT j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
+                f"WHERE ({clause}) GROUP BY j.value ORDER BY n DESC, move ASC"
+            ).bindparams(cid=base, mega=f"{base}-mega%")
+        ).all()
+        return [(str(move), int(n)) for move, n in rows if move]
 
     def list_regulations(self) -> list[str]:
         """Distinct regulation labels present in the data, most common first."""

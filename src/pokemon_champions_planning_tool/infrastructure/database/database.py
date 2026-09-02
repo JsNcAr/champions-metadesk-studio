@@ -89,6 +89,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
         # team_members — Terastallization type per slot
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+        # tournament_team_members — moves per roster slot (usage ranking in the move picker)
+        "ALTER TABLE tournament_team_members ADD COLUMN moves JSON NOT NULL DEFAULT '[]';",
         # tournaments — official tier (worlds/international/regional/special) or community
         "ALTER TABLE tournaments ADD COLUMN event_tier VARCHAR NOT NULL DEFAULT 'community';",
         "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
@@ -106,9 +108,45 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
             except Exception:
                 pass  # Column already exists — safe to ignore
         _backfill_event_tiers(conn)
+        _backfill_member_moves(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
+
+
+def _backfill_member_moves(conn) -> None:
+    """Fill ``tournament_team_members.moves`` for rosters stored before the column existed.
+
+    One pass over teams whose members all still have an empty list; each team's Showdown
+    text is parsed once and the moves assigned by slot order. Idempotent.
+    """
+    import json as _json
+
+    from pokemon_champions_planning_tool.services.showdown_service import parse_showdown_text
+
+    try:
+        rows = conn.execute(text(
+            "SELECT t.tournament_team_id, t.showdown_text FROM tournament_teams t "
+            "WHERE EXISTS (SELECT 1 FROM tournament_team_members m WHERE m.tournament_team_id = t.tournament_team_id) "
+            "AND NOT EXISTS (SELECT 1 FROM tournament_team_members m WHERE m.tournament_team_id = t.tournament_team_id AND m.moves != '[]')"
+        )).fetchall()
+    except Exception:
+        return
+    if not rows:
+        return
+    for team_id, showdown_text in rows:
+        try:
+            slots = list(parse_showdown_text(showdown_text or "").slots)
+        except Exception:  # noqa: BLE001 - one bad paste must not stop the pass
+            continue
+        members = conn.execute(text(
+            "SELECT id, slot_position FROM tournament_team_members WHERE tournament_team_id = :tid ORDER BY slot_position"
+        ), {"tid": team_id}).fetchall()
+        for index, (member_id, _slot) in enumerate(members):
+            moves = [m for m in (slots[index].moves if index < len(slots) else ()) if m]
+            if moves:
+                conn.execute(text("UPDATE tournament_team_members SET moves = :moves WHERE id = :id"), {"moves": _json.dumps(list(moves)), "id": member_id})
+    conn.commit()
 
 
 def _backfill_event_tiers(conn) -> None:

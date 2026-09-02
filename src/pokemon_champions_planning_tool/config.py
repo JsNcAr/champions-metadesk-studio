@@ -32,6 +32,13 @@ VICTORY_ROAD_BASE_URL = "https://victoryroad.pro"
 VRPASTE_BACKEND_URL = "https://vrpaste-backend.vercel.app/api/paste"
 POKEPAST_JSON_URL = "https://pokepast.es/{id}/json"
 
+# Move catalogue: every move (Showdown data bundle) plus the Champions learnsets and
+# move changes from the Showdown repository. Re-synced when older than this.
+SHOWDOWN_MOVES_JSON_URL = "https://play.pokemonshowdown.com/data/moves.json"
+SHOWDOWN_CHAMPIONS_LEARNSETS_URL = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions/learnsets.ts"
+SHOWDOWN_CHAMPIONS_MOVES_URL = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions/moves.ts"
+MOVE_CATALOG_MAX_AGE_DAYS = 30
+
 TOURNAMENT_SYNC_TIMEOUT = 12
 
 # Limitless allows 50 requests per 5 minutes (``ratelimit`` response header). A sync

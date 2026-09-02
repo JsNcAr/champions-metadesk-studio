@@ -16,6 +16,7 @@ from .dialogs.assign import AssignDialog
 from .dialogs.export_dialog import ExportDialog
 from .dialogs.import_dialog import ImportDialog
 from .dialogs.item_picker import ItemPickerDialog
+from .dialogs.move_picker import MovePickerDialog
 from .dialogs.spread import SpreadDialog
 from .slot_card import SLOT_CARD_HEIGHT, SLOT_CARD_HEIGHT_NARROW, SLOT_CARD_MAX_EXTENT, SLOT_CARD_WRAP_WIDTH, SlotCallbacks, SlotCard
 from .store import TeamStore
@@ -50,6 +51,12 @@ class TeamView(ft.Column):
             ],
         )
         self._summary_toggle = ft.IconButton(icon=ft.Icons.VIEW_SIDEBAR_OUTLINED, icon_size=20, tooltip="Toggle summary panel", selected=True, on_click=lambda _e: self._toggle_summary())
+        # Move legality: the picker hides moves outside the Champions learnset unless this is on.
+        self.show_all_moves = False
+        self._show_all_moves_item = ft.PopupMenuItem(
+            content=ft.Text("Show all moves (ignore legality)"), checked=False,
+            on_click=lambda _e: self._set_show_all_moves(not self.show_all_moves),
+        )
         self._more = ft.PopupMenuButton(
             icon=ft.Icons.MORE_VERT,
             tooltip="Team actions",
@@ -57,6 +64,8 @@ class TeamView(ft.Column):
                 ft.PopupMenuItem(content=ft.Text("New team"), icon=ft.Icons.ADD, on_click=lambda _e: self.ctx.page.run_task(self._new_team)),
                 ft.PopupMenuItem(content=ft.Text("Duplicate team"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self.ctx.page.run_task(self._duplicate_team)),
                 ft.PopupMenuItem(content=ft.Text("Delete team"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.ctx.page.run_task(self._delete_team)),
+                ft.PopupMenuItem(),
+                self._show_all_moves_item,
             ],
         )
         self.header = PageHeader("Teams", icon=ft.Icons.GROUPS, accent=Accent.TEAMS, actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
@@ -73,6 +82,7 @@ class TeamView(ft.Column):
             on_item=self._open_item_picker,
             on_remove_item=lambda p: self.store.set_item(p, None),
             on_move=self.store.set_move,
+            on_move_pick=self._open_move_picker,
             on_notes=self.store.set_notes,
             on_spread=self._open_spread,
             on_swap=self._swap,
@@ -226,7 +236,7 @@ class TeamView(ft.Column):
             self.store.load(self.store.active_team_id)
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
-        if kind in ("items", "megas"):
+        if kind in ("items", "megas", "moves"):
             self.store.catalogs = self.ctx.catalogs or self.store.catalogs
             self._reload_if_loaded()
 
@@ -264,6 +274,35 @@ class TeamView(ft.Column):
     def _swap(self, a: int, b: int) -> None:
         if self.store.swap(a, b):
             self._focus(b)
+
+    def _set_show_all_moves(self, value: bool) -> None:
+        self.show_all_moves = value
+        self._show_all_moves_item.checked = value
+        if is_mounted(self._show_all_moves_item):
+            self._show_all_moves_item.update()
+
+    def _open_move_picker(self, position: int, index: int) -> None:
+        slot = self.store.slot(position)
+        if slot.entry is None:
+            return
+        options = self.store.move_options(position)
+        current = slot.moves[index].name if index < len(slot.moves) else None
+        page = self.ctx.page
+
+        def pick(name: str | None) -> None:
+            page.pop_dialog()
+            self.store.set_move(position, index, name or "")
+
+        dialog = MovePickerDialog(
+            species_label=slot.entry.pokemon.display_name,
+            options=options,
+            current=current,
+            show_all=self.show_all_moves,
+            on_pick=pick,
+            on_close=page.pop_dialog,
+            on_show_all=self._set_show_all_moves,
+        )
+        page.show_dialog(dialog)
 
     def _open_item_picker(self, position: int) -> None:
         slot = self.store.slot(position)

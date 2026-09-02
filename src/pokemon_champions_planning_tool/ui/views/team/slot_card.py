@@ -31,12 +31,61 @@ class SlotCallbacks:
     on_spread: Callable[[int], None]
     on_swap: Callable[[int, int], None]
     on_focus: Callable[[int], None]
+    on_move_pick: Callable[[int, int], None] = lambda position, index: None
+
 
 
 SLOT_CARD_MAX_EXTENT = 600      # 3 columns at 1440, 2 beside the summary, 1 below ~1200 with it open
 SLOT_CARD_HEIGHT = 404          # header + form/ability/tera row + item + 2×2 moves + footer
 SLOT_CARD_WRAP_WIDTH = 430      # narrower tiles wrap form/ability/tera onto extra lines…
 SLOT_CARD_HEIGHT_NARROW = 500   # …so the card grows to keep the footer visible
+
+
+class MoveButton(ft.Container):
+    """One move slot on the card: ``● Fake Out`` or ``Move 2…``; red when flagged."""
+
+    def __init__(self, *, index: int, on_click: Callable[[], None]) -> None:
+        super().__init__()
+        self.index = index
+        self._dot = ft.Container(width=8, height=8, border_radius=Radius.PILL, bgcolor=Palette.OUTLINE, visible=False)
+        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.DISABLED, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._warn = ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=IconSize.SM, color=Palette.WARNING, visible=False)
+        self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._dot, self._name, self._warn])
+        self.height = 36
+        self.expand = True
+        self.padding = ft.Padding.symmetric(horizontal=Space.MD)
+        self.border_radius = Radius.SM
+        self.bgcolor = Palette.SURFACE_3
+        self.border = ft.Border.all(1, Palette.OUTLINE)
+        self.ink = True
+        self.on_click = lambda _e: on_click()
+        self.tooltip = "Choose move"
+
+    def update_from(self, move, *, species: str) -> None:
+        if move is None or not move.name:
+            self._name.value = f"Move {self.index + 1}…"
+            self._name.color = Palette.DISABLED
+            self._dot.visible = False
+            self._warn.visible = False
+            self.border = ft.Border.all(1, Palette.OUTLINE)
+            self.tooltip = "Choose move"
+            return
+        self._name.value = move.name
+        self._name.color = Palette.ON_SURFACE
+        info = move.info
+        self._dot.visible = info is not None and bool(info.type)
+        self._dot.bgcolor = type_color(info.type) if info is not None and info.type else Palette.OUTLINE
+        flagged = move.legal is False
+        self._warn.visible = flagged
+        self.border = ft.Border.all(1, Palette.WARNING if flagged else Palette.OUTLINE)
+        bits = []
+        if info is not None:
+            bits.append(f"{(info.type or '?').capitalize()} · {(info.category or '?').capitalize()}")
+            if info.power:
+                bits.append(f"{info.power} power")
+            if info.accuracy:
+                bits.append(f"{info.accuracy}% accuracy")
+        self.tooltip = (f"Not in {species}'s Champions learnset" if flagged else "") + ("\n" if flagged and bits else "") + " · ".join(bits) or "Choose move"
 
 
 class SlotCard(ft.Container):
@@ -113,12 +162,9 @@ class SlotCard(ft.Container):
         self._guardrail = InlineBanner(visible=False)
 
         # -- moves ----------------------------------------------------------------------------------
-        self._moves = [
-            ft.TextField(hint_text=f"Move {i + 1}", dense=True, height=36, expand=True,
-                         on_submit=lambda e, i=i: self.cb.on_move(self.position, i, e.control.value or ""),
-                         on_blur=lambda e, i=i: self._move_blur(i, e.control.value or ""))
-            for i in range(4)
-        ]
+        # Four move buttons: type dot, name, warning when not in the Champions learnset.
+        # Clicking opens the move picker for that index.
+        self._moves = [MoveButton(index=i, on_click=lambda i=i: self.cb.on_move_pick(self.position, i)) for i in range(4)]
         self._move_values = ["", "", "", ""]
 
         # -- footer: spread · partners · notes -------------------------------------------------------
@@ -253,10 +299,11 @@ class SlotCard(ft.Container):
         else:
             self._guardrail.hide()
 
-        names = [m.name for m in member.moveset][:4]
-        for i, field in enumerate(self._moves):
-            field.value = names[i] if i < len(names) else ""
-            self._move_values[i] = field.value
+        moves = list(slot.moves)[:4]
+        for i, button in enumerate(self._moves):
+            move = moves[i] if i < len(moves) else None
+            button.update_from(move, species=pokemon.display_name)
+            self._move_values[i] = move.name if move else ""
         self._spread.value = slot.spread_summary
         self._notes.value = member.notes or ""
         self._notes_toggle.icon = ft.Icons.NOTES if not member.notes else ft.Icons.STICKY_NOTE_2
@@ -293,10 +340,6 @@ class SlotCard(ft.Container):
             ft.PopupMenuItem(content=ft.Text("Clear slot"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.cb.on_clear(self.position)),
         ]
 
-    def _move_blur(self, index: int, value: str) -> None:
-        if value.strip() != self._move_values[index].strip():
-            self._move_values[index] = value
-            self.cb.on_move(self.position, index, value)
 
     def _toggle_notes(self) -> None:
         self._notes.visible = not self._notes.visible

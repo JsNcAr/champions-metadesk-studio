@@ -42,9 +42,10 @@ from ....services.showdown_service import (
     publish_to_pokepast,
     resolve_import_readiness,
 )
+from ....domain.moves import MoveInfo, base_canonical_id
 from ....services.tournament_service import PartnerRecommendation, TournamentService
 from ...catalogs import Catalogs
-from .summary import EMPTY_SUMMARY, SlotModel, TeamSummary, summarize, validate_slot
+from .summary import EMPTY_SUMMARY, SlotModel, SlotMove, TeamSummary, summarize, validate_slot
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 Change = tuple
@@ -56,6 +57,14 @@ class TeamRow:
     team_id: UUID
     name: str
     filled: int
+
+
+@dataclass(frozen=True)
+class MoveOptions:
+    legal: tuple[MoveInfo, ...]
+    others: tuple[MoveInfo, ...]
+    usage: dict[str, float]     # move id -> share of that species' tournament rosters
+    known: bool                 # False: the catalogue has no learnset for this species
 
 
 class TeamStore:
@@ -119,6 +128,7 @@ class TeamStore:
             slot.entry = entry
             slot.megas = megas_by_species.get(entry.pokemon.species_name or entry.pokemon.canonical_id, [])
             slot.item = self.catalogs.item_for(m.item)
+            slot.moves = self._resolve_moves(slot)
         for slot in self.slots:
             slot.validation = validate_slot(slot, self.slots)
         self.summary = summarize(self.slots)
@@ -213,6 +223,7 @@ class TeamStore:
         """Recompute a slot's derived data after its member changed; summary follows."""
         slot = self.slot(position)
         slot.item = self.catalogs.item_for(slot.member.item) if slot.member else None
+        slot.moves = self._resolve_moves(slot)
         for s in self.slots:
             s.validation = validate_slot(s, self.slots)
         self.summary = summarize(self.slots)
@@ -286,6 +297,39 @@ class TeamStore:
 
     def set_notes(self, position: int, notes: str) -> None:
         self._update(position, notes=notes.strip())
+
+    def _resolve_moves(self, slot: SlotModel) -> tuple[SlotMove, ...]:
+        if slot.member is None or slot.entry is None:
+            return ()
+        cid = slot.entry.pokemon.canonical_id
+        return tuple(
+            SlotMove(name=m.name, info=self.catalogs.move_by_name(m.name), legal=self.catalogs.move_legality(cid, m.name))
+            for m in slot.member.moveset[:4]
+            if m.name
+        )
+
+    def move_options(self, position: int) -> MoveOptions:
+        """Legal moves for the slot's species (base form for megas), every other move, and
+        how often stored tournament rosters of that species carry each move."""
+        slot = self.slot(position)
+        if slot.entry is None:
+            return MoveOptions((), (), {}, False)
+        cid = slot.entry.pokemon.canonical_id
+        legal_ids = self.catalogs.legal_move_ids(cid)
+        known = legal_ids is not None
+        by_name = lambda m: m.name.lower()  # noqa: E731
+        catalogue = [m for m in self.catalogs.moves_by_id.values() if m.is_legal]
+        if known:
+            legal = sorted((m for m in catalogue if m.move_id in legal_ids), key=by_name)
+            others = sorted((m for m in catalogue if m.move_id not in legal_ids), key=by_name)
+        else:
+            legal, others = sorted(catalogue, key=by_name), []
+        try:
+            with self._sf() as s:
+                usage = TournamentService(s).move_usage(base_canonical_id(cid))
+        except Exception:  # noqa: BLE001 - usage is a ranking hint, never required
+            usage = {}
+        return MoveOptions(tuple(legal), tuple(others), usage, known)
 
     def set_move(self, position: int, index: int, name: str) -> None:
         slot = self.slot(position)

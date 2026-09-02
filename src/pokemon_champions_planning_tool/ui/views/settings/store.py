@@ -20,11 +20,13 @@ from ....infrastructure.database.models import (
     ItemRecord,
     MegaCheckedSpeciesRecord,
     MegaEvolutionRecord,
+    MoveCatalogMetaRecord,
     TournamentRecord,
     TournamentTeamRecord,
 )
 from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
+from ....services.move_catalog_service import sync_move_catalog
 from ....services.tournament_service import TournamentService
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -39,6 +41,9 @@ class SettingsStatus:
     tournament_count: int
     tournament_team_count: int
     tournaments_synced_at: datetime | None
+    move_count: int = 0
+    move_species_count: int = 0
+    moves_synced_at: datetime | None = None
 
 
 class SettingsStore:
@@ -54,6 +59,7 @@ class SettingsStore:
             items_synced_at = meta.last_synced_at if meta and item_count else None
             tournament_count = s.exec(select(func.count()).select_from(TournamentRecord)).one()
             team_count = s.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
+            move_meta = s.get(MoveCatalogMetaRecord, 1)
             tournaments_synced_at = s.exec(
                 select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
             ).one()
@@ -65,6 +71,9 @@ class SettingsStore:
             tournament_count=int(tournament_count or 0),
             tournament_team_count=int(team_count or 0),
             tournaments_synced_at=tournaments_synced_at,
+            move_count=int(move_meta.move_count) if move_meta else 0,
+            move_species_count=int(move_meta.species_count) if move_meta else 0,
+            moves_synced_at=move_meta.last_synced_at if move_meta and move_meta.move_count else None,
         )
 
     # -- sync operations (run on a worker thread) ---------------------------------------
@@ -76,6 +85,10 @@ class SettingsStore:
     def sync_items(self) -> dict[str, Any]:
         with self._sf() as s:
             return sync_items_catalog(s, force=True)
+
+    def sync_moves(self) -> dict[str, Any]:
+        with self._sf() as s:
+            return sync_move_catalog(s, force=True)
 
     def sync_tournaments(self, on_progress: Any = None) -> dict[str, Any]:
         # Not forced: a manual sync lists what is new, drains the standings backlog and

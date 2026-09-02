@@ -104,8 +104,9 @@ class SettingsView(ft.Column):
         self.header = PageHeader("Settings", icon=ft.Icons.SETTINGS, accent=Accent.SETTINGS)
         self.row_megas = SyncRow(ft.Icons.BOLT, "Mega Evolutions", lambda: self._sync("megas"))
         self.row_items = SyncRow(ft.Icons.DIAMOND_OUTLINED, "Held items", lambda: self._sync("items"))
+        self.row_moves = SyncRow(ft.Icons.SPORTS_MARTIAL_ARTS, "Moves & learnsets", lambda: self._sync("moves"))
         self.row_tournaments = SyncRow(ft.Icons.EMOJI_EVENTS_OUTLINED, "Tournaments", lambda: self._sync("tournaments"))
-        self._rows = {"megas": self.row_megas, "items": self.row_items, "tournaments": self.row_tournaments}
+        self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments}
 
         self.about = KeyValueList(self._about_rows())
 
@@ -128,6 +129,8 @@ class SettingsView(ft.Column):
                                 self.row_megas,
                                 ft.Divider(),
                                 self.row_items,
+                                ft.Divider(),
+                                self.row_moves,
                                 ft.Divider(),
                                 self.row_tournaments,
                             ]
@@ -153,6 +156,7 @@ class SettingsView(ft.Column):
     def apply_status(self, status: SettingsStatus) -> None:
         self.row_megas.set_status(_status_line(plural(status.mega_count, "form"), status.megas_checked_at, status.mega_count))
         self.row_items.set_status(_status_line(plural(status.item_count, "item"), status.items_synced_at, status.item_count))
+        self.row_moves.set_status(_status_line(f"{plural(status.move_count, 'move')} · {plural(status.move_species_count, 'learnset')}", status.moves_synced_at, status.move_count))
         self.row_tournaments.set_status(
             _status_line(
                 f"{plural(status.tournament_count, 'event')} · {plural(status.tournament_team_count, 'team')}",
@@ -165,7 +169,7 @@ class SettingsView(ft.Column):
 
     def _sync(self, kind: str) -> None:
         row = self._rows[kind]
-        work = {"megas": self.store.sync_megas, "items": self.store.sync_items, "tournaments": self.store.sync_tournaments}[kind]
+        work = {"megas": self.store.sync_megas, "items": self.store.sync_items, "moves": self.store.sync_moves, "tournaments": self.store.sync_tournaments}[kind]
         row.set_running(True)
         row.set_status("Syncing…")
         if self._is_mounted():
@@ -248,6 +252,8 @@ def _result_summary(kind: str, result: dict[str, Any]) -> str:
         return f"+{result.get('added', 0)} forms"
     if kind == "items":
         return f"+{result.get('added', 0)} added · {result.get('updated', 0)} updated"
+    if kind == "moves":
+        return f"{result.get('moves', 0):,} moves · {result.get('species', 0):,} learnsets"
     limitless = result.get("limitless", {})
     victory = result.get("victory_road", {})
     added = int(limitless.get("added", 0)) + int(victory.get("added", 0))
@@ -261,6 +267,8 @@ def _toast_text(kind: str, result: dict[str, Any]) -> str:
         return f"Mega Evolutions synced — {result.get('total_local', 0):,} forms cached"
     if kind == "items":
         return f"Items synced — {result.get('total', 0):,} catalogued"
+    if kind == "moves":
+        return "Move catalogue unreachable — kept existing data" if result.get("status") == "offline" else f"Moves synced — {result.get('moves', 0):,} moves, {result.get('species', 0):,} Champions learnsets"
     status = result.get("status", "synced")
     if status == "offline":
         return "Tournament sources unreachable — kept existing data"

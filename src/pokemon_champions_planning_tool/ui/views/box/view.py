@@ -8,7 +8,7 @@ import flet as ft
 
 from ....domain.entities.box_entry import BoxEntry
 from ... import events
-from ...components import EmptyState, PageHeader
+from ...components import EmptyState, PageHeader, SplitPane
 from ...components.banner import InlineBanner
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...context import AppContext
@@ -137,7 +137,9 @@ class BoxView(ft.Row):
             spacing=Space.MD,
             controls=[self.header, self._suggestions, self._add_banner, self.toolbar, self._content],
         )
-        self.controls = [ft.Container(content=left, expand=True, padding=ft.Padding.only(right=Space.LG)), self.detail]
+        self.split = SplitPane(left, self.detail, gap=Space.LG)
+        self.controls = [self.split]
+        self._narrow = False
 
         self._relayout()
         self.store.subscribe(self._on_store_change)
@@ -562,14 +564,18 @@ class BoxView(ft.Row):
 
     def handle_resize(self, width: float, height: float) -> None:
         self._page_width = width
+        self._narrow = width < Layout.BREAKPOINT_NARROW
+        self.detail.width = Layout.SIDE_PANEL_WIDTH_COMPACT if width < Layout.BREAKPOINT_COMPACT else Layout.SIDE_PANEL_WIDTH
+        self.split.set_narrow(self._narrow)
         self._relayout()
 
     def _relayout(self) -> None:
         """Keep card height constant: the grid derives tile height from tile width."""
-        available = (
-            self._page_width - Layout.RAIL_WIDTH - 1 - 2 * Space.PAGE_PADDING - Space.LG
-            - (Layout.SIDE_PANEL_WIDTH if self.detail.visible else 0)
-        )
+        compact = self._page_width < Layout.BREAKPOINT_COMPACT
+        rail = Layout.RAIL_WIDTH_COMPACT if compact else Layout.RAIL_WIDTH
+        padding = Space.LG if compact else Space.PAGE_PADDING
+        panel = 0 if (self._narrow or not self.detail.visible) else (self.detail.width or Layout.SIDE_PANEL_WIDTH) + Space.LG
+        available = self._page_width - rail - 1 - 2 * padding - panel
         self.grid.child_aspect_ratio = grid_tile_aspect(
             available, max_extent=CARD_MAX_EXTENT, spacing=Space.GRID_GAP,
             tile_height=CARD_HEIGHT_WITH_STATS if self.show_stats else CARD_HEIGHT,

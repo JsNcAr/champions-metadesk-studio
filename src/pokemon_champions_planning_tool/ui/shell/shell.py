@@ -59,6 +59,13 @@ class AppShell(ft.Row):
             tooltip="Settings (Ctrl+,)",
             on_click=lambda _e: self.open_settings(),
         )
+        self._help_button = ft.IconButton(
+            icon=ft.Icons.HELP_OUTLINE,
+            icon_size=IconSize.LG,
+            tooltip="Help (F1)",
+            on_click=lambda _e: self.open_help(),
+        )
+        self.compact = False
         self.rail = ft.NavigationRail(
             destinations=[],
             selected_index=0,
@@ -76,7 +83,7 @@ class AppShell(ft.Row):
                 margin=ft.Margin.only(top=Space.MD, bottom=Space.SM),
             ),
             trailing=ft.Container(
-                content=self._settings_button,
+                content=ft.Column(spacing=0, tight=True, controls=[self._help_button, self._settings_button]),
                 margin=ft.Margin.only(bottom=Space.MD),
             ),
             on_change=self._on_rail_change,
@@ -141,6 +148,7 @@ class AppShell(ft.Row):
         self.host.content = entry.instance()
         self.rail.selected_index = self._order.index(key) if key in self._order else None
         self._current = key
+        self._apply_width(self.page_size()[0])
         self._forward_size(entry.control)
         if entry.on_activate is not None:
             entry.on_activate()
@@ -155,8 +163,17 @@ class AppShell(ft.Row):
         if 0 <= index < len(self._order):
             self.navigate(self._order[index])
 
+    def open_help(self) -> None:
+        from ..help import HelpDialog
+
+        page = self.ctx.page
+        page.show_dialog(HelpDialog(on_close=page.pop_dialog))
+
     def _on_key(self, e: ft.KeyboardEvent) -> None:
         if e.key == "Escape" and self._close_top_dialog():
+            return
+        if e.key == "F1" or (e.ctrl and e.key == "/"):
+            self.open_help()
             return
         if e.ctrl and e.key in _DIGIT_KEYS:
             index = int(e.key) - 1
@@ -176,8 +193,9 @@ class AppShell(ft.Row):
 
     def page_size(self) -> tuple[float, float]:
         page = self.ctx.page
-        width = getattr(page, "width", None) or getattr(page.window, "width", None) or DEFAULT_WINDOW_WIDTH
-        height = getattr(page, "height", None) or getattr(page.window, "height", None) or DEFAULT_WINDOW_HEIGHT
+        window = getattr(page, "window", None)
+        width = getattr(page, "width", None) or getattr(window, "width", None) or DEFAULT_WINDOW_WIDTH
+        height = getattr(page, "height", None) or getattr(window, "height", None) or DEFAULT_WINDOW_HEIGHT
         return float(width), float(height)
 
     def _forward_size(self, control: ft.Control | None) -> None:
@@ -186,11 +204,24 @@ class AppShell(ft.Row):
         if callable(handler):
             handler(*self.page_size())
 
+    def _apply_width(self, width: float) -> None:
+        """Compact rail (icons only) and tighter page padding below the compact breakpoint."""
+        compact = width < Layout.BREAKPOINT_COMPACT
+        if compact == self.compact:
+            return
+        self.compact = compact
+        self.rail.label_type = ft.NavigationRailLabelType.NONE if compact else ft.NavigationRailLabelType.ALL
+        self.rail.min_width = Layout.RAIL_WIDTH_COMPACT if compact else Layout.RAIL_WIDTH
+        self.host.padding = Space.LG if compact else Space.PAGE_PADDING
+
     def _on_resize(self, e) -> None:
-        entry = self._entries.get(self._current) if self._current else None
-        if entry is not None and entry.control is not None:
-            self._forward_size(entry.control)
-            self._update_if_mounted()
+        width, _height = self.page_size()
+        self._apply_width(width)
+        # Every built view gets the size, so a hidden one is already right when shown.
+        for entry in self._entries.values():
+            if entry.control is not None:
+                self._forward_size(entry.control)
+        self._update_if_mounted()
 
     def _close_top_dialog(self) -> bool:
         """Modal dialogs ignore Escape on their own; close the topmost open one here."""

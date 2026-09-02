@@ -157,6 +157,12 @@ class MetaView(ft.Column):
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.SYNC_PROGRESS, self._on_sync_progress)
 
+    def handle_key(self, e) -> bool:
+        if e.ctrl and (e.key or "").lower() == "f" and is_mounted(self._search):
+            self.ctx.page.run_task(self._search.focus)
+            return True
+        return False
+
     # -- lifecycle ----------------------------------------------------------------------
 
     def ensure_loaded(self) -> None:

@@ -108,6 +108,10 @@ src/
 tests/                        # Automated unit & integration test suite
 ```
 
+## Keyboard shortcuts
+
+Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials: Ctrl+1/2/3 switch sections, Ctrl+, opens Settings, Ctrl+F focuses the search, Ctrl+K adds to the box, Ctrl+N/I/E create, import and export a team, Escape closes dialogs and panels, Delete removes the selection with Undo.
+
 ## Configuration
 
 | Variable | Default | Purpose |

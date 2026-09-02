@@ -8,7 +8,7 @@ import flet as ft
 
 from ....domain.entities.team_member import TeamMember
 from ... import events
-from ...components import EmptyState, PageHeader, StatusChip
+from ...components import EmptyState, PageHeader, SplitPane, StatusChip
 from ...context import AppContext
 from ...tasks import grid_tile_aspect, grid_tile_width, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Palette, Space
@@ -100,8 +100,8 @@ class TeamView(ft.Column):
                                  action_label="Create team", on_action=lambda: self.ctx.page.run_task(self._new_team),
                                  secondary_label="Import", on_secondary=self._import)
         self._empty.visible = False
-        self._body = ft.Row(spacing=Space.LG, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH,
-                            controls=[ft.Container(content=ft.Column(expand=True, controls=[self.grid, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty])]), expand=True), self.summary])
+        self._body = SplitPane(ft.Column(expand=True, controls=[self.grid, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty])]), self.summary, gap=Space.LG)
+        self._narrow = False
         self.controls = [self.header, self._team_row, self._body]
         self._relayout()
 
@@ -391,14 +391,18 @@ class TeamView(ft.Column):
 
     def handle_resize(self, width: float, height: float) -> None:
         self._page_width = width
+        self._narrow = width < Layout.BREAKPOINT_NARROW
+        self.summary.width = Layout.SIDE_PANEL_WIDTH_COMPACT if width < Layout.BREAKPOINT_COMPACT else Layout.SIDE_PANEL_WIDTH
+        self._body.set_narrow(self._narrow)
         self._relayout()
 
     def _relayout(self) -> None:
         """Slot cards keep a fixed height whatever the window or summary panel does."""
-        available = (
-            self._page_width - Layout.RAIL_WIDTH - 1 - 2 * Space.PAGE_PADDING
-            - ((Layout.SIDE_PANEL_WIDTH + Space.LG) if self.summary.visible else 0)
-        )
+        compact = self._page_width < Layout.BREAKPOINT_COMPACT
+        rail = Layout.RAIL_WIDTH_COMPACT if compact else Layout.RAIL_WIDTH
+        padding = Space.LG if compact else Space.PAGE_PADDING
+        panel = 0 if (self._narrow or not self.summary.visible) else (self.summary.width or Layout.SIDE_PANEL_WIDTH) + Space.LG
+        available = self._page_width - rail - 1 - 2 * padding - panel
         tile_width = grid_tile_width(available, max_extent=SLOT_CARD_MAX_EXTENT, spacing=Space.GRID_GAP)
         height = SLOT_CARD_HEIGHT_NARROW if tile_width < SLOT_CARD_WRAP_WIDTH else SLOT_CARD_HEIGHT
         self.grid.child_aspect_ratio = grid_tile_aspect(available, max_extent=SLOT_CARD_MAX_EXTENT, spacing=Space.GRID_GAP, tile_height=height)

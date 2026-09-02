@@ -79,6 +79,7 @@
 
 ### QR-3 Responsive layout
 - The GUI should work on typical desktop screen sizes and degrade gracefully on smaller windows.
+- Implemented: the window works from about 900px up; the rail compacts below 1280px and side panels overlay below 1024px.
 
 ### QR-4 Data persistence
 - Box and team data should persist between sessions.

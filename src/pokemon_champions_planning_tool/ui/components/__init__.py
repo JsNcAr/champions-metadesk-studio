@@ -7,11 +7,13 @@ from .empty_state import EmptyState
 from .key_value import KeyValueList
 from .page_header import PageHeader
 from .section import Panel, SectionHeader
+from .layout import SplitPane
 from .sync_indicator import SyncIndicator
 from .skeleton import skeleton_block, skeleton_rows
 from .sprite import Sprite
 
 __all__ = [
+    "SplitPane",
     "SyncIndicator",
     "ActiveFilterChip",
     "EmptyState",

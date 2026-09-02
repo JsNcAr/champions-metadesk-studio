@@ -66,10 +66,12 @@ class EventHeader(ft.Container):
         meta_bits = _event_meta_bits(row)
         controls: list[ft.Control] = [
             ft.Icon(ft.Icons.EMOJI_EVENTS, size=IconSize.SM, color=Palette.TERTIARY),
-            ft.Text(row.tournament_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip=row.tournament_name),
+            # Weighted: the name keeps three fifths of the free width, the caption two, so a
+            # narrow window shortens both instead of squeezing the name to one letter.
+            ft.Text(row.tournament_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=3, tooltip=row.tournament_name),
             _tier_chip(row.event_tier),
             StatusChip(row.regulation or "Unknown format", "tertiary"),
-            ft.Text(" · ".join(meta_bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
+            ft.Text(" · ".join(meta_bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=2, tooltip=" · ".join(meta_bits)),
             self._count,
             self._toggle,
         ]

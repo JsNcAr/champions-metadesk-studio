@@ -90,6 +90,8 @@
 - **Saved filter views** in the Box toolbar.
 - **Configurable database path** (`PCPT_DATABASE`, `PCPT_PREFERENCES`).
 - **Official event discovery**: Victory Road's season calendars seed Regionals, Internationals, Worlds and Special Events automatically; finished events are read a few per run with a configurable placement cap.
+- **Narrow-window layout (QR-3)**: compact icon rail below 1280px, side panels overlay the content below 1024px, grids keep their card heights.
+- **Help dialog** (F1 / Ctrl+/ / rail button): shortcuts and non-obvious features.
 
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).

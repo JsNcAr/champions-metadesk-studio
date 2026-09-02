@@ -9,8 +9,14 @@ from pokemon_champions_planning_tool.domain.stat_calc import (
     calc_all,
     calc_hp,
     calc_stat,
+    champions_stat,
+    champions_stats,
+    format_points,
     nature_label,
     nature_multiplier,
+    points_from_evs,
+    points_left,
+    validate_points,
     validate_spread,
 )
 
@@ -42,6 +48,50 @@ class TestFormula(unittest.TestCase):
     def test_level_scales(self):
         self.assertEqual(calc_stat(130, ev=252, level=100), 359)
         self.assertEqual(calc_hp(108, ev=252, level=100), 420)
+
+
+class TestChampionsPoints(unittest.TestCase):
+    def test_garchomp_reference_values(self):
+        # The classic 252 Atk / 252 Spe / 4 HP Jolly spread is 32 / 32 / 1 in points.
+        stats = champions_stats(GARCHOMP, {"attack": 32, "speed": 32, "hp": 1}, "Jolly")
+        self.assertEqual((stats.hp, stats.attack, stats.speed, stats.special_attack), (184, 182, 169, 90))
+        self.assertEqual(champions_stats(GARCHOMP, {"attack": 32}, "Adamant").attack, 200)
+        self.assertEqual(champions_stat(1, 32, hp=True), 1, "Shedinja")
+        self.assertEqual(champions_stat(108, 0, hp=True), 183)
+        self.assertEqual(champions_stat(130, 0), 150)
+
+    def test_calculator_reference_sets(self):
+        # Values produced by the Smogon calculator's Champions module.
+        mega_y = PokemonStats(hp=78, attack=104, defense=78, sp_atk=159, sp_def=115, speed=100)
+        s = champions_stats(mega_y, {"hp": 2, "special_attack": 32, "speed": 32}, "Timid")
+        self.assertEqual((s.hp, s.attack, s.defense, s.special_attack, s.special_defense, s.speed), (155, 111, 98, 211, 135, 167))
+        g = champions_stats(GARCHOMP, {"hp": 32, "attack": 32, "speed": 2}, "Jolly")
+        self.assertEqual((g.hp, g.attack, g.defense, g.special_attack, g.special_defense, g.speed), (215, 182, 115, 90, 105, 136))
+
+    def test_points_from_evs_preserves_every_legacy_stat(self):
+        self.assertEqual(points_from_evs({"attack": 252, "speed": 252, "hp": 4}), {"attack": 32, "speed": 32, "hp": 1})
+        self.assertEqual(points_from_evs({"hp": 0, "atk": 10}), {})
+        self.assertEqual(points_from_evs({"attack": 999}), {"attack": 32})
+        for base in (1, 45, 80, 108, 130, 255):
+            for ev in range(0, 253, 4):
+                p = points_from_evs({"hp": ev})["hp"] if ev else 0
+                self.assertEqual(champions_stat(base, p, hp=True), calc_hp(base, ev=ev), (base, ev))
+                for mult in (1.0, 1.1, 0.9):
+                    self.assertEqual(champions_stat(base, p, mult), calc_stat(base, ev=ev, nature_mult=mult), (base, ev, mult))
+
+    def test_validation_and_budget(self):
+        self.assertEqual(validate_points({"attack": 32, "speed": 32, "hp": 2}), [])
+        self.assertEqual(validate_points(None), [])
+        self.assertTrue(any("Atk points" in p for p in validate_points({"attack": 33})))
+        self.assertTrue(any("exceeds 66" in p for p in validate_points({"attack": 32, "speed": 32, "hp": 3})))
+        self.assertTrue(validate_points({"atk": 1}))
+        self.assertEqual(points_left({"attack": 32, "speed": 32}), 2)
+        self.assertEqual(points_left({}), 66)
+
+    def test_format(self):
+        self.assertEqual(format_points({"speed": 32, "attack": 32, "hp": 2}), "2 HP / 32 Atk / 32 Spe")
+        self.assertEqual(format_points({"hp": 0}), "")
+        self.assertEqual(format_points(None), "")
 
 
 class TestNatures(unittest.TestCase):

@@ -1,11 +1,11 @@
 import sys
-from .infrastructure.database.database import initialize_database, get_session
-from .services.champions_catalog_service import sync_champions_catalog_on_startup
-from .services.items_catalog_service import sync_items_catalog
-from .services.move_catalog_service import sync_move_catalog_on_startup
-from .services.species_catalog_service import sync_species_catalog_on_startup
-from .services.pokemon_import_service import refresh_stub_pokemon
-from .services.terminal_shell import TerminalShell
+from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database, get_session
+from pokemon_champions_planning_tool.services.champions_catalog_service import sync_champions_catalog_on_startup
+from pokemon_champions_planning_tool.services.items_catalog_service import sync_items_catalog
+from pokemon_champions_planning_tool.services.move_catalog_service import sync_move_catalog_on_startup
+from pokemon_champions_planning_tool.services.species_catalog_service import sync_species_catalog_on_startup
+from pokemon_champions_planning_tool.services.pokemon_import_service import refresh_stub_pokemon
+from pokemon_champions_planning_tool.services.terminal_shell import TerminalShell
 
 
 STARTUP_CHECK_HOURS = 24
@@ -15,7 +15,7 @@ def _startup_check_due(session, key: str, hours: int = STARTUP_CHECK_HOURS) -> b
     """True at most once per ``hours`` per key; records the check time when due."""
     from datetime import datetime, timedelta, timezone
 
-    from .infrastructure.database.repositories import TournamentRepository
+    from pokemon_champions_planning_tool.infrastructure.database.repositories import TournamentRepository
 
     repo = TournamentRepository(session)
     stamp = repo.get_state(key)
@@ -55,7 +55,7 @@ def run():
         TerminalShell().run()
     else:
         import flet as ft
-        from .ui.app import main as gui_main
+        from pokemon_champions_planning_tool.ui.app import main as gui_main
 
         view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
         ft.run(gui_main, view=view_mode, port=8550)

@@ -154,6 +154,12 @@ def build_theme() -> ft.Theme:
         ),
         # Without a decoration Flutter falls back to its light tooltip, which put
         # near-white text on a white box.
+        # Material's default inactive track is the highest surface tone — the dialog
+        # background — so sliders in dialogs showed only their thumb.
+        slider_theme=ft.SliderTheme(
+            inactive_track_color=Palette.OUTLINE,
+            overlay_color=ft.Colors.with_opacity(0.12, Palette.PRIMARY),
+        ),
         tooltip_theme=ft.TooltipTheme(
             text_style=_style(FontSize.CAPTION, 16, ft.FontWeight.W_500, Palette.ON_SURFACE),
             decoration=ft.BoxDecoration(

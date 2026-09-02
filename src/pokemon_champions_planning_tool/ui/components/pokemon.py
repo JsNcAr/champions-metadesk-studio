@@ -34,7 +34,6 @@ class TypeChip(ft.Container):
         self._label = ft.Text("", weight=ft.FontWeight.W_600)
         self.content = self._label
         self.border_radius = Radius.SM
-        self.alignment = ft.Alignment.CENTER
         self._size = size
         self.set_type(type_name)
 

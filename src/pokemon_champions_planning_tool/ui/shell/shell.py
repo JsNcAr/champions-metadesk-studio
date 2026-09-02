@@ -156,6 +156,8 @@ class AppShell(ft.Row):
             self.navigate(self._order[index])
 
     def _on_key(self, e: ft.KeyboardEvent) -> None:
+        if e.key == "Escape" and self._close_top_dialog():
+            return
         if e.ctrl and e.key in _DIGIT_KEYS:
             index = int(e.key) - 1
             if index < len(self._order):
@@ -189,6 +191,16 @@ class AppShell(ft.Row):
         if entry is not None and entry.control is not None:
             self._forward_size(entry.control)
             self._update_if_mounted()
+
+    def _close_top_dialog(self) -> bool:
+        """Modal dialogs ignore Escape on their own; close the topmost open one here."""
+        page = self.ctx.page
+        stack = getattr(getattr(page, "_dialogs", None), "controls", None)
+        if stack is None:
+            stack = getattr(page, "dialogs", None) or []
+        if not any(getattr(dlg, "open", True) for dlg in stack):
+            return False
+        return page.pop_dialog() is not None
 
     def _update_if_mounted(self) -> None:
         # Before page.add the controls have no page; Flet auto-updates after the

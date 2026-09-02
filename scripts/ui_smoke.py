@@ -86,10 +86,14 @@ class StubPage(SimpleNamespace):
             raise failure[0]
 
     def show_dialog(self, dlg):
+        dlg.open = True  # like the real page, so open-state checks behave
         self.dialogs.append(dlg)
 
     def pop_dialog(self):
-        return self.dialogs.pop() if self.dialogs else None
+        dlg = self.dialogs.pop() if self.dialogs else None
+        if dlg is not None:
+            dlg.open = False
+        return dlg
 
 
 def _check_layout(control) -> None:

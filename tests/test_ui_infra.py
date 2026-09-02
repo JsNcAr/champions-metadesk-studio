@@ -209,5 +209,30 @@ class TestGridTileAspect(unittest.TestCase):
         self.assertGreater(grid_tile_aspect(0, max_extent=210, spacing=12, tile_height=240), 0)
 
 
+
+
+class TestShellEscape(unittest.TestCase):
+    def test_escape_closes_the_top_dialog_first(self):
+        from types import SimpleNamespace
+
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.context import AppContext
+        from pokemon_champions_planning_tool.ui.shell import AppShell
+
+        page = StubPage()
+        shell = AppShell(AppContext(page))
+        seen = []
+        shell.register_view("v", label="V", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
+                            control=type("V", (ft.Column,), {"handle_key": lambda self, e: seen.append(e.key)})())
+        shell.navigate("v")
+        esc = SimpleNamespace(key="Escape", ctrl=False, shift=False, alt=False, meta=False)
+        page.show_dialog(ft.AlertDialog(modal=True))
+        shell._on_key(esc)
+        self.assertEqual(page.dialogs, [], "Escape popped the dialog")
+        self.assertEqual(seen, [], "the view did not see the key while a dialog was open")
+        shell._on_key(esc)
+        self.assertEqual(seen, ["Escape"], "with no dialog open, Escape reaches the view")
+
+
 if __name__ == "__main__":
     unittest.main()

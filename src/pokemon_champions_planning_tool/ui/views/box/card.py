@@ -78,7 +78,10 @@ class PokemonCard(ft.Container):
             border_radius=ft.BorderRadius.only(top_left=Radius.MD, top_right=Radius.MD),
             bgcolor=Palette.SURFACE_3,
         )
+        # A tight Column is only as wide as its widest child, so without the full-width stat
+        # bars it hugged the left edge; the alignment makes the body span the card.
         self._body = ft.Container(
+            alignment=ft.Alignment.TOP_CENTER,
             padding=ft.Padding.only(left=Space.CARD_PADDING, right=Space.CARD_PADDING, top=Space.SM, bottom=Space.CARD_PADDING),
             content=ft.Column(
                 spacing=Space.XS,

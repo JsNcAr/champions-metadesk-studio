@@ -92,6 +92,7 @@ class DetailPanel(SidePanel):
             ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Tags", accent=Accent.BOX), self._tags, self._tag_input]),
             self._teams,
             ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._planned_button, self._delete_button]),
+            ft.Container(height=Space.XL),
         ]
 
     # -- model -> controls --------------------------------------------------------------------

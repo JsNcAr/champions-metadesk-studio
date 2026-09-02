@@ -66,7 +66,7 @@ class SpreadDialog(ft.AlertDialog):
         rows: list[ft.Control] = [
             ft.Row(spacing=Space.SM, controls=[
                 ft.Container(width=44), ft.Text("EVs", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True),
-                ft.Text("EV", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=56, text_align=ft.TextAlign.CENTER),
+                ft.Text("EV", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=64, text_align=ft.TextAlign.CENTER),
                 ft.Text("IV", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=48, text_align=ft.TextAlign.CENTER),
                 ft.Text("Stat", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=52, text_align=ft.TextAlign.RIGHT),
             ])
@@ -74,7 +74,7 @@ class SpreadDialog(ft.AlertDialog):
         for stat in STAT_ORDER:
             slider = ft.Slider(min=0, max=MAX_EV_PER_STAT, divisions=63, value=self._evs[stat], expand=True, active_color=STAT_COLORS[stat],
                                on_change=lambda e, stat=stat: self._slider_changed(stat, int(e.control.value)))
-            ev_field = ft.TextField(value=str(self._evs[stat]), width=56, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER,
+            ev_field = ft.TextField(value=str(self._evs[stat]), width=64, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER,
                                     on_change=lambda e, stat=stat: self._ev_typed(stat, e.control.value or ""))
             iv_field = ft.TextField(value=str(self._ivs[stat]), width=48, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER,
                                     on_change=lambda e, stat=stat: self._iv_typed(stat, e.control.value or ""))

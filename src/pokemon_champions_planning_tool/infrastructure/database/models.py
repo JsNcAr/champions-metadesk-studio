@@ -437,6 +437,16 @@ class MoveCatalogMetaRecord(SQLModel, table=True):
     last_synced_at: datetime = Field(default_factory=_utc_now)
 
 
+class AppStateRecord(SQLModel, table=True):
+    """Small key/value store for sync bookkeeping (e.g. when a calendar was last checked)."""
+
+    __tablename__: ClassVar[str] = "app_state"
+
+    key: str = Field(primary_key=True)
+    value: str = Field(default="")
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
 class TournamentSeedMetaRecord(SQLModel, table=True):
     """Tracks tournament seed dataset loading status."""
 

@@ -114,5 +114,6 @@ tests/                        # Automated unit & integration test suite
 |---|---|---|
 | `PCPT_DATABASE` | `pokemon_champions.db` (working directory) | Path of the SQLite database file. |
 | `PCPT_PREFERENCES` | `preferences.json` beside the database | Path of the view-preferences file. |
+| `PCPT_VR_MAX_PLACEMENT` | `64` | Placements ingested per official event from Victory Road (Regionals publish hundreds of sheets). |
 
 Example: `PCPT_DATABASE=~/pokemon/champions.db poetry run python -m pokemon_champions_planning_tool.main`

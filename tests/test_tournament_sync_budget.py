@@ -172,6 +172,10 @@ class TestUnfinishedEvents(_DbCase):
 
 
 class TestVictoryRoadResume(_DbCase):
+    def setUp(self):
+        super().setUp()
+        patch.object(sync_mod, "_VR_PAGES_PER_RUN", 1).start()
+
     def _event(self):
         return VREventResult(
             slug="2026-naic", name="2026 North America International Championships", date=datetime(2026, 7, 4, tzinfo=timezone.utc),
@@ -182,31 +186,37 @@ class TestVictoryRoadResume(_DbCase):
             ),
         )
 
-    def test_failed_paste_keeps_the_event_pending_and_only_the_missing_paste_is_refetched(self):
+    def _vr(self, event):
         vr = MagicMock()
-        vr.fetch_all_known_events.return_value = [self._event()]
+        vr.fetch_season_calendar.return_value = []
+        vr.fetch_event.side_effect = lambda meta, masters_only=True: event if meta["slug"] == "2026-naic" else None
+        return vr
+
+    def test_failed_paste_keeps_the_event_pending_and_only_the_missing_paste_is_refetched(self):
+        vr = self._vr(self._event())
         pokepast = MagicMock()
         pokepast.fetch_by_id.side_effect = lambda pid: {"paste": "Incineroar\n- Fake Out\n"} if pid == "aaa" else (_ for _ in ()).throw(RuntimeError("boom"))
         limitless = self._limitless([], served=set())
         res = sync_tournaments(self.session, limitless_provider=limitless, vr_provider=vr, pokepast_provider=pokepast, vrpaste_provider=MagicMock())
         self.assertEqual(res["victory_road"]["paste_errors"], 1)
         self.assertEqual(res["status"], "partial")
+        self.assertEqual(vr.fetch_event.call_args.args[0]["slug"], "2026-naic", "newest finished registry event is read first")
         self.assertFalse(self._records()["vr-2026-naic"].standings_synced)
         self.assertEqual(len(self.session.exec(select(TournamentTeamRecord)).all()), 1)
         self.assertEqual(pokepast.fetch_by_id.call_args_list.count(unittest.mock.call("bbb")), 2, "one retry")
 
         # Second run: the page is re-read (still pending), only 'bbb' is fetched, no duplicate of 'aaa'.
-        vr = MagicMock(); vr.fetch_all_known_events.return_value = [self._event()]
+        vr = self._vr(self._event())
         pokepast = MagicMock(); pokepast.fetch_by_id.return_value = {"paste": "Rillaboom\n- Grassy Glide\n"}
         sync_tournaments(self.session, limitless_provider=self._limitless([], served=set()), vr_provider=vr, pokepast_provider=pokepast, vrpaste_provider=MagicMock())
         self.assertEqual([c.args[0] for c in pokepast.fetch_by_id.call_args_list], ["bbb"])
         self.assertTrue(self._records()["vr-2026-naic"].standings_synced)
         self.assertEqual(len(self.session.exec(select(TournamentTeamRecord)).all()), 2)
 
-        # Third run: complete event -> its page is not requested at all.
-        vr = MagicMock(); vr.fetch_all_known_events.return_value = []
+        # Third run: the complete event is not requested again; the queue moves on.
+        vr = self._vr(self._event())
         sync_tournaments(self.session, limitless_provider=self._limitless([], served=set()), vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
-        self.assertIn("2026-naic", vr.fetch_all_known_events.call_args.kwargs["skip_slugs"])
+        self.assertNotEqual(vr.fetch_event.call_args.args[0]["slug"], "2026-naic")
 
 
 class TestStartupThrottle(_DbCase):

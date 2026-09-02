@@ -17,6 +17,7 @@ from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.pokemon_identity import format_api_name
 from .models import (
+    AppStateRecord,
     BoxEntryRecord,
     ChampionsSpeciesRecord,
     ItemCatalogMetaRecord,
@@ -859,6 +860,40 @@ class TournamentRepository:
         return self.session.exec(
             select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
         ).one()
+
+    # -- app state -------------------------------------------------------------------------
+
+    def get_state(self, key: str) -> str | None:
+        record = self.session.get(AppStateRecord, key)
+        return record.value if record else None
+
+    def set_state(self, key: str, value: str) -> None:
+        record = self.session.get(AppStateRecord, key) or AppStateRecord(key=key)
+        record.value = value
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+
+    def add_tournament_if_missing(self, tournament: TournamentRecord) -> bool:
+        """Insert a discovered event; an existing row (and its sync state) is left alone."""
+        if self.session.get(TournamentRecord, tournament.tournament_id) is not None:
+            return False
+        self.session.add(tournament)
+        self.session.commit()
+        return True
+
+    def list_official_events(self, *, ended_before: datetime, pending_only: bool = True) -> list[TournamentRecord]:
+        """Victory Road events that have finished, newest first — the page-read queue."""
+        stmt = select(TournamentRecord).where(
+            TournamentRecord.tournament_id.startswith("vr-"),
+            TournamentRecord.event_date <= ended_before,
+        )
+        if pending_only:
+            stmt = stmt.where(TournamentRecord.standings_synced == False)  # noqa: E712
+        records = list(self.session.exec(stmt.order_by(TournamentRecord.event_date.desc())).all())
+        for r in records:
+            self.session.expunge(r)
+        return records
 
     def delete_teams_for_tournament(self, tournament_id: str) -> int:
         """Delete a tournament's teams and their members. Returns rows removed.

@@ -89,6 +89,116 @@ DIVISION_MASTERS = "masters"
 DIVISION_OTHER = "seniors_juniors"
 
 
+_MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1)}
+_CAL_ROW_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
+_CAL_LINK_RE = re.compile(r'href="https?://(?:www\.)?victoryroad\.pro/(20\d{2}-[a-z0-9-]+)/"', re.I)
+_CAL_DATE_RE = re.compile(r"(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{4})")
+_CAL_ACRONYM_RE = re.compile(r"^(.*?\([A-Z0-9]{2,6}\))\s*(.*)$")
+_CAL_NOTE_RE = re.compile(r"\(\s+[^)]*\)")   # "( qualified players )" — notes, not acronyms
+_CAL_SKIP_SLUG = ("season", "calendar", "structure", "invites")
+_NAME_SUFFIXES = ("Regional", "SC", "Championships", "Championship", "Special")
+
+
+@dataclass(frozen=True)
+class VRCalendarEvent:
+    """One row of a Victory Road season calendar."""
+
+    slug: str
+    name: str
+    date: datetime          # last day of the event, UTC midnight
+    game_platform: str
+    format_regulation: str  # raw text, normalised by the sync
+    location: str
+    season: int
+
+    def to_meta(self) -> dict[str, Any]:
+        return {
+            "slug": self.slug, "name": self.name, "date": self.date.strftime("%Y-%m-%d"),
+            "game": self.game_platform, "format": self.format_regulation, "location": self.location,
+        }
+
+
+def _calendar_date(cell: str) -> datetime | None:
+    """Last day mentioned in a calendar date cell ("12–14 Jun 2026", "25 Jan 2026")."""
+    matches = _CAL_DATE_RE.findall(cell)
+    if not matches:
+        return None
+    day, mon, year = matches[-1]
+    month = _MONTHS.get(mon.lower()[:3])
+    if month is None:
+        return None
+    try:
+        return datetime(int(year), month, int(day), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+_EVENT_KIND_RE = re.compile(r"\b(Championships?|Regional|Special Championship|SC|League|Challenge|Qualifier|Cup|Open)\b")
+
+
+def _split_event_cell(cell: str) -> tuple[str, str]:
+    """Name and city from an Event cell.
+
+    "North America International (NAIC) New Orleans, LA" -> (up to the acronym, the rest);
+    "World Championships San Francisco, CA" -> (up to the event kind, the rest);
+    "Houston Regional" -> ("Houston Regional", "Houston").
+    """
+    clean = " ".join(_CAL_NOTE_RE.sub(" ", cell).split())
+    m = _CAL_ACRONYM_RE.match(clean)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    kinds = list(_EVENT_KIND_RE.finditer(clean))
+    if kinds:
+        last = kinds[-1]
+        name, rest = clean[: last.end()].strip(), clean[last.end():].strip()
+        if rest:
+            return name, rest
+        words = name.split()
+        if last.group(1) in ("Regional", "SC", "Special Championship") and len(words) >= 2:
+            return name, " ".join(words[: -len(last.group(1).split())])
+        return name, ""
+    return clean, ""
+
+
+def _format_from_cell(cell: str) -> tuple[str, str]:
+    """(game platform, regulation text) from "Champions M-A , OTS+Nat" / "SV Reg. Set F OTS"."""
+    game = "Scarlet & Violet" if ("SV" in cell and "Champions" not in cell) else "Pokémon Champions"
+    m = re.search(r"\bM-([A-Z])\b", cell)
+    if m:
+        return game, f"Regulation M-{m.group(1)}"
+    m = re.search(r"\bSet\s+([A-Z])\b", cell)
+    if m:
+        return game, f"Regulation {m.group(1)}"
+    return game, "Unknown"
+
+
+def parse_season_calendar(html: str, season: int) -> list[VRCalendarEvent]:
+    """Events from a season calendar page: rows are Date · Event (name + city) · Winner · Format."""
+    events: dict[str, VRCalendarEvent] = {}
+    for row in _CAL_ROW_RE.findall(html):
+        link = _CAL_LINK_RE.search(row)
+        if not link:
+            continue
+        slug = link.group(1).lower()
+        if any(k in slug for k in _CAL_SKIP_SLUG):
+            continue
+        cells = [_strip_tags(c) for c in _TD_RE.findall(row)]
+        if len(cells) < 4:
+            continue
+        date = _calendar_date(cells[0])
+        if date is None:
+            continue
+        name, location = _split_event_cell(cells[1])
+        if not name:
+            continue
+        game, regulation = _format_from_cell(cells[3])
+        events.setdefault(slug, VRCalendarEvent(
+            slug=slug, name=f"{season} {name}", date=date, game_platform=game,
+            format_regulation=regulation, location=location, season=season,
+        ))
+    return list(events.values())
+
+
 class VictoryRoadNetworkError(Exception):
     """Raised when Victory Road Pro is unreachable or returns HTTP errors."""
 
@@ -303,6 +413,17 @@ class VictoryRoadProvider:
             total_players=len(standings),
             standings=tuple(standings),
         )
+
+    def fetch_season_calendar(self, season: int) -> list[VRCalendarEvent]:
+        """Events listed on /{season}-season-calendar/; [] when the page does not exist."""
+        url = f"{self.base_url}/{season}-season-calendar/"
+        try:
+            html = self._fetch_html(url)
+        except VictoryRoadNetworkError as exc:
+            if "404" in str(exc):
+                return []
+            raise
+        return parse_season_calendar(html, season)
 
     def fetch_all_known_events(
         self, masters_only: bool = True, skip_slugs: set[str] | frozenset[str] | None = None

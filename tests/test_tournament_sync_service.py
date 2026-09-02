@@ -2,6 +2,7 @@
 
 import unittest
 from datetime import datetime, timezone
+import unittest.mock
 from unittest.mock import MagicMock
 
 from sqlmodel import Session, SQLModel, create_engine
@@ -81,7 +82,8 @@ class TestTournamentSyncService(unittest.TestCase):
         }
 
         mock_vr = MagicMock()
-        mock_vr.fetch_all_known_events.return_value = [
+        mock_vr.fetch_season_calendar.return_value = []
+        mock_vr.fetch_event.return_value = (
             VREventResult(
                 slug="2026-laic",
                 name="2026 Latin America International Championships",
@@ -99,7 +101,7 @@ class TestTournamentSyncService(unittest.TestCase):
                     ),
                 ),
             )
-        ]
+        )
 
         mock_vrpaste = MagicMock()
         mock_vrpaste.fetch_by_id.return_value = MagicMock(
@@ -114,7 +116,8 @@ class TestTournamentSyncService(unittest.TestCase):
             ]
         )
 
-        res = sync_tournaments(
+        with unittest.mock.patch("pokemon_champions_planning_tool.services.tournament_sync_service._VR_PAGES_PER_RUN", 1):
+          res = sync_tournaments(
             session=self.session,
             force=True,
             limitless_provider=mock_limitless,
@@ -128,7 +131,10 @@ class TestTournamentSyncService(unittest.TestCase):
 
         svc = TournamentService(self.session)
         tourneys = svc.list_tournaments()
-        self.assertEqual(len(tourneys), 2)
+        # one Limitless event plus the registry's official events (seeded as pending)
+        self.assertGreaterEqual(len(tourneys), 2)
+        # the newest finished official event in the queue was read and marked complete
+        self.assertTrue(any(t.tournament_id.startswith("vr-") and t.standings_synced for t in tourneys))
 
         teams = svc.search_teams()
         self.assertGreaterEqual(len(teams), 2)

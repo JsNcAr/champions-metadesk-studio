@@ -21,6 +21,10 @@ from sqlmodel import Session, select
 
 from ..config import (
     LIMITLESS_MAX_AGE_DAYS,
+    VICTORY_ROAD_CALENDAR_MAX_AGE_HOURS,
+    VICTORY_ROAD_MAX_PLACEMENT,
+    VICTORY_ROAD_PAGES_PER_RUN,
+    VICTORY_ROAD_RESULTS_GRACE_DAYS,
     LIMITLESS_STANDINGS_PER_RUN,
     RECENT_EVENT_GRACE_DAYS,
     STARTUP_SYNC_MIN_INTERVAL_HOURS,
@@ -97,6 +101,9 @@ _MAX_STANDINGS_PER_RUN = LIMITLESS_STANDINGS_PER_RUN
 # Pause between paste fetches for official events (Poképaste / VRPaste are separate
 # hosts from Limitless, but they are still someone else's servers).
 _PASTE_DELAY_S = 0.25
+# Patchable in tests: event pages read per run.
+_VR_PAGES_PER_RUN = VICTORY_ROAD_PAGES_PER_RUN
+_VR_CALENDAR_STATE_KEY = "victory_road.calendar_checked_at"
 
 
 def _assemble_showdown_from_limitless(standing: LimitlessStanding) -> str:
@@ -391,6 +398,58 @@ def _sync_limitless(
 
 
 
+def _vr_meta_from_record(record: TournamentRecord) -> dict:
+    slug = record.tournament_id.removeprefix("vr-")
+    registry = next((m for m in OFFICIAL_EVENT_SLUGS if m["slug"] == slug), {})
+    date = record.event_date
+    return {
+        "slug": slug,
+        "name": record.name,
+        "date": registry.get("date") or (date.strftime("%Y-%m-%d") if date else ""),
+        "game": record.game_platform or registry.get("game", "Pokémon Champions"),
+        "format": registry.get("format") or record.format_regulation or "Regulation M-A",
+        "location": record.location or registry.get("location", ""),
+    }
+
+
+def _register_official_event(repo: TournamentRepository, meta: dict, *, event_date: datetime | None = None) -> bool:
+    """Store a discovered or registry event as pending; never touches an existing row."""
+    date = event_date
+    if date is None and meta.get("date"):
+        try:
+            date = datetime.fromisoformat(f"{meta['date']}T00:00:00+00:00")
+        except ValueError:
+            date = None
+    return repo.add_tournament_if_missing(
+        TournamentRecord(
+            tournament_id=f"vr-{meta['slug']}",
+            name=meta["name"],
+            event_date=date or datetime.now(timezone.utc),
+            format_regulation=normalize_format_regulation(meta.get("format", "Regulation M-A")),
+            game_platform=meta.get("game", "Pokémon Champions"),
+            organizer="Play! Pokémon Premier Events",
+            location=meta.get("location", ""),
+            total_players=0,
+            source_url=f"https://victoryroad.pro/{meta['slug']}/",
+            standings_synced=False,
+            event_tier=classify_event_tier(meta["name"], "Play! Pokémon Premier Events"),
+        )
+    )
+
+
+def _calendar_is_stale(repo: TournamentRepository, now: datetime) -> bool:
+    stamp = repo.get_state(_VR_CALENDAR_STATE_KEY)
+    if not stamp:
+        return True
+    try:
+        checked = datetime.fromisoformat(stamp)
+    except ValueError:
+        return True
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=timezone.utc)
+    return now - checked > timedelta(hours=VICTORY_ROAD_CALENDAR_MAX_AGE_HOURS)
+
+
 def _sync_victory_road(
     session: Session,
     repo: TournamentRepository,
@@ -400,54 +459,78 @@ def _sync_victory_road(
     vrpaste_provider: VRPasteProvider | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> dict:
-    """Ingests official premier events from Victory Road Pro."""
+    """Ingests official Play! Pokémon events from Victory Road.
+
+    Discovery: the season calendar pages (this season and the next) list every event
+    with its date, name, city and format; new ones are stored as pending. The static
+    registry seeds the same way, so the app works before the first calendar read.
+    Reading: at most VICTORY_ROAD_PAGES_PER_RUN finished, pending events are read per
+    run, newest first, and the top VICTORY_ROAD_MAX_PLACEMENT sheets ingested. An event
+    page without sheets is retried while the event ended within the grace window; a
+    partly ingested event stays pending and only its missing sheets are fetched.
+    """
     vr = vr_provider or VictoryRoadProvider()
     pokepast = pokepast_provider or PokepastProvider()
     vrpaste = vrpaste_provider or VRPasteProvider()
+    now = datetime.now(timezone.utc)
 
-    # Events already ingested completely are not even requested: their pages are heavy
-    # WordPress renders and the results never change. An event whose pastes partly
-    # failed stays unsynced and is re-read, fetching only the pastes still missing.
-    skipped_count = 0
-    skip_slugs: set[str] = set()
-    if not force:
-        for meta in OFFICIAL_EVENT_SLUGS:
-            record = repo.get_tournament(f"vr-{meta['slug']}")
-            if record is not None and record.standings_synced:
-                skip_slugs.add(meta["slug"])
-                skipped_count += 1
+    # -- discovery -------------------------------------------------------------------------
+    discovered = 0
+    calendar_checked = False
+    if force or _calendar_is_stale(repo, now):
+        _report(on_progress, "official", "Checking Victory Road's season calendar…")
+        for season in (now.year, now.year + 1):
+            try:
+                events = vr.fetch_season_calendar(season)
+            except Exception as exc:  # noqa: BLE001 - discovery is best-effort
+                print(f"⚠️ Victory Road calendar {season} unavailable: {exc}")
+                continue
+            calendar_checked = True
+            for ev in events or []:
+                if _register_official_event(repo, ev.to_meta(), event_date=ev.date):
+                    discovered += 1
+        if calendar_checked:
+            repo.set_state(_VR_CALENDAR_STATE_KEY, now.isoformat())
+    for meta in OFFICIAL_EVENT_SLUGS:
+        if _register_official_event(repo, meta):
+            discovered += 1
 
-    to_read = len(OFFICIAL_EVENT_SLUGS) - len(skip_slugs)
-    if to_read:
-        _report(on_progress, "official", f"Reading {to_read} official event page{'s' if to_read != 1 else ''}…")
-    # Masters only: premier event pages carry Seniors and Juniors with placements
-    # restarting at 1 per division.
-    events = vr.fetch_all_known_events(masters_only=True, skip_slugs=skip_slugs)
-    fetched_count = len(events)
+    # -- queue -------------------------------------------------------------------------------
+    queue = repo.list_official_events(ended_before=now, pending_only=not force)
+    candidates = queue[:_VR_PAGES_PER_RUN]
+    skipped_count = len(queue) - len(candidates)
+    fetched_count = 0
     added_count = 0
     teams_added = 0
     paste_errors = 0
+    no_results = 0
+    grace = timedelta(days=VICTORY_ROAD_RESULTS_GRACE_DAYS)
 
-    for ev in events:
-        t_id = f"vr-{ev.slug}"
-        existing_tourney = repo.get_tournament(t_id)
-
-        if existing_tourney is not None and existing_tourney.standings_synced and not force:
-            skipped_count += 1
+    for index, record in enumerate(candidates, start=1):
+        t_id = record.tournament_id
+        _report(on_progress, "official", f"Reading {record.name} ({index} of {len(candidates)})…", done=index - 1, total=len(candidates), teams=teams_added)
+        ev = vr.fetch_event(_vr_meta_from_record(record), masters_only=True)
+        if ev is None:
+            event_date = record.event_date if record.event_date.tzinfo else record.event_date.replace(tzinfo=timezone.utc)
+            if now - event_date > grace:
+                # Ended long ago and still no sheets: stop asking.
+                repo.mark_standings_synced(t_id, True)
+            no_results += 1
             continue
+        fetched_count += 1
 
         norm_format = normalize_format_regulation(ev.format_regulation)
         t_record = TournamentRecord(
             tournament_id=t_id,
-            name=ev.name,
-            event_date=ev.date,
-            format_regulation=norm_format,
-            game_platform=ev.game_platform,
+            name=record.name,
+            event_date=record.event_date,
+            format_regulation=norm_format if norm_format != "Unknown" else record.format_regulation,
+            game_platform=ev.game_platform or record.game_platform,
             organizer="Play! Pokémon Premier Events",
-            location=ev.location,
+            location=record.location or ev.location,
             total_players=ev.total_players,
             source_url=f"https://victoryroad.pro/{ev.slug}/",
-            event_tier=classify_event_tier(ev.name, "Play! Pokémon Premier Events"),
+            event_tier=classify_event_tier(record.name, "Play! Pokémon Premier Events"),
         )
         repo.upsert_tournament(t_record)
         if force:
@@ -459,18 +542,10 @@ def _sync_victory_road(
             already_stored = repo.list_paste_urls_for_tournament(t_id)
         event_errors = 0
         entries: list[tuple[TournamentTeamRecord, list[TournamentTeamMemberRecord]]] = []
-        wanted = [st for st in ev.standings if st.paste_id and st.placement <= (50 if force else 16) and not (st.paste_url and st.paste_url in already_stored)]
+        wanted = [st for st in ev.standings if st.paste_id and st.placement <= VICTORY_ROAD_MAX_PLACEMENT and not (st.paste_url and st.paste_url in already_stored)]
 
-        for paste_index, st in enumerate(ev.standings, start=1):
-            if not st.paste_id:
-                continue
-            # Only ingest the top placements per event (configurable via force flag)
-            max_per_event = 50 if force else 16
-            if st.placement > max_per_event:
-                continue
-            if st.paste_url and st.paste_url in already_stored:
-                continue
-            _report(on_progress, "pastes", f"{ev.name}: fetching team {len(entries) + event_errors + 1} of {len(wanted)}", done=len(entries) + event_errors, total=len(wanted), teams=teams_added)
+        for st in wanted:
+            _report(on_progress, "pastes", f"{record.name}: fetching team {len(entries) + event_errors + 1} of {len(wanted)}", done=len(entries) + event_errors, total=len(wanted), teams=teams_added)
 
             showdown_text = ""
             members_raw: list[tuple[str, str]] = []  # (canonical_id, species_name)
@@ -540,6 +615,9 @@ def _sync_victory_road(
         "events_ingested": added_count,
         "skipped": skipped_count,
         "paste_errors": paste_errors,
+        "discovered": discovered,
+        "no_results": no_results,
+        "queued": max(0, len(queue) - added_count - no_results),
     }
 
 
@@ -659,9 +737,11 @@ def summarize_sync_result(result: dict) -> str:
     added = int(lim.get("added", 0) or 0) + int(vr.get("added", 0) or 0)
     events = int(lim.get("standings_synced", 0) or 0) + int(vr.get("events_ingested", 0) or 0)
     bits = [f"{added:,} new team{'s' if added != 1 else ''}", f"{events:,} event{'s' if events != 1 else ''}"]
-    backlog = int(lim.get("backlog_remaining", 0) or 0)
+    backlog = int(lim.get("backlog_remaining", 0) or 0) + int(vr.get("queued", 0) or 0)
     if backlog:
         bits.append(f"{backlog:,} still queued")
+    if vr.get("discovered"):
+        bits.append(f"{vr['discovered']} official event{'s' if vr['discovered'] != 1 else ''} discovered")
     if vr.get("paste_errors"):
         bits.append(f"{vr['paste_errors']} paste{'s' if vr['paste_errors'] != 1 else ''} failed")
     return "Synced · " + " · ".join(bits)

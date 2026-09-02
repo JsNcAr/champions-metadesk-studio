@@ -235,6 +235,8 @@ from .victory_road_provider import (
     VictoryRoadNetworkError,
     VictoryRoadParseError,
     VREventResult,
+    VRCalendarEvent,
+    parse_season_calendar,
     VRStandingRef,
 )
 

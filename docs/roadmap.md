@@ -89,8 +89,8 @@
 - **Compare teams (FR-13)**: side-by-side rosters, averages, health, coverage and shared weaknesses.
 - **Saved filter views** in the Box toolbar.
 - **Configurable database path** (`PCPT_DATABASE`, `PCPT_PREFERENCES`).
+- **Official event discovery**: Victory Road's season calendars seed Regionals, Internationals, Worlds and Special Events automatically; finished events are read a few per run with a configurable placement cap.
 
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.
-- **Victory Road registry**: only Internationals and Worlds are listed; Regional and Special Event pages must be added to `OFFICIAL_EVENT_SLUGS` for those tiers to fill.

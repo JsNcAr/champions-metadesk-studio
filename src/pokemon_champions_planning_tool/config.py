@@ -38,6 +38,15 @@ LIMITLESS_CHAMPIONS_FORMATS = {"M-A", "M-B", "M-C"}
 LIMITLESS_MAX_AGE_DAYS = 365
 
 VICTORY_ROAD_BASE_URL = "https://victoryroad.pro"
+# Official events are discovered from Victory Road's season calendar pages
+# (/{season}-season-calendar/). Each finished event page is read once; at most this many
+# new pages per sync run, since each is a 1–2 MB WordPress render.
+VICTORY_ROAD_PAGES_PER_RUN = 2
+VICTORY_ROAD_CALENDAR_MAX_AGE_HOURS = 24
+# An event page with no team sheets yet is retried while the event ended this recently.
+VICTORY_ROAD_RESULTS_GRACE_DAYS = 14
+# Placements ingested per official event (Regionals publish hundreds of sheets).
+VICTORY_ROAD_MAX_PLACEMENT = int(os.environ.get("PCPT_VR_MAX_PLACEMENT", "64") or 64)
 VRPASTE_BACKEND_URL = "https://vrpaste-backend.vercel.app/api/paste"
 POKEPAST_JSON_URL = "https://pokepast.es/{id}/json"
 

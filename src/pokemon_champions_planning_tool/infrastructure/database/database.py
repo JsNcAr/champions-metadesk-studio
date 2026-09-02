@@ -89,6 +89,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
         # team_members — Terastallization type per slot
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+        # team_members — Champions stat points (replaces the mainline EV/IV spread)
+        "ALTER TABLE team_members ADD COLUMN points JSON NOT NULL DEFAULT '{}';",
         # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
         # pokemon_records — explicit placeholder flag (records written without PokéAPI data)
@@ -122,6 +124,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_member_base_ids(conn)
         _backfill_member_counts(conn)
         _backfill_default_form_labels(conn)
+        _backfill_member_points(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -150,6 +153,33 @@ def _backfill_member_base_ids(conn) -> None:
         if base != canonical_id:
             conn.execute(text("UPDATE tournament_team_members SET base_canonical_id = :base WHERE canonical_id = :cid"), {"base": base, "cid": canonical_id})
     conn.commit()
+
+
+def _backfill_member_points(conn) -> None:
+    """Convert legacy EV spreads on team members into Champions stat points.
+
+    ``(EV + 4) // 8`` keeps every level-50 stat identical. Converted rows get their legacy
+    columns cleared, so a spread the user later zeroes is never re-converted.
+    """
+    import json
+
+    from ...domain.stat_calc import points_from_evs
+
+    try:
+        rows = conn.execute(text("SELECT team_member_id, evs FROM team_members WHERE points = '{}' AND evs != '{}'")).fetchall()
+        for member_id, evs_json in rows:
+            try:
+                evs = json.loads(evs_json) if isinstance(evs_json, str) else dict(evs_json or {})
+            except (TypeError, ValueError):
+                evs = {}
+            conn.execute(
+                text("UPDATE team_members SET points = :points, evs = '{}', ivs = '{}', level = 50 WHERE team_member_id = :id"),
+                {"points": json.dumps(points_from_evs(evs)), "id": member_id},
+            )
+        if rows:
+            conn.commit()
+    except Exception:
+        return
 
 
 def _backfill_default_form_labels(conn) -> None:

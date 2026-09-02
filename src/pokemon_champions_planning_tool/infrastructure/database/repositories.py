@@ -426,6 +426,7 @@ class TeamRepository:
         existing_record.moveset = new_record.moveset
         existing_record.ability = new_record.ability
         existing_record.notes = new_record.notes
+        existing_record.points = new_record.points
         existing_record.evs = new_record.evs
         existing_record.ivs = new_record.ivs
         existing_record.nature = new_record.nature

@@ -18,6 +18,7 @@ from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.pokemon_stats import PokemonStats
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
+from ...domain.stat_calc import points_from_evs
 
 
 def _utc_now() -> datetime:
@@ -183,10 +184,11 @@ class TeamRecord(SQLModel, table=True):
 class TeamMemberRecord(SQLModel, table=True):
     """Persisted team slot assignment.
 
-    ``evs`` and ``ivs`` store competitive EV/IV spreads as dicts mapping stat
-    keys (``hp``, ``attack``, ``defense``, ``special_attack``,
-    ``special_defense``, ``speed``) to integer values.  Only non-zero EVs and
-    non-31 IVs need to be stored; missing keys imply 0 EVs / 31 IVs.
+    ``points`` stores the Champions stat-point spread as a dict mapping stat keys
+    (``hp``, ``attack``, ``defense``, ``special_attack``, ``special_defense``, ``speed``)
+    to points; missing keys mean 0. ``evs``/``ivs``/``level`` are the legacy mainline
+    spread columns: the initialisation backfill converts them into ``points`` and they are
+    no longer edited.
     """
 
     __tablename__: ClassVar[str] = "team_members"
@@ -201,10 +203,12 @@ class TeamMemberRecord(SQLModel, table=True):
     moveset: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     ability: str | None = None
     notes: str = ""
-    # Competitive spread fields
+    # Champions spread
+    points: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    nature: str | None = None
+    # Legacy mainline spread columns (converted to ``points`` by the backfill)
     evs: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     ivs: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
-    nature: str | None = None
     level: int = Field(default=50)
     tera_type: str | None = None
 
@@ -220,6 +224,7 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[move.model_dump(mode="json") for move in team_member.moveset],
             ability=team_member.ability,
             notes=team_member.notes,
+            points=dict(team_member.points or {}) or points_from_evs(team_member.evs or {}),
             evs=dict(team_member.evs or {}),
             ivs=dict(team_member.ivs or {}),
             nature=team_member.nature,
@@ -237,6 +242,7 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[PokemonMove.model_validate(move) for move in (self.moveset or [])],
             ability=self.ability,
             notes=self.notes or "",
+            points=dict(self.points or {}) or points_from_evs(self.evs or {}),
             evs=dict(self.evs or {}),
             ivs=dict(self.ivs or {}),
             nature=self.nature,

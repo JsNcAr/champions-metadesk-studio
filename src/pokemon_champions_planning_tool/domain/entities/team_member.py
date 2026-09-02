@@ -18,10 +18,13 @@ class TeamMember:
     moveset: list[PokemonMove] = field(default_factory=list)
     ability: str | None = None
     notes: str = ""
-    # Competitive spread — only non-zero EVs / non-31 IVs need to be present
+    # Champions spread: stat points per stat (0–32 each, 66 total); only invested stats present.
+    points: dict[str, int] = field(default_factory=dict)
+    nature: str | None = None
+    # Legacy mainline spread fields — converted into ``points`` by the database backfill and
+    # kept only until the builder stops writing them.
     evs: dict[str, int] = field(default_factory=dict)
     ivs: dict[str, int] = field(default_factory=dict)
-    nature: str | None = None
-    level: int = 50
+    level: int = 50   # fixed at 50 in Champions
     # Terastallization type (lowercase type name) or None when unset.
     tera_type: str | None = None

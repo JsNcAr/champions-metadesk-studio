@@ -1,5 +1,6 @@
 """The additive migration list must upgrade an older database and be idempotent."""
 
+import json
 import shutil
 import sqlite3
 import tempfile
@@ -70,6 +71,36 @@ class TestMigrations(unittest.TestCase):
         self.assertEqual(tiers, {"vr": "worlds", "lim": "community"})
 
 
+
+    def test_legacy_ev_spreads_become_stat_points(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("ALTER TABLE team_members DROP COLUMN points")
+        conn.execute("INSERT INTO teams (team_id, name, description, created_at, updated_at) VALUES ('t1', 'T', '', '2026-01-01', '2026-01-01')")
+        conn.execute(
+            "INSERT INTO pokemon_records (canonical_id, display_name, species_name, form_name, types, hp, attack, defense, special_attack, special_defense, speed, abilities, moves, available_forms, created_at, updated_at, is_placeholder)"
+            " VALUES ('garchomp', 'Garchomp', 'garchomp', 'Base', '[]', 1, 1, 1, 1, 1, 1, '[]', '[]', '[]', '2026-01-01', '2026-01-01', 0)"
+        )
+        conn.execute("INSERT INTO box_entries (box_entry_id, pokemon_canonical_id, tags, is_favorite, notes, created_at, updated_at, is_planned) VALUES ('b1', 'garchomp', '[]', 0, '', '2026-01-01', '2026-01-01', 0)")
+        conn.execute(
+            "INSERT INTO team_members (team_member_id, team_id, box_entry_id, slot_position, selected_form, item, moveset, ability, notes, evs, ivs, nature, level)"
+            " VALUES ('m1', 't1', 'b1', 1, 'base', NULL, '[]', NULL, '', '{\"hp\": 252, \"attack\": 252, \"speed\": 4}', '{\"speed\": 0}', 'Jolly', 100)"
+        )
+        conn.execute(
+            "INSERT INTO team_members (team_member_id, team_id, box_entry_id, slot_position, selected_form, item, moveset, ability, notes, evs, ivs, nature, level)"
+            " VALUES ('m2', 't1', 'b1', 2, 'base', NULL, '[]', NULL, '', '{}', '{}', NULL, 50)"
+        )
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        conn = sqlite3.connect(self.db_path)
+        rows = {r[0]: r[1:] for r in conn.execute("SELECT team_member_id, points, evs, ivs, level FROM team_members")}
+        conn.close()
+        self.assertEqual(json.loads(rows["m1"][0]), {"hp": 32, "attack": 32, "speed": 1})
+        self.assertEqual(rows["m1"][1:], ("{}", "{}", 50), "legacy columns are cleared once converted")
+        self.assertEqual(json.loads(rows["m2"][0]), {})
+        database._DB_INITIALIZED.discard(str(self.db_path))
+        database.get_engine.cache_clear()
+        database.initialize_database(str(self.db_path))  # idempotent
 
     def test_default_form_labels_are_backfilled_onto_old_records(self):
         conn = sqlite3.connect(self.db_path)

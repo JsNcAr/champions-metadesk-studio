@@ -153,6 +153,7 @@ class TestRepositories(unittest.TestCase):
         self.assertEqual(members[0].selected_form, "charizard-mega-x")
         self.assertEqual(members[0].nature, "Jolly")
         self.assertEqual(members[0].evs, {"hp": 252, "attack": 252, "speed": 4})
+        self.assertEqual(members[0].points, {"hp": 32, "attack": 32, "speed": 1}, "legacy EVs surface as stat points")
 
         # Test update (upsert) existing member spread fields
         member_update = TeamMember(
@@ -173,6 +174,11 @@ class TestRepositories(unittest.TestCase):
         self.assertEqual(updated_members[0].nature, "Adamant")
         self.assertEqual(updated_members[0].level, 100)
         self.assertEqual(updated_members[0].evs, {"hp": 4, "attack": 252, "speed": 252})
+        self.assertEqual(updated_members[0].points, {"hp": 1, "attack": 32, "speed": 32})
+        member_points = TeamMember(box_entry_id=box_record.box_entry_id, slot_position=1, selected_form="charizard-mega-x", item="Charizardite X", ability="Tough Claws",
+                                   points={"hp": 32, "defense": 32, "special_defense": 2}, nature="Impish")
+        team_repo.upsert_member(team_record.team_id, member_points)
+        self.assertEqual(team_repo.get_members(team_record.team_id)[0].points, {"hp": 32, "defense": 32, "special_defense": 2})
 
         # Load team and verify
         loaded_team = team_repo.load_team(team_record.team_id)

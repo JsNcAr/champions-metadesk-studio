@@ -59,6 +59,12 @@
 - The user must be able to set or edit movesets for each Pokemon on a team.
 - The system should validate moves and items against known game data where possible.
 
+### FR-11a Edit Champions stat-point spreads
+- The user must be able to set a nature and stat points per Pokemon following Pokémon Champions rules: 0–32 points per stat, 66 points per Pokemon, level fixed at 50, IVs fixed at 31.
+- The system must compute battle stats with the Champions formula (HP = base + points + 75; other stats = floor(nature × (base + points + 20))).
+- The system must refuse spreads over the budget and report unspread slots and unused points in the team health checks.
+- Showdown pastes must be accepted in both conventions: point values on the `EVs:` line (Champions format) and mainline EV spreads, which are converted without changing any stat and flagged in the preview.
+
 ### FR-12 Show offensive type coverage
 - The user must be able to see the type coverage of damaging moves on a team.
 - The system should summarize which opposing types the team hits for super effective, neutral, not very effective, or no damage.

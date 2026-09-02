@@ -73,7 +73,7 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
 
 ## Showdown & Poképaste Integration
 
-- **Text Export / Import**: Parses standard Pokémon Showdown importable text format into live team slot configurations (species, item, ability, EV/IV spreads, moves).
+- **Text Export / Import**: Parses standard Pokémon Showdown importable text format into live team slot configurations (species, item, ability, stat points, moves). Showdown's Champions format carries stat points on the `EVs:` line; a mainline 252-style spread is converted with `points_from_evs` and flagged, and `IVs:`/`Level:` lines are ignored with a warning since both are fixed in Champions.
 - **Direct Poképaste Publishing**: Posts team text to `https://pokepast.es/create` and returns shareable Poképaste URLs.
 - **Showdown Sprite CDN**: High-reliability sprite URL generator (`get_pokemon_sprite_url`) fetching gen5 sprites from `play.pokemonshowdown.com/sprites/gen5/` with 100% form coverage for regional variants (Hisuian Arcanine, Hisuian Samurott), special forms (Floette Eternal, Calyrex forms, Ogerpon masks), and Mega evolutions.
 

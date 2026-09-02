@@ -26,7 +26,7 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Visual Roster Banner**: 6-slot preview rings with real-time stat progress bars and Mega indicator badges.
 - **Hero Slot Cards**: Auto-saving form/ability selectors, 4-slot move fields, and held item picker with Champions format legality guardrails.
 - **Stat Modifier Badges**: Automatic delta display (+50% Atk/SpA/SpD/Spe) when Choice items or Assault Vest are equipped.
-- **EV/IV Spread Editor**: Nature selector, level input, EV sliders/presets, and IV presets (e.g. 0 Speed TR, 0 Atk).
+- **Stat-point spread editor**: Champions has no EVs or IVs — every Pokémon is level 50 with 31 IVs and spends 0–32 stat points per stat (66 in total). Nature selector, point sliders with a budget bar, presets and a "Min speed" chip for Trick Room. Showdown pastes with mainline 252-style EV lines are converted on import without changing any stat.
 - **Showdown & Poképaste Integration**: 1-click text export/import and direct publishing to Pokepast.es.
 - **Planned Pokémon (Ghost Entries)**: Store non-owned Pokémon templates (`is_planned=True`) without cluttering the Box roster.
 

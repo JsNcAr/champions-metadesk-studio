@@ -83,6 +83,9 @@ Represents one box entry assigned to a specific team slot.
 - `moveset: list[PokemonMove]` — Assigned moves.
 - `ability: str | None` — Chosen ability.
 - `notes: str` — Slot-specific comments.
+- `points: dict[str, int]` — Champions stat points per stat key (0–32 each, 66 in total); only invested stats are present. Level is fixed at 50 and IVs at 31, so nothing else describes the spread.
+- `nature: str | None` — Nature name.
+- `tera_type: str | None` — Tera type (Champions has no Terastallization yet; kept for pastes).
 
 ---
 
@@ -135,6 +138,8 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `moveset: list[dict]` (Stored as JSON array)
 - `ability: str | None`
 - `notes: str`
+- `points: dict` (JSON) — Champions stat points; `nature: str | None`; `tera_type: str | None`
+- `evs`, `ivs` (JSON) and `level: int` — legacy mainline spread columns. The initialisation backfill converts an EV dict into `points` with `(EV + 4) // 8` (which keeps every level-50 stat), then clears the legacy columns and pins `level` to 50.
 - *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
 
 ### `TournamentRecord` (Table: `tournaments`)

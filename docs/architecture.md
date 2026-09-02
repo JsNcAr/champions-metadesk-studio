@@ -80,7 +80,7 @@ ui/
 
 ### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
 - Pure Python domain rules independent of UI widgets or HTTP APIs.
-- Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, EV/IV spread calculations, and co-occurrence synergy scoring.
+- Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, Champions stat-point calculations (`domain/stat_calc.py`: `champions_stats`, `validate_points`, `points_from_evs`), and co-occurrence synergy scoring.
 
 ### 3. Infrastructure & Provider Layer (`src/pokemon_champions_planning_tool/infrastructure/`)
 - **Persistence**: SQLite database (`pokemon_champions.db`) managed via SQLModel repository abstractions.

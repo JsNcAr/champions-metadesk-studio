@@ -97,6 +97,9 @@
 - **Box filter in the Meta explorer (FR-14)**: teams with all members in the box, or at most one, two or three missing; per-row "N/6 in box" chip and greyed missing sprites, in rows, cards and the standings dialog; updates when the box changes.
 - **Data**: `base_canonical_id` on roster rows (Megas → base species, forms kept), indexed, so the match is an `IN()` per query.
 
+## Phase 10: Champions Stat Points & Damage Calculator [IN PROGRESS — 2026-09-02]
+- **Stat points replace EVs/IVs (FR-11a)**: Champions rules (0–32 per stat, 66 total, level 50, 31 IVs) in the domain formula, the spread editor (shared `SpreadEditor` component with presets and "Min speed"), team health checks, Showdown import (legacy EV lines converted and flagged) and export; stored spreads backfilled with `(EV + 4) // 8`.
+
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.

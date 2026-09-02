@@ -30,7 +30,7 @@ from ..config import (
     STARTUP_SYNC_MIN_INTERVAL_HOURS,
 )
 from ..domain.event_tier import classify_event_tier
-from ..domain.pokemon_identity import format_api_name, normalize_format_regulation
+from ..domain.pokemon_identity import base_canonical_id, format_api_name, normalize_format_regulation
 from ..infrastructure.database.models import (
     TournamentRecord,
     TournamentTeamRecord,
@@ -363,6 +363,7 @@ def _sync_limitless(
                         slot_position=idx,
                         canonical_id=canon_id,
                         species_name=m.display_name,
+                        base_canonical_id=base_canonical_id(canon_id),
                         moves=[mv for mv in m.moves if mv],
                     )
                 )
@@ -596,6 +597,7 @@ def _sync_victory_road(
                     slot_position=pos,
                     canonical_id=cid,
                     species_name=sname,
+                    base_canonical_id=base_canonical_id(cid),
                     moves=member_moves[pos - 1] if pos - 1 < len(member_moves) else [],
                 )
                 for pos, (cid, sname) in enumerate(members_raw[:6], start=1)

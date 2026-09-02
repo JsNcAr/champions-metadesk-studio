@@ -13,7 +13,8 @@ from _ui_stubs import StubPage, serialise
 from pokemon_champions_planning_tool.domain.entities.box_entry import BoxEntry
 from pokemon_champions_planning_tool.domain.entities.pokemon import Pokemon
 from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
-from pokemon_champions_planning_tool.domain.moves import MoveInfo, base_canonical_id, move_key, resolve_learnset_key
+from pokemon_champions_planning_tool.domain.moves import MoveInfo, move_key, resolve_learnset_key
+from pokemon_champions_planning_tool.domain.pokemon_identity import base_canonical_id
 from pokemon_champions_planning_tool.infrastructure.database.models import (
     MegaEvolutionRecord,
     TournamentRecord,

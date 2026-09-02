@@ -70,5 +70,36 @@ class TestMigrations(unittest.TestCase):
         self.assertEqual(tiers, {"vr": "worlds", "lim": "community"})
 
 
+
+    def test_base_canonical_id_is_added_and_backfilled(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("DROP INDEX IF EXISTS ix_tournament_team_members_base_canonical_id")
+        conn.execute("ALTER TABLE tournament_team_members DROP COLUMN base_canonical_id")
+        conn.execute(
+            "INSERT INTO tournaments (tournament_id, name, event_date, format_regulation, game_platform, organizer, location, total_players, created_at, updated_at, standings_synced, event_tier)"
+            " VALUES ('t', 'T', '2026-01-01', 'Regulation M-B', 'Pokémon Champions', 'Limitless Community', 'Online', 8, '2026-01-01', '2026-01-01', 1, 'community')"
+        )
+        conn.execute(
+            "INSERT INTO tournament_teams (tournament_team_id, tournament_id, player_name, placement, standing_label, showdown_text, source_dataset, sync_source, division, created_at)"
+            " VALUES ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 't', 'p', 1, 'Place #1', 'x', 'limitless_api', 'limitless', 'masters', '2026-01-01')"
+        )
+        for i, cid in enumerate(("charizard-mega-y", "rotom-wash", "incineroar")):
+            conn.execute(
+                "INSERT INTO tournament_team_members (id, tournament_team_id, slot_position, canonical_id, species_name, moves)"
+                f" VALUES ('{i:032x}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', {i + 1}, '{cid}', '{cid}', '[]')"
+            )
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        self.assertIn("base_canonical_id", _columns(self.db_path, "tournament_team_members"))
+        conn = sqlite3.connect(self.db_path)
+        rows = dict(conn.execute("SELECT canonical_id, base_canonical_id FROM tournament_team_members").fetchall())
+        conn.close()
+        self.assertEqual(rows, {"charizard-mega-y": "charizard", "rotom-wash": "rotom-wash", "incineroar": "incineroar"})
+        database._DB_INITIALIZED.discard(str(self.db_path))
+        database.get_engine.cache_clear()
+        database.initialize_database(str(self.db_path))
+
+
 if __name__ == "__main__":
     unittest.main()

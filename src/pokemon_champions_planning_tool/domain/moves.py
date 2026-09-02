@@ -12,9 +12,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .pokemon_identity import base_canonical_id  # re-exported: callers import it from here too
+
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
-_MEGA_SUFFIX = re.compile(r"-mega(-[xy])?$")
-_DROPPED_SUFFIXES = ("-gmax", "-primal", "-eternamax")
 
 
 @dataclass(frozen=True)
@@ -37,16 +37,6 @@ class MoveInfo:
 def move_key(name: str | None) -> str:
     """Showdown's move id: lowercase, alphanumeric only ("Fake Out" -> "fakeout")."""
     return _NON_ALNUM.sub("", (name or "").lower())
-
-
-def base_canonical_id(canonical_id: str | None) -> str:
-    """Strip Mega and similar battle-only form suffixes: "charizard-mega-y" -> "charizard"."""
-    cid = (canonical_id or "").lower().strip()
-    cid = _MEGA_SUFFIX.sub("", cid)
-    for suffix in _DROPPED_SUFFIXES:
-        if cid.endswith(suffix):
-            cid = cid[: -len(suffix)]
-    return cid
 
 
 def showdown_species_key(canonical_id: str | None) -> str:

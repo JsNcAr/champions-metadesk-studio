@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import requests
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from pokemon_champions_planning_tool.infrastructure.database.models import TournamentRecord, TournamentTeamRecord
+from pokemon_champions_planning_tool.infrastructure.database.models import TournamentRecord, TournamentTeamMemberRecord, TournamentTeamRecord
 from pokemon_champions_planning_tool.infrastructure.providers import (
     LimitlessStanding,
     LimitlessTeamMember,
@@ -168,6 +168,8 @@ class TestUnfinishedEvents(_DbCase):
         sync_tournaments(self.session, limitless_provider=provider, include_official=False)
         self.assertEqual(provider.requested, ["deep"])
         self.assertTrue(self._records()["limitless-deep"].standings_synced)
+        members = self.session.exec(select(TournamentTeamMemberRecord)).all()
+        self.assertTrue(members and all(m.base_canonical_id == "incineroar" for m in members), "ingest stores the base species id")
         self.assertEqual(provider.fetch_champions_tournaments.call_args.kwargs["known_ids"], {"deep"})
 
 

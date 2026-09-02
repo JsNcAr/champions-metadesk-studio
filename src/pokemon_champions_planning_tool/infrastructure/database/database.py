@@ -91,6 +91,9 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
         # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
+        # tournament_team_members — mega-stripped species id for box matching
+        "ALTER TABLE tournament_team_members ADD COLUMN base_canonical_id VARCHAR NOT NULL DEFAULT '';",
+        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_base_canonical_id ON tournament_team_members (base_canonical_id);",
         # tournament_team_members — moves per roster slot (usage ranking in the move picker)
         "ALTER TABLE tournament_team_members ADD COLUMN moves JSON NOT NULL DEFAULT '[]';",
         # tournaments — official tier (worlds/international/regional/special) or community
@@ -111,9 +114,35 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
                 pass  # Column already exists — safe to ignore
         _backfill_event_tiers(conn)
         _backfill_member_moves(conn)
+        _backfill_member_base_ids(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
+
+
+def _backfill_member_base_ids(conn) -> None:
+    """Fill ``base_canonical_id`` for roster rows stored before the column existed.
+
+    One UPDATE copies the id for every empty row (the common case), then the few rows
+    whose id names a Mega or other battle-only form are corrected in Python. Idempotent.
+    """
+    from pokemon_champions_planning_tool.domain.pokemon_identity import base_canonical_id
+
+    try:
+        pending = conn.execute(text("SELECT COUNT(*) FROM tournament_team_members WHERE base_canonical_id = ''")).scalar()
+    except Exception:
+        return
+    if not pending:
+        return
+    conn.execute(text("UPDATE tournament_team_members SET base_canonical_id = canonical_id WHERE base_canonical_id = ''"))
+    rows = conn.execute(text(
+        "SELECT DISTINCT canonical_id FROM tournament_team_members WHERE canonical_id LIKE '%-mega%' OR canonical_id LIKE '%-gmax' OR canonical_id LIKE '%-primal' OR canonical_id LIKE '%-eternamax'"
+    )).fetchall()
+    for (canonical_id,) in rows:
+        base = base_canonical_id(canonical_id)
+        if base != canonical_id:
+            conn.execute(text("UPDATE tournament_team_members SET base_canonical_id = :base WHERE canonical_id = :cid"), {"base": base, "cid": canonical_id})
+    conn.commit()
 
 
 def _backfill_member_moves(conn) -> None:

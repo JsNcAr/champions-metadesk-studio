@@ -1,3 +1,4 @@
+import re
 """Canonical Pokemon naming helpers."""
 
 
@@ -196,3 +197,19 @@ def normalize_format_regulation(raw_format: str) -> str:
     return fmt
 
 
+_MEGA_SUFFIX_RE = re.compile(r"-mega(-[xy])?$")
+_BATTLE_ONLY_SUFFIXES = ("-gmax", "-primal", "-eternamax")
+
+
+def base_canonical_id(canonical_id: str | None) -> str:
+    """Strip Mega and similar battle-only form suffixes: "charizard-mega-y" -> "charizard".
+
+    Regional and other persistent forms ("rotom-wash", "urshifu-rapid-strike") are kept:
+    they are different Pokémon to own, whereas a Mega is the base species plus a stone.
+    """
+    cid = (canonical_id or "").lower().strip()
+    cid = _MEGA_SUFFIX_RE.sub("", cid)
+    for suffix in _BATTLE_ONLY_SUFFIXES:
+        if cid.endswith(suffix):
+            cid = cid[: -len(suffix)]
+    return cid

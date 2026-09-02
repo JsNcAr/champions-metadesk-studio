@@ -396,6 +396,10 @@ class TournamentTeamMemberRecord(SQLModel, table=True):
     # Move names as written in the paste, so per-species usage can be aggregated with
     # json_each() instead of re-parsing every Showdown text.
     moves: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    # Mega-stripped species id ("charizard" for "charizard-mega-y"; forms such as
+    # "rotom-wash" stay as they are) so "is this roster member in my box?" is an
+    # indexed IN() instead of a pattern match. Set on ingest, backfilled by migration.
+    base_canonical_id: str = Field(default="", index=True)
 
 
 class MoveRecord(SQLModel, table=True):

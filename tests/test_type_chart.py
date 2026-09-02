@@ -85,5 +85,30 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(len(matrix), 18)
 
 
+
+
+class TestOffensiveCoverage(unittest.TestCase):
+    def test_best_multiplier_matrix_and_uncovered(self):
+        from pokemon_champions_planning_tool.domain.type_chart import (
+            best_offensive_multiplier,
+            team_offensive_matrix,
+            team_offensive_summary,
+            uncovered_types,
+        )
+
+        self.assertEqual(best_offensive_multiplier(["fire", "flying"], "grass"), 2.0)
+        self.assertEqual(best_offensive_multiplier(["fire"], "water"), 0.5)
+        self.assertEqual(best_offensive_multiplier(["normal"], "ghost"), 0.0)
+        self.assertIsNone(best_offensive_multiplier([], "grass"))
+        matrix = team_offensive_matrix([["fire", "flying"], ["ground"], []])
+        self.assertEqual(matrix["grass"], [2.0, 0.5, None])
+        self.assertEqual(matrix["electric"], [1.0, 2.0, None])
+        self.assertEqual(team_offensive_summary(matrix)["grass"], (1, 0, 1))
+        uncovered = uncovered_types(matrix)
+        self.assertIn("water", uncovered)
+        self.assertNotIn("grass", uncovered)
+        self.assertNotIn("steel", uncovered, "fire and ground both hit steel")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -36,9 +36,9 @@ class SlotCallbacks:
 
 
 SLOT_CARD_MAX_EXTENT = 600      # 3 columns at 1440, 2 beside the summary, 1 below ~1200 with it open
-SLOT_CARD_HEIGHT = 404          # header + form/ability/tera row + item + 2×2 moves + footer
+SLOT_CARD_HEIGHT = 432          # header + form/ability/tera row + item + 2×2 moves + coverage + footer
 SLOT_CARD_WRAP_WIDTH = 430      # narrower tiles wrap form/ability/tera onto extra lines…
-SLOT_CARD_HEIGHT_NARROW = 500   # …so the card grows to keep the footer visible
+SLOT_CARD_HEIGHT_NARROW = 528   # …so the card grows to keep the footer visible
 
 
 class MoveButton(ft.Container):
@@ -166,6 +166,10 @@ class SlotCard(ft.Container):
         # Clicking opens the move picker for that index.
         self._moves = [MoveButton(index=i, on_click=lambda i=i: self.cb.on_move_pick(self.position, i)) for i in range(4)]
         self._move_values = ["", "", "", ""]
+        # Coverage caption: the defending types this slot hits super-effectively.
+        self._coverage_label = ft.Text("Hits SE", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)
+        self._coverage_chips = ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True)
+        self._coverage = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._coverage_label, self._coverage_chips])
 
         # -- footer: spread · partners · notes -------------------------------------------------------
         self._spread = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
@@ -189,6 +193,7 @@ class SlotCard(ft.Container):
                         self._guardrail,
                         ft.Row(spacing=Space.SM, controls=[self._moves[0], self._moves[1]]),
                         ft.Row(spacing=Space.SM, controls=[self._moves[2], self._moves[3]]),
+                        self._coverage,
                         ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._spread_button, self._partners, self._notes_toggle]),
                         self._notes,
                     ]),
@@ -304,6 +309,16 @@ class SlotCard(ft.Container):
             move = moves[i] if i < len(moves) else None
             button.update_from(move, species=pokemon.display_name)
             self._move_values[i] = move.name if move else ""
+        hits = slot.super_effective_against
+        if not slot.damaging_types:
+            self._coverage_label.value = "No damaging moves" if slot.moves else "Coverage"
+            self._coverage_chips.controls = [] if slot.moves else [ft.Text("pick moves to see what this slot hits", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.DISABLED)]
+        else:
+            self._coverage_label.value = f"Hits SE · {len(hits)}"
+            shown = hits[:8]
+            self._coverage_chips.controls = [TypeChip(t, size="sm") for t in shown] + (
+                [ft.Text(f"+{len(hits) - len(shown)}", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, tooltip=", ".join(t.capitalize() for t in hits[len(shown):]))] if len(hits) > len(shown) else []
+            )
         self._spread.value = slot.spread_summary
         self._notes.value = member.notes or ""
         self._notes_toggle.icon = ft.Icons.NOTES if not member.notes else ft.Icons.STICKY_NOTE_2

@@ -263,5 +263,27 @@ class TestLegalityInTeamBuilder(unittest.TestCase):
         serialise(dialog)
 
 
+
+    def test_offensive_coverage_from_assigned_moves(self):
+        self.store.set_move(1, 0, "Heat Wave")     # fire, special
+        self.store.set_move(1, 1, "Protect")       # status: ignored
+        slot = self.store.slot(1)
+        self.assertEqual(slot.damaging_types, ["fire"])
+        self.assertEqual(slot.super_effective_against, ["grass", "ice", "bug", "steel"])
+        summary = self.store.summary
+        self.assertTrue(summary.has_moves)
+        self.assertEqual(summary.offense["grass"][0], 2.0)
+        self.assertIsNone(summary.offense["grass"][1], "empty slot has no moves")
+        self.assertIn("water", summary.uncovered)
+        self.assertNotIn("grass", summary.uncovered)
+        self.assertTrue(any(c.label.endswith("uncovered") for c in summary.checks))
+        page = StubPage()
+        view = TeamView(AppContext(page, catalogs=self.catalogs), self.store)
+        view.ensure_loaded()
+        self.assertEqual(view.cards[0]._coverage_label.value, "Hits SE · 4")
+        self.assertIn("Not hit super-effectively", view.summary._uncovered.value)
+        serialise(view)
+
+
 if __name__ == "__main__":
     unittest.main()

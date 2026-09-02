@@ -104,3 +104,43 @@ def team_defensive_matrix(team_types: Iterable[Sequence[str]]) -> dict[str, list
     """Per attacking type: the multiplier against each member, in member order."""
     members = list(team_types)
     return {atk: [defensive_multiplier(atk, types) if types else 1.0 for types in members] for atk in TYPES}
+
+
+# -- offensive coverage -----------------------------------------------------------------------
+
+def best_offensive_multiplier(move_types: Sequence[str], defending: str) -> float | None:
+    """Best multiplier any of ``move_types`` (a slot's damaging moves) gets against a
+    single-type defender; None when the slot has no damaging move."""
+    types = [normalize_type(t) for t in move_types if normalize_type(t) in _ATTACK]
+    if not types:
+        return None
+    return max(effectiveness(t, defending) for t in types)
+
+
+def team_offensive_matrix(slot_move_types: Iterable[Sequence[str]]) -> dict[str, list[float | None]]:
+    """Per defending type: the best multiplier each slot reaches with its damaging moves."""
+    slots = list(slot_move_types)
+    return {d: [best_offensive_multiplier(types, d) for types in slots] for d in TYPES}
+
+
+def team_offensive_summary(matrix: dict[str, list[float | None]]) -> dict[str, tuple[int, int, int]]:
+    """Per defending type: (slots hitting it super-effectively, neutrally, resisted or immune)."""
+    out: dict[str, tuple[int, int, int]] = {}
+    for d in TYPES:
+        super_ = neutral = poor = 0
+        for m in matrix.get(d, []):
+            if m is None:
+                continue
+            if m > 1.0:
+                super_ += 1
+            elif m == 1.0:
+                neutral += 1
+            else:
+                poor += 1
+        out[d] = (super_, neutral, poor)
+    return out
+
+
+def uncovered_types(matrix: dict[str, list[float | None]]) -> list[str]:
+    """Defending types no slot hits super-effectively (only meaningful once moves exist)."""
+    return [d for d in TYPES if not any(m is not None and m > 1.0 for m in matrix.get(d, []))]

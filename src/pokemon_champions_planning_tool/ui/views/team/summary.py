@@ -15,7 +15,7 @@ from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.moves import MoveInfo
 from ....domain.entities.team_member import TeamMember
 from ....domain.stat_calc import calc_all
-from ....domain.type_chart import team_defensive_matrix, team_weakness_summary
+from ....domain.type_chart import TYPES, best_offensive_multiplier, team_defensive_matrix, team_offensive_matrix, team_offensive_summary, team_weakness_summary, uncovered_types
 from ....infrastructure.database.models import ItemRecord, MegaEvolutionRecord
 from ....services.item_effect_service import ValidationResult, compute_effective_stats, validate_item_assignment
 
@@ -60,6 +60,26 @@ class SlotModel:
     @property
     def filled(self) -> bool:
         return self.member is not None and self.entry is not None
+
+    @property
+    def damaging_types(self) -> list[str]:
+        """Types of this slot's damaging moves (status moves and unknown moves excluded)."""
+        out: list[str] = []
+        for m in self.moves:
+            info = m.info
+            if info is None or not info.type or (info.category or "").lower() == "status" or not info.power:
+                continue
+            if info.type.lower() not in out:
+                out.append(info.type.lower())
+        return out
+
+    @property
+    def super_effective_against(self) -> list[str]:
+        """Defending types this slot hits for 2× or more with its damaging moves."""
+        types = self.damaging_types
+        if not types:
+            return []
+        return [d for d in TYPES if (best_offensive_multiplier(types, d) or 0) > 1.0]
 
     @property
     def illegal_moves(self) -> list[str]:
@@ -160,6 +180,10 @@ class TeamSummary:
     checks: tuple[HealthCheck, ...]
     weakness: dict[str, tuple[int, int, int]]   # attacking type -> (weak, resist, immune)
     matrix: dict[str, list[float]]              # attacking type -> per-slot multiplier
+    offense: dict[str, list[float | None]] = field(default_factory=dict)   # defending type -> best multiplier per slot
+    offense_counts: dict[str, tuple[int, int, int]] = field(default_factory=dict)  # defending type -> (super, neutral, poor)
+    uncovered: tuple[str, ...] = ()             # defending types nobody hits super-effectively
+    has_moves: bool = False
 
 
 EMPTY_STATS = PokemonStats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0)
@@ -219,6 +243,14 @@ def summarize(slots: list[SlotModel]) -> TeamSummary:
         checks.append(HealthCheck("info", f"{planned} planned", f"{planned} template{'s' if planned != 1 else ''} not yet in your box"))
 
     types_per_slot = [list(s.form.types) if s.form else [] for s in slots]
+    move_types = [s.damaging_types if s.filled else [] for s in slots]
+    has_moves = any(move_types)
+    offense = team_offensive_matrix(move_types)
+    uncovered = tuple(uncovered_types(offense)) if has_moves else ()
+    if has_moves and uncovered:
+        checks.append(HealthCheck("info", f"{len(uncovered)} type{'s' if len(uncovered) != 1 else ''} uncovered", "No slot hits these super-effectively: " + ", ".join(t.capitalize() for t in uncovered)))
+    elif has_moves:
+        checks.append(HealthCheck("ok", "Full coverage", "Every type is hit super-effectively by someone"))
     return TeamSummary(
         filled=len(filled),
         planned=planned,
@@ -229,4 +261,8 @@ def summarize(slots: list[SlotModel]) -> TeamSummary:
         checks=tuple(checks),
         weakness=team_weakness_summary(types_per_slot),
         matrix=team_defensive_matrix(types_per_slot),
+        offense=offense,
+        offense_counts=team_offensive_summary(offense),
+        uncovered=uncovered,
+        has_moves=has_moves,
     )

@@ -106,6 +106,13 @@ class BoxToolbar(ft.Column):
         self._tags_label = ft.Text("Tags", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
         self._tags_menu = ft.PopupMenuButton(content=_menu_chip(ft.Icons.TAG, self._tags_label), items=[], tooltip="Filter by tag")
 
+        # Saved views: named filter sets kept in preferences; the view wires the callbacks.
+        self.on_save_view: Callable[[], None] | None = None
+        self.on_apply_view: Callable[[str], None] | None = None
+        self.on_forget_view: Callable[[], None] | None = None
+        self._views_label = ft.Text("Views", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
+        self._views_menu = ft.PopupMenuButton(content=_menu_chip(ft.Icons.BOOKMARK_BORDER, self._views_label), items=[], tooltip="Saved filter views")
+        self.set_saved_views([])
         self._sort_label = ft.Text(SORT_LABELS["name"], theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
         self._sort_items = {
             key: ft.PopupMenuItem(content=ft.Text(label), checked=(key == "name"), on_click=lambda _e, key=key: self._set(sort=key))
@@ -165,7 +172,7 @@ class BoxToolbar(ft.Column):
             spacing=Space.SM,
             tight=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._sort, self._direction, self._view_mode, self._view_menu],
+            controls=[self._views_menu, self._sort, self._direction, self._view_mode, self._view_menu],
         )
         self.row = ft.Row(
             spacing=Space.LG,
@@ -310,6 +317,25 @@ class BoxToolbar(ft.Column):
         self._view_mode.selected = [view_mode]
         self.show_stats = show_stats
         self._stats_item.checked = show_stats
+
+    def set_saved_views(self, names: list[str]) -> None:
+        items: list[ft.PopupMenuItem] = [
+            ft.PopupMenuItem(content=ft.Text(name), icon=ft.Icons.BOOKMARK, on_click=lambda _e, name=name: self.on_apply_view(name) if self.on_apply_view else None)
+            for name in names
+        ]
+        if items:
+            items.append(ft.PopupMenuItem())
+        items.append(ft.PopupMenuItem(content=ft.Text("Save current view…"), icon=ft.Icons.BOOKMARK_ADD_OUTLINED, on_click=lambda _e: self.on_save_view() if self.on_save_view else None))
+        if names:
+            items.append(ft.PopupMenuItem(content=ft.Text("Forget a view…"), icon=ft.Icons.BOOKMARK_REMOVE_OUTLINED, on_click=lambda _e: self.on_forget_view() if self.on_forget_view else None))
+        self._views_menu.items = items
+        self._views_label.value = f"Views · {len(names)}" if names else "Views"
+
+    def apply_filters(self, filters: BoxFilters) -> None:
+        """Replace the whole filter state (a saved view) and notify."""
+        self._filters = filters
+        self._sync_controls()
+        self._on_filters(filters)
 
     def set_columns(self, columns: list[str]) -> None:
         self.columns = [k for k in EXTRA_COLUMNS if k in set(columns)]

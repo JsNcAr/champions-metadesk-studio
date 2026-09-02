@@ -53,6 +53,10 @@ class BoxView(ft.Row):
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats, on_columns=self._set_columns)
         self.toolbar.set_view_state(self.view_mode, self.show_stats)
         self.columns: list[str] = [c for c in (ctx.prefs.get("box.columns") or []) if isinstance(c, str)]
+        self.toolbar.on_save_view = lambda: self.ctx.page.run_task(self._save_view)
+        self.toolbar.on_apply_view = self._apply_view
+        self.toolbar.on_forget_view = lambda: self.ctx.page.run_task(self._forget_view)
+        self.toolbar.set_saved_views(sorted(self._saved_views()))
         self.toolbar.set_columns(self.columns)
 
         # -- content ---------------------------------------------------------------------------
@@ -451,6 +455,44 @@ class BoxView(ft.Row):
         total = len([e for e in self.store.entries if not e.is_planned])
         suffix = "" if scope == "all" or count == total else f" ({scope}, of {total})"
         self.ctx.toast(f"Exported {count} entries to pokemon_team_stats.csv{suffix}", "success")
+
+    # -- saved views ---------------------------------------------------------------------------------
+
+    def _saved_views(self) -> dict[str, dict]:
+        raw = self.ctx.prefs.get("box.saved_views") or {}
+        return {str(k): v for k, v in raw.items() if isinstance(v, dict)} if isinstance(raw, dict) else {}
+
+    async def _save_view(self) -> None:
+        name = await self.ctx.prompt_text("Save view", "View name", submit_label="Save", validate=lambda t: None if t.strip() else "Enter a name")
+        if not name:
+            return
+        views = self._saved_views()
+        views[name.strip()] = self.store.filters.to_dict()
+        self.ctx.prefs.set("box.saved_views", views)
+        self.toolbar.set_saved_views(sorted(views))
+        self.ctx.toast(f"Saved view “{name.strip()}”", "success")
+        self._update_self()
+
+    def _apply_view(self, name: str) -> None:
+        data = self._saved_views().get(name)
+        if data is None:
+            return
+        self.toolbar.apply_filters(BoxFilters.from_dict(data))
+        self._update_self()
+
+    async def _forget_view(self) -> None:
+        views = self._saved_views()
+        if not views:
+            return
+        name = await self.ctx.prompt_text("Forget a view", "View name", submit_label="Forget",
+                                          validate=lambda t: None if t.strip() in views else "No saved view with that name")
+        if not name:
+            return
+        views.pop(name.strip(), None)
+        self.ctx.prefs.set("box.saved_views", views)
+        self.toolbar.set_saved_views(sorted(views))
+        self.ctx.toast(f"Forgot view “{name.strip()}”", "info")
+        self._update_self()
 
     # -- add to team --------------------------------------------------------------------------------------
 

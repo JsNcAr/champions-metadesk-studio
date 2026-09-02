@@ -45,6 +45,37 @@ class BoxFilters:
     def is_active(self) -> bool:
         return bool(self.active_labels())
 
+    def to_dict(self) -> dict:
+        """JSON-friendly form for saved views."""
+        return {
+            "text": self.text, "types": sorted(self.types), "favourites_only": self.favourites_only,
+            "mega_capable_only": self.mega_capable_only, "show_planned": self.show_planned,
+            "bst_range": list(self.bst_range), "stat_ranges": {k: list(v) for k, v in self.stat_ranges.items()},
+            "tags": sorted(self.tags), "sort": self.sort, "descending": self.descending,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "BoxFilters":
+        base = cls()
+        if not isinstance(data, dict):
+            return base
+        try:
+            bst = data.get("bst_range") or list(base.bst_range)
+            return cls(
+                text=str(data.get("text", "")),
+                types=frozenset(str(t) for t in data.get("types", [])),
+                favourites_only=bool(data.get("favourites_only", False)),
+                mega_capable_only=bool(data.get("mega_capable_only", False)),
+                show_planned=bool(data.get("show_planned", False)),
+                bst_range=(int(bst[0]), int(bst[1])),
+                stat_ranges={str(k): (int(v[0]), int(v[1])) for k, v in (data.get("stat_ranges") or {}).items()},
+                tags=frozenset(str(t) for t in data.get("tags", [])),
+                sort=data.get("sort", "name") if data.get("sort", "name") in SORT_LABELS else "name",
+                descending=bool(data.get("descending", False)),
+            )
+        except (TypeError, ValueError, IndexError):
+            return base
+
     def active_labels(self) -> list[tuple[str, str]]:
         """(field, label) for each non-default filter, for the removable chip row."""
         out: list[tuple[str, str]] = []

@@ -21,12 +21,15 @@ from ....infrastructure.database.models import (
     MegaCheckedSpeciesRecord,
     MegaEvolutionRecord,
     MoveCatalogMetaRecord,
+    PokemonRecord,
     TournamentRecord,
     TournamentTeamRecord,
 )
 from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
+from ....infrastructure.database.repositories import BoxRepository
 from ....services.move_catalog_service import sync_move_catalog
+from ....services.pokemon_import_service import refresh_stub_pokemon
 from ....services.tournament_service import TournamentService
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -44,6 +47,8 @@ class SettingsStatus:
     move_count: int = 0
     move_species_count: int = 0
     moves_synced_at: datetime | None = None
+    placeholder_in_box: int = 0      # box entries whose Pokémon has no PokéAPI data
+    placeholder_records: int = 0     # placeholder records in the table (any, referenced or not)
 
 
 class SettingsStore:
@@ -60,6 +65,8 @@ class SettingsStore:
             tournament_count = s.exec(select(func.count()).select_from(TournamentRecord)).one()
             team_count = s.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
             move_meta = s.get(MoveCatalogMetaRecord, 1)
+            placeholder_records = int(s.exec(select(func.count()).select_from(PokemonRecord).where(PokemonRecord.is_placeholder == True)).one() or 0)  # noqa: E712
+            placeholder_in_box = sum(1 for e in BoxRepository(s).list_entries(include_planned=True) if e.pokemon.is_stub)
             tournaments_synced_at = s.exec(
                 select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
             ).one()
@@ -74,6 +81,8 @@ class SettingsStore:
             move_count=int(move_meta.move_count) if move_meta else 0,
             move_species_count=int(move_meta.species_count) if move_meta else 0,
             moves_synced_at=move_meta.last_synced_at if move_meta and move_meta.move_count else None,
+            placeholder_in_box=placeholder_in_box,
+            placeholder_records=placeholder_records,
         )
 
     # -- sync operations (run on a worker thread) ---------------------------------------
@@ -89,6 +98,11 @@ class SettingsStore:
     def sync_moves(self) -> dict[str, Any]:
         with self._sf() as s:
             return sync_move_catalog(s, force=True)
+
+    def repair_data(self) -> dict[str, Any]:
+        """Re-fetch placeholder Pokémon referenced by the box."""
+        with self._sf() as s:
+            return refresh_stub_pokemon(s)
 
     def sync_tournaments(self, on_progress: Any = None) -> dict[str, Any]:
         # Not forced: a manual sync lists what is new, drains the standings backlog and

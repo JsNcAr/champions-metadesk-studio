@@ -46,6 +46,10 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class PlaceholderPokemonError(ValueError):
+    """A Pokémon without PokéAPI data was about to be stored as if it were real."""
+
+
 class PokemonRepository:
     """CRUD helpers for Pokemon records."""
 
@@ -54,6 +58,10 @@ class PokemonRepository:
 
     def upsert(self, pokemon: Pokemon) -> PokemonRecord:
         existing_record = self.session.get(PokemonRecord, pokemon.canonical_id)
+        # A placeholder never overwrites real data: the worst that can happen is that
+        # a stale placeholder is stored beside nothing, and the repair pass fixes that.
+        if existing_record is not None and pokemon.is_stub and not existing_record.to_domain().is_stub:
+            return existing_record
         new_record = PokemonRecord.from_domain(pokemon)
 
         if existing_record is None:
@@ -78,6 +86,7 @@ class PokemonRepository:
             "abilities",
             "moves",
             "available_forms",
+            "is_placeholder",
         ):
             setattr(existing_record, field_name, getattr(new_record, field_name))
 
@@ -106,7 +115,12 @@ class BoxRepository:
         self.session = session
         self.pokemon_repository = PokemonRepository(session)
 
-    def upsert_box_entry(self, box_entry: BoxEntry) -> BoxEntryRecord:
+    def upsert_box_entry(self, box_entry: BoxEntry, *, allow_placeholder: bool = False) -> BoxEntryRecord:
+        """Store an owned entry. A placeholder Pokémon is refused unless the caller says the
+        gap is intentional (an import while PokéAPI is unreachable) — that is how a
+        zero-stat "Pokémon" once ended up in the box unnoticed."""
+        if box_entry.pokemon.is_stub and not allow_placeholder:
+            raise PlaceholderPokemonError(f"{box_entry.pokemon.display_name} has no PokéAPI data; fetch it before storing it in the box")
         self.pokemon_repository.upsert(box_entry.pokemon)
         # Enforce uniqueness only for real (non-planned) entries
         if not box_entry.is_planned:
@@ -138,8 +152,10 @@ class BoxRepository:
         self.session.refresh(existing_record)
         return existing_record
 
-    def create_planned_entry(self, box_entry: BoxEntry) -> BoxEntryRecord:
+    def create_planned_entry(self, box_entry: BoxEntry, *, allow_placeholder: bool = False) -> BoxEntryRecord:
         """Insert a ghost/template entry (is_planned=True) without uniqueness checks."""
+        if box_entry.pokemon.is_stub and not allow_placeholder:
+            raise PlaceholderPokemonError(f"{box_entry.pokemon.display_name} has no PokéAPI data; fetch it before storing it in the box")
         self.pokemon_repository.upsert(box_entry.pokemon)
         record = BoxEntryRecord.from_domain(box_entry)
         record.is_planned = True

@@ -91,6 +91,9 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
         # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
+        # pokemon_records — explicit placeholder flag (records written without PokéAPI data)
+        "ALTER TABLE pokemon_records ADD COLUMN is_placeholder BOOLEAN NOT NULL DEFAULT 0;",
+        "UPDATE pokemon_records SET is_placeholder = 1 WHERE types = '[]' AND hp + attack + defense + special_attack + special_defense + speed = 0;",
         # tournament_teams — roster size (Box filter: size minus owned members)
         "ALTER TABLE tournament_teams ADD COLUMN member_count INTEGER NOT NULL DEFAULT 0;",
         # tournament_team_members — mega-stripped species id for box matching

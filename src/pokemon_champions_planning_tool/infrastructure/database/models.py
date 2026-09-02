@@ -36,6 +36,8 @@ class PokemonRecord(SQLModel, table=True):
     dex_number: int | None = Field(default=None, index=True)
     types: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     sprite_url: str | None = None
+    # Written without PokéAPI data; never allowed to overwrite a real record.
+    is_placeholder: bool = Field(default=False)
     hp: int
     attack: int
     defense: int
@@ -70,6 +72,7 @@ class PokemonRecord(SQLModel, table=True):
             speed=pokemon.stats.speed,
             abilities=[ability.model_dump(mode="json") for ability in pokemon.abilities],
             moves=[move.model_dump(mode="json") for move in pokemon.moves],
+            is_placeholder=pokemon.is_placeholder,
             available_forms=[form.model_dump(mode="json") for form in pokemon.available_forms],
         )
 
@@ -92,6 +95,7 @@ class PokemonRecord(SQLModel, table=True):
             ),
             abilities=[PokemonAbility.model_validate(ability) for ability in self.abilities],
             moves=[PokemonMove.model_validate(move) for move in self.moves],
+            is_placeholder=bool(self.is_placeholder),
             available_forms=[PokemonForm.model_validate(form) for form in self.available_forms],
         )
 

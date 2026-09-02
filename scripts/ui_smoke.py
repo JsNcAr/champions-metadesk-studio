@@ -114,6 +114,29 @@ def _serialise(control) -> int:
     return len(added)
 
 
+def _integrity(db_path: Path) -> int:
+    """Structural checks on the database copy; returns the number of failures."""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    failures = 0
+    checks = {
+        "roster rows without a base species id": "SELECT COUNT(*) FROM tournament_team_members WHERE base_canonical_id = ''",
+        "teams whose member_count disagrees with their rows": (
+            "SELECT COUNT(*) FROM tournament_teams t WHERE member_count != (SELECT COUNT(*) FROM tournament_team_members m WHERE m.tournament_team_id = t.tournament_team_id)"
+        ),
+        "box entries pointing at a missing Pokémon record": "SELECT COUNT(*) FROM box_entries b WHERE NOT EXISTS (SELECT 1 FROM pokemon_records p WHERE p.canonical_id = b.pokemon_canonical_id)",
+    }
+    for label, sql in checks.items():
+        n = conn.execute(sql).fetchone()[0]
+        print(f"  integrity: {label}: {n}" + ("  <-- FAIL" if n else ""))
+        failures += 1 if n else 0
+    info = conn.execute("SELECT COUNT(*) FROM box_entries b JOIN pokemon_records p ON p.canonical_id = b.pokemon_canonical_id WHERE p.is_placeholder = 1").fetchone()[0]
+    print(f"  integrity: box entries with placeholder data (repairable): {info}")
+    conn.close()
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--db", required=True, help="path to a COPY of the SQLite database")
@@ -157,6 +180,7 @@ def main() -> int:
             print(f"  {key:<5} FAILED: {type(exc).__name__}: {exc}")
 
     print(f"overlay entries: {len(page.overlay)}  dialogs shown: {len(page.dialogs)}")
+    failures += _integrity(db_path)
     return 1 if failures else 0
 
 

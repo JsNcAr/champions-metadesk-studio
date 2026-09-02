@@ -665,16 +665,10 @@ def commit_team_import(
                     pokemon_repo.upsert(fetched)
                     pokemon = fetched
             if pokemon is None:
-                pokemon = Pokemon(
-                    canonical_id=slot.showdown_form_key,
-                    display_name=slot.species_name,
-                    species_name=(slot.showdown_form_key or "").split("-")[0] or None,
-                    form_name="base",
-                    types=[],
-                    stats=PokemonStats(hp=0, attack=0, defense=0, sp_atk=0, sp_def=0, speed=0),
-                )
+                pokemon = Pokemon.placeholder(slot.showdown_form_key, slot.species_name)
             entry = BoxEntry(pokemon=pokemon, tags=["imported", name], is_planned=use_planned)
-            saved = box_repo.create_planned_entry(entry) if use_planned else box_repo.upsert_box_entry(entry)
+            allow = pokemon.is_stub  # only the offline fallback stores a placeholder, knowingly
+            saved = box_repo.create_planned_entry(entry, allow_placeholder=allow) if use_planned else box_repo.upsert_box_entry(entry, allow_placeholder=allow)
             box_entry_id = saved.box_entry_id
             (created_planned if use_planned else created_owned).append(slot.species_name)
             # Later slots may reference the same species.

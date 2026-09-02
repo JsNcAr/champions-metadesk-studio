@@ -47,7 +47,8 @@ class BoxView(ft.Row):
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
         self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, tooltip="Export the visible entries (or the selected ones) to CSV", on_click=lambda _e: self._export())
-        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._add_spinner, self._add_field, self._export_button])
+        self._hidden_button = ft.TextButton("", icon=ft.Icons.FILTER_ALT_OFF, visible=False, tooltip="Some owned Pokémon are hidden by the current filters — click to clear them", on_click=lambda _e: self.toolbar.clear())
+        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._hidden_button, self._add_spinner, self._add_field, self._export_button])
 
         # -- toolbar ---------------------------------------------------------------------------
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats, on_columns=self._set_columns)
@@ -193,6 +194,9 @@ class BoxView(ft.Row):
         visible = self.store.visible()
         shown, owned = self.store.counts()
         self.header.set_count(owned if shown == owned else f"{shown} of {owned}")
+        hidden = owned - sum(1 for e in visible if not e.is_planned)
+        self._hidden_button.content = f"{hidden} hidden by filters"
+        self._hidden_button.visible = hidden > 0
         self.toolbar.set_available_tags(self.store.all_tags())
 
         empty = not self.store.entries

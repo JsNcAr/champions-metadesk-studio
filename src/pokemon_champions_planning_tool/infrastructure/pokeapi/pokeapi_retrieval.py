@@ -11,6 +11,10 @@ from ...domain.pokemon_identity import format_display_name, format_api_name
 from ..database.models import MegaEvolutionRecord
 
 
+class PokeApiUnavailable(Exception):
+    """PokéAPI could not answer (offline, timeout, throttled). Distinct from "not found"."""
+
+
 @lru_cache(maxsize=512)
 def get_official_stats(pokemon_name):
     """Fetches stats directly from PokéAPI using requests."""
@@ -74,12 +78,10 @@ def get_official_stats(pokemon_name):
 
     except requests.exceptions.HTTPError as http_err:
         if response.status_code == 404:
-            return None
-        print(f"⚠️ HTTP error occurred: {http_err}")
-        return None
+            return None  # genuinely unknown name
+        raise PokeApiUnavailable(f"PokéAPI answered {response.status_code} — it may be throttling; try again in a minute") from http_err
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Network error reaching PokéAPI: {e}")
-        return None
+        raise PokeApiUnavailable(f"PokéAPI is unreachable: {e}") from e
 
 
 @lru_cache(maxsize=16)

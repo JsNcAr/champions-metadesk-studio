@@ -87,7 +87,7 @@ class TestStubs(unittest.TestCase):
     def test_repair_pass_refetches_stubs_referenced_by_the_box(self):
         with self.db.session() as s:
             repo = BoxRepository(s)
-            repo.upsert_box_entry(BoxEntry(pokemon=_stub("kingambit")))
+            repo.upsert_box_entry(BoxEntry(pokemon=_stub("kingambit")), allow_placeholder=True)
             repo.upsert_box_entry(BoxEntry(pokemon=_real("garchomp")))
             s.commit()
         with patch.object(imp, "get_official_stats", side_effect=lambda name: _real() if "kingambit" in name.lower() else None) as fetch, self.db.session() as s:
@@ -121,7 +121,7 @@ class TestStubs(unittest.TestCase):
     def test_box_shows_placeholders_with_a_mark_and_refresh(self):
         with self.db.session() as s:
             repo = BoxRepository(s)
-            stub_id = repo.upsert_box_entry(BoxEntry(pokemon=_stub())).box_entry_id
+            stub_id = repo.upsert_box_entry(BoxEntry(pokemon=_stub()), allow_placeholder=True).box_entry_id
             repo.upsert_box_entry(BoxEntry(pokemon=_real("garchomp")))
             s.commit()
         with self.db.session() as s:

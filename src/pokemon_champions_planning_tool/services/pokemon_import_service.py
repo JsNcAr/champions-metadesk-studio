@@ -11,7 +11,7 @@ from ..domain.entities.pokemon import Pokemon
 from ..domain.pokemon_identity import format_api_name
 from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import BoxRepository, PokemonRepository
-from ..infrastructure.pokeapi.pokeapi_retrieval import get_official_stats
+from ..infrastructure.pokeapi.pokeapi_retrieval import PokeApiUnavailable, get_official_stats
 
 
 class PokemonNotFoundError(LookupError):
@@ -40,7 +40,12 @@ def add_pokemon_to_box(pokemon_name: str) -> BoxEntry:
         # written a placeholder (no types, zero stats) for a species that was not in the
         # box; that must never come back as "the" Pokémon.
         if official_data is None or official_data.is_stub:
-            fetched = get_official_stats(formatted_name)
+            try:
+                fetched = get_official_stats(formatted_name)
+            except PokeApiUnavailable:
+                if official_data is None:
+                    raise
+                fetched = None  # keep the marked placeholder; the repair pass retries later
             if fetched:
                 pokemon_repo.upsert(fetched)
                 official_data = fetched
@@ -48,7 +53,7 @@ def add_pokemon_to_box(pokemon_name: str) -> BoxEntry:
         if not official_data:
             raise PokemonNotFoundError(f"'{formatted_name}' could not be found — check the spelling")
 
-        record = box_repo.upsert_box_entry(BoxEntry(pokemon=official_data))
+        record = box_repo.upsert_box_entry(BoxEntry(pokemon=official_data), allow_placeholder=official_data.is_stub)
         entry = box_repo.load_entry(str(record.box_entry_id))
         if entry is None:  # pragma: no cover - the entry was just written
             raise PokemonNotFoundError(f"'{formatted_name}' was not saved")
@@ -57,7 +62,10 @@ def add_pokemon_to_box(pokemon_name: str) -> BoxEntry:
 
 def refresh_pokemon_record(canonical_id: str, display_name: str | None = None) -> Pokemon | None:
     """Re-fetch one species from PokéAPI and replace its stored record; None when offline."""
-    fetched = get_official_stats(display_name or canonical_id.replace("-", " ").title())
+    try:
+        fetched = get_official_stats(display_name or canonical_id.replace("-", " ").title())
+    except PokeApiUnavailable:
+        return None
     if not fetched:
         return None
     with get_session() as session:
@@ -76,7 +84,11 @@ def refresh_stub_pokemon(session) -> dict:
     stubs = {e.pokemon.canonical_id: e.pokemon.display_name for e in box_repo.list_entries(include_planned=True) if e.pokemon.is_stub}
     repaired = 0
     for canonical_id, display_name in stubs.items():
-        fetched = get_official_stats(display_name) or get_official_stats(canonical_id)
+        try:
+            fetched = get_official_stats(display_name) or get_official_stats(canonical_id)
+        except PokeApiUnavailable as exc:
+            print(f"⚠️ Box data repair paused: {exc}")
+            break  # the network is the problem, not the name: stop asking
         if fetched:
             pokemon_repo.upsert(fetched)
             repaired += 1

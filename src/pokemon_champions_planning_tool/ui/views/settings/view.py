@@ -22,12 +22,12 @@ _MAX_WIDTH = 720
 class SyncRow(ft.Container):
     """One data source: icon, title, status caption, Sync button, progress bar."""
 
-    def __init__(self, icon: str, title: str, on_sync: Callable[[], None]) -> None:
+    def __init__(self, icon: str, title: str, on_sync: Callable[[], None], *, button_label: str = "Sync") -> None:
         super().__init__()
         self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._result = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.SUCCESS, visible=False)
         self.spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
-        self.button = ft.FilledTonalButton("Sync", icon=ft.Icons.SYNC, on_click=lambda _e: on_sync())
+        self.button = ft.FilledTonalButton(button_label, icon=ft.Icons.SYNC if button_label == "Sync" else ft.Icons.HEALING, on_click=lambda _e: on_sync())
         self._bar = ft.ProgressBar(visible=False, bar_height=2, color=Palette.PRIMARY, bgcolor=Palette.OUTLINE_VARIANT)
 
         self.content = ft.Column(
@@ -106,7 +106,8 @@ class SettingsView(ft.Column):
         self.row_items = SyncRow(ft.Icons.DIAMOND_OUTLINED, "Held items", lambda: self._sync("items"))
         self.row_moves = SyncRow(ft.Icons.SPORTS_MARTIAL_ARTS, "Moves & learnsets", lambda: self._sync("moves"))
         self.row_tournaments = SyncRow(ft.Icons.EMOJI_EVENTS_OUTLINED, "Tournaments", lambda: self._sync("tournaments"))
-        self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments}
+        self.row_health = SyncRow(ft.Icons.HEALTH_AND_SAFETY_OUTLINED, "Data health", lambda: self._sync("health"), button_label="Repair")
+        self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "health": self.row_health}
 
         self.about = KeyValueList(self._about_rows())
 
@@ -133,6 +134,8 @@ class SettingsView(ft.Column):
                                 self.row_moves,
                                 ft.Divider(),
                                 self.row_tournaments,
+                                ft.Divider(),
+                                self.row_health,
                             ]
                         ),
                         Panel([SectionHeader("About"), self.about]),
@@ -157,6 +160,11 @@ class SettingsView(ft.Column):
         self.row_megas.set_status(_status_line(plural(status.mega_count, "form"), status.megas_checked_at, status.mega_count))
         self.row_items.set_status(_status_line(plural(status.item_count, "item"), status.items_synced_at, status.item_count))
         self.row_moves.set_status(_status_line(f"{plural(status.move_count, 'move')} · {plural(status.move_species_count, 'learnset')}", status.moves_synced_at, status.move_count))
+        if status.placeholder_in_box:
+            self.row_health.set_status(f"{plural(status.placeholder_in_box, 'Pokémon')} in the box without PokéAPI data · {plural(status.placeholder_records, 'placeholder record')}")
+        else:
+            self.row_health.set_status("All box Pokémon have complete data" + (f" · {plural(status.placeholder_records, 'unused placeholder record')}" if status.placeholder_records else ""))
+        self.row_health.button.disabled = status.placeholder_in_box == 0
         self.row_tournaments.set_status(
             _status_line(
                 f"{plural(status.tournament_count, 'event')} · {plural(status.tournament_team_count, 'team')}",
@@ -169,7 +177,7 @@ class SettingsView(ft.Column):
 
     def _sync(self, kind: str) -> None:
         row = self._rows[kind]
-        work = {"megas": self.store.sync_megas, "items": self.store.sync_items, "moves": self.store.sync_moves, "tournaments": self.store.sync_tournaments}[kind]
+        work = {"megas": self.store.sync_megas, "items": self.store.sync_items, "moves": self.store.sync_moves, "tournaments": self.store.sync_tournaments, "health": self.store.repair_data}[kind]
         row.set_running(True)
         row.set_status("Syncing…")
         if self._is_mounted():
@@ -180,7 +188,7 @@ class SettingsView(ft.Column):
             row.set_result(_result_summary(kind, result))
             self.refresh()
             self.ctx.toast(_toast_text(kind, result), "success")
-            self.ctx.bus.emit(events.CATALOGS_RELOADED, kind)
+            self.ctx.bus.emit(events.BOX_CHANGED if kind == "health" else events.CATALOGS_RELOADED, None if kind == "health" else kind)
 
         def failed(exc: BaseException) -> None:
             row.set_running(False)
@@ -254,6 +262,8 @@ def _result_summary(kind: str, result: dict[str, Any]) -> str:
         return f"+{result.get('added', 0)} added · {result.get('updated', 0)} updated"
     if kind == "moves":
         return f"{result.get('moves', 0):,} moves · {result.get('species', 0):,} learnsets"
+    if kind == "health":
+        return f"{result.get('repaired', 0)} of {result.get('stubs', 0)} repaired"
     limitless = result.get("limitless", {})
     victory = result.get("victory_road", {})
     added = int(limitless.get("added", 0)) + int(victory.get("added", 0))
@@ -267,6 +277,9 @@ def _toast_text(kind: str, result: dict[str, Any]) -> str:
         return f"Mega Evolutions synced — {result.get('total_local', 0):,} forms cached"
     if kind == "items":
         return f"Items synced — {result.get('total', 0):,} catalogued"
+    if kind == "health":
+        stubs, repaired = result.get("stubs", 0), result.get("repaired", 0)
+        return "Nothing to repair" if not stubs else (f"Repaired {repaired} Pokémon" if repaired == stubs else f"Repaired {repaired} of {stubs} — PokéAPI unreachable for the rest")
     if kind == "moves":
         return "Move catalogue unreachable — kept existing data" if result.get("status") == "offline" else f"Moves synced — {result.get('moves', 0):,} moves, {result.get('species', 0):,} Champions learnsets"
     status = result.get("status", "synced")

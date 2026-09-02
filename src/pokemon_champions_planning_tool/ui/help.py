@@ -48,6 +48,7 @@ TIPS: dict[str, tuple[str, ...]] = {
     ),
     "Calc": (
         "Each move card carries its own result: base power, the type multiplier, the damage range, a bar and the KO text; click a card for the 16 rolls and the full description. Status moves with a known effect (Swords Dance, Tailwind, Will-O-Wisp…) get an Activate toggle that applies it.",
+        "The move picker opened from the calculator shows what every move would do to the other Pokémon under the current field, and can be sorted by damage instead of tournament usage.",
         "The strip above the panels toggles Singles/Doubles, Tailwind per side, Trick Room, weather, terrain and rooms with one click; the chips below it set screens, Helping Hand, hazards, Leech Seed and Spikes per side. \"Activate\" next to an ability means it has already triggered (Intimidate applied, Flash Fire lit).",
         "The left rail loads a team member or a box Pokémon as the attacker (click) or the defender (shield button). The Opponents rail runs the attacker against every Champions species: Crushed (you OHKO first), Threat (they KO you first), Wall (four hits or more), Mitigated (you win the race), Neutral; \"Tournament sets\" gives each opponent its four most used roster moves.",
         "HP scaling moves (Eruption, Flail, Hard Press), weight moves (Heavy Slam, Low Kick) and abilities such as Multiscale read the HP sliders and each species' weight; the Spe chip shows who moves first under Tailwind and Trick Room.",

@@ -293,6 +293,21 @@ class CalcStore:
     def search_species(self, query: str) -> list[SpeciesInfo]:
         return self.catalogs.search_species(query)
 
+    def damage_preview(self, side: str, move_name: str | None) -> MoveResult | None:
+        """What ``move_name`` used by ``side`` would do to the other Pokémon under the current
+        field (for the move picker); None when either side has no species."""
+        if not move_name:
+            return None
+        other = "right" if side == "left" else "left"
+        a_species = self.species(side)
+        d_species = self.species(other)
+        if a_species is None or d_species is None:
+            return None
+        attacker = replace(self.state.side(side), moves=[move_name, None, None, None], crit=[False, False, False, False])
+        field = engine_field(self.state.field, attacker_is_left=(side == "left"))
+        results = run_side(attacker, self.state.side(other), field, self.catalogs, self._calc, a_species, d_species)
+        return results[0] if results else None
+
     def points_left(self, side: str) -> int:
         return MAX_POINTS_TOTAL - points_total(self.state.side(side).points)
 

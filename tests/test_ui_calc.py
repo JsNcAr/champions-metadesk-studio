@@ -317,6 +317,37 @@ class TestCalcView(_Base):
         self.assertEqual(classify(mr(60), mr(60), False), "neutral")
         self.assertEqual(classify(mr(60), None, False), "mitigated")
 
+    def test_move_picker_shows_damage_against_the_other_pokemon_and_sorts_by_it(self):
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.move_picker import MovePickerDialog
+
+        self._load_pair()
+        preview = self.store.damage_preview("left", "Iron Head")
+        self.assertIsNotNone(preview)
+        self.assertGreater(preview.max_pct, 0)
+        self.assertIsNone(self.store.damage_preview("left", None))
+        self.store.set_field(weather="Rain")
+        self.assertLess(self.store.damage_preview("right", "Flare Blitz").max_pct, self.store.damage_preview("right", "Flare Blitz").max_pct + 1)
+        self.view._open_move_picker("left", 0)
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, MovePickerDialog)
+        self.assertIn("damage vs Incineroar", dialog._caption.value)
+        self.assertTrue(dialog._sort_control.visible)
+        self.assertEqual(dialog._sort, "damage", "the calculator defaults to damage order")
+        names = [r.content.controls[2].value for r in dialog._list.controls if isinstance(r, ft.Container) and isinstance(r.content, ft.Row) and len(r.content.controls) > 2]
+        self.assertEqual(names[:2], ["Kowtow Cleave", "Iron Head"], "Kowtow Cleave (85 BP, STAB) outdamages Iron Head; Protect last")
+        chips = [c for r in dialog._list.controls if isinstance(r, ft.Container) and isinstance(r.content, ft.Row) for c in r.content.controls if isinstance(c, ft.Text) and c.width == 92]
+        self.assertTrue(any("%" in c.value for c in chips))
+        self.assertTrue(any(c.value == "—" for c in chips), "Protect shows no damage")
+        dialog._set_sort("usage")
+        self.assertEqual(self.ctx.prefs.get("calc.move_sort"), "usage")
+        self.assertIn("ranked by tournament usage", dialog._caption.value)
+        serialise(dialog)
+        self.page.pop_dialog()
+        self.store.reset()
+        self.store.load_species("left", "kingambit")
+        self.view._open_move_picker("left", 0)
+        self.assertFalse(self.page.dialogs[-1]._sort_control.visible, "no target: no damage column")
+
     def test_help_and_accent(self):
         self.assertIn("Calc", TIPS)
         self.assertTrue(hasattr(Accent, "CALC"))

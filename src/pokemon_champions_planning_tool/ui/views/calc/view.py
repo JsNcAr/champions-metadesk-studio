@@ -178,15 +178,24 @@ class CalcView(ft.Column):
             return
         page = self.ctx.page
         current = self.store.state.side(side).moves[index]
+        target = self.store.species("right" if side == "left" else "left")
 
         def pick(name: str | None) -> None:
             page.pop_dialog()
             self.store.set_move(side, index, name)
 
-        page.show_dialog(MovePickerDialog(
+        def set_sort(value: str) -> None:
+            self.ctx.prefs.set("calc.move_sort", value)
+
+        dialog = MovePickerDialog(
             species_label=species.name, options=self.store.move_options(side), current=current,
             show_all=bool(self.ctx.prefs.get("team.show_all_moves", False)), on_pick=pick, on_close=page.pop_dialog,
-        ))
+            damage_for=(lambda info: self.store.damage_preview(side, info.name)) if target is not None else None,
+            target_label=target.name if target is not None else None,
+            sort=str(self.ctx.prefs.get("calc.move_sort", "damage")),
+        )
+        dialog.on_sort = set_sort
+        page.show_dialog(dialog)
 
     def _open_item_picker(self, side: str) -> None:
         species = self.store.species(side)

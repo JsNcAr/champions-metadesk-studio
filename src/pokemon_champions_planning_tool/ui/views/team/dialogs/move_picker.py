@@ -3,11 +3,16 @@
 Illegal moves are hidden unless "Show all moves" is on (a team-builder option); then
 they are listed greyed with a warning and can still be chosen, in case the catalogue is
 wrong about one. Typing a name that matches nothing offers to use it as typed.
+
+The damage calculator opens the same picker with ``damage_for``: every row then shows the
+damage that move would do to the other Pokémon under the current field, and the list can be
+sorted by damage instead of tournament usage.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import flet as ft
 
@@ -34,6 +39,9 @@ class MovePickerDialog(ft.AlertDialog):
         on_pick: Callable[[str | None], None],
         on_close: Callable[[], None],
         on_show_all: Callable[[bool], None] | None = None,
+        damage_for: Callable[[MoveInfo], Any] | None = None,
+        target_label: str | None = None,
+        sort: str = "usage",
     ) -> None:
         super().__init__(modal=True)
         self._options = options
@@ -42,6 +50,15 @@ class MovePickerDialog(ft.AlertDialog):
         self._on_pick = on_pick
         self._on_close = on_close
         self._on_show_all = on_show_all
+        self._damage_for = damage_for
+        self._target_label = target_label
+        self._damage_cache: dict[str, Any] = {}
+        self._sort = sort if (sort == "damage" and damage_for is not None) else "usage"
+        self._sort_control = ft.SegmentedButton(
+            selected=[self._sort], show_selected_icon=False, visible=damage_for is not None,
+            segments=[ft.Segment(value="usage", label=ft.Text("Usage")), ft.Segment(value="damage", label=ft.Text("Damage"))],
+            on_change=lambda e: self._set_sort(next(iter(e.control.selected), "usage") if e.control.selected else "usage"),
+        )
 
         self._search = ft.TextField(**SEARCH_FIELD_STYLE, hint_text="Search moves…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True, expand=True,
                                     on_change=lambda _e: self._refresh(), on_submit=lambda _e: self._pick_first())
@@ -58,7 +75,7 @@ class MovePickerDialog(ft.AlertDialog):
             content=ft.Column(
                 spacing=Space.MD,
                 expand=True,
-                controls=[ft.Row(spacing=Space.MD, controls=[self._search, self._switch]), self._caption, self._list],
+                controls=[ft.Row(spacing=Space.MD, controls=[self._search, self._sort_control, self._switch]), self._caption, self._list],
             ),
         )
         self.actions = [
@@ -77,8 +94,37 @@ class MovePickerDialog(ft.AlertDialog):
             self._on_show_all(value)
         self._refresh()
 
-    def _rank(self, move: MoveInfo) -> tuple[float, str]:
-        return (-self._options.usage.get(move.move_id, 0.0), move.name.lower())
+    on_sort: Callable[[str], None] | None = None
+
+    def _set_sort(self, value: str) -> None:
+        self._sort = "damage" if value == "damage" and self._damage_for is not None else "usage"
+        self._sort_control.selected = [self._sort]
+        if self.on_sort is not None:
+            self.on_sort(self._sort)
+        self._refresh()
+
+    def damage(self, move: MoveInfo) -> Any:
+        """The calculator's result for ``move`` against the other Pokémon (cached per dialog)."""
+        if self._damage_for is None:
+            return None
+        if move.move_id not in self._damage_cache:
+            try:
+                self._damage_cache[move.move_id] = self._damage_for(move)
+            except Exception:  # noqa: BLE001 - a preview must never break the picker
+                self._damage_cache[move.move_id] = None
+        return self._damage_cache[move.move_id]
+
+    @staticmethod
+    def _damage_score(result: Any) -> float:
+        if result is None or not getattr(result, "ok", False):
+            return -1.0
+        return (float(result.min_pct) + float(result.max_pct)) / 2
+
+    def _rank(self, move: MoveInfo) -> tuple:
+        usage = -self._options.usage.get(move.move_id, 0.0)
+        if self._sort == "damage":
+            return (-self._damage_score(self.damage(move)), usage, move.name.lower())
+        return (usage, move.name.lower())
 
     def _candidates(self) -> tuple[list[MoveInfo], list[MoveInfo]]:
         q = (self._search.value or "").strip().lower()
@@ -120,7 +166,10 @@ class MovePickerDialog(ft.AlertDialog):
             self._caption.value = "No Champions learnset for this species yet — every move is listed unchecked."
         else:
             hidden = len(self._options.others)
-            self._caption.value = f"{len(self._options.legal)} legal moves · ranked by tournament usage" + ("" if self._show_all or not hidden else f" · {hidden} others hidden")
+            ranked = "ranked by damage" if self._sort == "damage" else "ranked by tournament usage"
+            self._caption.value = f"{len(self._options.legal)} legal moves · {ranked}" + ("" if self._show_all or not hidden else f" · {hidden} others hidden")
+        if self._damage_for is not None and self._target_label:
+            self._caption.value += f" · damage vs {self._target_label}"
         if is_mounted(self):
             self.update()
 
@@ -134,8 +183,11 @@ class MovePickerDialog(ft.AlertDialog):
         stats.append(ft.Text(str(move.power) if move.power else "—", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, width=36, text_align=ft.TextAlign.RIGHT, tooltip="Power"))
         stats.append(ft.Text(f"{move.accuracy}%" if move.accuracy else "—", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, width=44, text_align=ft.TextAlign.RIGHT, tooltip="Accuracy"))
         trailing: list[ft.Control] = []
-        if usage >= 0.005:
-            trailing.append(StatusChip(f"{usage:.0%}", "info", tooltip=f"Carried by {usage:.0%} of this species' tournament rosters"))
+        if self._damage_for is not None:
+            trailing.append(self._damage_chip(move))
+        # A fixed slot keeps the stat columns aligned whether or not a usage chip is present.
+        usage_chip = StatusChip(f"{usage:.0%}", "info", tooltip=f"Carried by {usage:.0%} of this species' tournament rosters") if usage >= 0.005 else None
+        trailing.append(ft.Container(content=usage_chip, width=52, alignment=ft.Alignment.CENTER_RIGHT))
         if not legal:
             trailing.append(ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=IconSize.SM, color=Palette.WARNING, tooltip="Not in the Champions learnset"))
         selected = move_key(move.name) == move_key(self._current)
@@ -158,6 +210,19 @@ class MovePickerDialog(ft.AlertDialog):
             ink=True,
             on_click=lambda _e, name=move.name: self._on_pick(name),
         )
+
+
+    def _damage_chip(self, move: MoveInfo) -> ft.Control:
+        """`10.8–12.8%` coloured by the maximum, with the KO text as tooltip; `—` when it does nothing."""
+        result = self.damage(move)
+        if result is None or not getattr(result, "ok", False):
+            reason = getattr(result, "error", None) if result is not None else None
+            return ft.Text("—", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, width=92, text_align=ft.TextAlign.RIGHT,
+                           tooltip=reason or ("Status move" if (move.category or "").lower() == "status" else "No damage"))
+        max_pct = float(result.max_pct)
+        colour = Palette.ERROR if max_pct >= 100 else Palette.WARNING if max_pct >= 50 else Palette.SECONDARY if max_pct >= 25 else Palette.ON_SURFACE_VARIANT
+        return ft.Text(f"{result.min_pct:g}–{result.max_pct:g}%", theme_style=ft.TextThemeStyle.BODY_SMALL, weight=ft.FontWeight.W_600, color=colour, width=92,
+                       text_align=ft.TextAlign.RIGHT, tooltip=getattr(result, "ko_text", "") or f"{result.min_dmg}–{result.max_dmg} HP")
 
 
 __all__ = ["MovePickerDialog"]

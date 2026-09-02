@@ -9,7 +9,7 @@ import flet as ft
 from ....domain.type_chart import TYPES
 from ...components import SectionHeader, Sprite, StatusChip
 from ...components.pokemon import SidePanel, StatBlock, TypeChip
-from ...theme import Palette, Radius, Space, alpha
+from ...theme import Accent, Palette, Radius, Space, alpha
 from .summary import SlotModel, TeamSummary
 
 _CELL = 14
@@ -33,7 +33,7 @@ def _cell_colour(mult: float) -> str | None:
 
 class SummaryPanel(SidePanel):
     def __init__(self, *, on_close: Callable[[], None], on_focus_slot: Callable[[int], None]) -> None:
-        super().__init__("Team summary", on_close=on_close)
+        super().__init__("Team summary", on_close=on_close, accent=Accent.TEAMS)
         self._on_focus_slot = on_focus_slot
         self._avatars = ft.Row(spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER)
         self._stats = StatBlock()
@@ -42,9 +42,9 @@ class SummaryPanel(SidePanel):
         self._health = ft.Column(spacing=Space.XS, tight=True)
         self.body.controls = [
             self._avatars,
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Stats"), self._stats_caption, self._stats]),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Defensive coverage"), self._grid, self._legend()]),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Health"), self._health]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Stats", accent=Accent.TEAMS), self._stats_caption, self._stats]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Defensive coverage", accent=Accent.TEAMS), self._grid, self._legend()]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Health", accent=Accent.TEAMS), self._health]),
         ]
         self.visible = True
 

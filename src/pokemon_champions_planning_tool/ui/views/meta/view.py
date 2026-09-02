@@ -13,7 +13,7 @@ from ...components.banner import InlineBanner
 from ...context import AppContext
 from ...format import plural, relative_time
 from ...tasks import Debouncer, is_mounted
-from ...theme import IconSize, Layout, Palette, Space
+from ...theme import Accent, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
 from .row import EventHeader, TeamRow
 from .store import GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
@@ -36,7 +36,7 @@ class MetaView(ft.Column):
             icon=ft.Icons.SYNC, icon_size=IconSize.MD, tooltip="Sync tournaments now", on_click=lambda _e: self._sync_now()
         )
         self._sync_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
-        self.header = PageHeader("Meta", actions=[self._sync_spinner, self._sync_button])
+        self.header = PageHeader("Meta", icon=ft.Icons.EMOJI_EVENTS, accent=Accent.META, actions=[self._sync_spinner, self._sync_button])
 
         # -- filter bar ---------------------------------------------------------------
         self._search = ft.TextField(
@@ -67,7 +67,7 @@ class MetaView(ft.Column):
         self._recency = ft.Dropdown(
             value=self.store.filters.recency,
             options=[ft.DropdownOption(key=v, text=label) for v, label in RECENCY_OPTIONS],
-            width=140,
+            width=170,
             on_select=lambda e: self._apply(recency=e.control.value or "365"),
         )
         self._game = ft.Dropdown(

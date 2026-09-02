@@ -15,7 +15,7 @@ import flet as ft
 from ..context import AppContext
 from ..events import NAVIGATE
 from ..tasks import is_mounted
-from ..theme import IconSize, Layout, Palette, Radius, Space
+from ..theme import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Radius, Space
 
 ViewFactory = Callable[[], ft.Control]
 
@@ -90,6 +90,7 @@ class AppShell(ft.Row):
 
         ctx.bus.on(NAVIGATE, self.navigate)
         ctx.page.on_keyboard_event = self._on_key
+        ctx.page.on_resize = self._on_resize
 
     # -- registration -----------------------------------------------------------------
 
@@ -140,6 +141,7 @@ class AppShell(ft.Row):
         self.host.content = entry.instance()
         self.rail.selected_index = self._order.index(key) if key in self._order else None
         self._current = key
+        self._forward_size(entry.control)
         if entry.on_activate is not None:
             entry.on_activate()
         self._update_if_mounted()
@@ -167,6 +169,26 @@ class AppShell(ft.Row):
         handler = getattr(entry.control, "handle_key", None) if entry and entry.control is not None else None
         if callable(handler):
             handler(e)
+
+    # -- window size -----------------------------------------------------------------------
+
+    def page_size(self) -> tuple[float, float]:
+        page = self.ctx.page
+        width = getattr(page, "width", None) or getattr(page.window, "width", None) or DEFAULT_WINDOW_WIDTH
+        height = getattr(page, "height", None) or getattr(page.window, "height", None) or DEFAULT_WINDOW_HEIGHT
+        return float(width), float(height)
+
+    def _forward_size(self, control: ft.Control | None) -> None:
+        """Views that declare ``handle_resize(width, height)`` size their grids from it."""
+        handler = getattr(control, "handle_resize", None)
+        if callable(handler):
+            handler(*self.page_size())
+
+    def _on_resize(self, e) -> None:
+        entry = self._entries.get(self._current) if self._current else None
+        if entry is not None and entry.control is not None:
+            self._forward_size(entry.control)
+            self._update_if_mounted()
 
     def _update_if_mounted(self) -> None:
         # Before page.add the controls have no page; Flet auto-updates after the

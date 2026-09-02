@@ -11,7 +11,7 @@ from ....services.tournament_service import MetaTeamRow
 from ...components import PlacementBadge, Sprite, StatusChip
 from ...format import absolute_time, plural
 from ...tasks import is_mounted
-from ...theme import IconSize, Motion, Palette, Radius, Space
+from ...theme import IconSize, Motion, Palette, Radius, Space, alpha
 
 
 class EventHeader(ft.Container):
@@ -40,7 +40,8 @@ class EventHeader(ft.Container):
                 )
             )
         self.content = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
-        self.bgcolor = Palette.SURFACE_1
+        self.bgcolor = alpha(Palette.TERTIARY, 0.12)
+        self.border = ft.Border.only(left=ft.BorderSide(3, Palette.TERTIARY))
         self.border_radius = Radius.SM
         self.padding = ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.SM)
         self.margin = ft.Margin.only(top=Space.SM)

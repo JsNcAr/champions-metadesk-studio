@@ -194,5 +194,20 @@ class TestLayoutLint(unittest.TestCase):
         check_layout(ft.Row(controls=[ft.Row(wrap=True, expand=True, controls=[ft.Text("a")]), ft.Container(expand=True)]))
 
 
+
+
+class TestGridTileAspect(unittest.TestCase):
+    def test_matches_flutter_max_extent_delegate(self):
+        from pokemon_champions_planning_tool.ui.tasks import grid_tile_aspect
+
+        # 1311px → 6 columns of (1311 - 5*12)/6 = 208.5px; height held at 240.
+        self.assertAlmostEqual(grid_tile_aspect(1311, max_extent=210, spacing=12, tile_height=240), 208.5 / 240, places=4)
+        # Narrower window → fewer, narrower tiles → smaller ratio, same height.
+        narrow = grid_tile_aspect(700, max_extent=210, spacing=12, tile_height=240)
+        self.assertLess(narrow, 208.5 / 240)
+        self.assertAlmostEqual(narrow, ((700 - 3 * 12) / 4) / 240, places=4)
+        self.assertGreater(grid_tile_aspect(0, max_extent=210, spacing=12, tile_height=240), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

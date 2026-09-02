@@ -11,7 +11,7 @@ from ....domain.type_chart import BUCKETS
 from ...components import SectionHeader, Sprite
 from ...components.pokemon import BstPill, SidePanel, StatBlock, TypeChip
 from ...tasks import is_mounted
-from ...theme import IconSize, Palette, Radius, Space
+from ...theme import Accent, IconSize, Palette, Radius, Space
 from .store import BoxDetail
 
 _BUCKET_LABELS: dict[float, str] = {4.0: "4×", 2.0: "2×", 1.0: "1×", 0.5: "½×", 0.25: "¼×", 0.0: "0×"}
@@ -33,7 +33,7 @@ class DetailPanel(SidePanel):
         on_toggle_planned: Callable[[UUID, bool], None],
         on_delete: Callable[[UUID], None],
     ) -> None:
-        super().__init__("Details", on_close=on_close)
+        super().__init__("Details", on_close=on_close, accent=Accent.BOX)
         self.detail: BoxDetail | None = None
         self.form_id: str | None = None
         self._on_form = on_form
@@ -63,7 +63,7 @@ class DetailPanel(SidePanel):
         self._abilities = ft.Row(spacing=Space.XS, wrap=True, tight=True)
         self._defensive = ft.Column(spacing=Space.XS, tight=True)
         self._teams = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False)
-        self._notes_header = SectionHeader("Notes")
+        self._notes_header = SectionHeader("Notes", accent=Accent.BOX)
         self._notes = ft.TextField(
             multiline=True, min_lines=2, max_lines=5, dense=True, hint_text="Nickname, role, reminders…",
             on_blur=lambda e: self._save_notes(e.control.value or ""),
@@ -85,11 +85,11 @@ class DetailPanel(SidePanel):
                 controls=[self.sprite, self._forms, self._types, self._subtitle,
                           ft.Row(spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER, controls=[self._bst, self._star])],
             ),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Stats"), self._stats]),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Abilities"), self._abilities]),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Defensive"), self._defensive]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Stats", accent=Accent.BOX), self._stats]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Abilities", accent=Accent.BOX), self._abilities]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Defensive", accent=Accent.BOX), self._defensive]),
             ft.Column(spacing=Space.SM, tight=True, controls=[self._notes_header, self._notes]),
-            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Tags"), self._tags, self._tag_input]),
+            ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Tags", accent=Accent.BOX), self._tags, self._tag_input]),
             self._teams,
             ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._planned_button, self._delete_button]),
         ]

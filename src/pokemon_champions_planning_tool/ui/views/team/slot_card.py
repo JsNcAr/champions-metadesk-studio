@@ -33,6 +33,12 @@ class SlotCallbacks:
     on_focus: Callable[[int], None]
 
 
+SLOT_CARD_MAX_EXTENT = 600      # 3 columns at 1440, 2 beside the summary, 1 below ~1200 with it open
+SLOT_CARD_HEIGHT = 404          # header + form/ability/tera row + item + 2×2 moves + footer
+SLOT_CARD_WRAP_WIDTH = 430      # narrower tiles wrap form/ability/tera onto extra lines…
+SLOT_CARD_HEIGHT_NARROW = 500   # …so the card grows to keep the footer visible
+
+
 class SlotCard(ft.Container):
     def __init__(self, position: int, callbacks: SlotCallbacks) -> None:
         super().__init__()
@@ -48,7 +54,7 @@ class SlotCard(ft.Container):
             spacing=Space.SM,
             controls=[
                 ft.Text(f"Slot {position}", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT),
-                ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=IconSize.LG, color=Palette.DISABLED),
+                ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=IconSize.LG, color=Palette.SECONDARY),
                 ft.FilledTonalButton("Assign Pokémon", icon=ft.Icons.ADD, on_click=lambda _e: self.cb.on_assign(self.position)),
             ],
         )
@@ -187,7 +193,7 @@ class SlotCard(ft.Container):
         entry, member, form = slot.entry, slot.member, slot.form
         pokemon = entry.pokemon
         primary = form.types[0] if form.types else None
-        self._header.bgcolor = alpha(type_color(primary), 0.18)
+        self._header.bgcolor = alpha(type_color(primary), 0.30)
         self.sprite.set_src(form.sprite_url)
         self.sprite.set_tooltip(pokemon.display_name)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if form.is_mega else "type"), primary)

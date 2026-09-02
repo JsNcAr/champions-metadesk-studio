@@ -128,3 +128,23 @@ class Debouncer(Generic[T]):
 
     def cancel(self) -> None:
         self._generation += 1
+
+
+def grid_tile_aspect(available_width: float, *, max_extent: int, spacing: int, tile_height: int) -> float:
+    """``child_aspect_ratio`` that gives GridView tiles a fixed height at this width.
+
+    Mirrors Flutter's SliverGridDelegateWithMaxCrossAxisExtent: the column count is
+    ``ceil(width / (max_extent + spacing))`` and tiles share the remaining width, so the
+    only way to hold tile *height* constant across window sizes is to recompute the
+    aspect ratio whenever the width changes.
+    """
+    return max(0.1, grid_tile_width(available_width, max_extent=max_extent, spacing=spacing) / float(tile_height))
+
+
+def grid_tile_width(available_width: float, *, max_extent: int, spacing: int) -> float:
+    """Width Flutter will give each GridView tile (max-extent delegate)."""
+    import math
+
+    width = max(1.0, float(available_width))
+    columns = max(1, math.ceil(width / (max_extent + spacing)))
+    return (width - spacing * (columns - 1)) / columns

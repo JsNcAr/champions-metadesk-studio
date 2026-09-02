@@ -40,7 +40,7 @@ class EmptyState(ft.Container):
             spacing=Space.SM,
             tight=True,
             controls=[
-                ft.Icon(icon, size=IconSize.EMPTY_STATE, color=Palette.DISABLED),
+                ft.Icon(icon, size=IconSize.EMPTY_STATE, color=Palette.SECONDARY),
                 self._title,
                 self._description,
                 ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=Space.SM, controls=buttons, visible=bool(buttons)),

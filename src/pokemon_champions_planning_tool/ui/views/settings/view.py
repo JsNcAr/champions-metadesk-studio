@@ -13,7 +13,7 @@ from ... import events
 from ...components import KeyValueList, PageHeader, Panel, SectionHeader
 from ...context import AppContext
 from ...format import absolute_time, plural, relative_time
-from ...theme import IconSize, Palette, Radius, Space
+from ...theme import Accent, IconSize, Palette, Radius, Space
 from .store import SettingsStatus, SettingsStore
 
 _MAX_WIDTH = 720
@@ -89,7 +89,7 @@ class SettingsView(ft.Column):
         self.ctx = ctx
         self.store = store or SettingsStore()
 
-        self.header = PageHeader("Settings")
+        self.header = PageHeader("Settings", icon=ft.Icons.SETTINGS, accent=Accent.SETTINGS)
         self.row_megas = SyncRow(ft.Icons.BOLT, "Mega Evolutions", lambda: self._sync("megas"))
         self.row_items = SyncRow(ft.Icons.DIAMOND_OUTLINED, "Held items", lambda: self._sync("items"))
         self.row_tournaments = SyncRow(ft.Icons.EMOJI_EVENTS_OUTLINED, "Tournaments", lambda: self._sync("tournaments"))

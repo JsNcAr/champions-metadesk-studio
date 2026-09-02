@@ -19,10 +19,10 @@ ViewMode = str  # "grid" | "table"
 
 
 class _FilterChip(ft.Chip):
-    def __init__(self, label: str, *, icon: str | None = None, on_toggle: Callable[[bool], None]) -> None:
+    def __init__(self, label: str, *, icon: str | None = None, icon_color: str | None = None, on_toggle: Callable[[bool], None]) -> None:
         super().__init__(
             label=ft.Text(label),
-            leading=ft.Icon(icon, size=16) if icon else None,
+            leading=ft.Icon(icon, size=16, color=icon_color) if icon else None,
             selected=False,
             show_checkmark=False,
             on_select=lambda e: on_toggle(bool(e.control.selected)),
@@ -79,27 +79,27 @@ class BoxToolbar(ft.Column):
 
         self._type_chip = ft.Chip(
             label=ft.Text("Type"),
-            leading=ft.Icon(ft.Icons.CATEGORY_OUTLINED, size=16),
+            leading=ft.Icon(ft.Icons.CATEGORY_OUTLINED, size=16, color=Palette.SECONDARY),
             selected=False,
             show_checkmark=False,
             on_select=lambda e: self._toggle_drawer("types", bool(e.control.selected)),
         )
         self._bst_chip = ft.Chip(
             label=ft.Text("BST"),
-            leading=ft.Icon(ft.Icons.FUNCTIONS, size=16),
+            leading=ft.Icon(ft.Icons.FUNCTIONS, size=16, color=Palette.TERTIARY),
             selected=False,
             show_checkmark=False,
             on_select=lambda e: self._toggle_drawer("bst", bool(e.control.selected)),
         )
         self._stats_chip = ft.Chip(
             label=ft.Text("Stats"),
-            leading=ft.Icon(ft.Icons.BAR_CHART, size=16),
+            leading=ft.Icon(ft.Icons.BAR_CHART, size=16, color=Palette.WARNING),
             selected=False,
             show_checkmark=False,
             on_select=lambda e: self._toggle_drawer("stats", bool(e.control.selected)),
         )
-        self._fav_chip = _FilterChip("Favourites", icon=ft.Icons.STAR_OUTLINE, on_toggle=lambda v: self._set(favourites_only=v))
-        self._mega_chip = _FilterChip("Mega-capable", icon=ft.Icons.BOLT, on_toggle=lambda v: self._set(mega_capable_only=v))
+        self._fav_chip = _FilterChip("Favourites", icon=ft.Icons.STAR_OUTLINE, icon_color=Palette.PRIMARY, on_toggle=lambda v: self._set(favourites_only=v))
+        self._mega_chip = _FilterChip("Mega-capable", icon=ft.Icons.BOLT, icon_color=Palette.PRIMARY, on_toggle=lambda v: self._set(mega_capable_only=v))
         self._tags_label = ft.Text("Tags", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
         self._tags_menu = ft.PopupMenuButton(content=_menu_chip(ft.Icons.TAG, self._tags_label), items=[], tooltip="Filter by tag")
 

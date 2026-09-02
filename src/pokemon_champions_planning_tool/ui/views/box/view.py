@@ -11,9 +11,9 @@ from ... import events
 from ...components import EmptyState, PageHeader
 from ...components.banner import InlineBanner
 from ...context import AppContext
-from ...tasks import is_mounted
-from ...theme import OVERLAY_SHADOW, Layout, Motion, Palette, Radius, Space
-from .card import CARD_ASPECT, CARD_ASPECT_WITH_STATS, CARD_MAX_EXTENT, PokemonCard
+from ...tasks import grid_tile_aspect, is_mounted
+from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Motion, OVERLAY_SHADOW, Palette, Radius, Space
+from .card import CARD_HEIGHT, CARD_HEIGHT_WITH_STATS, CARD_MAX_EXTENT, PokemonCard
 from .detail_panel import DetailPanel
 from .filters import BoxFilters, SortKey
 from .store import BoxStore
@@ -46,13 +46,14 @@ class BoxView(ft.Row):
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
         self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, on_click=lambda _e: self._export())
-        self.header = PageHeader("Box", count=0, actions=[self._add_spinner, self._add_field, self._export_button])
+        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._add_spinner, self._add_field, self._export_button])
 
         # -- toolbar ---------------------------------------------------------------------------
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats)
 
         # -- content ---------------------------------------------------------------------------
-        self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=CARD_ASPECT, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
+        self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
+        self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=1.0, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
         self.table = BoxTable(on_sort=self._on_table_sort, on_select=self._select, on_check=self._check)
         self.table.visible = False
         self._empty = EmptyState(ft.Icons.INVENTORY_2_OUTLINED, "Your box is empty", "Add a Pokémon by name to start planning.", action_label="Add a Pokémon", on_action=self._focus_add)
@@ -115,6 +116,7 @@ class BoxView(ft.Row):
         )
         self.controls = [ft.Container(content=left, expand=True, padding=ft.Padding.only(right=Space.LG)), self.detail]
 
+        self._relayout()
         self.store.subscribe(self._on_store_change)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
 
@@ -259,7 +261,6 @@ class BoxView(ft.Row):
 
     def _set_show_stats(self, show: bool) -> None:
         self.show_stats = show
-        self.grid.child_aspect_ratio = CARD_ASPECT_WITH_STATS if show else CARD_ASPECT
         self._render()
         self._update_self()
 
@@ -425,7 +426,25 @@ class BoxView(ft.Row):
         if is_mounted(field):
             self.ctx.page.run_task(field.focus)
 
+    # -- layout ----------------------------------------------------------------------------------------------
+
+    def handle_resize(self, width: float, height: float) -> None:
+        self._page_width = width
+        self._relayout()
+
+    def _relayout(self) -> None:
+        """Keep card height constant: the grid derives tile height from tile width."""
+        available = (
+            self._page_width - Layout.RAIL_WIDTH - 1 - 2 * Space.PAGE_PADDING - Space.LG
+            - (Layout.SIDE_PANEL_WIDTH if self.detail.visible else 0)
+        )
+        self.grid.child_aspect_ratio = grid_tile_aspect(
+            available, max_extent=CARD_MAX_EXTENT, spacing=Space.GRID_GAP,
+            tile_height=CARD_HEIGHT_WITH_STATS if self.show_stats else CARD_HEIGHT,
+        )
+
     def _update_self(self) -> None:
+        self._relayout()
         if is_mounted(self):
             self.update()
 

@@ -5,7 +5,7 @@ Views and components use ``Palette``, ``Space``, ``Radius``, ``FontSize``, ``Ico
 and ``alpha`` — never literals (``tests/test_ui_theme_lint.py`` enforces it).
 """
 
-from .build import FONT_FAMILY, INTER_FONT_URL, apply_theme, build_color_scheme, build_text_theme, build_theme
+from .build import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, FONT_FAMILY, INTER_FONT_URL, apply_theme, build_color_scheme, build_text_theme, build_theme
 from .tokens import (
     OVERLAY_SHADOW,
     STAT_COLORS,
@@ -19,6 +19,7 @@ from .tokens import (
     IconSize,
     Layout,
     Motion,
+    Accent,
     Palette,
     Radius,
     Space,
@@ -28,6 +29,8 @@ from .tokens import (
 )
 
 __all__ = [
+    "DEFAULT_WINDOW_HEIGHT",
+    "DEFAULT_WINDOW_WIDTH",
     "FONT_FAMILY",
     "INTER_FONT_URL",
     "OVERLAY_SHADOW",

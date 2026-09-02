@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 import flet as ft
 
-from ..theme import Layout, Palette, Radius, Space
+from ..theme import IconSize, Layout, Palette, Radius, Space, alpha
 
 
 class PageHeader(ft.Container):
@@ -20,12 +20,23 @@ class PageHeader(ft.Container):
         count: int | str | None = None,
         caption: str | None = None,
         actions: Sequence[ft.Control] = (),
+        icon: str | None = None,
+        accent: str = Palette.SECONDARY,
     ) -> None:
         super().__init__()
+        self._icon = ft.Container(
+            content=ft.Icon(icon or ft.Icons.CIRCLE, size=IconSize.MD, color=accent),
+            width=36,
+            height=36,
+            border_radius=Radius.MD,
+            bgcolor=alpha(accent, 0.16),
+            alignment=ft.Alignment.CENTER,
+            visible=icon is not None,
+        )
         self._title = ft.Text(title, theme_style=ft.TextThemeStyle.TITLE_LARGE, color=Palette.ON_SURFACE)
         self._count = ft.Container(
-            content=ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
-            bgcolor=Palette.SURFACE_3,
+            content=ft.Text("", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=accent),
+            bgcolor=alpha(accent, 0.16),
             border_radius=Radius.PILL,
             padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=2),
             visible=False,
@@ -42,7 +53,7 @@ class PageHeader(ft.Container):
                 ft.Row(
                     spacing=Space.MD,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[self._title, self._count, self._caption],
+                    controls=[self._icon, self._title, self._count, self._caption],
                 ),
                 self._actions,
             ],

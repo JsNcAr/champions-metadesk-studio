@@ -17,18 +17,18 @@ class Palette:
     """Semantic colour roles for the dark theme."""
 
     # Surfaces, from the page background up to overlays.
-    BG = "#0F172A"
-    SURFACE_1 = "#172033"       # side panels, table rows, grouped lists
-    SURFACE_2 = "#1E293B"       # cards, tiles, inputs, toolbars
-    SURFACE_3 = "#273447"       # hover, selected rows, chips, menus
-    SURFACE_4 = "#2F3D52"       # dialogs, sheets, tooltips
-    OUTLINE = "#3B4A63"         # borders that need definition
-    OUTLINE_VARIANT = "#263244" # hairlines, dividers
+    BG = "#0B1120"
+    SURFACE_1 = "#141D31"       # side panels, table rows, grouped lists
+    SURFACE_2 = "#1C2740"       # cards, tiles, inputs, toolbars
+    SURFACE_3 = "#2B3A56"       # hover, selected rows, chips, menus
+    SURFACE_4 = "#354769"       # dialogs, sheets, tooltips
+    OUTLINE = "#4A5C7E"         # borders that need definition
+    OUTLINE_VARIANT = "#2E3D5A" # hairlines, dividers
     SCRIM = "#000000"
 
     # Text.
     ON_SURFACE = "#F1F5F9"
-    ON_SURFACE_VARIANT = "#A3B0C2"
+    ON_SURFACE_VARIANT = "#B4C0D3"
     DISABLED = "#64748B"        # disabled / placeholder only, never body text
 
     # Accent — interactive and selected elements only, never headers or metadata.
@@ -70,6 +70,16 @@ class Palette:
     # Placement badge for 2nd place (silver); 1st uses PRIMARY, top 4 TERTIARY_CONTAINER.
     SILVER = "#CBD5E1"
     ON_SILVER = "#0B1220"
+
+
+class Accent:
+    """One hue per section, used on its page header, panels and section headers so a
+    screen reads as "Box" (blue), "Teams" (green) or "Meta" (purple) at a glance."""
+
+    BOX = Palette.SECONDARY
+    TEAMS = Palette.SUCCESS
+    META = Palette.TERTIARY
+    SETTINGS = Palette.ON_SURFACE_VARIANT
 
 
 class Space:
@@ -194,7 +204,7 @@ STAT_COLORS: dict[str, str] = {
     "special_defense": "#4ADE80",
     "speed": "#F472B6",
 }
-STAT_TRACK = "#334155"
+STAT_TRACK = "#2E3D5A"
 STAT_MAX = 255
 
 STAT_ORDER: tuple[str, ...] = ("hp", "attack", "defense", "special_attack", "special_defense", "speed")

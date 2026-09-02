@@ -12,13 +12,17 @@ from ..theme import Palette, Radius, Space
 class SectionHeader(ft.Row):
     """Uppercase overline label with room for a trailing action and a status caption."""
 
-    def __init__(self, label: str, *, action: ft.Control | None = None, status: str | None = None) -> None:
+    def __init__(self, label: str, *, action: ft.Control | None = None, status: str | None = None, accent: str = Palette.SECONDARY) -> None:
         super().__init__(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
-        self._label = ft.Text(
-            label.upper(), theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT
+        self._bar = ft.Container(width=3, height=12, border_radius=Radius.PILL, bgcolor=accent)
+        self._label = ft.Row(
+            spacing=Space.SM,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[self._bar, ft.Text(label.upper(), theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)],
         )
         self._status = ft.Text(
             status or "", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT,

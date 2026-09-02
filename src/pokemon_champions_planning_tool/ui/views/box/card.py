@@ -14,8 +14,8 @@ from ...tasks import is_mounted
 from ...theme import IconSize, Motion, Palette, Radius, Space, alpha, type_color
 
 CARD_MAX_EXTENT = 210
-CARD_ASPECT = 0.88             # band + sprite + name + caption + types + tags
-CARD_ASPECT_WITH_STATS = 0.66  # tags row hidden, six stat bars shown
+CARD_HEIGHT = 240             # band + sprite + name + caption + types + tags
+CARD_HEIGHT_WITH_STATS = 336  # tags row hidden, six stat bars shown
 
 
 class PokemonCard(ft.Container):
@@ -119,7 +119,7 @@ class PokemonCard(ft.Container):
         self._planned.visible = entry.is_planned
 
         primary_type = pokemon.types[0] if pokemon.types else None
-        self._band.bgcolor = alpha(Palette.TERTIARY if entry.is_planned else type_color(primary_type), 0.22)
+        self._band.bgcolor = alpha(Palette.TERTIARY if entry.is_planned else type_color(primary_type), 0.32)
         self.sprite.set_src(pokemon.sprite_url)
         self.sprite.set_tooltip(pokemon.display_name)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if mega_capable else "type"), primary_type)

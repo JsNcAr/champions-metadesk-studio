@@ -10,14 +10,14 @@ from ....domain.entities.team_member import TeamMember
 from ... import events
 from ...components import EmptyState, PageHeader, StatusChip
 from ...context import AppContext
-from ...tasks import is_mounted
-from ...theme import Layout, Palette, Space
+from ...tasks import grid_tile_aspect, grid_tile_width, is_mounted
+from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Palette, Space
 from .dialogs.assign import AssignDialog
 from .dialogs.export_dialog import ExportDialog
 from .dialogs.import_dialog import ImportDialog
 from .dialogs.item_picker import ItemPickerDialog
 from .dialogs.spread import SpreadDialog
-from .slot_card import SlotCallbacks, SlotCard
+from .slot_card import SLOT_CARD_HEIGHT, SLOT_CARD_HEIGHT_NARROW, SLOT_CARD_MAX_EXTENT, SLOT_CARD_WRAP_WIDTH, SlotCallbacks, SlotCard
 from .store import TeamStore
 from .summary_panel import SummaryPanel
 
@@ -59,7 +59,7 @@ class TeamView(ft.Column):
                 ft.PopupMenuItem(content=ft.Text("Delete team"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.ctx.page.run_task(self._delete_team)),
             ],
         )
-        self.header = PageHeader("Teams", actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
+        self.header = PageHeader("Teams", icon=ft.Icons.GROUPS, accent=Accent.TEAMS, actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
         self._team_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True,
                                 controls=[self._team_select, self._rename, self._health])
 
@@ -79,7 +79,8 @@ class TeamView(ft.Column):
             on_focus=self._focus,
         )
         self.cards = [SlotCard(p, callbacks) for p in range(1, 7)]
-        self.grid = ft.GridView(expand=True, max_extent=480, child_aspect_ratio=1.15, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, controls=list(self.cards))
+        self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
+        self.grid = ft.GridView(expand=True, max_extent=SLOT_CARD_MAX_EXTENT, child_aspect_ratio=1.15, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, controls=list(self.cards))
         self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=self._focus)
         self._empty = EmptyState(ft.Icons.GROUPS_OUTLINED, "No teams yet", "Create a team, or import one from a Showdown paste or the Meta explorer.",
                                  action_label="Create team", on_action=lambda: self.ctx.page.run_task(self._new_team),
@@ -88,6 +89,7 @@ class TeamView(ft.Column):
         self._body = ft.Row(spacing=Space.LG, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                             controls=[ft.Container(content=ft.Column(expand=True, controls=[self.grid, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty])]), expand=True), self.summary])
         self.controls = [self.header, self._team_row, self._body]
+        self._relayout()
 
         self.store.subscribe(self._on_store_change)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self._reload_if_loaded())
@@ -332,9 +334,25 @@ class TeamView(ft.Column):
     def _toggle_summary(self) -> None:
         self.summary.visible = not self.summary.visible
         self._summary_toggle.selected = self.summary.visible
+        self._relayout()
         self._update_self()
 
+    def handle_resize(self, width: float, height: float) -> None:
+        self._page_width = width
+        self._relayout()
+
+    def _relayout(self) -> None:
+        """Slot cards keep a fixed height whatever the window or summary panel does."""
+        available = (
+            self._page_width - Layout.RAIL_WIDTH - 1 - 2 * Space.PAGE_PADDING
+            - ((Layout.SIDE_PANEL_WIDTH + Space.LG) if self.summary.visible else 0)
+        )
+        tile_width = grid_tile_width(available, max_extent=SLOT_CARD_MAX_EXTENT, spacing=Space.GRID_GAP)
+        height = SLOT_CARD_HEIGHT_NARROW if tile_width < SLOT_CARD_WRAP_WIDTH else SLOT_CARD_HEIGHT
+        self.grid.child_aspect_ratio = grid_tile_aspect(available, max_extent=SLOT_CARD_MAX_EXTENT, spacing=Space.GRID_GAP, tile_height=height)
+
     def _update_self(self) -> None:
+        self._relayout()
         if is_mounted(self):
             self.update()
 

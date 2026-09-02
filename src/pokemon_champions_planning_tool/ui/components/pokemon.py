@@ -150,8 +150,9 @@ class IdentityRow(ft.Row):
 class SidePanel(ft.Container):
     """360px right panel with a title row and scrollable body; hairline on the left."""
 
-    def __init__(self, title: str, *, on_close, width: int = 360) -> None:
+    def __init__(self, title: str, *, on_close, width: int = 360, accent: str = Palette.SECONDARY) -> None:
         super().__init__()
+        self.accent = accent
         self._title = ft.Text(title, theme_style=ft.TextThemeStyle.TITLE_MEDIUM, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
         self.body = ft.Column(spacing=Space.LG, expand=True, scroll=ft.ScrollMode.AUTO)
         self.content = ft.Column(
@@ -167,7 +168,7 @@ class SidePanel(ft.Container):
         )
         self.width = width
         self.bgcolor = Palette.SURFACE_1
-        self.border = ft.Border.only(left=ft.BorderSide(1, Palette.OUTLINE_VARIANT))
+        self.border = ft.Border.only(left=ft.BorderSide(3, accent))
         self.padding = Space.PANEL_PADDING
         self.visible = False
 

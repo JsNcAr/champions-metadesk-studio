@@ -9,6 +9,7 @@ import flet as ft
 
 from ....domain.type_chart import BUCKETS
 from ...components import SectionHeader, Sprite
+from ...components.banner import InlineBanner
 from ...components.pokemon import BstPill, SidePanel, StatBlock, TypeChip
 from ...tasks import is_mounted
 from ...theme import Accent, IconSize, Palette, Radius, Space
@@ -33,6 +34,7 @@ class DetailPanel(SidePanel):
         on_toggle_planned: Callable[[UUID, bool], None],
         on_delete: Callable[[UUID], None],
         on_add_to_team: Callable[[UUID, UUID | None], None] | None = None,
+        on_refresh: Callable[[UUID], None] | None = None,
     ) -> None:
         super().__init__("Details", on_close=on_close, accent=Accent.BOX)
         self.detail: BoxDetail | None = None
@@ -72,6 +74,10 @@ class DetailPanel(SidePanel):
         self._tags = ft.Row(spacing=Space.XS, wrap=True, tight=True)
         self._tag_input = ft.TextField(hint_text="Add tag…", dense=True, width=160, on_submit=lambda e: self._add_tag(e.control.value or ""))
         self._planned_button = ft.OutlinedButton("Mark as planned", icon=ft.Icons.EDIT_NOTE, on_click=lambda _e: self._toggle_planned())
+        self._on_refresh = on_refresh
+        self._refresh_banner = InlineBanner(visible=False)
+        self._refresh_button = ft.FilledTonalButton("Refresh data", icon=ft.Icons.REFRESH, visible=False,
+                                                    on_click=lambda _e: self._on_refresh(self.detail.entry.box_entry_id) if (self._on_refresh and self.detail) else None)
         self._on_add_to_team = on_add_to_team
         self._team_items: list[ft.PopupMenuItem] = []
         self._add_to_team = ft.PopupMenuButton(
@@ -100,6 +106,8 @@ class DetailPanel(SidePanel):
             ft.Column(spacing=Space.SM, tight=True, controls=[self._notes_header, self._notes]),
             ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Tags", accent=Accent.BOX), self._tags, self._tag_input]),
             self._teams,
+            self._refresh_banner,
+            self._refresh_button,
             self._add_to_team,
             ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._planned_button, self._delete_button]),
             ft.Container(height=Space.XL),
@@ -155,6 +163,7 @@ class DetailPanel(SidePanel):
             self._teams.visible = True
         else:
             self._teams.visible = False
+        self.set_incomplete(entry.pokemon.is_stub)
         self.visible = True
 
     def _render_defensive(self, buckets: dict[float, list[str]]) -> None:
@@ -220,6 +229,13 @@ class DetailPanel(SidePanel):
     def _toggle_planned(self) -> None:
         if self.detail:
             self._on_toggle_planned(self.detail.entry.box_entry_id, not self.detail.entry.is_planned)
+
+    def set_incomplete(self, incomplete: bool) -> None:
+        self._refresh_button.visible = incomplete and self._on_refresh is not None
+        if incomplete:
+            self._refresh_banner.show("No PokéAPI data is stored for this Pokémon (types and stats are missing). Refresh to fetch it.", "warning")
+        else:
+            self._refresh_banner.hide()
 
     def set_team_options(self, options: list[tuple[UUID | None, str]]) -> None:
         """(team id or None for "New team…", label) rows for the Add to team menu."""

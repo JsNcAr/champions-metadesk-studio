@@ -130,6 +130,7 @@ class BoxView(ft.Row):
             on_toggle_planned=self._toggle_planned,
             on_delete=self._delete,
             on_add_to_team=self._add_to_team,
+            on_refresh=self._refresh_entry,
         )
 
         left = ft.Column(
@@ -495,6 +496,24 @@ class BoxView(ft.Row):
         self.toolbar.set_saved_views(sorted(views))
         self.ctx.toast(f"Forgot view “{name.strip()}”", "info")
         self._update_self()
+
+    # -- placeholder repair -----------------------------------------------------------------------
+
+    def _refresh_entry(self, entry_id: UUID) -> None:
+        entry = self.store.entry(entry_id)
+        name = entry.pokemon.display_name if entry else "Pokémon"
+
+        def done(ok: bool) -> None:
+            if not ok:
+                self.ctx.toast(f"Couldn't fetch {name} from PokéAPI — try again when online", "error")
+                return
+            self.store.load()
+            self.store.select(entry_id)
+            self.ctx.bus.emit(events.BOX_CHANGED, None)
+            self.ctx.toast(f"{name} data refreshed", "success")
+            self._update_self()
+
+        self.ctx.run_in_background(lambda: self.store.refresh_entry(entry_id), on_done=done, on_error=lambda exc: self.ctx.toast(f"Refresh failed: {exc}", "error"))
 
     # -- add to team --------------------------------------------------------------------------------------
 

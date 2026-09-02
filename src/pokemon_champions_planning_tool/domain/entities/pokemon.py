@@ -52,6 +52,11 @@ class Pokemon(BaseModel):
 
     @computed_field(return_type=int)
     @property
+    def is_stub(self) -> bool:
+        """True for a placeholder written without PokéAPI data (no types, no stats)."""
+        return not self.types and self.stats.total == 0
+
+    @property
     def total(self) -> int:
         """Expose the derived stat total for convenience."""
 

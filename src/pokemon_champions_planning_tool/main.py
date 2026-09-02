@@ -3,6 +3,7 @@ from .infrastructure.database.database import initialize_database, get_session
 from .services.champions_catalog_service import sync_champions_catalog_on_startup
 from .services.items_catalog_service import sync_items_catalog
 from .services.move_catalog_service import sync_move_catalog_on_startup
+from .services.pokemon_import_service import refresh_stub_pokemon
 from .services.terminal_shell import TerminalShell
 
 
@@ -43,6 +44,10 @@ def run():
         if _startup_check_due(session, "startup.items_checked_at"):
             sync_items_catalog(session)
         sync_move_catalog_on_startup(session)
+        try:
+            refresh_stub_pokemon(session)
+        except Exception as exc:  # noqa: BLE001 - repair is best-effort
+            print(f"⚠️ Box data repair skipped: {exc}")
 
     if "--cli" in sys.argv:
         TerminalShell().run()

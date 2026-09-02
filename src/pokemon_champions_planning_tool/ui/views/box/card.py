@@ -119,7 +119,12 @@ class PokemonCard(ft.Container):
         self._star.icon = ft.Icons.STAR if entry.is_favorite else ft.Icons.STAR_BORDER
         self._star.icon_color = Palette.PRIMARY if entry.is_favorite else Palette.ON_SURFACE_VARIANT
         self._bst.set_total(pokemon.total)
-        self._planned.visible = entry.is_planned
+        if pokemon.is_stub:
+            self._planned.set("Incomplete data", "warning", icon=ft.Icons.WARNING_AMBER_ROUNDED, tooltip="No PokéAPI data stored — open the details and press Refresh data")
+            self._planned.visible = True
+        else:
+            self._planned.set("Planned", "tertiary", icon=ft.Icons.EDIT_NOTE)
+            self._planned.visible = entry.is_planned
 
         primary_type = pokemon.types[0] if pokemon.types else None
         self._band.bgcolor = alpha(Palette.TERTIARY if entry.is_planned else type_color(primary_type), 0.32)

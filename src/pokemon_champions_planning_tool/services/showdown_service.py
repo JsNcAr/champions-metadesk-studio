@@ -584,6 +584,16 @@ class ImportedTeam:
     reused: tuple[str, ...]            # display names that were already in the box
 
 
+def _fetch_official(species_name: str, form_key: str | None) -> Pokemon | None:
+    """PokéAPI lookup for an imported species; tries the display name, then the form key."""
+    from ..infrastructure.pokeapi.pokeapi_retrieval import get_official_stats
+
+    try:
+        return get_official_stats(species_name) or (get_official_stats(form_key) if form_key else None)
+    except Exception:  # noqa: BLE001 - offline or throttled: the caller stores a placeholder
+        return None
+
+
 def commit_team_import(
     session,
     parsed: ParsedTeamResult,
@@ -646,9 +656,15 @@ def commit_team_import(
             reused.append(slot.species_name)
         else:
             record = pokemon_repo.get(slot.showdown_form_key) or pokemon_repo.get(slot.species_name.lower())
-            if record is not None:
-                pokemon = record.to_domain()
-            else:
+            pokemon = record.to_domain() if record is not None else None
+            if pokemon is None or pokemon.is_stub:
+                # Real data from PokéAPI when reachable; a placeholder (no types, zero
+                # stats) only offline, and it is repaired at the next launch.
+                fetched = _fetch_official(slot.species_name, slot.showdown_form_key)
+                if fetched is not None:
+                    pokemon_repo.upsert(fetched)
+                    pokemon = fetched
+            if pokemon is None:
                 pokemon = Pokemon(
                     canonical_id=slot.showdown_form_key,
                     display_name=slot.species_name,

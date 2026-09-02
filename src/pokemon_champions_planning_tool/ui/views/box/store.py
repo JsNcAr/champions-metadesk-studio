@@ -30,7 +30,7 @@ from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import MegaEvolutionRecord
 from ....infrastructure.database.repositories import BoxRepository, MegaEvolutionRepository, TeamRepository
 from ....services.mega_evolution_service import sync_mega_evolutions_for_species
-from ....services.pokemon_import_service import add_pokemon_to_box
+from ....services.pokemon_import_service import add_pokemon_to_box, refresh_pokemon_record
 from ...catalogs import Catalogs
 from .filters import BoxFilters, apply_filters
 
@@ -288,6 +288,14 @@ class BoxStore:
     def add_by_name(self, name: str) -> BoxEntry:
         """Blocking: resolves the species (PokéAPI on a miss) and stores it."""
         return add_pokemon_to_box(name)
+
+    def refresh_entry(self, entry_id: UUID) -> bool:
+        """Blocking: re-fetch a placeholder Pokémon's data from PokéAPI and reload."""
+        entry = self.entry(entry_id)
+        if entry is None:
+            return False
+        fetched = refresh_pokemon_record(entry.pokemon.canonical_id, entry.pokemon.display_name)
+        return fetched is not None
 
     def fetch_megas(self, species_name: str) -> list[MegaEvolutionRecord]:
         """Blocking: look up mega forms for a species the catalogue has not checked yet."""

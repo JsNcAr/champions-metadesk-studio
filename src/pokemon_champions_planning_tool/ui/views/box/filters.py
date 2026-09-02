@@ -136,6 +136,10 @@ def matches(entry: BoxEntry, f: BoxFilters, mega_species: frozenset[str] | set[s
         return False
     if f.mega_capable_only and (pokemon.species_name or "").lower() not in mega_species:
         return False
+    if pokemon.is_stub:
+        # No data to judge: keep the entry visible (with its "incomplete data" mark)
+        # rather than silently hiding it behind the stat ranges.
+        return not f.tags or bool(f.tags & {t.lower() for t in entry.tags})
     lo, hi = f.bst_range
     if not lo <= pokemon.total <= hi:
         return False

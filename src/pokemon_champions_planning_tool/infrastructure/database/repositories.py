@@ -1035,8 +1035,13 @@ class TournamentRepository:
                 .group_by(TournamentTeamMemberRecord.tournament_team_id)
                 .subquery("roster_hits")
             )
-            stmt = stmt.outerjoin(hits, hits.c.team_id == TournamentTeamRecord.tournament_team_id).where(
-                TournamentTeamRecord.member_count - func.coalesce(hits.c.hits, 0) <= max_missing
+            missing = TournamentTeamRecord.member_count - func.coalesce(hits.c.hits, 0)
+            # Closest to the box first; search_teams appends date/placement/id after this,
+            # so paging keeps a total order.
+            stmt = (
+                stmt.outerjoin(hits, hits.c.team_id == TournamentTeamRecord.tournament_team_id)
+                .where(missing <= max_missing)
+                .order_by(missing.asc())
             )
 
         if regulation_filter and regulation_filter != "All":

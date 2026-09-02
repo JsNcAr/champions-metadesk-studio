@@ -60,6 +60,10 @@ class TestRepositoryFilter(_Db):
         self.assertEqual(self._players(owned_species=self.OWNED, max_missing=0), ["full", "short"])
         self.assertEqual(self._players(owned_species=self.OWNED, max_missing=1), ["full", "one", "short"])
         self.assertEqual(self._players(owned_species=self.OWNED, max_missing=2), ["full", "one", "short", "two"])
+        with self.sf() as s:
+            ordered = [t.player_name for t in TournamentRepository(s).search_teams(owned_species=self.OWNED, max_missing=2)]
+        self.assertEqual(ordered[:2], ["full", "short"], "closest to the box first")
+        self.assertEqual(ordered[-1], "two")
         self.assertEqual(self._players(owned_species=[], max_missing=1), [], "empty box matches nothing")
         self.assertEqual(len(self._players(owned_species=self.OWNED)), 4, "no threshold: no filtering")
         with self.sf() as s:
@@ -93,6 +97,17 @@ class TestStoreAndView(_Db):
         self.assertIsNone(MetaFilters().max_missing)
         # standings of an event carry the marks too
         self.assertTrue(all(r.missing_count is not None for r in store.teams_for_event("t")))
+        # an empty box marks nothing but still makes the filter reject everything
+        with self.sf() as s:
+            repo = BoxRepository(s)
+            for e in repo.list_entries(include_planned=True):
+                repo.delete_by_canonical_id(e.pokemon.canonical_id)
+            s.commit()
+        store.refresh_box()
+        store.set_filters(MetaFilters(placement="all"))
+        self.assertTrue(all(r.missing_count is None for r in store.load_first_page()))
+        store.set_filters(MetaFilters(placement="all", box="3"))
+        self.assertEqual(store.load_first_page(), [])
 
     def test_view_dropdown_marks_chips_and_empty_states(self):
         page = StubPage()

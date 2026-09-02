@@ -326,7 +326,8 @@ class MetaView(ft.Column):
         self._more_button.content = f"Show more · {self.store.loaded:,} of {self.store.total:,}"
         unit = "event" if self.view_mode == "cards" or self.collapsed else "team"
         shown = len(self._groups) if unit == "event" else self.store.loaded
-        self._order_caption.value = f"Newest events first · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
+        order = "Closest to your box first" if self.store.filters.max_missing is not None else "Newest events first"
+        self._order_caption.value = f"{order} · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
 
     # -- grouping, layout and the event dialog ------------------------------------------------
 
@@ -364,7 +365,8 @@ class MetaView(ft.Column):
     def _render_caption_only(self) -> None:
         unit = "event" if self.view_mode == "cards" or self.collapsed else "team"
         shown = len(self._groups) if unit == "event" else self.store.loaded
-        self._order_caption.value = f"Newest events first · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
+        order = "Closest to your box first" if self.store.filters.max_missing is not None else "Newest events first"
+        self._order_caption.value = f"{order} · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
 
     def _set_view_mode(self, mode: str) -> None:
         self.view_mode = "cards" if mode == "cards" else "rows"

@@ -144,7 +144,10 @@ class MetaStore:
     def _query_kwargs(self) -> dict:
         if not self._box_loaded:
             self.refresh_box()
-        return {**self.filters.to_query_kwargs(), "owned_species": sorted(self.box_species)}
+        # An empty box marks nothing (every row would read "0/6"); the Box filter itself
+        # still needs the list to reject everything, hence [] rather than None there.
+        owned = sorted(self.box_species)
+        return {**self.filters.to_query_kwargs(), "owned_species": owned if (owned or self.filters.max_missing is not None) else None}
 
     def invalidate(self) -> None:
         """New data landed; the next load re-queries even with unchanged filters."""
@@ -178,7 +181,7 @@ class MetaStore:
         """Every Masters team recorded for one event, best placement first, ignoring the
         list filters — the event dialog shows the whole standings."""
         with self._sf() as s:
-            return TournamentService(s).search_team_rows(tournament_id_filter=tournament_id, owned_species=sorted(self.box_species))
+            return TournamentService(s).search_team_rows(tournament_id_filter=tournament_id, owned_species=sorted(self.box_species) or None)
 
     def summary(self) -> MetaSummary:
         with self._sf() as s:

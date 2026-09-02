@@ -158,6 +158,7 @@ class EventCard(ft.Container):
         super().__init__()
         self.row = row
         self._count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
+        box_chip = _box_chip(row)
         winner_actions: list[ft.Control] = []
         if not row.legality_known or row.is_legal:
             winner_actions.append(ft.IconButton(icon=ft.Icons.DOWNLOAD, icon_size=IconSize.MD, tooltip=f"Import {row.player_name}'s team", on_click=lambda _e: on_import(self.row)))
@@ -182,7 +183,7 @@ class EventCard(ft.Container):
                     *winner_actions,
                 ]),
                 ft.Row(spacing=4, controls=[_member_sprite(m, 36) for m in row.members]),
-                *([ft.Row(controls=[_box_chip(row)])] if _box_chip(row) is not None else []),
+                *([ft.Row(controls=[box_chip])] if box_chip is not None else []),
                 ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                     self._count,
                     ft.TextButton("View standings", icon=ft.Icons.LIST_ALT, on_click=lambda _e: on_open(self.row.tournament_id)),

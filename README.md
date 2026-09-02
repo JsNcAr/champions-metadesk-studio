@@ -107,3 +107,12 @@ src/
         ui/                   # Flet GUI views and components (app.py)
 tests/                        # Automated unit & integration test suite
 ```
+
+## Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PCPT_DATABASE` | `pokemon_champions.db` (working directory) | Path of the SQLite database file. |
+| `PCPT_PREFERENCES` | `preferences.json` beside the database | Path of the view-preferences file. |
+
+Example: `PCPT_DATABASE=~/pokemon/champions.db poetry run python -m pokemon_champions_planning_tool.main`

@@ -215,3 +215,5 @@ pyrightconfig.json
 *.db-wal
 *.db-shm
 *.csv
+# View preferences written next to the database at runtime
+preferences.json

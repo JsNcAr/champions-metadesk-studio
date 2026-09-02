@@ -398,6 +398,7 @@ class TournamentService:
         force: bool = False,
         max_age_days: int = 365,
         include_official: bool = True,
+        on_progress: Any = None,
     ) -> dict[str, Any]:
         """Syncs live tournament data from Limitless and Victory Road into local SQLite DB."""
         from .tournament_sync_service import sync_tournaments
@@ -407,5 +408,6 @@ class TournamentService:
             force=force,
             max_age_days=max_age_days,
             include_official=include_official,
+            on_progress=on_progress,
         )
 

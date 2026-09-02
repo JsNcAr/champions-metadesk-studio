@@ -77,6 +77,8 @@ class SettingsStore:
         with self._sf() as s:
             return sync_items_catalog(s, force=True)
 
-    def sync_tournaments(self) -> dict[str, Any]:
+    def sync_tournaments(self, on_progress: Any = None) -> dict[str, Any]:
+        # Not forced: a manual sync lists what is new, drains the standings backlog and
+        # reads only official events not yet ingested. Forcing would re-fetch a year.
         with self._sf() as s:
-            return TournamentService(s).sync(force=True, max_age_days=365, include_official=True)
+            return TournamentService(s).sync(force=False, max_age_days=365, include_official=True, on_progress=on_progress)

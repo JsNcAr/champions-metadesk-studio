@@ -8,7 +8,7 @@ import flet as ft
 
 from ....services.tournament_service import MetaTeamRow
 from ... import events
-from ...components import ActiveFilterChip, EmptyState, PageHeader, skeleton_rows
+from ...components import ActiveFilterChip, EmptyState, PageHeader, SyncIndicator, skeleton_rows
 from ...components.banner import InlineBanner
 from ...context import AppContext
 from ...format import plural, relative_time
@@ -44,7 +44,8 @@ class MetaView(ft.Column):
             icon=ft.Icons.SYNC, icon_size=IconSize.MD, tooltip="Sync tournaments now", on_click=lambda _e: self._sync_now()
         )
         self._sync_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
-        self.header = PageHeader("Meta", icon=ft.Icons.EMOJI_EVENTS, accent=Accent.META, actions=[self._sync_spinner, self._sync_button])
+        self.sync_indicator = SyncIndicator()
+        self.header = PageHeader("Meta", icon=ft.Icons.EMOJI_EVENTS, accent=Accent.META, actions=[self.sync_indicator, self._sync_spinner, self._sync_button])
 
         # -- filter bar ---------------------------------------------------------------
         self._search = ft.TextField(
@@ -153,6 +154,7 @@ class MetaView(ft.Column):
 
         ctx.bus.on(events.META_SYNCED, self._on_meta_synced)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
+        ctx.bus.on(events.SYNC_PROGRESS, self._on_sync_progress)
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -407,18 +409,46 @@ class MetaView(ft.Column):
     # -- sync -----------------------------------------------------------------------------
 
     def _sync_now(self) -> None:
-        def done(result: dict) -> None:
-            self.ctx.toast("Tournament data synced", "success")
-            self.ctx.bus.emit(events.META_SYNCED, result)
-            self.ctx.bus.emit(events.CATALOGS_RELOADED, "tournaments")
+        from ....services.tournament_sync_service import summarize_sync_result, sync_in_progress
 
-        self.ctx.run_in_background(
+        if sync_in_progress():
+            self.ctx.toast("A sync is already running", "info")
+            return
+
+        def done(result: dict) -> None:
+            self.ctx.toast(summarize_sync_result(result), "success" if result.get("status") in ("synced", "partial") else "info")
+            if result.get("status") in ("synced", "partial"):
+                self.ctx.bus.emit(events.META_SYNCED, result)
+                self.ctx.bus.emit(events.CATALOGS_RELOADED, "tournaments")
+
+        self.ctx.sync_tournaments(
             self._sync_store.sync_tournaments,
             on_done=done,
             on_error=lambda exc: self.ctx.toast(f"Tournament sync failed: {exc}", "error"),
             busy=[self._sync_button],
             spinner=self._sync_spinner,
         )
+
+    def _on_sync_progress(self, progress) -> None:
+        self.sync_indicator.update_from(progress)
+        self._sync_button.disabled = progress.running
+        if is_mounted(self._sync_button):
+            self._sync_button.update()
+        if not progress.running:
+            self._hide_indicator_later()
+
+    def _hide_indicator_later(self, delay_s: float = 8.0) -> None:
+        import asyncio
+
+        indicator = self.sync_indicator
+        shown_phase = indicator.phase
+
+        async def _hide() -> None:
+            await asyncio.sleep(delay_s)
+            if indicator.phase == shown_phase:
+                indicator.hide()
+
+        self.ctx.page.run_task(_hide)
 
     def _on_meta_synced(self, result: Any) -> None:
         """Background sync finished. Never reshuffle rows under the user: offer a refresh."""

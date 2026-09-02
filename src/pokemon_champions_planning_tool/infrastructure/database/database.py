@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
+from sqlalchemy import event
 from sqlmodel import SQLModel, Session, create_engine
 
 from pokemon_champions_planning_tool.config import DEFAULT_DATABASE_FILENAME
@@ -21,10 +22,28 @@ def _resolve_database_url(database_filename: str) -> str:
 def get_engine(database_filename: str = DEFAULT_DATABASE_FILENAME):
     """Return a cached SQLite engine."""
 
-    return create_engine(
+    engine = create_engine(
         _resolve_database_url(database_filename),
-        connect_args={"check_same_thread": False},
+        # 30 s: a background sync commits while the UI reads; the default 5 s produced
+        # "database is locked" under a long write.
+        connect_args={"check_same_thread": False, "timeout": 30},
     )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001 - DB-API objects
+        # WAL lets readers and the one writer proceed together instead of taking turns;
+        # NORMAL sync is safe under WAL and much cheaper per commit.
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+        except Exception:  # noqa: BLE001 - e.g. an in-memory database
+            pass
+        finally:
+            cursor.close()
+
+    return engine
 
 
 from sqlalchemy import text

@@ -79,7 +79,19 @@ class SyncRow(ft.Container):
 
     def set_running(self, running: bool) -> None:
         self._bar.visible = running
+        self._bar.value = None
         if running:
+            self.set_result(None)
+
+    def set_progress(self, progress) -> None:
+        """Follow a SyncProgress snapshot: status text and a determinate bar."""
+        self._bar.visible = progress.running
+        self._bar.value = progress.fraction
+        text = progress.message
+        if progress.running and progress.teams_added:
+            text += f" · {progress.teams_added:,} teams"
+        self._status.value = text
+        if progress.running:
             self.set_result(None)
 
 
@@ -127,6 +139,7 @@ class SettingsView(ft.Column):
         ]
 
         ctx.bus.on(events.META_SYNCED, lambda _payload: self.refresh())
+        ctx.bus.on(events.SYNC_PROGRESS, lambda p: self._on_sync_progress(p))
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -171,7 +184,24 @@ class SettingsView(ft.Column):
             self.refresh()
             self.ctx.toast(f"{kind.capitalize()} sync failed: {exc}", "error")
 
+        if kind == "tournaments":
+            from ....services.tournament_sync_service import sync_in_progress
+
+            if sync_in_progress():
+                row.set_running(False)
+                row.set_status("A sync is already running")
+                self.ctx.toast("A sync is already running", "info")
+                return
+            self.ctx.sync_tournaments(work, on_done=done, on_error=failed, busy=[row.button], spinner=row.spinner)
+            return
         self.ctx.run_in_background(work, on_done=done, on_error=failed, busy=[row.button], spinner=row.spinner)
+
+    def _on_sync_progress(self, progress) -> None:
+        row = self.row_tournaments
+        row.set_progress(progress)
+        row.button.disabled = progress.running
+        if self._is_mounted():
+            row.update()
 
     # -- helpers ------------------------------------------------------------------------
 

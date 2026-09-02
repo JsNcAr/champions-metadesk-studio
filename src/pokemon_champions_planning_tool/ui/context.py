@@ -25,6 +25,23 @@ class AppContext:
     catalogs: Any = None
     _clipboard: Any = field(default=None, init=False, repr=False)
 
+    def post(self, fn, *args) -> None:
+        """Run ``fn(*args)`` on the UI loop from any thread (progress callbacks)."""
+
+        async def _call() -> None:
+            fn(*args)
+
+        self.page.run_task(_call)
+
+    def sync_tournaments(self, work, *, on_done=None, on_error=None, busy=(), spinner=None) -> None:
+        """Run a tournament sync off the loop, relaying SyncProgress to the bus."""
+        from . import events as _events
+
+        def relay(progress) -> None:
+            self.post(self.bus.emit, _events.SYNC_PROGRESS, progress)
+
+        self.run_in_background(lambda: work(relay), on_done=on_done, on_error=on_error, busy=busy, spinner=spinner)
+
     def toast(
         self,
         message: str,

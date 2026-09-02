@@ -39,8 +39,8 @@ def _seed_once() -> None:
 def _start_background_sync(ctx: AppContext) -> None:
     """Sync tournament data once per process without blocking the UI."""
 
-    def work():
-        return sync_tournaments_once_per_process(max_age_days=365, include_official=True)
+    def work(relay):
+        return sync_tournaments_once_per_process(max_age_days=365, include_official=True, on_progress=relay)
 
     def done(result) -> None:
         if result is None:  # another session already ran it
@@ -51,7 +51,7 @@ def _start_background_sync(ctx: AppContext) -> None:
     def failed(exc: BaseException) -> None:
         print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
 
-    ctx.run_in_background(work, on_done=done, on_error=failed)
+    ctx.sync_tournaments(work, on_done=done, on_error=failed)
 
 
 def main(page: ft.Page) -> None:

@@ -83,7 +83,7 @@ class TestSettingsStore(unittest.TestCase):
             self.assertEqual(self.store.sync_tournaments()["status"], "synced")
         self.assertEqual(calls[0][0], "megas")
         self.assertEqual(calls[1], ("items", True), "manual item sync forces a refresh")
-        svc.return_value.sync.assert_called_once_with(force=True, max_age_days=365, include_official=True)
+        svc.return_value.sync.assert_called_once_with(force=False, max_age_days=365, include_official=True, on_progress=None)
 
 
 class TestRelativeTime(unittest.TestCase):

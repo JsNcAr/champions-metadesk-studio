@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -376,6 +377,7 @@ class LimitlessProvider:
         max_placement: int | None = None,
         max_requests: int = _MAX_STANDINGS_PER_SYNC,
         delay_between: float = _STANDINGS_DELAY_S,
+        on_progress: Callable[[int, int, str], None] | None = None,
     ) -> dict[str, list[LimitlessStanding]]:
         """Fetches standings for a batch of tournament IDs with rate-limiting.
 
@@ -406,6 +408,8 @@ class LimitlessProvider:
                 break
 
             fetched += 1
+            if on_progress is not None:
+                on_progress(fetched, min(len(tournament_ids), max_requests), t_id)
             try:
                 results[t_id] = self.fetch_standings(
                     t_id, max_placement=max_placement, raise_on_error=True

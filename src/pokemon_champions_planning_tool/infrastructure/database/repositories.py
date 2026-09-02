@@ -771,13 +771,21 @@ class TournamentRepository:
         self.session.add(record)
         self.session.commit()
 
-    def list_tournament_ids_pending_standings(self, source_prefix: str | None = None) -> set[str]:
-        """Tournament IDs whose standings have never been fetched successfully."""
+    def list_tournament_ids_pending_standings(
+        self, source_prefix: str | None = None, *, since: datetime | None = None
+    ) -> set[str]:
+        """Tournament IDs whose standings have never been fetched successfully.
+
+        ``since`` limits the backlog to events on or after that date, so tournaments
+        that have aged out of the sync window are not fetched or counted.
+        """
         stmt = select(TournamentRecord.tournament_id).where(
             TournamentRecord.standings_synced == False  # noqa: E712 - SQL boolean column
         )
         if source_prefix:
             stmt = stmt.where(TournamentRecord.tournament_id.startswith(source_prefix))
+        if since is not None:
+            stmt = stmt.where(TournamentRecord.event_date >= since)
         return set(self.session.exec(stmt).all())
 
     def list_tournament_ids(self, source_prefix: str | None = None) -> set[str]:
@@ -833,6 +841,23 @@ class TournamentRepository:
     def list_tournaments(self) -> list[TournamentRecord]:
         return list(self.session.exec(select(TournamentRecord).order_by(TournamentRecord.event_date.desc())).all())
 
+
+    def save_teams(
+        self, entries: list[tuple[TournamentTeamRecord, list[TournamentTeamMemberRecord]]]
+    ) -> int:
+        """Persist many teams with their members in one transaction.
+
+        Team IDs are generated client-side, so members can reference them before the
+        flush. One commit per tournament instead of two per team keeps the write lock
+        short — the UI reads the same file while a sync runs.
+        """
+        for team, members in entries:
+            self.session.add(team)
+            for m in members:
+                m.tournament_team_id = team.tournament_team_id
+                self.session.add(m)
+        self.session.commit()
+        return len(entries)
 
     def save_team(
         self, team: TournamentTeamRecord, members: list[TournamentTeamMemberRecord]

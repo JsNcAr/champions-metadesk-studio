@@ -62,3 +62,6 @@ class EventBus:
 
     def listener_count(self, event: str) -> int:
         return len(self._listeners.get(event, ()))
+
+# A tournament sync reported progress. Payload: services.tournament_sync_service.SyncProgress.
+SYNC_PROGRESS = "sync.progress"

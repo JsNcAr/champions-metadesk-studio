@@ -12,6 +12,7 @@ This folder contains the planning documents for the Pokemon Champions planning t
 - [Data Model](data-model.md) outlines the core entities.
 - [Integration Notes](integrations.md) covers PokéAPI, SQLite, and export concerns.
 - [Testing Strategy](testing-strategy.md) describes the validation approach.
+- [Packaging and Building Executables](building.md) covers native PyInstaller builds and Docker/Wine cross-compilation.
 
 ## Current Implementation Status
 

@@ -97,6 +97,30 @@ poetry run python -m unittest discover -s tests
 
 ---
 
+## 🛠️ Building Executables
+
+### 1. Cross-Compiling Windows Executable (`.exe`) via Docker (Linux Host)
+
+To build a standalone Windows binary from Linux without installing Wine locally:
+
+```bash
+./scripts/build_windows_docker.sh
+```
+
+The output executable will be created at: `dist/PokemonChampionsPlanningTool.exe`.
+
+### 2. Native Build (Current Host OS)
+
+To build a binary for your current operating system (Linux, macOS, or Windows):
+
+```bash
+poetry run pyinstaller pokemon_champions.spec --noconfirm --clean
+```
+
+For complete packaging details, see [docs/building.md](docs/building.md).
+
+---
+
 ## Repository Layout
 
 ```text

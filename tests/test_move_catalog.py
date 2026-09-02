@@ -269,6 +269,12 @@ class TestLegalityInTeamBuilder(unittest.TestCase):
         self.store.set_move(1, 1, "Protect")       # status: ignored
         slot = self.store.slot(1)
         self.assertEqual(slot.damaging_types, ["fire"])
+        # variable-power moves (base power 0 in Showdown data) still count as damaging
+        from pokemon_champions_planning_tool.domain.moves import MoveInfo as _MI
+        from pokemon_champions_planning_tool.ui.views.team.summary import SlotMove as _SM
+        probe = type(slot)(position=9)
+        probe.moves = (_SM("Grass Knot", _MI("grassknot", "Grass Knot", "Grass", "Special", None, 100, 20, 0, "normal", None, True), True),)
+        self.assertEqual(probe.damaging_types, ["grass"])
         self.assertEqual(slot.super_effective_against, ["grass", "ice", "bug", "steel"])
         summary = self.store.summary
         self.assertTrue(summary.has_moves)

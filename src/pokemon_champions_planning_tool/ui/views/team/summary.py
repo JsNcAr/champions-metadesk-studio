@@ -63,11 +63,13 @@ class SlotModel:
 
     @property
     def damaging_types(self) -> list[str]:
-        """Types of this slot's damaging moves (status moves and unknown moves excluded)."""
+        """Types of this slot's damaging moves. Status moves and moves the catalogue does not
+        know are excluded; variable-power moves (Grass Knot, Low Kick…) count even though
+        Showdown lists their base power as 0."""
         out: list[str] = []
         for m in self.moves:
             info = m.info
-            if info is None or not info.type or (info.category or "").lower() == "status" or not info.power:
+            if info is None or not info.type or (info.category or "").lower() == "status":
                 continue
             if info.type.lower() not in out:
                 out.append(info.type.lower())

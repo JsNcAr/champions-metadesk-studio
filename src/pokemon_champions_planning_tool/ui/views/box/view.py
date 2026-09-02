@@ -511,8 +511,10 @@ class BoxView(ft.Row):
         self.ctx.page.run_task(self._add_flow, [entry_id], team_id)
 
     def _bulk_add_to_team(self, team_id: UUID | None) -> None:
-        ids = [e.box_entry_id for e in self.store.visible() if e.box_entry_id in self.store.multi]
-        self.ctx.page.run_task(self._add_flow, ids, team_id)
+        # Whole selection, visible entries first so slot order follows the grid.
+        visible = [e.box_entry_id for e in self.store.visible() if e.box_entry_id in self.store.multi]
+        hidden = [e.box_entry_id for e in self.store.entries if e.box_entry_id in self.store.multi and e.box_entry_id not in set(visible)]
+        self.ctx.page.run_task(self._add_flow, visible + hidden, team_id)
 
     async def _add_flow(self, ids: list[UUID], team_id: UUID | None) -> None:
         if not ids:

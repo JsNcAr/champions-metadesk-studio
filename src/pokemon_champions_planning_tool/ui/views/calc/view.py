@@ -1,4 +1,4 @@
-"""Calc view: attacker | field | defender panels over a results list; both directions at once."""
+"""Calc view: team/box rail | field strip over the two Pokémon panels | opponent sweep."""
 
 from __future__ import annotations
 
@@ -10,11 +10,15 @@ from ...context import AppContext
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
-from .field_panel import FieldPanel
+from .field_strip import FieldStrip
 from .panels import PokemonPanel
-from .results import ResultsList
-from .state import CalcRequest
+from .rail import CalcRail
+from .state import CalcRequest, SweepEntry, pokemon_from_species_id
 from .store import CalcStore
+from .sweep import SweepPanel
+
+RAIL_WIDTH = 224
+SWEEP_WIDTH = 300
 
 
 class CalcView(ft.Column):
@@ -23,16 +27,21 @@ class CalcView(ft.Column):
         self.ctx = ctx
         self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
         self._narrow = False
+        self._sweep_running = False
 
-        self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker)
-        self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker)
-        self.field = FieldPanel(store=self.store, accent=Accent.CALC, on_swap=self.store.swap_sides)
-        self.field.width = Layout.SIDE_PANEL_WIDTH
-        self.results = ResultsList(on_copy=self._copy, accent=Accent.CALC)
+        self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
+        self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
+        self.field = FieldStrip(store=self.store, on_swap=self.store.swap_sides)
+        self.rail = CalcRail(store=self.store, accent=Accent.CALC)
+        self.rail.width = RAIL_WIDTH
+        self.sweep = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=self._pick_opponent)
+        self.sweep.width = SWEEP_WIDTH
 
-        self._panels = ft.Row(spacing=Space.LG, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.field, self.defender])
-        self._stack = ft.Column(spacing=Space.LG, tight=True, controls=[])
-        self._host = ft.Container(content=self._panels)
+        self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
+        self._centre = ft.Column(spacing=Space.MD, tight=True, expand=True, controls=[self.field, self._pokemon_row])
+        self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.rail, self._centre, self.sweep])
+        self._stack = ft.Column(spacing=Space.MD, tight=True, controls=[])
+        self._host = ft.Container(content=self._wide)
         self.header = PageHeader(
             "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption="Champions damage · both directions",
             actions=[
@@ -40,26 +49,33 @@ class CalcView(ft.Column):
                 ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, on_click=lambda _e: self.store.reset()),
             ],
         )
-        # Results first so the numbers are visible without scrolling; the panels below tune them.
-        self.controls = [self.header, self.results, self._host]
+        self.controls = [self.header, self._host]
 
         self.store.subscribe(self._on_store)
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
+        ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())
+        ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self.rail.refresh_team())
 
     # -- lifecycle -----------------------------------------------------------------------------
 
     def ensure_loaded(self) -> None:
         if not self.store.loaded:
             self.store.load()
+        self.rail.refresh()
+        self._maybe_sweep()
 
     def _on_store(self, event: tuple) -> None:
         if event[0] == "state":
-            self.attacker.update_from()
-            self.defender.update_from()
             self.field.update_from()
         elif event[0] == "results":
-            self.results.update_from(self.store.results)
+            self.attacker.update_from()
+            self.defender.update_from()
+            self.rail.refresh_team()
             self._sync_species_banner()
+            self._maybe_sweep()
+        elif event[0] == "sweep":
+            self.sweep.render()
+            self._maybe_sweep()
 
     def _sync_species_banner(self) -> None:
         if not self.store.catalogs.has_species:
@@ -79,6 +95,41 @@ class CalcView(ft.Column):
         if names:
             self.ctx.toast("Loaded " + " and ".join(names), "success")
 
+    # -- opponent sweep ------------------------------------------------------------------------
+
+    def _maybe_sweep(self) -> None:
+        """Recompute the sweep in the background when the attacker or the field changed."""
+        if self._sweep_running or not self.store.sweep_stale():
+            return
+        if self.store.species("left") is None or not any(self.store.state.left.moves):
+            self.store.publish_sweep(())
+            return
+        self._sweep_running = True
+        self.sweep.set_busy(True)
+
+        def done(entries) -> None:
+            self._sweep_running = False
+            self.sweep.set_busy(False)
+            self.store.publish_sweep(entries)
+
+        def failed(exc: BaseException) -> None:
+            self._sweep_running = False
+            self.sweep.set_busy(False)
+            self.sweep.render()
+            print(f"⚠️ Opponent sweep failed: {exc}")
+
+        try:
+            self.ctx.run_in_background(self.store.compute_sweep, on_done=done, on_error=failed)
+        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
+            done(self.store.compute_sweep())
+
+    def _pick_opponent(self, entry: SweepEntry) -> None:
+        species = self.store.catalogs.species_for(entry.canonical_id)
+        if species is None:
+            return
+        moves = list(self.store.preset_moves().get(species.canonical_id, [])) if self.store.sweep_presets else []
+        self.store.load_pokemon("right", pokemon_from_species_id(species.canonical_id, species, source="Opponents" + (" · tournament set" if moves else ""), moves=moves))
+
     # -- layout ------------------------------------------------------------------------------------
 
     def handle_resize(self, width: float, height: float) -> None:
@@ -86,17 +137,21 @@ class CalcView(ft.Column):
         compact = width < Layout.BREAKPOINT_COMPACT
         if narrow != self._narrow:
             self._narrow = narrow
-            self._panels.controls = []
+            self._wide.controls = []
             self._stack.controls = []
+            self._centre.controls = []
             if narrow:
-                self._stack.controls = [self.attacker, self.defender, self.field]
+                self._stack.controls = [self.field, self._pokemon_row, self.rail, self.sweep]
                 self._host.content = self._stack
-                self.field.width = None
+                self.rail.width = None
+                self.sweep.width = None
             else:
-                self._panels.controls = [self.attacker, self.field, self.defender]
-                self._host.content = self._panels
+                self._centre.controls = [self.field, self._pokemon_row]
+                self._wide.controls = [self.rail, self._centre, self.sweep]
+                self._host.content = self._wide
         if not narrow:
-            self.field.width = Layout.SIDE_PANEL_WIDTH_COMPACT if compact else Layout.SIDE_PANEL_WIDTH
+            self.rail.width = 190 if compact else RAIL_WIDTH
+            self.sweep.width = 270 if compact else SWEEP_WIDTH
         try:
             if self.page is not None:
                 self._host.update()
@@ -111,7 +166,7 @@ class CalcView(ft.Column):
         if e.ctrl and key == "f":
             return self.attacker.focus_search()
         if key == "escape":
-            return self.results.collapse_all()
+            return self.attacker.collapse_cards() | self.defender.collapse_cards()
         return False
 
     # -- dialogs -------------------------------------------------------------------------------

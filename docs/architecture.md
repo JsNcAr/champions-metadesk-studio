@@ -62,7 +62,7 @@ ui/
                     build.py (ft.Theme from tokens)
   shell/            AppShell: NavigationRail, content host, view registry, shortcuts
   components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
-  views/calc/       state (Flet-free, JSON round-trippable), store (mutations → recompute → persist), attacker/defender panels, field panel, results list
+  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep), rail (team/box), field_strip (tiles + side chips), panels (radar + editor + stages + move cards), move_card, sweep (opponents)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

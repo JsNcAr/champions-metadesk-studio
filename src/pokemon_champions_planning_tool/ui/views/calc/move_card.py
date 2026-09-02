@@ -1,0 +1,191 @@
+"""A move card: the move slot and its result in one type-coloured card.
+
+Damaging moves show base power, the type multiplier, the damage range with a bar and the KO
+text; clicking expands the description, the sixteen rolls, recoil/recovery and Copy. Status
+moves with a known effect get an "Activate" toggle that applies it to the calculation.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import flet as ft
+
+from ...components import StatusChip
+from ...theme import IconSize, Palette, Radius, Space, alpha, type_color
+from .state import MoveResult
+
+CATEGORY_ICONS = {"physical": ft.Icons.FITNESS_CENTER, "special": ft.Icons.AUTO_AWESOME, "status": ft.Icons.CHANGE_CIRCLE_OUTLINED}
+
+
+def damage_colour(max_pct: float) -> str:
+    if max_pct >= 100:
+        return Palette.ERROR
+    if max_pct >= 50:
+        return Palette.WARNING
+    if max_pct >= 25:
+        return Palette.SECONDARY
+    return Palette.ON_SURFACE_VARIANT
+
+
+def effectiveness_label(mult: float | None) -> str:
+    if mult is None:
+        return ""
+    return f"{mult:g}×"
+
+
+class DamageBar(ft.Stack):
+    def __init__(self) -> None:
+        super().__init__()
+        self._max = ft.ProgressBar(value=0, bar_height=6, color=Palette.OUTLINE, bgcolor=Palette.SURFACE_3)
+        self._min = ft.ProgressBar(value=0, bar_height=6, color=Palette.OUTLINE, bgcolor=ft.Colors.TRANSPARENT)
+        self.controls = [self._max, self._min]
+        self.height = 6
+
+    def set_range(self, min_pct: float, max_pct: float) -> None:
+        colour = damage_colour(max_pct)
+        self._max.value = min(1.0, max_pct / 100)
+        self._max.color = alpha(colour, 0.4)
+        self._min.value = min(1.0, min_pct / 100)
+        self._min.color = colour
+
+
+class MoveCard(ft.Container):
+    def __init__(self, index: int, *, on_pick: Callable[[int], None], on_crit: Callable[[int], None], on_activate: Callable[[int], None], on_copy: Callable[[str], None]) -> None:
+        super().__init__()
+        self.index = index
+        self.result: MoveResult | None = None
+        self.expanded = False
+        self._on_copy = on_copy
+        muted = Palette.ON_SURFACE_VARIANT
+        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._category = ft.Icon(ft.Icons.HELP_OUTLINE, size=IconSize.SM, color=muted, visible=False)
+        self._bp = StatusChip("", "neutral")
+        self._bp.visible = False
+        self._eff = StatusChip("", "neutral")
+        self._eff.visible = False
+        self._effect = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, visible=False, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._pct = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.W_700, color=muted, text_align=ft.TextAlign.RIGHT)
+        self._ko = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, text_align=ft.TextAlign.RIGHT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        self._bar = DamageBar()
+        self._bar.visible = False
+        self._activate = ft.Chip(label=ft.Text("Activate"), selected=False, show_checkmark=True, visible=False, on_select=lambda _e: on_activate(self.index))
+        self._crit = ft.IconButton(icon=ft.Icons.FLASH_ON_OUTLINED, selected_icon=ft.Icons.FLASH_ON, icon_size=IconSize.SM, selected=False, tooltip="Critical hit",
+                                   icon_color=muted, selected_icon_color=Palette.PRIMARY, on_click=lambda _e: on_crit(self.index), visible=False)
+        self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=IconSize.SM, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index))
+        self._details = ft.Column(spacing=Space.SM, tight=True, visible=False, controls=[])
+        self._name.expand = True
+        body = ft.Column(spacing=4, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._category, self._name, self._activate, self._crit, self._edit]),
+            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True, controls=[self._bp, self._eff, self._effect]),
+                ft.Column(spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.END, controls=[self._pct, self._ko]),
+            ]),
+            self._bar,
+            self._details,
+        ])
+        self.content = body
+        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.SM)
+        self.border_radius = Radius.SM
+        self.bgcolor = Palette.SURFACE_3
+        self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
+        self.ink = True
+        self.on_click = lambda _e: self._clicked(on_pick)
+
+    def _set_border(self, stripe: str, edge: str) -> None:
+        """A thick type-coloured left edge (the "stripe") and a thin edge elsewhere."""
+        self.border = ft.Border(left=ft.BorderSide(4, stripe), top=ft.BorderSide(1, edge), right=ft.BorderSide(1, edge), bottom=ft.BorderSide(1, edge))
+
+    def _clicked(self, on_pick: Callable[[int], None]) -> None:
+        if self.result is not None and self.result.ok:
+            self.toggle()
+        elif self._name.color == Palette.DISABLED:
+            on_pick(self.index)
+
+    def update_from(self, name: str | None, info, result: MoveResult | None, *, active: bool, effect: str | None, crit: bool) -> None:
+        self.result = result
+        muted = Palette.ON_SURFACE_VARIANT
+        if not name:
+            self._name.value = f"Move {self.index + 1}…"
+            self._name.color = Palette.DISABLED
+            self._category.visible = self._bp.visible = self._eff.visible = self._effect.visible = self._bar.visible = self._activate.visible = self._crit.visible = False
+            self._pct.value = self._ko.value = ""
+            self.bgcolor = Palette.SURFACE_3
+            self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
+            self._collapse()
+            return
+        type_name = (result.type if result is not None and result.type else (info.type if info is not None else None)) or None
+        category = (result.category if result is not None and result.category else (info.category if info is not None else None)) or ""
+        colour = type_color(type_name.lower()) if type_name and type_name != "???" else Palette.OUTLINE
+        self._name.value = name
+        self._name.color = Palette.ON_SURFACE
+        self._category.icon = CATEGORY_ICONS.get(category.lower(), ft.Icons.HELP_OUTLINE)
+        self._category.visible = True
+        self._category.color = colour
+        self.bgcolor = alpha(colour, 0.16)
+        self._set_border(colour, alpha(colour, 0.45))
+        is_status = category.lower() == "status" or effect is not None
+        self._crit.visible = not is_status
+        self._crit.selected = crit
+        self._activate.visible = is_status and effect is not None
+        self._activate.selected = active
+        self._activate.label = ft.Text("Active" if active else "Activate")
+        self._effect.visible = bool(effect) or (is_status and result is not None)
+        self._effect.value = effect or ("Status move" if is_status else "")
+        if result is None or not result.ok:
+            self._bp.visible = self._eff.visible = self._bar.visible = False
+            if result is not None and result.error and not is_status and effect is None:
+                self._pct.value = "—"
+                self._pct.color = muted
+                self._ko.value = result.error
+            else:
+                self._pct.value = self._ko.value = ""
+            self._collapse()
+            return
+        self._bp.visible = result.bp is not None
+        self._bp.set(f"{result.bp:g} BP", "neutral")
+        eff = result.effectiveness
+        self._eff.visible = eff is not None and eff != 1.0
+        if eff is not None:
+            self._eff.set(effectiveness_label(eff), "error" if eff > 1 else "neutral")
+        self._pct.value = f"{result.min_pct:g}–{result.max_pct:g}%"
+        self._pct.color = damage_colour(result.max_pct)
+        self._ko.value = result.ko_text or f"{result.min_dmg}–{result.max_dmg} HP"
+        self._ko.color = Palette.ERROR if "OHKO" in (result.ko_text or "") else muted
+        self._bar.visible = True
+        self._bar.set_range(result.min_pct, result.max_pct)
+        if self.expanded:
+            self._fill_details()
+
+    def _collapse(self) -> None:
+        self.expanded = False
+        self._details.visible = False
+        self._details.controls = []
+
+    def _fill_details(self) -> None:
+        r = self.result
+        if r is None:
+            return
+        lines: list[ft.Control] = [
+            ft.Text(r.description, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, selectable=True),
+            ft.Row(spacing=Space.XS, wrap=True, controls=[StatusChip(str(v), "neutral") for v in r.rolls]),
+        ]
+        if r.recoil:
+            lines.append(ft.Text(r.recoil, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.WARNING))
+        if r.recovery:
+            lines.append(ft.Text(r.recovery, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.SUCCESS))
+        lines.append(ft.Row(alignment=ft.MainAxisAlignment.END, controls=[ft.TextButton("Copy", icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._on_copy(r.description))]))
+        self._details.controls = lines
+
+    def toggle(self) -> None:
+        self.expanded = not self.expanded
+        if self.expanded:
+            self._fill_details()
+        else:
+            self._details.controls = []
+        self._details.visible = self.expanded
+        try:
+            if self.page is not None:
+                self.update()
+        except RuntimeError:
+            pass

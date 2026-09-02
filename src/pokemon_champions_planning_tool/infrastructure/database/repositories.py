@@ -1267,6 +1267,23 @@ class TournamentRepository:
         ).all()
         return [(str(move), int(n)) for move, n in rows if move]
 
+    def move_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+        """{base species id: [(move name, rosters using it), …] most used first} for every species
+        in one query (megas fold into their base species)."""
+        from sqlalchemy import text as _text
+
+        rows = self.session.exec(
+            _text(
+                "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
+                "WHERE m.base_canonical_id != '' GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
+            )
+        ).all()
+        out: dict[str, list[tuple[str, int]]] = {}
+        for cid, move, n in rows:
+            if move:
+                out.setdefault(str(cid), []).append((str(move), int(n)))
+        return out
+
     def list_regulations(self) -> list[str]:
         """Distinct regulation labels present in the data, most common first."""
         stmt = (

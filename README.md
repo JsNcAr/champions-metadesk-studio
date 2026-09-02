@@ -31,7 +31,9 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Planned Pokémon (Ghost Entries)**: Store non-owned Pokémon templates (`is_planned=True`) without cluttering the Box roster.
 
 ### 🧮 4. Damage Calculator
-- **Both directions at once**: every move of the attacker against the defender and back, with the 16 rolls, the Smogon-style description and the KO chance.
+- **Both directions at once**: each move card shows base power, the type multiplier, the damage range, a bar and the KO chance; expand it for the 16 rolls and the Smogon-style description. Status moves with a known effect have an Activate toggle.
+- **One-click field**: tiles for Singles/Doubles, Tailwind per side, Trick Room, weather, terrain and rooms; chips for screens, Helping Hand, hazards, Leech Seed and Spikes per side.
+- **Team rail and opponent sweep**: load a team member or box Pokémon with one click; the Opponents rail classifies every Champions species against the attacker (Crushed / Threat / Wall / Mitigated / Neutral), searchable, with each opponent's most used tournament moves.
 - **Full Champions mechanics**: weather, terrain, screens, Tailwind, Helping Hand, hazards, Leech Seed, status, stat stages, current HP (Eruption, Flail, Hard Press, Multiscale…), weight (Heavy Slam, Low Kick…), abilities, held items, critical hits, doubles spread, multi-hit and Parental Bond.
 - **Verified**: a Python port of the Smogon calculator's Pokémon Champions module, replayed against ~1000 golden scenarios generated from the calculator itself.
 - **Entry points**: "Open in damage calc" on a team slot, "Damage calc vs…" on a Meta team (with the paste's set), "Damage calc" in the Box detail panel; the last calculation is remembered.

@@ -317,6 +317,11 @@ class TournamentService:
             usage[key] = usage.get(key, 0.0) + n / teams
         return usage
 
+    def common_moves_by_species(self, top: int = 4) -> dict[str, list[str]]:
+        """The ``top`` most used roster moves per base species id (the "tournament set")."""
+        usage = self.repo.move_usage_all()
+        return {cid: [name for name, _n in moves[:top]] for cid, moves in usage.items()}
+
     def search_team_rows(
         self,
         query: str | None = None,

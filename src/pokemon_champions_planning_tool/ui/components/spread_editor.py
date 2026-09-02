@@ -184,7 +184,7 @@ class SpreadEditor(ft.Column):
                 mult = 1.0
             arrow = self._arrows[stat]
             arrow.visible = mult != 1.0
-            arrow.name = ft.Icons.ARROW_UPWARD if mult > 1.0 else ft.Icons.ARROW_DOWNWARD
+            arrow.icon = ft.Icons.ARROW_UPWARD if mult > 1.0 else ft.Icons.ARROW_DOWNWARD
             arrow.color = Palette.SUCCESS if mult > 1.0 else Palette.ERROR
         self._safe_update()
 

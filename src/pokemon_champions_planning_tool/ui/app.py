@@ -72,13 +72,14 @@ def main(page: ft.Page) -> None:
     box_view = BoxView(ctx)
     shell.register_view("box", label="Box", icon=ft.Icons.INVENTORY_2_OUTLINED, selected_icon=ft.Icons.INVENTORY_2,
                         control=box_view, on_activate=box_view.ensure_loaded)
-    team_view = TeamView(ctx, TeamStore(ctx.catalogs))
+    team_store = TeamStore(ctx.catalogs)
+    team_view = TeamView(ctx, team_store)
     shell.register_view("team", label="Teams", icon=ft.Icons.GROUPS_OUTLINED, selected_icon=ft.Icons.GROUPS,
                         control=team_view, on_activate=team_view.ensure_loaded)
     meta_view = MetaView(ctx)
     shell.register_view("meta", label="Meta", icon=ft.Icons.EMOJI_EVENTS_OUTLINED, selected_icon=ft.Icons.EMOJI_EVENTS,
                         control=meta_view, on_activate=meta_view.ensure_loaded)
-    calc_view = CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs))
+    calc_view = CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store))
     shell.register_view("calc", label="Calc", icon=ft.Icons.CALCULATE_OUTLINED, selected_icon=ft.Icons.CALCULATE,
                         control=calc_view, on_activate=calc_view.ensure_loaded)
     settings_view = SettingsView(ctx)

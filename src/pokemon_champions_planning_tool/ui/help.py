@@ -47,11 +47,11 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Box ▾ finds teams you can build: all six in your box, or one to three missing. Greyed sprites are the ones you lack; the chip says how many you have. Owned entries only; Megas count as their base species.",
     ),
     "Calc": (
-        "Both directions at once: every move of the attacker against the defender and the other way round, with the 16 rolls, the description and the KO chance when a row is expanded.",
-        "Weather, terrain, screens, Tailwind, Helping Hand, hazards and Leech Seed live in the Field panel; \"Active\" next to an ability means it has already triggered (Intimidate applied, Flash Fire lit).",
-        "HP scaling moves (Eruption, Flail, Hard Press), weight moves (Heavy Slam, Low Kick) and abilities such as Multiscale read the HP sliders and each species' weight.",
-        "Open in damage calc from a team slot's menu, Damage calc vs… on a Meta team, or Damage calc in the Box detail panel; the last calculation is remembered.",
-        "The numbers come from a port of the Smogon calculator's Pokémon Champions module and are checked against it; Terastallization is not in Champions and is not modelled.",
+        "Each move card carries its own result: base power, the type multiplier, the damage range, a bar and the KO text; click a card for the 16 rolls and the full description. Status moves with a known effect (Swords Dance, Tailwind, Will-O-Wisp…) get an Activate toggle that applies it.",
+        "The strip above the panels toggles Singles/Doubles, Tailwind per side, Trick Room, weather, terrain and rooms with one click; the chips below it set screens, Helping Hand, hazards, Leech Seed and Spikes per side. \"Activate\" next to an ability means it has already triggered (Intimidate applied, Flash Fire lit).",
+        "The left rail loads a team member or a box Pokémon as the attacker (click) or the defender (shield button). The Opponents rail runs the attacker against every Champions species: Crushed (you OHKO first), Threat (they KO you first), Wall (four hits or more), Mitigated (you win the race), Neutral; \"Tournament sets\" gives each opponent its four most used roster moves.",
+        "HP scaling moves (Eruption, Flail, Hard Press), weight moves (Heavy Slam, Low Kick) and abilities such as Multiscale read the HP sliders and each species' weight; the Spe chip shows who moves first under Tailwind and Trick Room.",
+        "Open in damage calc from a team slot's menu, Damage calc vs… on a Meta team, or Damage calc in the Box detail panel; the last calculation is remembered. The numbers come from a port of the Smogon calculator's Champions module and are checked against it; Terastallization is not in Champions and is not modelled.",
     ),
     "Data & syncing": (
         "Tournaments sync at launch when the last sync is older than six hours or a backlog is waiting; Settings › Sync now always runs.",

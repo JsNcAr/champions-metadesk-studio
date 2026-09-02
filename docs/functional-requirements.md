@@ -86,6 +86,8 @@
 - The calculation must follow Pokémon Champions rules (stat points, level 50) and account for weather, terrain, screens, Tailwind, Helping Hand, hazards, Leech Seed, status, stat stages, current HP (HP-scaling moves and abilities), weight (weight-based moves), abilities, held items, critical hits and doubles spread damage.
 - Any Champions species or Mega must be selectable on either side, with its base stats, abilities and weight.
 - A team slot, a tournament roster member (with the paste's set when present) and a box entry must be sendable to the calculator.
+- Status moves with a known effect (self boosts, screens, Tailwind, weather, terrain, status infliction) must be applicable to the calculation with one toggle.
+- The user must be able to sweep every Champions species against the attacker and see each classified as Crushed, Threat, Wall, Mitigated or Neutral from the hits each side needs and the speed order, with the opponent's most used tournament moves available as its set.
 - The last calculation must be remembered between launches.
 - The engine must be verified against the Smogon damage calculator's Champions module.
 

@@ -101,7 +101,7 @@
 - **Stat points replace EVs/IVs (FR-11a)**: Champions rules (0–32 per stat, 66 total, level 50, 31 IVs) in the domain formula, the spread editor (shared `SpreadEditor` component with presets and "Min speed"), team health checks, Showdown import (legacy EV lines converted and flagged) and export; stored spreads backfilled with `(EV + 4) // 8`.
 - **Damage engine** (`domain/damage/`): a Python port of the Smogon calculator's Pokémon Champions module (MIT, see `NOTICE.md`), replayed against 997 golden scenarios generated from the calculator itself (`scripts/damage_fixtures/`).
 - **Data**: move mechanics (flags, secondaries, recoil, multihit, stat overrides…) persisted on the move catalogue, with the Past-move legality fix; a Showdown species catalogue (base stats, abilities, weights, forms, Champions legality) synced like the moves.
-- **Calc section (FR-15)**: attacker | field | defender panels, results both ways with damage bars, rolls, descriptions and KO text; entry points from a team slot's menu, a Meta team ("Damage calc vs…") and the Box detail panel; the last calculation remembered.
+- **Calc section (FR-15)**: team/box rail | field strip of one-click tiles over the attacker and defender panels (radar chart, stat-point editor, +/− stages, status chips, type-coloured move cards carrying the results with Activate toggles for status moves) | opponent sweep classifying every species (Crushed / Threat / Wall / Mitigated / Neutral) with tournament sets; entry points from a team slot's menu, a Meta team ("Damage calc vs…") and the Box detail panel; the last calculation remembered.
 
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).

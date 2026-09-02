@@ -31,6 +31,9 @@ class SectionHeader(ft.Row):
         trailing = ft.Row(spacing=Space.SM, controls=[self._status] + ([action] if action else []))
         self.controls = [self._label, trailing]
 
+    def set_label(self, label: str) -> None:
+        self._label.controls[1].value = label.upper()
+
     def set_status(self, status: str | None, *, color: str | None = None) -> None:
         self._status.value = status or ""
         self._status.visible = bool(status)

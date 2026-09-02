@@ -1,8 +1,9 @@
-"""Calculator store: state, mutations, results and persistence. Flet-free.
+"""Calculator store: state, mutations, results, the opponent sweep and persistence. Flet-free.
 
 Every mutation recomputes both directions (eight engine calls, a few milliseconds), keeps the
 result in a small cache keyed by the state, persists the state in the preferences and
-notifies ``("state",)`` then ``("results",)``.
+notifies ``("state",)`` then ``("results",)``. The sweep (every species versus the attacker)
+is computed on demand and notified as ``("sweep",)``.
 """
 
 from __future__ import annotations
@@ -15,21 +16,86 @@ from typing import Any
 
 from sqlmodel import Session
 
-from ....domain.damage import CalcMove, Field, Side
+from ....domain.damage import CalcPokemon, Field, Side
 from ....domain.damage.ko import DescError
+from ....domain.damage.util import get_final_speed
+from ....domain.damage.state import FieldState as EngineFieldState, Mon
+from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.species import SpeciesInfo
 from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champions_stats, points_total
+from ....domain.type_chart import defensive_multiplier
 from ....infrastructure.database.database import get_session
+from ....infrastructure.database.repositories import BoxRepository
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
+from ....services.tournament_service import TournamentService
 from ...catalogs import Catalogs
 from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, move_options_for
-from .state import BOOST_STATS, SIDES, CalcRequest, CalcResults, CalcState, FieldState, MoveResult, PokemonState, SideConditions, pokemon_from_species_id
+from .state import (
+    BOOST_STATS,
+    SIDES,
+    CalcRequest,
+    CalcResults,
+    CalcState,
+    FieldState,
+    MoveResult,
+    PokemonState,
+    SideConditions,
+    SweepEntry,
+    classify,
+    hits_to_ko,
+    pokemon_from_species_id,
+)
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 Listener = Callable[[tuple], None]
 
 PREF_STATE = "calc.state"
+PREF_PRESETS = "calc.sweep_presets"
+
+# Status moves the "Activate" toggle knows: stat stages on the user, field or side conditions,
+# or a status on the opponent. Values are applied on activation and reverted on deactivation.
+SELF_BOOSTS: dict[str, dict[str, int]] = {
+    "Swords Dance": {"attack": 2}, "Nasty Plot": {"special_attack": 2}, "Dragon Dance": {"attack": 1, "speed": 1}, "Calm Mind": {"special_attack": 1, "special_defense": 1},
+    "Bulk Up": {"attack": 1, "defense": 1}, "Iron Defense": {"defense": 2}, "Agility": {"speed": 2}, "Quiver Dance": {"special_attack": 1, "special_defense": 1, "speed": 1},
+    "Shell Smash": {"attack": 2, "special_attack": 2, "speed": 2, "defense": -1, "special_defense": -1}, "Curse": {"attack": 1, "defense": 1, "speed": -1}, "Coil": {"attack": 1, "defense": 1},
+    "Work Up": {"attack": 1, "special_attack": 1}, "Growth": {"attack": 1, "special_attack": 1}, "Howl": {"attack": 1}, "Amnesia": {"special_defense": 2}, "Cotton Guard": {"defense": 3},
+    "Belly Drum": {"attack": 6}, "Victory Dance": {"attack": 1, "defense": 1, "speed": 1}, "Tidy Up": {"attack": 1, "speed": 1}, "Hone Claws": {"attack": 1}, "Rock Polish": {"speed": 2},
+    "Autotomize": {"speed": 2}, "Acid Armor": {"defense": 2}, "Barrier": {"defense": 2}, "Defend Order": {"defense": 1, "special_defense": 1}, "Meditate": {"attack": 1},
+    "Sharpen": {"attack": 1}, "Harden": {"defense": 1}, "Withdraw": {"defense": 1}, "Tail Glow": {"special_attack": 3}, "Geomancy": {"special_attack": 2, "special_defense": 2, "speed": 2},
+    "Clangorous Soul": {"attack": 1, "defense": 1, "special_attack": 1, "special_defense": 1, "speed": 1}, "No Retreat": {"attack": 1, "defense": 1, "special_attack": 1, "special_defense": 1, "speed": 1},
+    "Charge": {"special_defense": 1},
+}
+OWN_SIDE: dict[str, dict[str, Any]] = {"Reflect": {"reflect": True}, "Light Screen": {"light_screen": True}, "Aurora Veil": {"aurora_veil": True}, "Tailwind": {"tailwind": True},
+                                       "Helping Hand": {"helping_hand": True}, "Protect": {"protect": True}, "Detect": {"protect": True}, "Charge": {"charge": True}, "Power Trick": {"power_trick": True}}
+FOE_SIDE: dict[str, dict[str, Any]] = {"Stealth Rock": {"stealth_rock": True}, "Spikes": {"spikes": 1}, "Leech Seed": {"leech_seed": True}}
+FIELD_EFFECTS: dict[str, dict[str, Any]] = {"Sunny Day": {"weather": "Sun"}, "Rain Dance": {"weather": "Rain"}, "Sandstorm": {"weather": "Sand"}, "Snowscape": {"weather": "Snow"},
+                                            "Chilly Reception": {"weather": "Snow"}, "Electric Terrain": {"terrain": "Electric"}, "Grassy Terrain": {"terrain": "Grassy"},
+                                            "Psychic Terrain": {"terrain": "Psychic"}, "Misty Terrain": {"terrain": "Misty"}, "Gravity": {"gravity": True},
+                                            "Trick Room": {"trick_room": True}, "Magic Room": {"magic_room": True}, "Wonder Room": {"wonder_room": True}}
+FOE_STATUS: dict[str, str] = {"Will-O-Wisp": "brn", "Toxic": "tox", "Thunder Wave": "par", "Glare": "par", "Stun Spore": "par", "Nuzzle": "par", "Spore": "slp", "Sleep Powder": "slp",
+                              "Hypnosis": "slp", "Dark Void": "slp", "Yawn": "slp", "Poison Powder": "psn", "Toxic Thread": "psn"}
+
+
+def move_effect(name: str | None) -> str | None:
+    """A short description of what activating this status move does, or None when unknown."""
+    if not name:
+        return None
+    if name in SELF_BOOSTS:
+        abbrev = {"attack": "Atk", "defense": "Def", "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"}
+        return " ".join(f"{v:+d} {abbrev[k]}" for k, v in SELF_BOOSTS[name].items())
+    if name in OWN_SIDE:
+        return f"{name} on your side"
+    if name in FOE_SIDE:
+        return f"{name} on their side"
+    if name in FIELD_EFFECTS:
+        return "Sets " + ", ".join(f"{k.replace('_', ' ')} {v}" if not isinstance(v, bool) else k.replace("_", " ") for k, v in FIELD_EFFECTS[name].items())
+    if name in FOE_STATUS:
+        return f"Inflicts {dict(_STATUS_LABELS)[FOE_STATUS[name]].lower()}"
+    return None
+
+
+_STATUS_LABELS = (("brn", "Burn"), ("psn", "Poison"), ("tox", "Bad poison"), ("par", "Paralysis"), ("slp", "Sleep"), ("frz", "Freeze"))
 
 
 def _engine_side(c: SideConditions) -> Side:
@@ -44,16 +110,24 @@ def engine_field(f: FieldState, *, attacker_is_left: bool) -> Field:
                  attacker_side=_engine_side(a), defender_side=_engine_side(d))
 
 
-def engine_pokemon(p: PokemonState, species: SpeciesInfo):
+def engine_pokemon(p: PokemonState, species: SpeciesInfo) -> CalcPokemon:
     max_hp = champions_stats(species.stats, p.points, p.nature if p.nature != "hardy" else None).hp
     cur = max(1, min(max_hp, round(max_hp * p.hp_pct / 100)))
     return pokemon_from_species(species, ability=p.ability, ability_on=p.ability_on, item=p.item, nature=p.nature, points=p.points, boosts=p.boosts,
                                 cur_hp=cur, status="" if p.status == "none" else p.status, allies_fainted=p.allies_fainted)
 
 
-def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catalogs: Catalogs, calc: Callable = calculate) -> tuple[MoveResult, ...]:
-    a_species = catalogs.species_for(attacker.species)
-    d_species = catalogs.species_for(defender.species)
+def final_speed(p: PokemonState, species: SpeciesInfo, field: FieldState, side: str) -> int:
+    """Speed the game would use for turn order under the field (Tailwind, paralysis, Scarf…)."""
+    mon = Mon.from_input(engine_pokemon(p, species))
+    ef = engine_field(field, attacker_is_left=(side == "left"))
+    return get_final_speed(mon, EngineFieldState.from_input(ef), EngineFieldState.from_input(ef).attacker_side)
+
+
+def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catalogs: Catalogs, calc: Callable = calculate,
+             a_species: SpeciesInfo | None = None, d_species: SpeciesInfo | None = None) -> tuple[MoveResult, ...]:
+    a_species = a_species or catalogs.species_for(attacker.species)
+    d_species = d_species or catalogs.species_for(defender.species)
     if a_species is None or d_species is None:
         return ()
     a = engine_pokemon(attacker, a_species)
@@ -71,19 +145,19 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
             continue
         try:
             result = calc(a, d, move, field)
+            eff = defensive_multiplier(result.move.type.lower(), [t.lower() for t in result.defender.types]) if result.move.type != "???" else 1.0
             lo, hi = result.range()
             if hi == 0:
-                out.append(MoveResult(index, name, result.move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error="No effect", bp=result.move_bp))
+                out.append(MoveResult(index, name, result.move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error="No effect", bp=result.move_bp, effectiveness=eff))
                 continue
             try:
                 description = result.desc()
                 ko_text = result.ko_chance().text
             except DescError:
                 description, ko_text = "", ""
-            recoil_text = result.recoil()[1] or None
-            recovery_text = result.recovery()[1] or None
-            out.append(MoveResult(index, name, result.move.type, move.category, lo, hi, result.min_pct, result.max_pct, tuple(result.rolls), description, ko_text,
-                                  recoil_text, recovery_text, bp=result.move_bp))
+            mr = MoveResult(index, name, result.move.type, move.category, lo, hi, result.min_pct, result.max_pct, tuple(result.rolls), description, ko_text,
+                            result.recoil()[1] or None, result.recovery()[1] or None, bp=result.move_bp, effectiveness=eff)
+            out.append(replace(mr, ko_hits=hits_to_ko(mr)))
         except Exception as exc:  # noqa: BLE001 - one bad move must not hide the others
             out.append(MoveResult(index, name, move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error=f"{type(exc).__name__}: {exc}"))
     return tuple(out)
@@ -93,20 +167,33 @@ def run(state: CalcState, catalogs: Catalogs, calc: Callable = calculate) -> Cal
     left = catalogs.species_for(state.left.species)
     right = catalogs.species_for(state.right.species)
     return CalcResults(
-        left_vs_right=run_side(state.left, state.right, engine_field(state.field, attacker_is_left=True), catalogs, calc),
-        right_vs_left=run_side(state.right, state.left, engine_field(state.field, attacker_is_left=False), catalogs, calc),
+        left_vs_right=run_side(state.left, state.right, engine_field(state.field, attacker_is_left=True), catalogs, calc, left, right),
+        right_vs_left=run_side(state.right, state.left, engine_field(state.field, attacker_is_left=False), catalogs, calc, right, left),
         left_name=left.name if left else "", right_name=right.name if right else "",
+        left_speed=final_speed(state.left, left, state.field, "left") if left else 0,
+        right_speed=final_speed(state.right, right, state.field, "right") if right else 0,
     )
 
 
+def best_of(results: tuple[MoveResult, ...]) -> MoveResult | None:
+    ok = [r for r in results if r.ok and r.max_pct > 0]
+    return max(ok, key=lambda r: (r.min_pct + r.max_pct)) if ok else None
+
+
 class CalcStore:
-    def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory | None = get_session, *, prefs: Any = None, calculate_fn: Callable | None = None) -> None:
+    def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory | None = get_session, *, prefs: Any = None,
+                 calculate_fn: Callable | None = None, team_store: Any = None) -> None:
         self.catalogs = catalogs or Catalogs()
         self._sf = session_factory
         self._prefs = prefs
         self._calc = calculate_fn or calculate
+        self.team_store = team_store
         self.state = CalcState()
         self.results = CalcResults()
+        self.sweep: tuple[SweepEntry, ...] = ()
+        self.sweep_presets = True
+        self._sweep_key: str | None = None
+        self._preset_moves: dict[str, list[str]] | None = None
         self._cache: OrderedDict[str, CalcResults] = OrderedDict()
         self._listeners: list[Listener] = []
         self.loaded = False
@@ -131,6 +218,7 @@ class CalcStore:
         if self._prefs is not None:
             try:
                 self.state = CalcState.from_dict(self._prefs.get(PREF_STATE, None))
+                self.sweep_presets = bool(self._prefs.get(PREF_PRESETS, True))
             except Exception:  # noqa: BLE001 - a corrupt preference must not break the view
                 self.state = CalcState()
         self._recompute(persist=False)
@@ -142,9 +230,10 @@ class CalcStore:
             self.state = self.state.with_side("right", req.defender)
         self._commit()
 
-    def load_species(self, side: str, canonical_id: str) -> None:
+    def load_species(self, side: str, canonical_id: str, *, preset: bool = False) -> None:
         species = self.catalogs.species_for(canonical_id)
-        self.state = self.state.with_side(side, pokemon_from_species_id(species.canonical_id if species else canonical_id, species))
+        moves = self.preset_moves().get(species.canonical_id if species else canonical_id, []) if preset else None
+        self.state = self.state.with_side(side, pokemon_from_species_id(species.canonical_id if species else canonical_id, species, moves=moves))
         self._commit()
 
     def load_pokemon(self, side: str, pokemon: PokemonState) -> None:
@@ -174,6 +263,19 @@ class CalcStore:
         max_hp = self.max_hp(side)
         return max(1, min(max_hp, round(max_hp * self.state.side(side).hp_pct / 100))) if max_hp else 0
 
+    def speed(self, side: str) -> int:
+        return self.results.left_speed if side == "left" else self.results.right_speed
+
+    def speed_order(self) -> str:
+        """"left", "right" or "tie": who moves first under the field (Trick Room reverses)."""
+        a, b = self.results.left_speed, self.results.right_speed
+        if a == b:
+            return "tie"
+        first = "left" if a > b else "right"
+        if self.state.field.trick_room:
+            first = "right" if first == "left" else "left"
+        return first
+
     def ability_options(self, side: str) -> list[str]:
         species = self.species(side)
         options = list(species.abilities) if species else []
@@ -193,6 +295,38 @@ class CalcStore:
 
     def points_left(self, side: str) -> int:
         return MAX_POINTS_TOTAL - points_total(self.state.side(side).points)
+
+    def team_slots(self) -> list[Any]:
+        """Filled slots of the active team (via the shared team store), or []."""
+        if self.team_store is None:
+            return []
+        try:
+            if not getattr(self.team_store, "teams", None) and self.team_store.active_team_id is None:
+                self.team_store.load()
+        except Exception:  # noqa: BLE001 - the rail is a convenience
+            return []
+        return [s for s in self.team_store.slots if s.filled]
+
+    def box_entries(self) -> list[BoxEntry]:
+        if self._sf is None:
+            return []
+        try:
+            with self._sf() as s:
+                return BoxRepository(s).list_entries(include_planned=False)
+        except Exception:  # noqa: BLE001
+            return []
+
+    def preset_moves(self) -> dict[str, list[str]]:
+        """Top-4 roster moves per species from the tournament data (cached for the session)."""
+        if self._preset_moves is None:
+            self._preset_moves = {}
+            if self._sf is not None:
+                try:
+                    with self._sf() as s:
+                        self._preset_moves = TournamentService(s).common_moves_by_species(top=4)
+                except Exception:  # noqa: BLE001 - presets are a convenience
+                    self._preset_moves = {}
+        return self._preset_moves
 
     # -- mutations ---------------------------------------------------------------------------
 
@@ -218,6 +352,9 @@ class CalcStore:
             boosts.pop(stat, None)
         self.set_pokemon(side, boosts=boosts)
 
+    def bump_boost(self, side: str, stat: str, delta: int) -> None:
+        self.set_boost(side, stat, self.state.side(side).boosts.get(stat, 0) + delta)
+
     def set_hp_pct(self, side: str, pct: float) -> None:
         self.set_pokemon(side, hp_pct=max(0.0, min(100.0, float(pct))))
 
@@ -227,7 +364,11 @@ class CalcStore:
             self.set_hp_pct(side, 100.0 * max(1, min(max_hp, int(hp))) / max_hp)
 
     def set_move(self, side: str, index: int, name: str | None) -> None:
-        moves = list(self.state.side(side).moves)
+        p = self.state.side(side)
+        if p.active[index]:
+            self.toggle_move_effect(side, index)
+            p = self.state.side(side)
+        moves = list(p.moves)
         moves[index] = (name or "").strip() or None
         self.set_pokemon(side, moves=moves)
 
@@ -236,14 +377,63 @@ class CalcStore:
         crit[index] = not crit[index]
         self.set_pokemon(side, crit=crit)
 
+    def toggle_move_effect(self, side: str, index: int) -> bool:
+        """Apply (or revert) a status move's known effect. Returns True when the move has one."""
+        p = self.state.side(side)
+        name = p.moves[index]
+        if not name or move_effect(name) is None:
+            return False
+        turning_on = not p.active[index]
+        sign = 1 if turning_on else -1
+        other = "right" if side == "left" else "left"
+        active = list(p.active)
+        active[index] = turning_on
+        if name in SELF_BOOSTS:
+            boosts = dict(p.boosts)
+            for stat, delta in SELF_BOOSTS[name].items():
+                value = max(-6, min(6, boosts.get(stat, 0) + sign * delta))
+                if value:
+                    boosts[stat] = value
+                else:
+                    boosts.pop(stat, None)
+            self.state = self.state.with_side(side, replace(p, boosts=boosts, active=active))
+        elif name in OWN_SIDE or name in FOE_SIDE:
+            target = side if name in OWN_SIDE else other
+            effect = OWN_SIDE.get(name) or FOE_SIDE[name]
+            current = self.state.field.left if target == "left" else self.state.field.right
+            changes = {k: (v if turning_on else (0 if isinstance(v, int) and not isinstance(v, bool) else False)) for k, v in effect.items()}
+            self.state = replace(self.state.with_side(side, replace(p, active=active)), field=replace(self.state.field, **{target: replace(current, **changes)}))
+        elif name in FIELD_EFFECTS:
+            effect = FIELD_EFFECTS[name]
+            changes = {k: (v if turning_on else ("none" if isinstance(v, str) else False)) for k, v in effect.items()}
+            self.state = replace(self.state.with_side(side, replace(p, active=active)), field=replace(self.state.field, **changes))
+        elif name in FOE_STATUS:
+            foe = self.state.side(other)
+            self.state = self.state.with_side(side, replace(p, active=active)).with_side(other, replace(foe, status=FOE_STATUS[name] if turning_on else "none"))
+        self._commit()
+        return True
+
     def set_field(self, **changes: Any) -> None:
         self.state = replace(self.state, field=replace(self.state.field, **changes))
         self._commit()
+
+    def toggle_field(self, key: str, value: Any = True) -> None:
+        """Tiles: a bool flips; weather/terrain set to ``value`` or clear when already set."""
+        current = getattr(self.state.field, key)
+        if isinstance(current, bool):
+            self.set_field(**{key: not current})
+        else:
+            self.set_field(**{key: "none" if current == value else value})
 
     def set_side_conditions(self, side: str, **changes: Any) -> None:
         current = self.state.field.left if side == "left" else self.state.field.right
         updated = replace(current, **changes)
         self.set_field(**{side: updated})
+
+    def toggle_side(self, side: str, key: str) -> None:
+        current = self.state.field.left if side == "left" else self.state.field.right
+        value = getattr(current, key)
+        self.set_side_conditions(side, **{key: (0 if value else 1) if key == "spikes" else not value})
 
     def swap_sides(self) -> None:
         f = self.state.field
@@ -253,6 +443,57 @@ class CalcStore:
     def reset(self) -> None:
         self.state = CalcState()
         self._commit()
+
+    def set_sweep_presets(self, value: bool) -> None:
+        self.sweep_presets = bool(value)
+        if self._prefs is not None:
+            try:
+                self._prefs.set(PREF_PRESETS, self.sweep_presets)
+            except Exception:  # noqa: BLE001
+                pass
+        self._sweep_key = None
+        self._notify(("sweep",))
+
+    # -- opponent sweep ----------------------------------------------------------------------
+
+    def sweep_key(self) -> str:
+        d = self.state.to_dict()
+        return "|".join((str(d["left"]), str(d["field"]), str(self.sweep_presets)))
+
+    def sweep_stale(self) -> bool:
+        return self._sweep_key != self.sweep_key()
+
+    def compute_sweep(self) -> tuple[SweepEntry, ...]:
+        """Every legal species against the attacker: their class, speed and both best moves.
+        Pure computation (no notification) so it can run on a worker thread; call
+        ``publish_sweep`` with the result on the UI thread."""
+        key = self.sweep_key()
+        attacker = self.state.left
+        a_species = self.catalogs.species_for(attacker.species)
+        if a_species is None or not any(attacker.moves):
+            return ()
+        presets = self.preset_moves() if self.sweep_presets else {}
+        field_ab = engine_field(self.state.field, attacker_is_left=True)
+        field_ba = engine_field(self.state.field, attacker_is_left=False)
+        my_speed = final_speed(attacker, a_species, self.state.field, "left")
+        entries: list[SweepEntry] = []
+        for species in self.catalogs.species_by_canonical.values():
+            if not species.is_legal:
+                continue
+            their_moves = list(presets.get(species.canonical_id, presets.get(species.base_species_id, [])))[:4] if presets else []
+            defender = pokemon_from_species_id(species.canonical_id, species, moves=their_moves)
+            yours = best_of(run_side(attacker, defender, field_ab, self.catalogs, self._calc, a_species, species))
+            theirs = best_of(run_side(defender, attacker, field_ba, self.catalogs, self._calc, species, a_species)) if their_moves else None
+            speed = final_speed(defender, species, self.state.field, "right")
+            faster = (my_speed > speed) != self.state.field.trick_room if my_speed != speed else False
+            entries.append(SweepEntry(species.canonical_id, species.name, speed, classify(yours, theirs, faster), yours, theirs, faster, bool(their_moves)))
+        self._sweep_key = key
+        return tuple(sorted(entries, key=lambda e: e.name))
+
+    def publish_sweep(self, entries: tuple[SweepEntry, ...]) -> None:
+        self.sweep = entries
+        self._sweep_key = self.sweep_key()
+        self._notify(("sweep",))
 
     # -- internals ---------------------------------------------------------------------------
 
@@ -279,4 +520,4 @@ class CalcStore:
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_STATE", "engine_field", "engine_pokemon", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]

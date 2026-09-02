@@ -209,6 +209,10 @@ STAT_COLORS: dict[str, str] = {
 STAT_TRACK = "#2E3D5A"
 STAT_MAX = 255
 
+# Damage calculator field tiles (weather / terrain) — the only place these hues live.
+WEATHER_COLORS: dict[str, str] = {"Sun": "#F59E0B", "Rain": "#38BDF8", "Sand": "#D6A741", "Snow": "#93C5FD"}
+TERRAIN_COLORS: dict[str, str] = {"Electric": "#FACC15", "Grassy": "#4ADE80", "Psychic": "#F472B6", "Misty": "#E9B8F5"}
+
 STAT_ORDER: tuple[str, ...] = ("hp", "attack", "defense", "special_attack", "special_defense", "speed")
 STAT_LABELS: dict[str, str] = {
     "hp": "HP",

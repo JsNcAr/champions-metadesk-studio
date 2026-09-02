@@ -164,28 +164,82 @@ class TestCalcView(_Base):
         self.navigated = []
         self.ctx.bus.on(events.NAVIGATE, self.navigated.append)
         self.view = CalcView(self.ctx, self.store)
+        self.view.ensure_loaded()
 
-    def test_empty_and_full_render(self):
-        self.assertGreater(serialise(self.view), 100)
-        self.assertIs(self.view.results.controls[0], self.view.results.empty)
+    def _load_pair(self):
         self.store.load_species("left", "kingambit")
         self.store.load_species("right", "incineroar")
         self.store.set_move("left", 0, "Kowtow Cleave")
         self.store.set_move("left", 1, "Iron Head")
+        self.store.set_move("left", 2, "Swords Dance")
         self.store.set_move("right", 0, "Flare Blitz")
-        self.assertEqual(len(self.view.results.rows), 3)
+
+    def test_empty_and_full_render(self):
+        self.assertGreater(serialise(self.view), 100)
+        self.assertEqual(self.view.attacker.cards[0]._name.value, "Move 1…")
+        self._load_pair()
+        cards = self.view.attacker.cards
+        self.assertEqual(cards[0]._name.value, "Kowtow Cleave")
+        self.assertIn("%", cards[0]._pct.value)
+        self.assertTrue(cards[0]._bar.visible)
+        self.assertTrue(cards[0]._eff.visible, "Dark vs Fire/Dark is resisted: 0.5×")
+        self.assertEqual(cards[0]._eff._label.value, "0.5×")
+        self.assertTrue(cards[2]._activate.visible, "Swords Dance has a known effect")
         self.assertEqual(self.view.attacker._name.value, "Kingambit")
         self.assertEqual(self.view.attacker._ability.value, "Defiant")
-        self.assertEqual(self.view.attacker._moves[0]._name.value, "Kowtow Cleave")
         self.assertIn("/ 175", self.view.attacker._hp_label.value)
+        self.assertTrue(self.view.attacker._speed.visible)
         serialise(self.view)
-        row = self.view.results.rows[0]
-        row.toggle()
-        self.assertTrue(row.expanded)
-        self.assertGreater(len(row._details.controls), 2)
+        cards[0].toggle()
+        self.assertTrue(cards[0].expanded)
+        self.assertGreater(len(cards[0]._details.controls), 2)
         serialise(self.view)
-        self.assertTrue(self.view.results.collapse_all())
-        self.assertFalse(row.expanded)
+        self.assertTrue(self.view.handle_key(SimpleNamespace(key="Escape", ctrl=False, shift=False, alt=False, meta=False)))
+        self.assertFalse(cards[0].expanded)
+
+    def test_status_move_activation_applies_boosts_and_field(self):
+        self._load_pair()
+        before = self.store.results.left_vs_right[0].max_pct
+        self.assertTrue(self.store.toggle_move_effect("left", 2))
+        self.assertEqual(self.store.state.left.boosts, {"attack": 2})
+        self.assertTrue(self.store.state.left.active[2])
+        self.assertGreater(self.store.results.left_vs_right[0].max_pct, before)
+        self.store.toggle_move_effect("left", 2)
+        self.assertEqual(self.store.state.left.boosts, {})
+        self.store.set_move("right", 1, "Will-O-Wisp")
+        self.store.toggle_move_effect("right", 1)
+        self.assertEqual(self.store.state.left.status, "brn")
+        self.store.set_move("right", 2, "Tailwind")
+        self.store.toggle_move_effect("right", 2)
+        self.assertTrue(self.store.state.field.right.tailwind)
+        self.store.set_move("right", 2, "Protect")
+        self.assertFalse(self.store.state.field.right.tailwind, "replacing an active move reverts its effect")
+        self.assertTrue(self.store.toggle_move_effect("right", 2), "Protect is a known side condition")
+        self.assertTrue(self.store.state.field.right.protect)
+        self.store.set_move("right", 3, "Roar")
+        self.assertFalse(self.store.toggle_move_effect("right", 3), "unknown status moves have no toggle")
+        self.assertFalse(self.store.toggle_move_effect("left", 0), "damaging moves have no effect toggle")
+
+    def test_field_strip_and_speed_order(self):
+        self._load_pair()
+        self.view.field.tiles["weather:Sun"].on_click(None)
+        self.assertEqual(self.store.state.field.weather, "Sun")
+        self.assertTrue(self.view.field.tiles["weather:Sun"].active)
+        self.view.field.tiles["weather:Sun"].on_click(None)
+        self.assertEqual(self.store.state.field.weather, "none")
+        self.view.field.tiles["singles"].on_click(None)
+        self.assertEqual(self.store.state.field.game_type, "singles")
+        self.view.field._toggle_side("right", "reflect")
+        self.view.field._cycle_spikes("right")
+        self.view.field._cycle_spikes("right")
+        self.assertEqual((self.store.state.field.right.reflect, self.store.state.field.right.spikes), (True, 2))
+        self.assertEqual(self.view.field.side_chips[("right", "spikes")].label.value, "Spikes ×2")
+        self.assertEqual(self.store.speed_order(), "right", "Incineroar (80) outspeeds Kingambit (50)")
+        self.view.field.tiles["trick_room"].on_click(None)
+        self.assertEqual(self.store.speed_order(), "left")
+        self.view.field.tiles["tailwind_left"].on_click(None)
+        self.assertGreater(self.store.speed("left"), 102)
+        serialise(self.view)
 
     def test_panel_search_and_edits_go_through_the_store(self):
         self.view.attacker._suggest("king")
@@ -194,39 +248,85 @@ class TestCalcView(_Base):
         self.assertEqual(self.store.state.left.species, "kingambit")
         self.view.attacker.editor._typed("attack", "32")
         self.assertEqual(self.store.state.left.points, {"attack": 32})
-        self.view.attacker._boost_changed("attack", "2")
+        self.view.attacker._bump("attack", 1)
+        self.view.attacker._bump("attack", 1)
         self.assertEqual(self.store.state.left.boosts, {"attack": 2})
+        self.assertEqual(self.view.attacker._stages["attack"].value.value, "+2")
+        self.view.attacker._status_changed("brn")
+        self.assertEqual(self.store.state.left.status, "brn")
         self.view.attacker._hp_typed("90")
         self.assertEqual(self.store.cur_hp("left"), 90)
-        self.view.field._field("weather", "Rain")
-        self.view.field._side("right", "light_screen", True)
-        self.view.field._game_type_changed({"singles"})
-        self.assertEqual((self.store.state.field.weather, self.store.state.field.right.light_screen, self.store.state.field.game_type), ("Rain", True, "singles"))
-        self.assertEqual(self.view.field._weather.value, "Rain")
+        self.view.attacker._toggle_spread()
+        self.assertFalse(self.view.attacker._spread_body.visible)
         serialise(self.view)
 
-    def test_resize_key_and_request(self):
+    def test_rail_and_sweep(self):
+        self._load_pair()
+        entries = self.store.compute_sweep()
+        self.assertEqual({e.canonical_id for e in entries}, {"kingambit", "incineroar", "charizard-mega-y"})
+        by = {e.canonical_id: e for e in entries}
+        self.assertFalse(by["incineroar"].preset, "no roster data: their moves unknown")
+        self.assertIn(by["incineroar"].klass, {"wall", "neutral", "mitigated"})
+        self.assertIsNotNone(by["charizard-mega-y"].your_best)
+        self.store.publish_sweep(entries)
+        self.assertFalse(self.store.sweep_stale())
+        self.assertEqual(len(self.view.sweep._list.controls), 3)
+        self.view.sweep._set_query("char")
+        self.assertEqual(len(self.view.sweep._list.controls), 1)
+        self.view.sweep._set_query("")
+        self.view.sweep._set_class("wall")
+        self.assertTrue(all(c.content.controls[2]._label.value == "Wall" for c in self.view.sweep._list.controls if hasattr(c, "content") and isinstance(c.content, ft.Row)))
+        self.view.sweep._set_class(None)
+        card = self.view.sweep._list.controls[0]
+        card.on_click(None)
+        self.assertEqual(self.store.state.right.species, card.content.controls[0].tooltip or self.store.state.right.species)
+        self.assertTrue(self.store.state.right.source.startswith("Opponents"))
+        self.assertEqual(self.view.rail._team.controls[0].value, "No team yet — build one in Teams.")
+        serialise(self.view)
+
+    def test_resize_and_request(self):
         self.view.handle_resize(1000, 700)
         self.assertIs(self.view._host.content, self.view._stack)
-        self.assertIsNone(self.view.field.width)
+        self.assertIsNone(self.view.rail.width)
         serialise(self.view)
         self.view.handle_resize(1440, 900)
-        self.assertIs(self.view._host.content, self.view._panels)
-        self.assertEqual(self.view.field.width, 360)
+        self.assertIs(self.view._host.content, self.view._wide)
+        self.assertEqual(self.view.sweep.width, 300)
         serialise(self.view)
-        self.store.load_species("left", "kingambit")
-        self.store.load_species("right", "incineroar")
+        self._load_pair()
         self.assertTrue(self.view.handle_key(SimpleNamespace(key="S", ctrl=True, shift=True, alt=False, meta=False)))
         self.assertEqual(self.store.state.left.species, "incineroar")
-        self.assertFalse(self.view.handle_key(SimpleNamespace(key="F", ctrl=True, shift=False, alt=False, meta=False)), "unmounted field cannot focus")
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=PokemonState(species="charizard-mega-y", ability="Drought", moves=["Heat Wave", None, None, None])))
         self.assertEqual(self.store.state.left.species, "charizard-mega-y")
         self.assertEqual(self.navigated, ["calc"])
-        self.assertEqual(self.view.results.rows[0].result.name, "Heat Wave")
+        self.assertEqual(self.view.attacker.cards[0]._name.value, "Heat Wave")
+
+    def test_classify_rules(self):
+        from pokemon_champions_planning_tool.ui.views.calc.state import classify
+
+        def mr(pct):
+            return MoveResultStub(pct) if pct is not None else None
+
+        self.assertEqual(classify(mr(120), mr(30), True), "crushed")
+        self.assertEqual(classify(mr(120), mr(110), False), "threat", "they OHKO first")
+        self.assertEqual(classify(mr(120), mr(110), True), "crushed", "you OHKO first")
+        self.assertEqual(classify(mr(40), mr(60), True), "threat", "their 2HKO beats your 3HKO")
+        self.assertEqual(classify(mr(20), mr(20), True), "wall")
+        self.assertEqual(classify(None, mr(60), True), "threat")
+        self.assertEqual(classify(mr(60), mr(40), False), "mitigated")
+        self.assertEqual(classify(mr(60), mr(60), False), "neutral")
+        self.assertEqual(classify(mr(60), None, False), "mitigated")
 
     def test_help_and_accent(self):
         self.assertIn("Calc", TIPS)
         self.assertTrue(hasattr(Accent, "CALC"))
+
+
+class MoveResultStub:
+    def __init__(self, pct):
+        self.ok = True
+        self.min_pct = pct
+        self.max_pct = pct
 
 
 def _walk(control):

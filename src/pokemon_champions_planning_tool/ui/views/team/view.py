@@ -16,6 +16,7 @@ from .dialogs.assign import AssignDialog
 from .dialogs.export_dialog import ExportDialog
 from .dialogs.import_dialog import ImportDialog
 from .dialogs.item_picker import ItemPickerDialog
+from .dialogs.compare import CompareDialog
 from .dialogs.move_picker import MovePickerDialog
 from .dialogs.spread import SpreadDialog
 from .slot_card import SLOT_CARD_HEIGHT, SLOT_CARD_HEIGHT_NARROW, SLOT_CARD_MAX_EXTENT, SLOT_CARD_WRAP_WIDTH, SlotCallbacks, SlotCard
@@ -64,6 +65,7 @@ class TeamView(ft.Column):
                 ft.PopupMenuItem(content=ft.Text("New team"), icon=ft.Icons.ADD, on_click=lambda _e: self.ctx.page.run_task(self._new_team)),
                 ft.PopupMenuItem(content=ft.Text("Duplicate team"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self.ctx.page.run_task(self._duplicate_team)),
                 ft.PopupMenuItem(content=ft.Text("Delete team"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.ctx.page.run_task(self._delete_team)),
+                ft.PopupMenuItem(content=ft.Text("Compare teams…"), icon=ft.Icons.COMPARE_ARROWS, on_click=lambda _e: self._open_compare()),
                 ft.PopupMenuItem(),
                 self._show_all_moves_item,
             ],
@@ -276,6 +278,13 @@ class TeamView(ft.Column):
     def _swap(self, a: int, b: int) -> None:
         if self.store.swap(a, b):
             self._focus(b)
+
+    def _open_compare(self) -> None:
+        if self.store.active_team_id is None:
+            self.ctx.toast("Create a team first", "info")
+            return
+        page = self.ctx.page
+        page.show_dialog(CompareDialog(self.store, on_close=page.pop_dialog))
 
     def _set_show_all_moves(self, value: bool) -> None:
         self.show_all_moves = value

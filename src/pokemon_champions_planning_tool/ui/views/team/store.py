@@ -90,6 +90,36 @@ class TeamStore:
 
     # -- reading ----------------------------------------------------------------------------
 
+    def summary_for(self, team_id: UUID) -> tuple[str, list[SlotModel], TeamSummary]:
+        """(name, slots, summary) of any team without touching the active one — for comparison."""
+        with self._sf() as s:
+            team_repo = TeamRepository(s)
+            record = team_repo.get(team_id)
+            name = record.name if record else ""
+            members = team_repo.get_members(team_id)
+            entries = {e.box_entry_id: e for e in BoxRepository(s).list_entries(include_planned=True)}
+            mega_repo = MegaEvolutionRepository(s)
+            megas_by_species: dict[str, list] = {}
+            for m in members:
+                entry = entries.get(m.box_entry_id)
+                if entry is not None:
+                    species = entry.pokemon.species_name or entry.pokemon.canonical_id
+                    if species not in megas_by_species:
+                        megas_by_species[species] = mega_repo.list_by_species(species)
+        slots = [SlotModel(p) for p in range(1, 7)]
+        for m in members:
+            entry = entries.get(m.box_entry_id)
+            if entry is None or not 1 <= m.slot_position <= 6:
+                continue
+            slot = slots[m.slot_position - 1]
+            slot.member, slot.entry = m, entry
+            slot.megas = megas_by_species.get(entry.pokemon.species_name or entry.pokemon.canonical_id, [])
+            slot.item = self.catalogs.item_for(m.item)
+            slot.moves = self._resolve_moves(slot)
+        for slot in slots:
+            slot.validation = validate_slot(slot, slots)
+        return name, slots, summarize(slots)
+
     def load(self, team_id: UUID | None = None) -> None:
         """Reload the team list and the active team (defaults to the first team)."""
         with self._sf() as s:

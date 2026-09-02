@@ -10,6 +10,7 @@ from ....services.tournament_service import MetaTeamRow
 from ... import events
 from ...components import ActiveFilterChip, EmptyState, PageHeader, SyncIndicator, skeleton_rows
 from ...components.banner import InlineBanner
+from ...components.inputs import SEARCH_FIELD_STYLE
 from ...context import AppContext
 from ...format import plural, relative_time
 from ...tasks import Debouncer, grid_tile_aspect, is_mounted
@@ -48,7 +49,7 @@ class MetaView(ft.Column):
         self.header = PageHeader("Meta", icon=ft.Icons.EMOJI_EVENTS, accent=Accent.META, actions=[self.sync_indicator, self._sync_spinner, self._sync_button])
 
         # -- filter bar ---------------------------------------------------------------
-        self._search = ft.TextField(
+        self._search = ft.TextField(**SEARCH_FIELD_STYLE, 
             hint_text="Species, player or event…",
             prefix_icon=ft.Icons.SEARCH,
             width=320,

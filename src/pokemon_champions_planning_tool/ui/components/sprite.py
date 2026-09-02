@@ -42,14 +42,17 @@ class Sprite(ft.Container):
             ),
         )
         self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not src)
+        # The badge sits over the ring's bottom-right edge; a rim in the surface colour
+        # separates it from the ring, and the stack must not clip it at the circle.
         self._badge = ft.Container(
-            width=max(14, size // 3),
-            height=max(14, size // 3),
+            width=max(16, size // 3),
+            height=max(16, size // 3),
             border_radius=Radius.PILL,
             alignment=ft.Alignment.CENTER,
+            border=ft.Border.all(2, Palette.SURFACE_2),
             visible=False,
-            right=-2,
-            bottom=-2,
+            right=-4,
+            bottom=-4,
         )
         self._number = ft.Container(
             content=ft.Text("", size=max(9, size // 4), weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE),
@@ -62,20 +65,33 @@ class Sprite(ft.Container):
             left=-2,
             bottom=-2,
         )
-        self.content = ft.Stack(
-            controls=[
-                ft.Container(content=self._image, alignment=ft.Alignment.CENTER, width=size, height=size),
-                ft.Container(content=self._fallback, alignment=ft.Alignment.CENTER, width=size, height=size),
-                self._badge,
-                self._number,
-            ],
+        # The circle (background, ring, shadow) is an inner control: a Container with a
+        # pill radius clips its children to the circle, which cut the corner badge. The
+        # badge is a sibling in an unclipped stack, so it may overhang the ring.
+        self._circle = ft.Container(
+            content=ft.Stack(
+                controls=[
+                    ft.Container(content=self._image, alignment=ft.Alignment.CENTER, width=size, height=size),
+                    ft.Container(content=self._fallback, alignment=ft.Alignment.CENTER, width=size, height=size),
+                ],
+                width=size,
+                height=size,
+            ),
             width=size,
             height=size,
+            border_radius=Radius.PILL,
+            bgcolor=Palette.SURFACE_3,
+            alignment=ft.Alignment.CENTER,
+        )
+        self.content = ft.Stack(
+            controls=[self._circle, self._badge, self._number],
+            width=size,
+            height=size,
+            clip_behavior=ft.ClipBehavior.NONE,
         )
         self.width = size
         self.height = size
-        self.border_radius = Radius.PILL
-        self.bgcolor = Palette.SURFACE_3
+        self.clip_behavior = ft.ClipBehavior.NONE
         self.alignment = ft.Alignment.CENTER
         self.tooltip = tooltip
         self.set_ring(ring, primary_type)
@@ -103,20 +119,20 @@ class Sprite(ft.Container):
         elif ring == "mega":
             colour = Palette.PRIMARY
             self._badge.visible = True
-            self._badge.bgcolor = Palette.PRIMARY_CONTAINER
-            self._badge.content = ft.Icon(ft.Icons.BOLT, size=max(10, self._size // 4), color=Palette.ON_PRIMARY_CONTAINER)
+            self._badge.bgcolor = Palette.PRIMARY
+            self._badge.content = ft.Icon(ft.Icons.BOLT, size=max(10, self._size // 5), color=Palette.ON_PRIMARY)
         elif ring == "planned":
             colour = Palette.TERTIARY
             self._image.opacity = 0.7
             self._badge.visible = True
-            self._badge.bgcolor = Palette.TERTIARY_CONTAINER
-            self._badge.content = ft.Icon(ft.Icons.EDIT_NOTE, size=max(10, self._size // 4), color=Palette.ON_TERTIARY_CONTAINER)
+            self._badge.bgcolor = Palette.TERTIARY
+            self._badge.content = ft.Icon(ft.Icons.EDIT_NOTE, size=max(10, self._size // 5), color=Palette.ON_TERTIARY)
         elif ring == "selected":
             colour = Palette.PRIMARY
         elif ring == "error":
             colour = Palette.ERROR
-        self.border = ft.Border.all(width, colour) if colour else None
-        self.shadow = (
+        self._circle.border = ft.Border.all(width, colour) if colour else None
+        self._circle.shadow = (
             ft.BoxShadow(blur_radius=6, spread_radius=1, color=alpha(Palette.PRIMARY, 0.35))
             if ring == "selected"
             else None

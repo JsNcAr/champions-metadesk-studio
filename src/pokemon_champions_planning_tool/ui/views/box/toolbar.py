@@ -9,6 +9,7 @@ from dataclasses import replace
 import flet as ft
 
 from ...components import ActiveFilterChip
+from ...components.inputs import SEARCH_FIELD_STYLE
 from ...tasks import Debouncer
 from ...theme import TYPE_ORDER, Layout, Motion, Palette, Radius, Space, alpha, on_type_color, type_color
 from ...theme import STAT_COLORS, STAT_LABELS, STAT_ORDER
@@ -66,7 +67,7 @@ class BoxToolbar(ft.Column):
         self._on_show_stats = on_show_stats
         self.show_stats = False
 
-        self.search = ft.TextField(
+        self.search = ft.TextField(**SEARCH_FIELD_STYLE, 
             hint_text="Filter box…",
             prefix_icon=ft.Icons.FILTER_LIST,
             width=260,

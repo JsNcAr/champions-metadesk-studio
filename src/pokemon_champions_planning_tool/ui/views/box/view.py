@@ -10,6 +10,7 @@ from ....domain.entities.box_entry import BoxEntry
 from ... import events
 from ...components import EmptyState, PageHeader
 from ...components.banner import InlineBanner
+from ...components.inputs import SEARCH_FIELD_STYLE
 from ...context import AppContext
 from ...tasks import grid_tile_aspect, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Motion, OVERLAY_SHADOW, Palette, Radius, Space
@@ -33,7 +34,7 @@ class BoxView(ft.Row):
         self._cards: dict[UUID, PokemonCard] = {}
 
         # -- header: add by name -------------------------------------------------------------
-        self._add_field = ft.TextField(
+        self._add_field = ft.TextField(**SEARCH_FIELD_STYLE, 
             hint_text="Add to box…",
             prefix_icon=ft.Icons.ADD_CIRCLE_OUTLINE,
             width=320,

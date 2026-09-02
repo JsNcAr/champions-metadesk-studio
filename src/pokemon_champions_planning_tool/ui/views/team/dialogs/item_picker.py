@@ -9,6 +9,7 @@ import flet as ft
 from .....infrastructure.database.models import ItemRecord
 from ....catalogs import Catalogs
 from ....components import EmptyState, StatusChip
+from ....components.inputs import SEARCH_FIELD_STYLE
 from ....tasks import is_mounted
 from ....theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
 
@@ -41,7 +42,7 @@ class ItemPickerDialog(ft.AlertDialog):
         all_items = list(catalogs.items_by_id.values())
         categories = sorted({(i.category or "other") for i in all_items}, key=_category_label)
 
-        self._search = ft.TextField(hint_text="Search items…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True, expand=True,
+        self._search = ft.TextField(**SEARCH_FIELD_STYLE, hint_text="Search items…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True, expand=True,
                                     on_change=lambda _e: self._refresh(), on_submit=lambda _e: self._pick_first())
         self._legal = ft.Switch(label="Champions-legal only", value=True, on_change=lambda e: self._set_legal(bool(e.control.value)))
         self._categories = ft.ListView(width=160, spacing=2, controls=[])

@@ -9,6 +9,7 @@ import flet as ft
 
 from .....domain.entities.box_entry import BoxEntry
 from ....components import EmptyState
+from ....components.inputs import SEARCH_FIELD_STYLE
 from ....components.pokemon import BstPill, IdentityRow
 from ....tasks import is_mounted
 from ....theme import Palette, Radius, Space
@@ -33,7 +34,7 @@ class AssignDialog(ft.AlertDialog):
         self._on_close = on_close
         self._include_planned = False
 
-        self._search = ft.TextField(hint_text="Search by name, type or tag…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True,
+        self._search = ft.TextField(**SEARCH_FIELD_STYLE, hint_text="Search by name, type or tag…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True,
                                     on_change=lambda _e: self._refresh(), on_submit=lambda _e: self._pick_first())
         self._planned = ft.Switch(label="Include planned", value=False, on_change=lambda e: self._set_planned(bool(e.control.value)))
         self._list = ft.ListView(spacing=Space.XS, height=380)

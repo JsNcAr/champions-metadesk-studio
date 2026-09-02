@@ -32,6 +32,7 @@ class DetailPanel(SidePanel):
         on_tags: Callable[[UUID, list[str]], None],
         on_toggle_planned: Callable[[UUID, bool], None],
         on_delete: Callable[[UUID], None],
+        on_add_to_team: Callable[[UUID, UUID | None], None] | None = None,
     ) -> None:
         super().__init__("Details", on_close=on_close, accent=Accent.BOX)
         self.detail: BoxDetail | None = None
@@ -71,6 +72,14 @@ class DetailPanel(SidePanel):
         self._tags = ft.Row(spacing=Space.XS, wrap=True, tight=True)
         self._tag_input = ft.TextField(hint_text="Add tag…", dense=True, width=160, on_submit=lambda e: self._add_tag(e.control.value or ""))
         self._planned_button = ft.OutlinedButton("Mark as planned", icon=ft.Icons.EDIT_NOTE, on_click=lambda _e: self._toggle_planned())
+        self._on_add_to_team = on_add_to_team
+        self._team_items: list[ft.PopupMenuItem] = []
+        self._add_to_team = ft.PopupMenuButton(
+            content=ft.FilledTonalButton("Add to team", icon=ft.Icons.GROUP_ADD),
+            items=[],
+            tooltip="Add to a team's first empty slot",
+            visible=on_add_to_team is not None,
+        )
         self._delete_button = ft.TextButton(
             "Remove from box", icon=ft.Icons.DELETE_OUTLINE,
             style=ft.ButtonStyle(color=Palette.ERROR),
@@ -91,6 +100,7 @@ class DetailPanel(SidePanel):
             ft.Column(spacing=Space.SM, tight=True, controls=[self._notes_header, self._notes]),
             ft.Column(spacing=Space.SM, tight=True, controls=[SectionHeader("Tags", accent=Accent.BOX), self._tags, self._tag_input]),
             self._teams,
+            self._add_to_team,
             ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=[self._planned_button, self._delete_button]),
             ft.Container(height=Space.XL),
         ]
@@ -210,6 +220,15 @@ class DetailPanel(SidePanel):
     def _toggle_planned(self) -> None:
         if self.detail:
             self._on_toggle_planned(self.detail.entry.box_entry_id, not self.detail.entry.is_planned)
+
+    def set_team_options(self, options: list[tuple[UUID | None, str]]) -> None:
+        """(team id or None for "New team…", label) rows for the Add to team menu."""
+        entry_id = self.detail.entry.box_entry_id if self.detail else None
+        self._add_to_team.items = [
+            ft.PopupMenuItem(content=ft.Text(label), icon=ft.Icons.ADD if team_id is None else None,
+                             on_click=lambda _e, team_id=team_id: self._on_add_to_team(entry_id, team_id) if (self._on_add_to_team and entry_id) else None)
+            for team_id, label in options
+        ]
 
     def clear(self) -> None:
         self.detail = None

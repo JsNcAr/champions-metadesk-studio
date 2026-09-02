@@ -18,7 +18,7 @@ from .card import CARD_HEIGHT, CARD_HEIGHT_WITH_STATS, CARD_MAX_EXTENT, PokemonC
 from .detail_panel import DetailPanel
 from .filters import BoxFilters, SortKey
 from .store import BoxStore
-from .table import BoxTable
+from .table import EXTRA_COLUMNS, BoxTable
 from .toolbar import BoxToolbar
 
 _MAX_SUGGESTIONS = 6
@@ -46,17 +46,20 @@ class BoxView(ft.Row):
         self._add_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
-        self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, on_click=lambda _e: self._export())
+        self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, tooltip="Export the visible entries (or the selected ones) to CSV", on_click=lambda _e: self._export())
         self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._add_spinner, self._add_field, self._export_button])
 
         # -- toolbar ---------------------------------------------------------------------------
-        self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats)
+        self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats, on_columns=self._set_columns)
         self.toolbar.set_view_state(self.view_mode, self.show_stats)
+        self.columns: list[str] = [c for c in (ctx.prefs.get("box.columns") or []) if isinstance(c, str)]
+        self.toolbar.set_columns(self.columns)
 
         # -- content ---------------------------------------------------------------------------
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
         self.grid = ft.GridView(expand=True, max_extent=CARD_MAX_EXTENT, child_aspect_ratio=1.0, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP)
         self.table = BoxTable(on_sort=self._on_table_sort, on_select=self._select, on_check=self._check)
+        self.table.set_columns(self.columns)
         self.table.visible = False
         self._empty = EmptyState(ft.Icons.INVENTORY_2_OUTLINED, "Your box is empty", "Add a Pokémon by name to start planning.", action_label="Add a Pokémon", on_action=self._focus_add)
         self._empty.visible = False
@@ -64,6 +67,18 @@ class BoxView(ft.Row):
         self._no_match.visible = False
         # -- bulk selection bar (floats over the content) -------------------------------------
         self._bulk_count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
+        self._bulk_team_menu = ft.PopupMenuButton(
+            content=ft.Container(
+                content=ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    ft.Icon(ft.Icons.GROUP_ADD, size=18, color=Palette.PRIMARY),
+                    ft.Text("Add to team", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.PRIMARY),
+                    ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=18, color=Palette.PRIMARY),
+                ]),
+                padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=6),
+            ),
+            items=[],
+            tooltip="Fill a team's empty slots with the selection",
+        )
         self.bulk_bar = ft.Container(
             content=ft.Row(
                 spacing=Space.SM,
@@ -75,6 +90,7 @@ class BoxView(ft.Row):
                     ft.TextButton("Favourite", icon=ft.Icons.STAR, on_click=lambda _e: self._bulk_favorite(True)),
                     ft.TextButton("Unfavourite", icon=ft.Icons.STAR_BORDER, on_click=lambda _e: self._bulk_favorite(False)),
                     ft.TextButton("Tag", icon=ft.Icons.TAG, on_click=lambda _e: self.ctx.page.run_task(self._bulk_tag)),
+                    self._bulk_team_menu,
                     ft.TextButton("Delete", icon=ft.Icons.DELETE_OUTLINE, style=ft.ButtonStyle(color=Palette.ERROR), on_click=lambda _e: self.ctx.page.run_task(self._bulk_delete)),
                     ft.VerticalDivider(width=Space.LG, thickness=1, color=Palette.OUTLINE_VARIANT),
                     ft.TextButton("Clear", on_click=lambda _e: self.store.clear_multi()),
@@ -109,6 +125,7 @@ class BoxView(ft.Row):
             on_tags=self._save_tags,
             on_toggle_planned=self._toggle_planned,
             on_delete=self._delete,
+            on_add_to_team=self._add_to_team,
         )
 
         left = ft.Column(
@@ -202,6 +219,8 @@ class BoxView(ft.Row):
         n = len(self.store.multi)
         self.bulk_bar.visible = n > 0
         self._bulk_count.value = f"{n} selected"
+        if n > 0:
+            self._bulk_team_menu.items = self._team_menu_items(lambda team_id: self._bulk_add_to_team(team_id))
         for eid, card in self._cards.items():
             card.set_checked(eid in self.store.multi, selection_mode=n > 0)
         if self.view_mode == "table":
@@ -234,6 +253,7 @@ class BoxView(ft.Row):
             self.detail.clear()
             return
         self.detail.update_from(detail, self.store.selected_form_id)
+        self.detail.set_team_options(self._team_options())
         if not detail.megas_checked:
             species = detail.entry.pokemon.species_name or detail.entry.pokemon.canonical_id
             self.ctx.run_in_background(lambda: self.store.fetch_megas(species), on_done=lambda _m: self._refresh_detail_if(selected), on_error=lambda _exc: None)
@@ -255,6 +275,15 @@ class BoxView(ft.Row):
 
     def _filter_by_tag(self, tag: str) -> None:
         self.toolbar._set(tags=frozenset({tag.lower()}))
+
+    def _set_columns(self, columns: list[str]) -> None:
+        self.columns = [k for k in EXTRA_COLUMNS if k in set(columns)]
+        self.ctx.prefs.set("box.columns", self.columns)
+        self.toolbar.set_columns(self.columns)
+        self.table.set_columns(self.columns)
+        if self.view_mode == "table":
+            self._render()
+        self._update_self()
 
     def _set_view_mode(self, mode: str) -> None:
         self.view_mode = mode
@@ -410,8 +439,63 @@ class BoxView(ft.Row):
         self.ctx.run_in_background(lambda: self.store.add_by_name(name), on_done=done, on_error=failed, busy=[self._add_field], spinner=self._add_spinner)
 
     def _export(self) -> None:
-        count = self.store.export_csv()
-        self.ctx.toast(f"Exported {count} entries to pokemon_team_stats.csv", "success")
+        """Export the selection if there is one, otherwise the visible (filtered) entries."""
+        visible = self.store.visible()
+        if self.store.multi:
+            chosen = [e for e in visible if e.box_entry_id in self.store.multi] or [e for e in self.store.entries if e.box_entry_id in self.store.multi]
+            scope = "selected"
+        else:
+            chosen = visible
+            scope = "visible" if self.store.filters.active_labels() else "all"
+        count = self.store.export_csv(chosen)
+        total = len([e for e in self.store.entries if not e.is_planned])
+        suffix = "" if scope == "all" or count == total else f" ({scope}, of {total})"
+        self.ctx.toast(f"Exported {count} entries to pokemon_team_stats.csv{suffix}", "success")
+
+    # -- add to team --------------------------------------------------------------------------------------
+
+    def _team_options(self) -> list[tuple[UUID | None, str]]:
+        options: list[tuple[UUID | None, str]] = [(t.team_id, f"{t.name} · {t.filled}/6") for t in self.store.list_teams()]
+        options.append((None, "New team…"))
+        return options
+
+    def _team_menu_items(self, on_pick) -> list[ft.PopupMenuItem]:
+        return [
+            ft.PopupMenuItem(content=ft.Text(label), icon=ft.Icons.ADD if team_id is None else None, on_click=lambda _e, team_id=team_id: on_pick(team_id))
+            for team_id, label in self._team_options()
+        ]
+
+    def _add_to_team(self, entry_id: UUID, team_id: UUID | None) -> None:
+        self.ctx.page.run_task(self._add_flow, [entry_id], team_id)
+
+    def _bulk_add_to_team(self, team_id: UUID | None) -> None:
+        ids = [e.box_entry_id for e in self.store.visible() if e.box_entry_id in self.store.multi]
+        self.ctx.page.run_task(self._add_flow, ids, team_id)
+
+    async def _add_flow(self, ids: list[UUID], team_id: UUID | None) -> None:
+        if not ids:
+            return
+        if team_id is None:
+            name = await self.ctx.prompt_text("New team", "Team name", submit_label="Create", validate=lambda t: None if t.strip() else "Enter a name")
+            if not name:
+                return
+            try:
+                team_id = self.store.create_team(name)
+            except ValueError as exc:
+                self.ctx.toast(str(exc), "error")
+                return
+        result = self.store.add_to_team(team_id, ids)
+        team_name = next((t.name for t in self.store.list_teams() if t.team_id == team_id), "team")
+        bits = [f"Added {result.added} to {team_name}"]
+        if result.already_on_team:
+            bits.append(f"{result.already_on_team} already there")
+        if result.no_room:
+            bits.append(f"{result.no_room} left out (no free slot)")
+        self.ctx.toast(" · ".join(bits), "success" if result.added else "warning", action="View", on_action=lambda: self.ctx.bus.emit(events.NAVIGATE, "team"))
+        self.ctx.bus.emit(events.TEAMS_CHANGED, team_id)
+        if self.store.multi:
+            self.store.clear_multi()
+        self._update_self()
 
     # -- events ---------------------------------------------------------------------------------------------
 

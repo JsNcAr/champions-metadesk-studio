@@ -30,6 +30,15 @@ _COLUMNS: list[tuple[str, SortKey | None, bool]] = [
 ]
 
 
+# Optional columns, chosen from the View menu: key -> (label, sort key, numeric)
+EXTRA_COLUMNS: dict[str, tuple[str, SortKey | None, bool]] = {
+    "abilities": ("Abilities", None, False),
+    "dex": ("Dex #", None, True),
+    "added": ("Added", "added", False),
+    "notes": ("Notes", None, False),
+}
+
+
 class BoxTable(ft.Container):
     def __init__(
         self,
@@ -42,16 +51,10 @@ class BoxTable(ft.Container):
         self._on_sort = on_sort
         self._on_select = on_select
         self._on_check = on_check
-        self._sort_keys: list[SortKey | None] = [key for _label, key, _numeric in _COLUMNS]
+        self.extra: list[str] = []
+        self._sort_keys: list[SortKey | None] = []
         self.table = ft.DataTable(
-            columns=[
-                ft.DataColumn(
-                    label=ft.Text(label),
-                    numeric=numeric,
-                    on_sort=(lambda e, key=key: self._on_sort(key, bool(e.ascending))) if key else None,
-                )
-                for label, key, numeric in _COLUMNS
-            ],
+            columns=[],
             rows=[],
             heading_row_height=36,
             data_row_min_height=40,
@@ -62,6 +65,24 @@ class BoxTable(ft.Container):
         )
         self.content = ft.Column(controls=[self.table], scroll=ft.ScrollMode.AUTO, expand=True)
         self.expand = True
+        self.set_columns([])
+
+    def _column_defs(self) -> list[tuple[str, SortKey | None, bool]]:
+        return list(_COLUMNS) + [EXTRA_COLUMNS[k] for k in self.extra if k in EXTRA_COLUMNS]
+
+    def set_columns(self, extra: list[str]) -> None:
+        """Choose the optional columns (abilities, dex, added, notes); rebuilds the header."""
+        self.extra = [k for k in EXTRA_COLUMNS if k in set(extra)]
+        defs = self._column_defs()
+        self._sort_keys = [key for _label, key, _numeric in defs]
+        self.table.columns = [
+            ft.DataColumn(
+                label=ft.Text(label),
+                numeric=numeric,
+                on_sort=(lambda e, key=key: self._on_sort(key, bool(e.ascending))) if key else None,
+            )
+            for label, key, numeric in defs
+        ]
 
     def update_from(self, entries: list[BoxEntry], *, sort: SortKey, descending: bool, selected_id: UUID | None, checked: set[UUID] | None = None) -> None:
         checked = checked or set()
@@ -108,7 +129,23 @@ class BoxTable(ft.Container):
                         ft.DataCell(ft.Text(str(p.total), weight=ft.FontWeight.W_600, text_align=ft.TextAlign.RIGHT)),
                         ft.DataCell(ft.Text(", ".join(entry.tags), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)),
                         ft.DataCell(ft.Icon(ft.Icons.STAR if entry.is_favorite else ft.Icons.STAR_BORDER, size=16, color=Palette.PRIMARY if entry.is_favorite else Palette.DISABLED)),
+                        *self._extra_cells(entry),
                     ],
                 )
             )
         self.table.rows = rows
+
+    def _extra_cells(self, entry: BoxEntry) -> list[ft.DataCell]:
+        p = entry.pokemon
+        cells: list[ft.DataCell] = []
+        for key in self.extra:
+            if key == "abilities":
+                names = [a.name.replace("-", " ").title() for a in p.abilities]
+                cells.append(ft.DataCell(ft.Text(", ".join(names), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)))
+            elif key == "dex":
+                cells.append(ft.DataCell(ft.Text(f"#{p.dex_number:03d}" if p.dex_number else "—", text_align=ft.TextAlign.RIGHT)))
+            elif key == "added":
+                cells.append(ft.DataCell(ft.Text(entry.created_at.strftime("%d %b %Y") if entry.created_at else "—", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)))
+            elif key == "notes":
+                cells.append(ft.DataCell(ft.Text(entry.notes or "", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, tooltip=entry.notes or None)))
+        return cells

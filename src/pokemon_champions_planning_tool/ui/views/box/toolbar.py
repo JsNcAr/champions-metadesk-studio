@@ -14,6 +14,7 @@ from ...tasks import Debouncer
 from ...theme import TYPE_ORDER, Layout, Motion, Palette, Radius, Space, alpha, on_type_color, type_color
 from ...theme import STAT_COLORS, STAT_LABELS, STAT_ORDER
 from .filters import BST_MAX, BST_MIN, SORT_LABELS, STAT_MAX, STAT_MIN, BoxFilters
+from .table import EXTRA_COLUMNS
 
 _FILTER_DEBOUNCE_MS = 150
 ViewMode = str  # "grid" | "table"
@@ -59,6 +60,7 @@ class BoxToolbar(ft.Column):
         on_filters: Callable[[BoxFilters], None],
         on_view_mode: Callable[[ViewMode], None],
         on_show_stats: Callable[[bool], None],
+        on_columns: Callable[[list[str]], None] | None = None,
     ) -> None:
         super().__init__(spacing=Space.SM, tight=True)
         self._filters = BoxFilters()
@@ -129,7 +131,16 @@ class BoxToolbar(ft.Column):
         )
         self._stats_item = ft.PopupMenuItem(content=ft.Text("Show stats on cards"), checked=False, on_click=lambda _e: self._toggle_stats())
         self._planned_item = ft.PopupMenuItem(content=ft.Text("Show planned Pokémon"), checked=False, on_click=lambda _e: self._set(show_planned=not self._filters.show_planned))
-        self._view_menu = ft.PopupMenuButton(icon=ft.Icons.TUNE, tooltip="View options", items=[self._stats_item, self._planned_item])
+        self._on_columns = on_columns
+        self.columns: list[str] = []
+        self._column_items: dict[str, ft.PopupMenuItem] = {
+            key: ft.PopupMenuItem(content=ft.Text(f"Column: {label}"), checked=False, on_click=lambda _e, key=key: self._toggle_column(key))
+            for key, (label, _sort, _numeric) in EXTRA_COLUMNS.items()
+        }
+        self._view_menu = ft.PopupMenuButton(
+            icon=ft.Icons.TUNE, tooltip="View options",
+            items=[self._stats_item, self._planned_item, ft.PopupMenuItem(), *self._column_items.values()],
+        )
 
         # Two groups: the filter chips wrap when the panel narrows; sort/view stay pinned right.
         # A wrapping Row must never hold an ``expand`` child — Flutter's Wrap rejects Expanded
@@ -299,6 +310,18 @@ class BoxToolbar(ft.Column):
         self._view_mode.selected = [view_mode]
         self.show_stats = show_stats
         self._stats_item.checked = show_stats
+
+    def set_columns(self, columns: list[str]) -> None:
+        self.columns = [k for k in EXTRA_COLUMNS if k in set(columns)]
+        for key, item in self._column_items.items():
+            item.checked = key in self.columns
+
+    def _toggle_column(self, key: str) -> None:
+        current = set(self.columns)
+        (current.discard if key in current else current.add)(key)
+        self.set_columns(list(current))
+        if self._on_columns is not None:
+            self._on_columns(self.columns)
 
     def _toggle_stats(self) -> None:
         self.show_stats = not self.show_stats

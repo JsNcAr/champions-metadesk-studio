@@ -21,6 +21,8 @@ from uuid import UUID
 from sqlmodel import Session
 
 from ....domain.entities.box_entry import BoxEntry
+from ....domain.entities.team import Team
+from ....domain.entities.team_member import TeamMember
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.type_chart import bucket_profile, defensive_profile
 from ....infrastructure.csv.csv_operations import export_box_entries_to_csv
@@ -78,6 +80,20 @@ class BoxDetail:
 
     def defensive_buckets(self, form_id: str | None = None) -> dict[float, list[str]]:
         return bucket_profile(defensive_profile(list(self.form(form_id).types)))
+
+
+@dataclass(frozen=True)
+class TeamOption:
+    team_id: UUID
+    name: str
+    filled: int
+
+
+@dataclass(frozen=True)
+class AddToTeamResult:
+    added: int
+    already_on_team: int
+    no_room: int
 
 
 class BoxStore:
@@ -278,7 +294,47 @@ class BoxStore:
         with self._sf() as s:
             return list(sync_mega_evolutions_for_species(s, species_name))
 
-    def export_csv(self) -> int:
-        owned = [e for e in self.entries if not e.is_planned]
+    def export_csv(self, entries: list[BoxEntry] | None = None) -> int:
+        """Write owned entries to the CSV file; ``entries`` limits it to a visible or selected set."""
+        source = self.entries if entries is None else entries
+        owned = [e for e in source if not e.is_planned]
         export_box_entries_to_csv(owned)
         return len(owned)
+
+    # -- teams -----------------------------------------------------------------------------
+
+    def list_teams(self) -> list[TeamOption]:
+        with self._sf() as s:
+            repo = TeamRepository(s)
+            return [TeamOption(r.team_id, r.name, len(repo.list_members(r.team_id))) for r in repo.list_all()]
+
+    def create_team(self, name: str) -> UUID:
+        clean = name.strip()
+        if not clean:
+            raise ValueError("Team name cannot be empty")
+        with self._sf() as s:
+            repo = TeamRepository(s)
+            if repo.get_by_name(clean) is not None:
+                raise ValueError(f"A team named “{clean}” already exists")
+            return repo.create(Team(name=clean)).team_id
+
+    def add_to_team(self, team_id: UUID, ids: list[UUID]) -> AddToTeamResult:
+        """Put entries into the team's empty slots, in order. Entries already on the team are
+        skipped; entries beyond the free slots are counted, not placed."""
+        with self._sf() as s:
+            repo = TeamRepository(s)
+            members = repo.get_members(team_id)
+            on_team = {m.box_entry_id for m in members}
+            free = [p for p in range(1, 7) if p not in {m.slot_position for m in members}]
+            added = already = no_room = 0
+            for entry_id in ids:
+                if entry_id in on_team:
+                    already += 1
+                    continue
+                if not free:
+                    no_room += 1
+                    continue
+                repo.upsert_member(team_id, TeamMember(box_entry_id=entry_id, slot_position=free.pop(0)))
+                on_team.add(entry_id)
+                added += 1
+        return AddToTeamResult(added=added, already_on_team=already, no_room=no_room)

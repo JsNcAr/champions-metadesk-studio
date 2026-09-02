@@ -182,8 +182,9 @@ class TestParseShowdownText(unittest.TestCase):
         self.assertEqual(slot.ability_name, "Static")
         self.assertEqual(slot.level, 50)
         self.assertEqual(slot.nature, "Jolly")
-        self.assertEqual(slot.evs["attack"], 252)
-        self.assertEqual(slot.evs["speed"], 252)
+        self.assertEqual(slot.points, {"attack": 32, "special_defense": 1, "speed": 32}, "a 252-style EV line is converted to stat points")
+        self.assertTrue(slot.points_converted)
+        self.assertTrue(any("converted to stat points" in w for w in result.warnings))
         self.assertIn("Volt Tackle", slot.moves)
         self.assertIn("Protect", slot.moves)
 
@@ -193,9 +194,21 @@ class TestParseShowdownText(unittest.TestCase):
         iron_hands = result.slots[0]
         flutter = result.slots[1]
         self.assertEqual(iron_hands.species_name, "Iron Hands")
-        self.assertEqual(iron_hands.ivs.get("speed"), 0)
+        self.assertEqual(iron_hands.points, {"hp": 32, "attack": 1, "defense": 32})
+        self.assertTrue(any("IVs ignored" in w for w in result.warnings))
         self.assertEqual(flutter.species_name, "Flutter Mane")
         self.assertEqual(flutter.item_name, "Choice Specs")
+
+    def test_champions_points_are_taken_verbatim(self):
+        result = parse_showdown_text("Kingambit @ Life Orb\nAbility: Supreme Overlord\nLevel: 50\nEVs: 32 HP / 32 Atk / 2 Spe\nAdamant Nature\n- Kowtow Cleave\n")
+        slot = result.slots[0]
+        self.assertEqual(slot.points, {"hp": 32, "attack": 32, "speed": 2})
+        self.assertFalse(slot.points_converted)
+        self.assertEqual(result.warnings, ())
+        clamped = parse_showdown_text("Kingambit\nEVs: 33 Atk\nLevel: 100\n- Kowtow Cleave\n")
+        self.assertEqual(clamped.slots[0].points, {"attack": 32})
+        self.assertTrue(any("clamped" in w for w in clamped.warnings))
+        self.assertTrue(any("level 100 ignored" in w for w in clamped.warnings))
 
     def test_edge_cases_ho_oh_and_type_null(self):
         result = parse_showdown_text(EDGE_CASE_PASTE)
@@ -235,14 +248,13 @@ class TestParseShowdownText(unittest.TestCase):
 class TestRoundTrip(unittest.TestCase):
     """Export a team then re-parse it and assert identity."""
 
-    def _make_mock_member(self, display_name, item, ability, moves, nature, evs, ivs):
+    def _make_mock_member(self, display_name, item, ability, moves, nature, points):
         member = MagicMock()
         member.slot_position = 1
         member.item = item
         member.ability = ability
         member.nature = nature
-        member.evs = evs
-        member.ivs = ivs
+        member.points = points
         member.level = 50
         member.moveset = [MagicMock(name=m) for m in moves]
         for i, m_name in enumerate(moves):
@@ -263,13 +275,17 @@ class TestRoundTrip(unittest.TestCase):
             ability="Intimidate",
             moves=["Fake Out", "Knock Off", "Flare Blitz", "U-turn"],
             nature="Adamant",
-            evs={"hp": 252, "attack": 4, "defense": 252},
-            ivs={},
+            points={"hp": 32, "attack": 2, "defense": 32},
         )
         text = export_team_to_showdown_text([member], {"test-uuid": box_entry})
+        self.assertIn("EVs: 32 HP / 2 Atk / 32 Def", text, "points ride on the EVs line, Showdown's Champions convention")
+        self.assertNotIn("IVs:", text)
+        self.assertNotIn("Level:", text)
         result = parse_showdown_text(text)
         self.assertTrue(result.is_valid)
         slot = result.slots[0]
+        self.assertEqual(slot.points, {"hp": 32, "attack": 2, "defense": 32})
+        self.assertFalse(slot.points_converted)
         self.assertEqual(slot.species_name, "Incineroar")
         self.assertEqual(slot.item_name, "Assault Vest")
         self.assertEqual(slot.ability_name, "Intimidate")

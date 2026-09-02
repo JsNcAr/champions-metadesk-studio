@@ -140,10 +140,8 @@ class TestRepositories(unittest.TestCase):
             item="Charizardite X",
             ability="Tough Claws",
             notes="Lead sweeper",
-            evs={"hp": 252, "attack": 252, "speed": 4},
-            ivs={"speed": 31},
+            points={"hp": 32, "attack": 32, "speed": 1},
             nature="Jolly",
-            level=50,
         )
         team_repo.upsert_member(team_record.team_id, member)
 
@@ -152,8 +150,7 @@ class TestRepositories(unittest.TestCase):
         self.assertEqual(len(members), 1)
         self.assertEqual(members[0].selected_form, "charizard-mega-x")
         self.assertEqual(members[0].nature, "Jolly")
-        self.assertEqual(members[0].evs, {"hp": 252, "attack": 252, "speed": 4})
-        self.assertEqual(members[0].points, {"hp": 32, "attack": 32, "speed": 1}, "legacy EVs surface as stat points")
+        self.assertEqual(members[0].points, {"hp": 32, "attack": 32, "speed": 1})
 
         # Test update (upsert) existing member spread fields
         member_update = TeamMember(
@@ -163,17 +160,14 @@ class TestRepositories(unittest.TestCase):
             item="Charizardite X",
             ability="Tough Claws",
             notes="Updated sweeper",
-            evs={"hp": 4, "attack": 252, "speed": 252},
-            ivs={"speed": 31},
+            points={"hp": 1, "attack": 32, "speed": 32},
             nature="Adamant",
-            level=100,
         )
         team_repo.upsert_member(team_record.team_id, member_update)
         updated_members = team_repo.get_members(team_record.team_id)
         self.assertEqual(len(updated_members), 1)
         self.assertEqual(updated_members[0].nature, "Adamant")
-        self.assertEqual(updated_members[0].level, 100)
-        self.assertEqual(updated_members[0].evs, {"hp": 4, "attack": 252, "speed": 252})
+        self.assertEqual(updated_members[0].level, 50, "level is fixed in Champions")
         self.assertEqual(updated_members[0].points, {"hp": 1, "attack": 32, "speed": 32})
         member_points = TeamMember(box_entry_id=box_record.box_entry_id, slot_position=1, selected_form="charizard-mega-x", item="Charizardite X", ability="Tough Claws",
                                    points={"hp": 32, "defense": 32, "special_defense": 2}, nature="Impish")

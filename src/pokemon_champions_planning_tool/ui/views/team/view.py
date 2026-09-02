@@ -343,8 +343,8 @@ class TeamView(ft.Column):
         if not slot.filled or slot.base_stats is None:
             return
 
-        def save(nature: str, level: int, evs: dict[str, int], ivs: dict[str, int]) -> list[str]:
-            problems = self.store.save_spread(position, nature=nature, level=level, evs=evs, ivs=ivs)
+        def save(nature: str, points: dict[str, int]) -> list[str]:
+            problems = self.store.save_spread(position, nature=nature, points=points)
             if not problems:
                 self.ctx.page.pop_dialog()
                 self.ctx.toast("Spread saved", "success")
@@ -352,7 +352,7 @@ class TeamView(ft.Column):
 
         self.ctx.page.show_dialog(SpreadDialog(
             title=slot.entry.pokemon.display_name, base_stats=slot.base_stats,
-            nature=slot.member.nature, level=slot.member.level or 50, evs=slot.member.evs, ivs=slot.member.ivs,
+            nature=slot.member.nature, points=dict(slot.member.points),
             on_save=save, on_close=self.ctx.page.pop_dialog,
         ))
 

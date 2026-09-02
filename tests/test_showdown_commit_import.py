@@ -68,7 +68,7 @@ class TestCommitTeamImport(unittest.TestCase):
         self.assertEqual(inc.ability, "Intimidate")
         self.assertEqual(inc.tera_type, "grass", "tera type is carried and normalised")
         self.assertEqual(inc.nature, "Careful")
-        self.assertEqual(inc.evs.get("hp"), 252)
+        self.assertEqual(inc.points.get("hp"), 32, "legacy EV lines land as stat points")
         self.assertEqual([m.name for m in inc.moveset], ["Fake Out", "Knock Off", "Parting Shot", "Will-O-Wisp"])
         self.assertIsNone(members[1].tera_type)
 

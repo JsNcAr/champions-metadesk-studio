@@ -210,30 +210,3 @@ def calc_all(
         else:
             values[key] = calc_stat(b, iv, ev, level, nature_multiplier(nature, key))
     return PokemonStats(**values)
-
-
-def ev_total(evs: Mapping[str, int] | None) -> int:
-    return sum(int(v) for v in (evs or {}).values())
-
-
-def validate_spread(evs: Mapping[str, int] | None, ivs: Mapping[str, int] | None, level: int = DEFAULT_LEVEL) -> list[str]:
-    """Human-readable problems with a spread; empty when it is legal."""
-    problems: list[str] = []
-    evs = evs or {}
-    ivs = ivs or {}
-    for key, value in evs.items():
-        if key not in STAT_KEYS:
-            problems.append(f"Unknown stat '{key}' in EVs")
-        elif not 0 <= int(value) <= MAX_EV_PER_STAT:
-            problems.append(f"{key} EVs must be 0–{MAX_EV_PER_STAT} (got {value})")
-    total = ev_total(evs)
-    if total > MAX_EV_TOTAL:
-        problems.append(f"EV total {total} exceeds {MAX_EV_TOTAL}")
-    for key, value in ivs.items():
-        if key not in STAT_KEYS:
-            problems.append(f"Unknown stat '{key}' in IVs")
-        elif not 0 <= int(value) <= MAX_IV:
-            problems.append(f"{key} IVs must be 0–{MAX_IV} (got {value})")
-    if not 1 <= int(level) <= 100:
-        problems.append(f"Level must be 1–100 (got {level})")
-    return problems

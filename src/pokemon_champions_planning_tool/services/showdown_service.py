@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from uuid import UUID
 
 from ..domain.entities.pokemon_move import PokemonMove
+from ..domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, STAT_KEYS, format_points, points_from_evs, validate_points
 
 if TYPE_CHECKING:
     from ..infrastructure.database.repositories import BoxRepository
@@ -80,8 +81,10 @@ class ParsedSlot:
     shiny: bool = False
     tera_type: Optional[str] = None
     moves: tuple[str, ...] = field(default_factory=tuple)
-    evs: dict[str, int] = field(default_factory=dict)
-    ivs: dict[str, int] = field(default_factory=dict)
+    # Champions stat points. A paste's "EVs:" line carries points in Champions format; a
+    # mainline 252-style spread is converted (and flagged) so its stats stay the same.
+    points: dict[str, int] = field(default_factory=dict)
+    points_converted: bool = False
     nature: Optional[str] = None
 
 
@@ -160,37 +163,20 @@ def export_team_to_showdown_text(
         if tera:
             lines.append(f"Tera Type: {str(tera).strip().capitalize()}")
 
-        # --- Level (omit if 50, the VGC default) ---
-        if member.level != 50:
-            lines.append(f"Level: {member.level}")
-
         # --- Shiny (omit false) ---
         if getattr(box_entry, "shiny", False):
             lines.append("Shiny: Yes")
 
-        # --- EVs ---
-        if member.evs:
-            ev_parts = [
-                f"{v} {_SHOWDOWN_STAT_LABELS[k]}"
-                for k, v in member.evs.items()
-                if v and k in _SHOWDOWN_STAT_LABELS
-            ]
-            if ev_parts:
-                lines.append(f"EVs: {' / '.join(ev_parts)}")
+        # --- Stat points (Showdown's Champions format reuses the EVs line for points) ---
+        points = getattr(member, "points", None) or {}
+        if points:
+            spread = format_points(points)
+            if spread:
+                lines.append(f"EVs: {spread}")
 
         # --- Nature ---
         if member.nature:
             lines.append(f"{member.nature} Nature")
-
-        # --- IVs (only non-31 values) ---
-        if member.ivs:
-            iv_parts = [
-                f"{v} {_SHOWDOWN_STAT_LABELS[k]}"
-                for k, v in member.ivs.items()
-                if v != 31 and k in _SHOWDOWN_STAT_LABELS
-            ]
-            if iv_parts:
-                lines.append(f"IVs: {' / '.join(iv_parts)}")
 
         # --- Moves ---
         for move in member.moveset[:4]:
@@ -209,6 +195,17 @@ def export_team_to_showdown_text(
 
 _EV_IV_PART_RE = re.compile(r"(\d+)\s+([A-Za-z/]+)")
 _GENDER_RE = re.compile(r"\s+\(([MF])\)\s*$", re.IGNORECASE)
+
+
+def _points_from_paste(values: dict[str, int]) -> tuple[dict[str, int], bool]:
+    """Stat points from an "EVs:" line: verbatim when it already fits Champions' limits,
+    otherwise converted from mainline EVs. Returns (points, converted)."""
+    if not values:
+        return {}, False
+    # 33–35 in one stat is a typo in a points line, not an EV spread; anything larger is EVs.
+    if any(v > MAX_POINTS_PER_STAT + 3 for v in values.values()) or sum(values.values()) > MAX_POINTS_TOTAL:
+        return points_from_evs(values), True
+    return {k: int(v) for k, v in values.items() if int(v) > 0}, False
 
 
 def _parse_spread_line(line: str) -> dict[str, int]:
@@ -335,6 +332,17 @@ def parse_showdown_text(paste_text: str) -> ParsedTeamResult:
         if _species_raw is None:
             return
         key = _normalize_showdown_key(_species_raw)
+        species_label = _species_raw.strip()
+        points, converted = _points_from_paste(_evs)
+        if converted:
+            warnings.append(f"{species_label}: EV spread converted to stat points ({format_points(points) or 'none'})")
+        for problem in validate_points(points):
+            warnings.append(f"{species_label}: {problem} — clamped")
+        points = {k: min(MAX_POINTS_PER_STAT, v) for k, v in points.items() if k in STAT_KEYS and v > 0}
+        if any(v != 31 for v in _ivs.values()):
+            warnings.append(f"{species_label}: IVs ignored — Champions fixes IVs at 31")
+        if _level != 50:
+            warnings.append(f"{species_label}: level {_level} ignored — Champions is level 50")
         slots.append(ParsedSlot(
             raw_header=_header or "",
             species_name=_species_raw.strip(),
@@ -347,8 +355,8 @@ def parse_showdown_text(paste_text: str) -> ParsedTeamResult:
             shiny=_shiny,
             tera_type=_tera,
             moves=tuple(_moves[:4]),
-            evs=dict(_evs),
-            ivs=dict(_ivs),
+            points=points,
+            points_converted=converted,
             nature=_nature,
         ))
         # Reset state
@@ -684,9 +692,7 @@ def commit_team_import(
             ability=slot.ability_name,
             moveset=[PokemonMove(name=m) for m in slot.moves if m],
             nature=slot.nature,
-            evs=dict(slot.evs),
-            ivs=dict(slot.ivs),
-            level=slot.level,
+            points=dict(slot.points),
             tera_type=(slot.tera_type or "").strip().lower() or None,
         )
         team_repo.upsert_member(team.team_id, member)

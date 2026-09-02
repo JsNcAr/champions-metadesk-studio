@@ -8,6 +8,7 @@ from uuid import UUID
 import flet as ft
 
 from .....services.showdown_service import ImportReadinessReport, ParsedSlot, ParsedTeamResult
+from .....domain.stat_calc import format_points
 from .... import events
 from ....components import EmptyState, StatusChip
 from ....components.banner import InlineBanner
@@ -253,12 +254,16 @@ class ImportDialog(ft.AlertDialog):
             bits.append(slot.ability_name)
         if slot.tera_type:
             bits.append(f"Tera {slot.tera_type}")
+        spread = format_points(slot.points)
+        if spread:
+            bits.append(f"{slot.nature or 'Hardy'} · {spread}")
         detail = ft.Column(spacing=2, tight=True, expand=True, controls=[
             ft.Text(" · ".join(bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=bool(bits)),
             ft.Text(" / ".join(slot.moves), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=bool(slot.moves)),
-            ft.Row(spacing=Space.XS, tight=True, visible=bool(flagged_moves), controls=[
-                StatusChip(f"{len(flagged_moves or [])} move{'s' if len(flagged_moves or []) != 1 else ''} not in Champions learnset", "warning",
-                           icon=ft.Icons.WARNING_AMBER_ROUNDED, tooltip=", ".join(flagged_moves or [])),
+            ft.Row(spacing=Space.XS, tight=True, wrap=True, visible=bool(flagged_moves) or slot.points_converted, controls=[
+                *([StatusChip(f"{len(flagged_moves or [])} move{'s' if len(flagged_moves or []) != 1 else ''} not in Champions learnset", "warning",
+                              icon=ft.Icons.WARNING_AMBER_ROUNDED, tooltip=", ".join(flagged_moves or []))] if flagged_moves else []),
+                *([StatusChip("Converted from EVs", "info", icon=ft.Icons.SWAP_VERT, tooltip="Champions uses stat points (0–32 per stat, 66 total); the EV spread was converted without changing its stats")] if slot.points_converted else []),
             ]),
         ])
         row = IdentityRow(name=slot.species_name, sprite_url=get_pokemon_sprite_url(slot.showdown_form_key or slot.species_name),

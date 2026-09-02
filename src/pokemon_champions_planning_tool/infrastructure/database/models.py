@@ -224,11 +224,11 @@ class TeamMemberRecord(SQLModel, table=True):
             moveset=[move.model_dump(mode="json") for move in team_member.moveset],
             ability=team_member.ability,
             notes=team_member.notes,
-            points=dict(team_member.points or {}) or points_from_evs(team_member.evs or {}),
-            evs=dict(team_member.evs or {}),
-            ivs=dict(team_member.ivs or {}),
+            points=dict(team_member.points or {}),
+            evs={},
+            ivs={},
             nature=team_member.nature,
-            level=team_member.level,
+            level=50,
             tera_type=team_member.tera_type,
         )
 
@@ -243,10 +243,8 @@ class TeamMemberRecord(SQLModel, table=True):
             ability=self.ability,
             notes=self.notes or "",
             points=dict(self.points or {}) or points_from_evs(self.evs or {}),
-            evs=dict(self.evs or {}),
-            ivs=dict(self.ivs or {}),
             nature=self.nature,
-            level=self.level or 50,
+            level=50,
             tera_type=self.tera_type,
         )
 

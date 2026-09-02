@@ -126,16 +126,16 @@ class TestTeamView(_TeamViewCase):
         dialog = self.page.dialogs[-1]
         self.assertIsInstance(dialog, SpreadDialog)
         serialise(dialog)
-        dialog._apply_evs({"attack": 252, "speed": 252, "hp": 4})
+        dialog._apply_points({"attack": 32, "speed": 32, "hp": 2})
         dialog._nature.value = "adamant"
         dialog._recompute()
-        self.assertEqual(dialog._computed["attack"].value, "149", "84 base, 252 EV, Adamant at level 50")
+        self.assertEqual(dialog._computed["attack"].value, "149", "84 base, 32 points, Adamant: floor((84+32+20)·1.1)")
         dialog._save()
-        self.assertEqual(self.store.slot(1).member.evs, {"attack": 252, "speed": 252, "hp": 4})
-        self.assertIn("252 Atk", self.view.cards[0]._spread.value)
+        self.assertEqual(self.store.slot(1).member.points, {"attack": 32, "speed": 32, "hp": 2})
+        self.assertIn("32 Atk", self.view.cards[0]._spread.value)
         self.view._open_spread(1)
         dialog = self.page.dialogs[-1]
-        dialog._apply_evs({"attack": 252, "speed": 252, "hp": 8})
+        dialog._editor._points["hp"] = 3  # past the 66 budget, bypassing the editor's clamp
         dialog._save()
         self.assertTrue(dialog._banner.visible)
 

@@ -14,7 +14,7 @@ from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.moves import MoveInfo
 from ....domain.entities.team_member import TeamMember
-from ....domain.stat_calc import calc_all
+from ....domain.stat_calc import MAX_POINTS_TOTAL, champions_stats, format_points, points_total, validate_points
 from ....domain.type_chart import TYPES, best_offensive_multiplier, team_defensive_matrix, team_offensive_matrix, team_offensive_summary, team_weakness_summary, uncovered_types
 from ....infrastructure.database.models import ItemRecord, MegaEvolutionRecord
 from ....services.item_effect_service import ValidationResult, compute_effective_stats, validate_item_assignment
@@ -137,14 +137,22 @@ class SlotModel:
 
     @property
     def battle_stats(self) -> PokemonStats | None:
-        """Actual level-50 stats from the spread, before items."""
+        """Actual battle stats from the stat-point spread (level 50), before items."""
         base = self.base_stats
         if base is None or self.member is None:
             return None
         try:
-            return calc_all(base, self.member.evs, self.member.ivs, self.member.nature, self.member.level or 50)
+            return champions_stats(base, self.member.points, self.member.nature)
         except ValueError:  # unknown nature stored by an older version — show neutral
-            return calc_all(base, self.member.evs, self.member.ivs, None, self.member.level or 50)
+            return champions_stats(base, self.member.points, None)
+
+    @property
+    def points_used(self) -> int:
+        return points_total(self.member.points) if self.member is not None else 0
+
+    @property
+    def points_left(self) -> int:
+        return MAX_POINTS_TOTAL - self.points_used
 
     @property
     def ability_options(self) -> list[str]:
@@ -156,12 +164,7 @@ class SlotModel:
     def spread_summary(self) -> str:
         if self.member is None:
             return ""
-        parts = [self.member.nature or "Hardy", f"Lv{self.member.level or 50}"]
-        evs = [(k, v) for k, v in (self.member.evs or {}).items() if v]
-        if evs:
-            short = {"hp": "HP", "attack": "Atk", "defense": "Def", "special_attack": "SpA", "special_defense": "SpD", "speed": "Spe"}
-            parts.append(" / ".join(f"{v} {short.get(k, k)}" for k, v in evs))
-        return " · ".join(parts)
+        return " · ".join([self.member.nature or "Hardy", format_points(self.member.points) or "no points"])
 
 
 @dataclass(frozen=True)
@@ -237,6 +240,17 @@ def summarize(slots: list[SlotModel]) -> TeamSummary:
         checks.append(HealthCheck("warn", f"{mega_stones} Mega Stones", "Only one Pokémon per team may Mega Evolve"))
     elif mega_stones == 1:
         checks.append(HealthCheck("ok", "1 Mega Stone", "One Mega Evolution available"))
+    illegal = [(s.species_name, p) for s in filled if s.member is not None for p in validate_points(s.member.points)]
+    unspread = [s for s in filled if s.points_used == 0]
+    partial = [s for s in filled if 0 < s.points_used < MAX_POINTS_TOTAL]
+    if illegal:
+        checks.append(HealthCheck("error", "Illegal spread", "; ".join(f"{sp.title()}: {p}" for sp, p in illegal[:4])))
+    if unspread:
+        checks.append(HealthCheck("info", f"{len(unspread)} unspread", "No stat points yet: " + ", ".join(s.species_name.title() for s in unspread)))
+    if partial:
+        checks.append(HealthCheck("warn", f"{sum(s.points_left for s in partial)} points unused", " · ".join(f"{s.species_name.title()} {s.points_left} left" for s in partial)))
+    if not illegal and not unspread and not partial:
+        checks.append(HealthCheck("ok", "Spreads complete", f"Every slot uses all {MAX_POINTS_TOTAL} points"))
     flagged = [(s.species_name, m) for s in filled for m in s.illegal_moves]
     if flagged:
         detail = "; ".join(f"{sp.title()}: {m}" for sp, m in flagged[:6])

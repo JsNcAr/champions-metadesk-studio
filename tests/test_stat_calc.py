@@ -17,7 +17,6 @@ from pokemon_champions_planning_tool.domain.stat_calc import (
     points_from_evs,
     points_left,
     validate_points,
-    validate_spread,
 )
 
 GARCHOMP = PokemonStats(hp=108, attack=130, defense=95, sp_atk=80, sp_def=85, speed=102)
@@ -114,22 +113,6 @@ class TestNatures(unittest.TestCase):
     def test_labels(self):
         self.assertEqual(nature_label("timid"), "Timid (+Spe −Atk)")
         self.assertEqual(nature_label("hardy"), "Hardy (neutral)")
-
-
-class TestValidateSpread(unittest.TestCase):
-    def test_legal_spreads_pass(self):
-        self.assertEqual(validate_spread({"attack": 252, "speed": 252, "hp": 4}, {}), [])
-        self.assertEqual(validate_spread({}, {}), [])
-        self.assertEqual(validate_spread(None, None), [])
-
-    def test_problems_are_reported(self):
-        problems = validate_spread({"attack": 256, "speed": 252, "hp": 4}, {"speed": 32})
-        self.assertTrue(any("attack EVs" in p for p in problems))
-        self.assertTrue(any("exceeds 510" in p for p in problems))
-        self.assertTrue(any("speed IVs" in p for p in problems))
-        self.assertTrue(validate_spread({"attack": 252, "speed": 252, "hp": 8}, {}))
-        self.assertTrue(validate_spread({"atk": 10}, {}))
-        self.assertTrue(validate_spread({}, {}, level=0))
 
 
 if __name__ == "__main__":

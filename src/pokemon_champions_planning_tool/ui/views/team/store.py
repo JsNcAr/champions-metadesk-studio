@@ -25,7 +25,7 @@ from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_move import PokemonMove
 from ....domain.entities.team import Team
 from ....domain.entities.team_member import TeamMember
-from ....domain.stat_calc import validate_spread
+from ....domain.stat_calc import validate_points
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import ItemRecord
 from ....infrastructure.database.repositories import BoxRepository, MegaEvolutionRepository, TeamRepository
@@ -42,9 +42,10 @@ from ....services.showdown_service import (
     publish_to_pokepast,
     resolve_import_readiness,
 )
-from ....domain.moves import MoveInfo, base_canonical_id
+from ....domain.moves import base_canonical_id
 from ....services.tournament_service import PartnerRecommendation, TournamentService
 from ...catalogs import Catalogs
+from ...move_options import MoveOptions, move_options_for  # noqa: F401 - MoveOptions re-exported for the picker
 from .summary import EMPTY_SUMMARY, SlotModel, SlotMove, TeamSummary, summarize, validate_slot
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -57,14 +58,6 @@ class TeamRow:
     team_id: UUID
     name: str
     filled: int
-
-
-@dataclass(frozen=True)
-class MoveOptions:
-    legal: tuple[MoveInfo, ...]
-    others: tuple[MoveInfo, ...]
-    usage: dict[str, float]     # move id -> share of that species' tournament rosters
-    known: bool                 # False: the catalogue has no learnset for this species
 
 
 class TeamStore:
@@ -234,7 +227,7 @@ class TeamStore:
             TeamMember(
                 box_entry_id=m.box_entry_id, slot_position=m.slot_position, selected_form=m.selected_form,
                 item=m.item, moveset=list(m.moveset), ability=m.ability, notes=m.notes,
-                evs=dict(m.evs), ivs=dict(m.ivs), nature=m.nature, level=m.level, tera_type=m.tera_type,
+                points=dict(m.points), nature=m.nature, tera_type=m.tera_type,
             )
             for m in (s.member for s in self.slots if s.member is not None)
         ]
@@ -347,22 +340,7 @@ class TeamStore:
         slot = self.slot(position)
         if slot.entry is None:
             return MoveOptions((), (), {}, False)
-        cid = slot.entry.pokemon.canonical_id
-        legal_ids = self.catalogs.legal_move_ids(cid)
-        known = legal_ids is not None
-        by_name = lambda m: m.name.lower()  # noqa: E731
-        catalogue = [m for m in self.catalogs.moves_by_id.values() if m.is_legal]
-        if known:
-            legal = sorted((m for m in catalogue if m.move_id in legal_ids), key=by_name)
-            others = sorted((m for m in catalogue if m.move_id not in legal_ids), key=by_name)
-        else:
-            legal, others = sorted(catalogue, key=by_name), []
-        try:
-            with self._sf() as s:
-                usage = TournamentService(s).move_usage(base_canonical_id(cid))
-        except Exception:  # noqa: BLE001 - usage is a ranking hint, never required
-            usage = {}
-        return MoveOptions(tuple(legal), tuple(others), usage, known)
+        return move_options_for(self.catalogs, slot.entry.pokemon.canonical_id, self._sf)
 
     def set_move(self, position: int, index: int, name: str) -> None:
         slot = self.slot(position)
@@ -407,14 +385,13 @@ class TeamStore:
                 return mega.canonical_id
         return slot.megas[0].canonical_id if slot.megas else None
 
-    def save_spread(self, position: int, *, nature: str | None, level: int, evs: dict[str, int], ivs: dict[str, int]) -> list[str]:
-        """Validate and store a spread. Returns problems (empty = saved)."""
-        clean_evs = {k: int(v) for k, v in evs.items() if int(v) > 0}
-        clean_ivs = {k: int(v) for k, v in ivs.items() if int(v) != 31}
-        problems = validate_spread(clean_evs, clean_ivs, level)
+    def save_spread(self, position: int, *, nature: str | None, points: dict[str, int]) -> list[str]:
+        """Validate and store a Champions stat-point spread. Returns problems (empty = saved)."""
+        clean = {k: int(v) for k, v in points.items() if int(v) > 0}
+        problems = validate_points(clean)
         if problems:
             return problems
-        self._update(position, nature=(nature or "Hardy"), level=int(level), evs=clean_evs, ivs=clean_ivs)
+        self._update(position, nature=(nature or "Hardy"), points=clean)
         return []
 
     # -- export / analytics -----------------------------------------------------------------------------

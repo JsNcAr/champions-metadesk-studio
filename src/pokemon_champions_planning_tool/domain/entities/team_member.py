@@ -19,12 +19,9 @@ class TeamMember:
     ability: str | None = None
     notes: str = ""
     # Champions spread: stat points per stat (0–32 each, 66 total); only invested stats present.
+    # Level is fixed at 50 and IVs at 31, so there is nothing else to store.
     points: dict[str, int] = field(default_factory=dict)
     nature: str | None = None
-    # Legacy mainline spread fields — converted into ``points`` by the database backfill and
-    # kept only until the builder stops writing them.
-    evs: dict[str, int] = field(default_factory=dict)
-    ivs: dict[str, int] = field(default_factory=dict)
-    level: int = 50   # fixed at 50 in Champions
+    level: int = 50
     # Terastallization type (lowercase type name) or None when unset.
     tera_type: str | None = None

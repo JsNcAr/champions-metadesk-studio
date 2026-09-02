@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 
 from sqlmodel import Session
 
+from ....domain.event_tier import OFFICIAL_TIERS, TIER_LABELS, tiers_for_filter
 from ....infrastructure.database.database import get_session
 from ....services.tournament_service import MetaSummary, MetaTeamRow, TournamentService
 
@@ -22,6 +23,8 @@ PAGE_SIZE = 20
 
 PLACEMENT_OPTIONS: tuple[tuple[str, str], ...] = (("1", "Winner"), ("4", "Top 4"), ("8", "Top 8"), ("all", "All"))
 RECENCY_OPTIONS: tuple[tuple[str, str], ...] = (("90", "3 months"), ("365", "12 months"), ("all", "All time"))
+SOURCE_OPTIONS: tuple[tuple[str, str], ...] = (("All", "All"), ("official", "Official"), ("community", "Community"))
+TIER_OPTIONS: tuple[tuple[str, str], ...] = (("All", "All official events"),) + tuple((t, TIER_LABELS[t]) for t in OFFICIAL_TIERS)
 GAME_OPTIONS: tuple[tuple[str, str], ...] = (
     ("All", "All games"),
     ("Pokémon Champions", "Pokémon Champions"),
@@ -36,6 +39,12 @@ class MetaFilters:
     regulation: str = "All"
     recency: str = "365"     # days, or "all"
     game: str = "All"
+    source: str = "All"      # "All" | "official" | "community"
+    tier: str = "All"        # "All" or one of OFFICIAL_TIERS; only meaningful with source "official"
+
+    @property
+    def event_tiers(self) -> tuple[str, ...] | None:
+        return tiers_for_filter(self.source, self.tier)
 
     @property
     def placement_limit(self) -> int | None:
@@ -52,6 +61,7 @@ class MetaFilters:
             "placement_filter": self.placement_limit,
             "game_platform_filter": self.game,
             "max_age_days": self.max_age_days,
+            "event_tiers": self.event_tiers,
         }
 
     def active(self) -> list[tuple[str, str]]:
@@ -61,17 +71,25 @@ class MetaFilters:
         if self.query.strip():
             out.append(("query", f"“{self.query.strip()}”"))
         if self.placement != default.placement:
-            out.append(("placement", dict(PLACEMENT_OPTIONS)[self.placement]))
+            out.append(("placement", "All placements" if self.placement == "all" else dict(PLACEMENT_OPTIONS)[self.placement]))
         if self.regulation != default.regulation:
             out.append(("regulation", self.regulation))
         if self.recency != default.recency:
             out.append(("recency", dict(RECENCY_OPTIONS)[self.recency]))
         if self.game != default.game:
             out.append(("game", self.game))
+        if self.tier != default.tier:
+            out.append(("tier", f"Official · {TIER_LABELS.get(self.tier, self.tier)}"))
+        elif self.source != default.source:
+            out.append(("source", dict(SOURCE_OPTIONS)[self.source]))
         return out
 
     def without(self, field: str) -> "MetaFilters":
-        return replace(self, **{field: getattr(MetaFilters(), field)})
+        defaults = MetaFilters()
+        changes = {field: getattr(defaults, field)}
+        if field == "source":
+            changes["tier"] = defaults.tier   # a tier only exists inside "official"
+        return replace(self, **changes)
 
 
 class MetaStore:

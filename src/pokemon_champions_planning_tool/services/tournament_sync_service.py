@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 
 from ..config import LIMITLESS_MAX_AGE_DAYS
+from ..domain.event_tier import classify_event_tier
 from ..domain.pokemon_identity import format_api_name, normalize_format_regulation
 from ..infrastructure.database.models import (
     TournamentRecord,
@@ -186,6 +187,7 @@ def _sync_limitless(
             location="Limitless Online",
             total_players=t_dto.player_count,
             source_url=f"https://play.limitlesstcg.com/tournament/{t_dto.id}",
+            event_tier=classify_event_tier(t_dto.name, t_dto.organizer),
         )
         repo.upsert_tournament(t_record)
         if existing is None or t_id in pending_ids or force:
@@ -292,6 +294,7 @@ def _sync_victory_road(
             location=ev.location,
             total_players=ev.total_players,
             source_url=f"https://victoryroad.pro/{ev.slug}/",
+            event_tier=classify_event_tier(ev.name, "Play! Pokémon Premier Events"),
         )
         repo.upsert_tournament(t_record)
         # Replace rather than append, so re-ingesting an event cannot duplicate rosters.

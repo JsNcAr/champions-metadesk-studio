@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -9,6 +10,7 @@ from sqlalchemy import func
 from sqlmodel import func, Session, select
 
 from ...domain.entities.box_entry import BoxEntry
+from ...domain.event_tier import classify_event_tier
 from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
@@ -743,6 +745,7 @@ class TournamentRepository:
             existing.location = tournament.location
             existing.total_players = tournament.total_players
             existing.source_url = tournament.source_url
+            existing.event_tier = tournament.event_tier
             # standings_synced is owned by the standings fetch, not by metadata
             # refreshes, so a re-listed tournament keeps its backlog state.
             existing.updated_at = _utc_now()
@@ -852,11 +855,15 @@ class TournamentRepository:
         species_filter: str | None,
         game_platform_filter: str | None,
         max_age_days: int | None,
+        event_tiers: Sequence[str] | None = None,
     ):
         """Shared WHERE clauses for search_teams and count_teams."""
 
         if regulation_filter and regulation_filter != "All":
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
+
+        if event_tiers:
+            stmt = stmt.where(TournamentRecord.event_tier.in_(list(event_tiers)))
 
         if game_platform_filter and game_platform_filter != "All":
             stmt = stmt.where(TournamentRecord.game_platform == game_platform_filter)
@@ -915,6 +922,7 @@ class TournamentRepository:
         max_age_days: int | None = None,
         limit: int | None = None,
         offset: int = 0,
+        event_tiers: Sequence[str] | None = None,
     ) -> list[TournamentTeamRecord]:
         stmt = self._apply_search_filters(
             self._joined_teams(),
@@ -924,6 +932,7 @@ class TournamentRepository:
             species_filter=species_filter,
             game_platform_filter=game_platform_filter,
             max_age_days=max_age_days,
+            event_tiers=event_tiers,
         )
 
         # Newest event first, then best placement within that event. Ordering by
@@ -954,6 +963,7 @@ class TournamentRepository:
         species_filter: str | None = None,
         game_platform_filter: str | None = None,
         max_age_days: int | None = None,
+        event_tiers: Sequence[str] | None = None,
     ) -> int:
         """Number of teams matching the same filters as search_teams."""
         stmt = self._apply_search_filters(
@@ -964,6 +974,7 @@ class TournamentRepository:
             species_filter=species_filter,
             game_platform_filter=game_platform_filter,
             max_age_days=max_age_days,
+            event_tiers=event_tiers,
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
 
@@ -1016,6 +1027,7 @@ class TournamentRepository:
                 organizer=t_dict.get("organizer", "Official VGC"),
                 location=t_dict.get("location", "Online"),
                 total_players=t_dict.get("total_players", 0),
+                event_tier=classify_event_tier(t_dict.get("name"), t_dict.get("organizer", "Official VGC")),
             )
             self.upsert_tournament(t_rec)
             total_tourneys += 1

@@ -50,7 +50,9 @@ def _seed(db: _TempDb, *, teams_per_event: int = 25, events: int = 2, with_catal
             t_id = f"t{e}"
             s.add(TournamentRecord(tournament_id=t_id, name=f"Event {e}", event_date=now - timedelta(days=e),
                                    format_regulation="Regulation M-B" if e == 0 else "Regulation M-A",
-                                   game_platform="Pokémon Champions", total_players=64, standings_synced=True, updated_at=now))
+                                   game_platform="Pokémon Champions", total_players=64, standings_synced=True, updated_at=now,
+                                   organizer="Play! Pokémon Premier Events" if e == 1 else "Limitless Community",
+                                   event_tier="international" if e == 1 else "community"))
             s.commit()
             for p in range(1, teams_per_event + 1):
                 team = TournamentTeamRecord(tournament_id=t_id, player_name=f"player-{e}-{p:02d}", placement=p,
@@ -209,6 +211,53 @@ class TestMetaView(unittest.TestCase):
             self.assertIn("No tournament data yet", view._list.controls[0]._title.value)
         finally:
             db.close()
+
+
+
+
+class TestEventTierFilters(unittest.TestCase):
+    def setUp(self):
+        self.db = _TempDb()
+        _seed(self.db, teams_per_event=10, events=2)
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_store_filters_by_source_and_tier(self):
+        from pokemon_champions_planning_tool.ui.views.meta.store import MetaFilters, MetaStore
+
+        store = MetaStore(self.db.session)
+        store.set_filters(MetaFilters(placement="all", source="official"))
+        rows = store.load_first_page()
+        self.assertEqual({r.tournament_id for r in rows}, {"t1"})
+        self.assertEqual(store.total, 10)
+        self.assertTrue(all(r.event_tier == "international" for r in rows))
+        store.set_filters(MetaFilters(placement="all", source="community"))
+        self.assertEqual({r.tournament_id for r in store.load_first_page()}, {"t0"})
+        store.set_filters(MetaFilters(placement="all", source="official", tier="worlds"))
+        self.assertEqual(store.load_first_page(), [])
+        self.assertEqual(MetaFilters(source="official", tier="regional").active(), [("tier", "Official · Regionals")])
+        self.assertEqual(MetaFilters(source="community").active(), [("source", "Community")])
+        self.assertEqual(MetaFilters(source="official", tier="regional").without("source"), MetaFilters())
+
+    def test_view_shows_tier_dropdown_only_for_official(self):
+        from pokemon_champions_planning_tool.ui.views.meta.view import MetaView
+
+        page = StubPage()
+        ctx = AppContext(page)
+        ctx.run_in_background = lambda work, on_done=None, on_error=None, **kw: on_done(work()) if on_done else work()
+        view = MetaView(ctx, store=MetaStore(self.db.session))
+        view.ensure_loaded()
+        self.assertFalse(view._tier.visible)
+        view._apply_source("official")
+        self.assertTrue(view._tier.visible)
+        self.assertEqual({r.tournament_id for r in view.store.rows}, {"t1"})
+        view._apply(tier="worlds")
+        self.assertEqual(view.store.rows, [])
+        view._apply_source("All")
+        self.assertFalse(view._tier.visible)
+        self.assertEqual(view.store.filters.tier, "All")
+        serialise(view)
 
 
 if __name__ == "__main__":

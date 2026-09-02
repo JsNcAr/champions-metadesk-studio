@@ -51,6 +51,24 @@ class TestMigrations(unittest.TestCase):
         database.initialize_database(str(self.db_path))
         self.assertIn("tera_type", _columns(self.db_path, "team_members"))
 
+    def test_event_tier_column_is_added_and_backfilled(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("DROP INDEX IF EXISTS ix_tournaments_event_tier")
+        conn.execute("ALTER TABLE tournaments DROP COLUMN event_tier")
+        conn.execute(
+            "INSERT INTO tournaments (tournament_id, name, event_date, format_regulation, game_platform, organizer, location, total_players, created_at, updated_at, standings_synced)"
+            " VALUES ('vr', '2025 World Championships', '2025-08-14', 'Regulation H', 'Scarlet & Violet', 'Play! Pokémon Premier Events', 'Anaheim', 400, '2025-08-14', '2025-08-14', 1),"
+            " ('lim', 'Broome Regional', '2026-01-01', 'Regulation M-A', 'Pokémon Champions', 'Limitless Community', 'Online', 20, '2026-01-01', '2026-01-01', 1)"
+        )
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        self.assertIn("event_tier", _columns(self.db_path, "tournaments"))
+        conn = sqlite3.connect(self.db_path)
+        tiers = dict(conn.execute("SELECT tournament_id, event_tier FROM tournaments").fetchall())
+        conn.close()
+        self.assertEqual(tiers, {"vr": "worlds", "lim": "community"})
+
 
 if __name__ == "__main__":
     unittest.main()

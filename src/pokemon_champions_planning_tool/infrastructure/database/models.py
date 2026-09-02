@@ -355,6 +355,9 @@ class TournamentRecord(SQLModel, table=True):
     # The sync caps standings requests per run to respect rate limits, so unsynced
     # tournaments form a backlog that later runs drain instead of skipping forever.
     standings_synced: bool = Field(default=False, index=True)
+    # "worlds" | "international" | "regional" | "special" (official Play! Pokémon) or
+    # "community". See domain/event_tier.py; set on ingest and backfilled by migration.
+    event_tier: str = Field(default="community", index=True)
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 

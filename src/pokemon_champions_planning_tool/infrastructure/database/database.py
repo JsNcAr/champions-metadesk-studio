@@ -70,6 +70,9 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
         # team_members — Terastallization type per slot
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+        # tournaments — official tier (worlds/international/regional/special) or community
+        "ALTER TABLE tournaments ADD COLUMN event_tier VARCHAR NOT NULL DEFAULT 'community';",
+        "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
@@ -83,9 +86,35 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
                 conn.commit()
             except Exception:
                 pass  # Column already exists — safe to ignore
+        _backfill_event_tiers(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
+
+
+def _backfill_event_tiers(conn) -> None:
+    """Classify tournaments that predate the event_tier column.
+
+    Rows are created with the 'community' default; official events (Victory Road, seed)
+    get their tier from organizer + name. Idempotent: only rows whose stored tier differs
+    from the classification are written.
+    """
+    from pokemon_champions_planning_tool.domain.event_tier import classify_event_tier
+
+    try:
+        rows = conn.execute(text("SELECT tournament_id, name, organizer, event_tier FROM tournaments")).fetchall()
+    except Exception:
+        return
+    changes = [
+        (tier, tournament_id)
+        for tournament_id, name, organizer, stored in rows
+        if (tier := classify_event_tier(name, organizer)) != stored
+    ]
+    if not changes:
+        return
+    for tier, tournament_id in changes:
+        conn.execute(text("UPDATE tournaments SET event_tier = :tier WHERE tournament_id = :id"), {"tier": tier, "id": tournament_id})
+    conn.commit()
 
 
 @contextmanager

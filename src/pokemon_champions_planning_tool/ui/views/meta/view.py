@@ -16,7 +16,7 @@ from ...tasks import Debouncer, is_mounted
 from ...theme import Accent, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
 from .row import EventHeader, TeamRow
-from .store import GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
+from .store import TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
 
@@ -76,12 +76,31 @@ class MetaView(ft.Column):
             width=180,
             on_select=lambda e: self._apply(game=e.control.value or "All"),
         )
+        self._source = ft.SegmentedButton(
+            selected=[self.store.filters.source],
+            allow_multiple_selection=False,
+            allow_empty_selection=False,
+            show_selected_icon=False,
+            segments=[
+                ft.Segment(value="All", label=ft.Text("All"), tooltip="Official and community events"),
+                ft.Segment(value="official", icon=ft.Icon(ft.Icons.VERIFIED, size=IconSize.SM), label=ft.Text("Official"), tooltip="Play! Pokémon events: Worlds, Internationals, Regionals, Special Events"),
+                ft.Segment(value="community", icon=ft.Icon(ft.Icons.GROUPS, size=IconSize.SM), label=ft.Text("Community"), tooltip="Community-run and online events (Limitless, Victory Road community)"),
+            ],
+            on_change=lambda e: self._apply_source(next(iter(e.control.selected or ["All"]))),
+        )
+        self._tier = ft.Dropdown(
+            value=self.store.filters.tier,
+            options=[ft.DropdownOption(key=v, text=label) for v, label in TIER_OPTIONS],
+            width=200,
+            visible=self.store.filters.source == "official",
+            on_select=lambda e: self._apply(tier=e.control.value or "All"),
+        )
         self._search_button = ft.OutlinedButton("Search", icon=ft.Icons.SEARCH, on_click=lambda _e: self._apply(query=self._search.value or "", force=True))
         self.filter_bar = ft.Row(
             spacing=Space.SM,
             wrap=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._search, self._placement, self._regulation, self._recency, self._game, self._search_button],
+            controls=[self._search, self._placement, self._source, self._tier, self._regulation, self._recency, self._game, self._search_button],
         )
         self._active_chips = ft.Row(spacing=Space.SM, wrap=True, visible=False)
         self._order_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
@@ -135,9 +154,15 @@ class MetaView(ft.Column):
         if new_filters == self.store.filters and not force:
             return
         self.store.set_filters(new_filters)
+        self._tier.visible = new_filters.source == "official"
+        self._tier.value = new_filters.tier
         if force:
             self.store.invalidate()
         self._reload()
+
+    def _apply_source(self, source: str) -> None:
+        """Leaving "official" drops the tier with it; the tier dropdown only shows there."""
+        self._apply(source=source, tier=self.store.filters.tier if source == "official" else "All")
 
     def _remove_filter(self, field: str) -> None:
         self.store.set_filters(self.store.filters.without(field))
@@ -156,6 +181,9 @@ class MetaView(ft.Column):
         self._regulation.value = f.regulation
         self._recency.value = f.recency
         self._game.value = f.game
+        self._source.selected = [f.source]
+        self._tier.value = f.tier
+        self._tier.visible = f.source == "official"
 
     def _render_active_chips(self) -> None:
         active = self.store.filters.active()

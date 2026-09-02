@@ -6,12 +6,40 @@ from collections.abc import Callable
 
 import flet as ft
 
+from ....domain.event_tier import (
+    TIER_COMMUNITY,
+    TIER_EVENT_LABELS,
+    TIER_INTERNATIONAL,
+    TIER_REGIONAL,
+    TIER_SPECIAL,
+    TIER_WORLDS,
+    is_official_tier,
+)
 from ....services.showdown_service import parse_showdown_text
 from ....services.tournament_service import MetaTeamRow
 from ...components import PlacementBadge, Sprite, StatusChip
 from ...format import absolute_time, plural
 from ...tasks import is_mounted
 from ...theme import IconSize, Motion, Palette, Radius, Space, alpha
+
+
+_TIER_TONES: dict[str, str] = {
+    TIER_WORLDS: "primary",
+    TIER_INTERNATIONAL: "tertiary",
+    TIER_REGIONAL: "info",
+    TIER_SPECIAL: "warning",
+    TIER_COMMUNITY: "neutral",
+}
+
+
+def _tier_chip(tier: str) -> StatusChip:
+    official = is_official_tier(tier)
+    return StatusChip(
+        TIER_EVENT_LABELS.get(tier, "Community"),
+        _TIER_TONES.get(tier, "neutral"),
+        icon=ft.Icons.VERIFIED if official else None,
+        tooltip="Official Play! Pokémon event" if official else "Community-run event",
+    )
 
 
 class EventHeader(ft.Container):
@@ -26,6 +54,7 @@ class EventHeader(ft.Container):
         controls: list[ft.Control] = [
             ft.Icon(ft.Icons.EMOJI_EVENTS, size=IconSize.SM, color=Palette.TERTIARY),
             ft.Text(row.tournament_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip=row.tournament_name),
+            _tier_chip(row.event_tier),
             StatusChip(row.regulation or "Unknown format", "tertiary"),
             ft.Text(" · ".join(meta_bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
             self._count,

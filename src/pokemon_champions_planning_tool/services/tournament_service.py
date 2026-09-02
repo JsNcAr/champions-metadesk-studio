@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,7 @@ class MetaTeamRow:
     location: str
     total_players: int
     source_url: str | None
+    event_tier: str
     player_name: str
     placement: int
     standing_label: str
@@ -255,6 +257,7 @@ class TournamentService:
         max_age_days: int | None = None,
         limit: int | None = None,
         offset: int = 0,
+        event_tiers: Sequence[str] | None = None,
     ) -> list[TournamentTeamRecord]:
         return self.repo.search_teams(
             query=query,
@@ -265,6 +268,7 @@ class TournamentService:
             max_age_days=max_age_days,
             limit=limit,
             offset=offset,
+            event_tiers=event_tiers,
         )
 
     def count_teams(self, **filters: Any) -> int:
@@ -282,6 +286,7 @@ class TournamentService:
         max_age_days: int | None = None,
         limit: int | None = None,
         offset: int = 0,
+        event_tiers: Sequence[str] | None = None,
     ) -> list[MetaTeamRow]:
         """Search teams and return detached rows with event context, roster and legality.
 
@@ -298,6 +303,7 @@ class TournamentService:
             max_age_days=max_age_days,
             limit=limit,
             offset=offset,
+            event_tiers=event_tiers,
         )
         if not teams:
             return []
@@ -338,6 +344,7 @@ class TournamentService:
                     location=tournament.location if tournament else "",
                     total_players=tournament.total_players if tournament else 0,
                     source_url=tournament.source_url if tournament else None,
+                    event_tier=tournament.event_tier if tournament else "community",
                     player_name=team.player_name,
                     placement=team.placement,
                     standing_label=team.standing_label,

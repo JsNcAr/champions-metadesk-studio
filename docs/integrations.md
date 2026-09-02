@@ -16,6 +16,11 @@ PokéAPI is the main external data source for the project.
 
 ### Integration Concerns
 
+- Species lookups go to `/pokemon/<species>`; on a 404 the adapter asks
+  `/pokemon-species/<species>` for the default variety and fetches that form instead
+  (basculegion → basculegion-male, aegislash → aegislash-shield, lycanroc → lycanroc-midday,
+  mimikyu, morpeko, palafin, maushold, gourgeist, meowstic, pyroar). The stored record keeps
+  the species slug as its id so it matches the Champions catalogue, rosters and learnsets.
 - All outbound HTTP in the project goes through the `requests` library; providers wrap
   failures in their own domain exception type (`LimitlessNetworkError`,
   `VictoryRoadNetworkError`, `VRPasteNetworkError`, `PokepastNetworkError`) so services

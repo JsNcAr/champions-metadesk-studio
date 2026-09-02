@@ -115,6 +115,14 @@ class TestDiscoverySync(unittest.TestCase):
         sync_tournaments(self.session, force=True, limitless_provider=self._limitless(), vr_provider=vr3, pokepast_provider=pokepast, vrpaste_provider=MagicMock())
         self.assertEqual(vr3.fetch_season_calendar.call_count, 2)
 
+    def test_queue_puts_champions_events_before_other_games(self):
+        d = lambda days: self.now - timedelta(days=days)  # noqa: E731
+        for slug, game, days in (("sv-new", "Scarlet & Violet", 1), ("ch-old", "Pokémon Champions", 30), ("ch-new", "Pokémon Champions", 5)):
+            self.session.add(TournamentRecord(tournament_id=f"vr-{slug}", name=slug, event_date=d(days), format_regulation="Regulation M-B", game_platform=game, standings_synced=False))
+        self.session.commit()
+        queue = TournamentRepository(self.session).list_official_events(ended_before=self.now)
+        self.assertEqual([q.tournament_id for q in queue], ["vr-ch-new", "vr-ch-old", "vr-sv-new"])
+
     def test_existing_rows_are_never_overwritten_by_discovery(self):
         self.session.add(TournamentRecord(tournament_id="vr-2026-mid", name="Custom name", event_date=self.now - timedelta(days=20), format_regulation="Regulation M-B", game_platform="Pokémon Champions", standings_synced=True))
         self.session.commit()

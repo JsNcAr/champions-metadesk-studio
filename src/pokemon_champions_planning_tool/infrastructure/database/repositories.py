@@ -883,14 +883,20 @@ class TournamentRepository:
         return True
 
     def list_official_events(self, *, ended_before: datetime, pending_only: bool = True) -> list[TournamentRecord]:
-        """Victory Road events that have finished, newest first — the page-read queue."""
+        """Victory Road events that have finished — the page-read queue.
+
+        Pokémon Champions events come first (this app is about Champions), then the
+        other games; newest first within each group."""
+        from sqlalchemy import case
+
         stmt = select(TournamentRecord).where(
             TournamentRecord.tournament_id.startswith("vr-"),
             TournamentRecord.event_date <= ended_before,
         )
         if pending_only:
             stmt = stmt.where(TournamentRecord.standings_synced == False)  # noqa: E712
-        records = list(self.session.exec(stmt.order_by(TournamentRecord.event_date.desc())).all())
+        champions_first = case((TournamentRecord.game_platform == "Pokémon Champions", 0), else_=1)
+        records = list(self.session.exec(stmt.order_by(champions_first, TournamentRecord.event_date.desc())).all())
         for r in records:
             self.session.expunge(r)
         return records

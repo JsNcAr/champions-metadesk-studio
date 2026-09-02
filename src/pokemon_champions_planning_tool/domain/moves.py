@@ -8,13 +8,91 @@ Showdown does not key separately ("basculegion-male") falls back to its base.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from .pokemon_identity import base_canonical_id  # re-exported: callers import it from here too
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]")
+
+
+@dataclass(frozen=True)
+class MoveMechanics:
+    """The Showdown move fields the damage formula needs beyond power/type/category.
+
+    Stored as JSON on the move catalogue (non-default keys only); every field defaults to
+    "nothing special" so older catalogues still load.
+    """
+
+    contact: bool = False
+    sound: bool = False
+    punch: bool = False
+    bite: bool = False
+    bullet: bool = False
+    pulse: bool = False
+    slicing: bool = False
+    wind: bool = False
+    secondaries: bool = False               # has a secondary effect (Sheer Force)
+    recoil: tuple[int, int] | None = None   # (numerator, denominator) of damage dealt
+    drain: tuple[int, int] | None = None
+    multihit: int | tuple[int, int] | None = None
+    multiaccuracy: bool = False
+    will_crit: bool = False
+    crit_ratio: int = 0
+    ignore_defensive: bool = False
+    override_offensive_stat: str | None = None     # "def" (Body Press)
+    override_defensive_stat: str | None = None     # "def" (Psyshock)
+    override_offensive_pokemon: str | None = None  # "target" (Foul Play)
+    breaks_protect: bool = False
+    has_crash_damage: bool = False
+    struggle_recoil: bool = False
+    mind_blown_recoil: bool = False
+    self_boosts: tuple[tuple[str, int], ...] = ()  # raw ``self.boosts`` in calc stat keys
+    ohko: bool = False
+
+    _FLAGS = ("contact", "sound", "punch", "bite", "bullet", "pulse", "slicing", "wind")
+
+    def drops_stats(self, category: str | None) -> int:
+        stat = "spa" if (category or "").lower() == "special" else "atk"
+        for key, value in self.self_boosts:
+            if key == stat and value < 0:
+                return abs(int(value))
+        return 0
+
+    def to_json(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for f in fields(self):
+            if f.name.startswith("_"):
+                continue
+            value = getattr(self, f.name)
+            if value == f.default:
+                continue
+            if isinstance(value, tuple):
+                value = [list(v) if isinstance(v, tuple) else v for v in value]
+            out[f.name] = value
+        return out
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any] | None) -> "MoveMechanics":
+        if not data:
+            return cls()
+        kwargs: dict[str, Any] = {}
+        names = {f.name for f in fields(cls)}
+        for key, value in data.items():
+            if key not in names:
+                continue
+            if key in ("recoil", "drain") and value is not None:
+                value = (int(value[0]), int(value[1]))
+            elif key == "multihit" and isinstance(value, list):
+                value = (int(value[0]), int(value[1]))
+            elif key == "self_boosts":
+                value = tuple((str(k), int(v)) for k, v in value)
+            kwargs[key] = value
+        return cls(**kwargs)
 
 
 @dataclass(frozen=True)
@@ -32,6 +110,7 @@ class MoveInfo:
     target: str | None
     short_desc: str | None
     is_legal: bool  # False for moves Champions removed from the game entirely
+    mechanics: MoveMechanics = MoveMechanics()
 
 
 def move_key(name: str | None) -> str:

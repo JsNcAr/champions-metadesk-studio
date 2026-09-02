@@ -1,0 +1,1289 @@
+{
+ "calc_commit": "2c50a89d9e369289965b1448a6f5c1b7d41520c7",
+ "items": [
+  {
+   "name": "Abomasite",
+   "megaStone": {
+    "Abomasnow": "Abomasnow-Mega"
+   }
+  },
+  {
+   "name": "Absolite",
+   "megaStone": {
+    "Absol": "Absol-Mega"
+   }
+  },
+  {
+   "name": "Aerodactylite",
+   "megaStone": {
+    "Aerodactyl": "Aerodactyl-Mega"
+   }
+  },
+  {
+   "name": "Aggronite",
+   "megaStone": {
+    "Aggron": "Aggron-Mega"
+   }
+  },
+  {
+   "name": "Alakazite",
+   "megaStone": {
+    "Alakazam": "Alakazam-Mega"
+   }
+  },
+  {
+   "name": "Altarianite",
+   "megaStone": {
+    "Altaria": "Altaria-Mega"
+   }
+  },
+  {
+   "name": "Ampharosite",
+   "megaStone": {
+    "Ampharos": "Ampharos-Mega"
+   }
+  },
+  {
+   "name": "Aspear Berry"
+  },
+  {
+   "name": "Audinite",
+   "megaStone": {
+    "Audino": "Audino-Mega"
+   }
+  },
+  {
+   "name": "Babiri Berry"
+  },
+  {
+   "name": "Banettite",
+   "megaStone": {
+    "Banette": "Banette-Mega"
+   }
+  },
+  {
+   "name": "Barbaracite",
+   "megaStone": {
+    "Barbaracle": "Barbaracle-Mega"
+   }
+  },
+  {
+   "name": "Beedrillite",
+   "megaStone": {
+    "Beedrill": "Beedrill-Mega"
+   }
+  },
+  {
+   "name": "Big Root"
+  },
+  {
+   "name": "Black Belt"
+  },
+  {
+   "name": "Black Glasses"
+  },
+  {
+   "name": "Blastoisinite",
+   "megaStone": {
+    "Blastoise": "Blastoise-Mega"
+   }
+  },
+  {
+   "name": "Blazikenite",
+   "megaStone": {
+    "Blaziken": "Blaziken-Mega"
+   }
+  },
+  {
+   "name": "Bright Powder"
+  },
+  {
+   "name": "Cameruptite",
+   "megaStone": {
+    "Camerupt": "Camerupt-Mega"
+   }
+  },
+  {
+   "name": "Chandelurite",
+   "megaStone": {
+    "Chandelure": "Chandelure-Mega"
+   }
+  },
+  {
+   "name": "Charcoal"
+  },
+  {
+   "name": "Charizardite X",
+   "megaStone": {
+    "Charizard": "Charizard-Mega-X"
+   }
+  },
+  {
+   "name": "Charizardite Y",
+   "megaStone": {
+    "Charizard": "Charizard-Mega-Y"
+   }
+  },
+  {
+   "name": "Charti Berry"
+  },
+  {
+   "name": "Cheri Berry"
+  },
+  {
+   "name": "Chesnaughtite",
+   "megaStone": {
+    "Chesnaught": "Chesnaught-Mega"
+   }
+  },
+  {
+   "name": "Chesto Berry"
+  },
+  {
+   "name": "Chilan Berry"
+  },
+  {
+   "name": "Chimechite",
+   "megaStone": {
+    "Chimecho": "Chimecho-Mega"
+   }
+  },
+  {
+   "name": "Choice Scarf"
+  },
+  {
+   "name": "Chople Berry"
+  },
+  {
+   "name": "Clefablite",
+   "megaStone": {
+    "Clefable": "Clefable-Mega"
+   }
+  },
+  {
+   "name": "Coba Berry"
+  },
+  {
+   "name": "Colbur Berry"
+  },
+  {
+   "name": "Crabominite",
+   "megaStone": {
+    "Crabominable": "Crabominable-Mega"
+   }
+  },
+  {
+   "name": "Damp Rock"
+  },
+  {
+   "name": "Delphoxite",
+   "megaStone": {
+    "Delphox": "Delphox-Mega"
+   }
+  },
+  {
+   "name": "Dragalgite",
+   "megaStone": {
+    "Dragalge": "Dragalge-Mega"
+   }
+  },
+  {
+   "name": "Dragon Fang"
+  },
+  {
+   "name": "Dragoninite",
+   "megaStone": {
+    "Dragonite": "Dragonite-Mega"
+   }
+  },
+  {
+   "name": "Drampanite",
+   "megaStone": {
+    "Drampa": "Drampa-Mega"
+   }
+  },
+  {
+   "name": "Eelektrossite",
+   "megaStone": {
+    "Eelektross": "Eelektross-Mega"
+   }
+  },
+  {
+   "name": "Emboarite",
+   "megaStone": {
+    "Emboar": "Emboar-Mega"
+   }
+  },
+  {
+   "name": "Excadrite",
+   "megaStone": {
+    "Excadrill": "Excadrill-Mega"
+   }
+  },
+  {
+   "name": "Expert Belt"
+  },
+  {
+   "name": "Fairy Feather"
+  },
+  {
+   "name": "Falinksite",
+   "megaStone": {
+    "Falinks": "Falinks-Mega"
+   }
+  },
+  {
+   "name": "Feraligite",
+   "megaStone": {
+    "Feraligatr": "Feraligatr-Mega"
+   }
+  },
+  {
+   "name": "Floettite",
+   "megaStone": {
+    "Floette-Eternal": "Floette-Mega"
+   }
+  },
+  {
+   "name": "Focus Band"
+  },
+  {
+   "name": "Focus Sash"
+  },
+  {
+   "name": "Froslassite",
+   "megaStone": {
+    "Froslass": "Froslass-Mega"
+   }
+  },
+  {
+   "name": "Galladite",
+   "megaStone": {
+    "Gallade": "Gallade-Mega"
+   }
+  },
+  {
+   "name": "Garchompite",
+   "megaStone": {
+    "Garchomp": "Garchomp-Mega"
+   }
+  },
+  {
+   "name": "Gardevoirite",
+   "megaStone": {
+    "Gardevoir": "Gardevoir-Mega"
+   }
+  },
+  {
+   "name": "Gengarite",
+   "megaStone": {
+    "Gengar": "Gengar-Mega"
+   }
+  },
+  {
+   "name": "Glalitite",
+   "megaStone": {
+    "Glalie": "Glalie-Mega"
+   }
+  },
+  {
+   "name": "Glimmoranite",
+   "megaStone": {
+    "Glimmora": "Glimmora-Mega"
+   }
+  },
+  {
+   "name": "Golurkite",
+   "megaStone": {
+    "Golurk": "Golurk-Mega"
+   }
+  },
+  {
+   "name": "Greninjite",
+   "megaStone": {
+    "Greninja": "Greninja-Mega"
+   }
+  },
+  {
+   "name": "Gyaradosite",
+   "megaStone": {
+    "Gyarados": "Gyarados-Mega"
+   }
+  },
+  {
+   "name": "Haban Berry"
+  },
+  {
+   "name": "Hard Stone"
+  },
+  {
+   "name": "Hawluchanite",
+   "megaStone": {
+    "Hawlucha": "Hawlucha-Mega"
+   }
+  },
+  {
+   "name": "Heat Rock"
+  },
+  {
+   "name": "Heracronite",
+   "megaStone": {
+    "Heracross": "Heracross-Mega"
+   }
+  },
+  {
+   "name": "Houndoominite",
+   "megaStone": {
+    "Houndoom": "Houndoom-Mega"
+   }
+  },
+  {
+   "name": "Icy Rock"
+  },
+  {
+   "name": "Iron Ball"
+  },
+  {
+   "name": "Kangaskhanite",
+   "megaStone": {
+    "Kangaskhan": "Kangaskhan-Mega"
+   }
+  },
+  {
+   "name": "Kasib Berry"
+  },
+  {
+   "name": "Kebia Berry"
+  },
+  {
+   "name": "King's Rock"
+  },
+  {
+   "name": "Leftovers"
+  },
+  {
+   "name": "Leppa Berry"
+  },
+  {
+   "name": "Life Orb"
+  },
+  {
+   "name": "Light Ball"
+  },
+  {
+   "name": "Light Clay"
+  },
+  {
+   "name": "Lopunnite",
+   "megaStone": {
+    "Lopunny": "Lopunny-Mega"
+   }
+  },
+  {
+   "name": "Lucarionite",
+   "megaStone": {
+    "Lucario": "Lucario-Mega"
+   }
+  },
+  {
+   "name": "Lum Berry"
+  },
+  {
+   "name": "Magnet"
+  },
+  {
+   "name": "Malamarite",
+   "megaStone": {
+    "Malamar": "Malamar-Mega"
+   }
+  },
+  {
+   "name": "Manectite",
+   "megaStone": {
+    "Manectric": "Manectric-Mega"
+   }
+  },
+  {
+   "name": "Mawilite",
+   "megaStone": {
+    "Mawile": "Mawile-Mega"
+   }
+  },
+  {
+   "name": "Medichamite",
+   "megaStone": {
+    "Medicham": "Medicham-Mega"
+   }
+  },
+  {
+   "name": "Meganiumite",
+   "megaStone": {
+    "Meganium": "Meganium-Mega"
+   }
+  },
+  {
+   "name": "Mental Herb"
+  },
+  {
+   "name": "Meowsticite",
+   "megaStone": {
+    "Meowstic": "Meowstic-M-Mega",
+    "Meowstic-F": "Meowstic-F-Mega"
+   }
+  },
+  {
+   "name": "Metagrossite",
+   "megaStone": {
+    "Metagross": "Metagross-Mega"
+   }
+  },
+  {
+   "name": "Metal Coat"
+  },
+  {
+   "name": "Metronome"
+  },
+  {
+   "name": "Miracle Seed"
+  },
+  {
+   "name": "Muscle Band"
+  },
+  {
+   "name": "Mystic Water"
+  },
+  {
+   "name": "Never-Melt Ice"
+  },
+  {
+   "name": "Occa Berry"
+  },
+  {
+   "name": "Oran Berry"
+  },
+  {
+   "name": "Passho Berry"
+  },
+  {
+   "name": "Payapa Berry"
+  },
+  {
+   "name": "Pecha Berry"
+  },
+  {
+   "name": "Persim Berry"
+  },
+  {
+   "name": "Pidgeotite",
+   "megaStone": {
+    "Pidgeot": "Pidgeot-Mega"
+   }
+  },
+  {
+   "name": "Pinsirite",
+   "megaStone": {
+    "Pinsir": "Pinsir-Mega"
+   }
+  },
+  {
+   "name": "Poison Barb"
+  },
+  {
+   "name": "Pyroarite",
+   "megaStone": {
+    "Pyroar": "Pyroar-Mega"
+   }
+  },
+  {
+   "name": "Quick Claw"
+  },
+  {
+   "name": "Raichunite X",
+   "megaStone": {
+    "Raichu": "Raichu-Mega-X"
+   }
+  },
+  {
+   "name": "Raichunite Y",
+   "megaStone": {
+    "Raichu": "Raichu-Mega-Y"
+   }
+  },
+  {
+   "name": "Rawst Berry"
+  },
+  {
+   "name": "Rindo Berry"
+  },
+  {
+   "name": "Roseli Berry"
+  },
+  {
+   "name": "Sablenite",
+   "megaStone": {
+    "Sableye": "Sableye-Mega"
+   }
+  },
+  {
+   "name": "Sceptilite",
+   "megaStone": {
+    "Sceptile": "Sceptile-Mega"
+   }
+  },
+  {
+   "name": "Scizorite",
+   "megaStone": {
+    "Scizor": "Scizor-Mega"
+   }
+  },
+  {
+   "name": "Scolipite",
+   "megaStone": {
+    "Scolipede": "Scolipede-Mega"
+   }
+  },
+  {
+   "name": "Scope Lens"
+  },
+  {
+   "name": "Scovillainite",
+   "megaStone": {
+    "Scovillain": "Scovillain-Mega"
+   }
+  },
+  {
+   "name": "Scraftinite",
+   "megaStone": {
+    "Scrafty": "Scrafty-Mega"
+   }
+  },
+  {
+   "name": "Sharp Beak"
+  },
+  {
+   "name": "Sharpedonite",
+   "megaStone": {
+    "Sharpedo": "Sharpedo-Mega"
+   }
+  },
+  {
+   "name": "Shed Shell"
+  },
+  {
+   "name": "Shell Bell"
+  },
+  {
+   "name": "Shuca Berry"
+  },
+  {
+   "name": "Silk Scarf"
+  },
+  {
+   "name": "Silver Powder"
+  },
+  {
+   "name": "Sitrus Berry"
+  },
+  {
+   "name": "Skarmorite",
+   "megaStone": {
+    "Skarmory": "Skarmory-Mega"
+   }
+  },
+  {
+   "name": "Slowbronite",
+   "megaStone": {
+    "Slowbro": "Slowbro-Mega"
+   }
+  },
+  {
+   "name": "Smooth Rock"
+  },
+  {
+   "name": "Soft Sand"
+  },
+  {
+   "name": "Spell Tag"
+  },
+  {
+   "name": "Staraptite",
+   "megaStone": {
+    "Staraptor": "Staraptor-Mega"
+   }
+  },
+  {
+   "name": "Starminite",
+   "megaStone": {
+    "Starmie": "Starmie-Mega"
+   }
+  },
+  {
+   "name": "Steelixite",
+   "megaStone": {
+    "Steelix": "Steelix-Mega"
+   }
+  },
+  {
+   "name": "Swampertite",
+   "megaStone": {
+    "Swampert": "Swampert-Mega"
+   }
+  },
+  {
+   "name": "Tanga Berry"
+  },
+  {
+   "name": "Twisted Spoon"
+  },
+  {
+   "name": "Tyranitarite",
+   "megaStone": {
+    "Tyranitar": "Tyranitar-Mega"
+   }
+  },
+  {
+   "name": "Venusaurite",
+   "megaStone": {
+    "Venusaur": "Venusaur-Mega"
+   }
+  },
+  {
+   "name": "Victreebelite",
+   "megaStone": {
+    "Victreebel": "Victreebel-Mega"
+   }
+  },
+  {
+   "name": "Wacan Berry"
+  },
+  {
+   "name": "White Herb"
+  },
+  {
+   "name": "Wide Lens"
+  },
+  {
+   "name": "Wise Glasses"
+  },
+  {
+   "name": "Yache Berry"
+  },
+  {
+   "name": "Zoom Lens"
+  }
+ ],
+ "abilities": [
+  "Adaptability",
+  "Aerilate",
+  "Aftermath",
+  "Analytic",
+  "Anger Point",
+  "Anticipation",
+  "Armor Tail",
+  "Aroma Veil",
+  "Battle Armor",
+  "Berserk",
+  "Big Pecks",
+  "Blaze",
+  "Bulletproof",
+  "Cheek Pouch",
+  "Chlorophyll",
+  "Clear Body",
+  "Cloud Nine",
+  "Competitive",
+  "Compound Eyes",
+  "Contrary",
+  "Corrosion",
+  "Cud Chew",
+  "Curious Medicine",
+  "Cursed Body",
+  "Cute Charm",
+  "Damp",
+  "Defiant",
+  "Disguise",
+  "Dragonize",
+  "Drizzle",
+  "Drought",
+  "Dry Skin",
+  "Early Bird",
+  "Earth Eater",
+  "Eelevate",
+  "Effect Spore",
+  "Electric Surge",
+  "Electromorphosis",
+  "Fairy Aura",
+  "Filter",
+  "Fire Mane",
+  "Flame Body",
+  "Flash Fire",
+  "Flower Veil",
+  "Fluffy",
+  "Forecast",
+  "Forewarn",
+  "Friend Guard",
+  "Frisk",
+  "Fur Coat",
+  "Gale Wings",
+  "Gluttony",
+  "Good as Gold",
+  "Gooey",
+  "Guts",
+  "Harvest",
+  "Healer",
+  "Heatproof",
+  "Heavy Metal",
+  "Hospitality",
+  "Huge Power",
+  "Hunger Switch",
+  "Hustle",
+  "Hydration",
+  "Hyper Cutter",
+  "Ice Body",
+  "Illuminate",
+  "Illusion",
+  "Immunity",
+  "Imposter",
+  "Infiltrator",
+  "Innards Out",
+  "Inner Focus",
+  "Insomnia",
+  "Intimidate",
+  "Iron Fist",
+  "Justified",
+  "Keen Eye",
+  "Klutz",
+  "Leaf Guard",
+  "Levitate",
+  "Light Metal",
+  "Lightning Rod",
+  "Limber",
+  "Liquid Voice",
+  "Long Reach",
+  "Magic Bounce",
+  "Magic Guard",
+  "Magician",
+  "Magma Armor",
+  "Marvel Scale",
+  "Mega Launcher",
+  "Mega Sol",
+  "Merciless",
+  "Mimicry",
+  "Minus",
+  "Mirror Armor",
+  "Mold Breaker",
+  "Moody",
+  "Motor Drive",
+  "Moxie",
+  "Multiscale",
+  "Mummy",
+  "Natural Cure",
+  "No Guard",
+  "Oblivious",
+  "Opportunist",
+  "Overcoat",
+  "Overgrow",
+  "Own Tempo",
+  "Parental Bond",
+  "Pickpocket",
+  "Pickup",
+  "Piercing Drill",
+  "Pixilate",
+  "Plus",
+  "Poison Heal",
+  "Poison Point",
+  "Poison Touch",
+  "Prankster",
+  "Pressure",
+  "Protean",
+  "Pure Power",
+  "Purifying Salt",
+  "Queenly Majesty",
+  "Quick Draw",
+  "Quick Feet",
+  "Rain Dish",
+  "Receiver",
+  "Reckless",
+  "Refrigerate",
+  "Regenerator",
+  "Ripen",
+  "Rivalry",
+  "Rock Head",
+  "Rough Skin",
+  "Sand Force",
+  "Sand Rush",
+  "Sand Spit",
+  "Sand Stream",
+  "Sand Veil",
+  "Sap Sipper",
+  "Scrappy",
+  "Screen Cleaner",
+  "Shadow Tag",
+  "Sharpness",
+  "Shed Skin",
+  "Sheer Force",
+  "Shell Armor",
+  "Shield Dust",
+  "Skill Link",
+  "Slush Rush",
+  "Sniper",
+  "Snow Cloak",
+  "Snow Warning",
+  "Solar Power",
+  "Solid Rock",
+  "Soundproof",
+  "Speed Boost",
+  "Spicy Spray",
+  "Stall",
+  "Stalwart",
+  "Stamina",
+  "Stance Change",
+  "Static",
+  "Steadfast",
+  "Stench",
+  "Sticky Hold",
+  "Strong Jaw",
+  "Sturdy",
+  "Suction Cups",
+  "Super Luck",
+  "Supersweet Syrup",
+  "Supreme Overlord",
+  "Surge Surfer",
+  "Swarm",
+  "Sweet Veil",
+  "Swift Swim",
+  "Symbiosis",
+  "Synchronize",
+  "Tangled Feet",
+  "Technician",
+  "Telepathy",
+  "Thick Fat",
+  "Torrent",
+  "Tough Claws",
+  "Toxic Debris",
+  "Trace",
+  "Unaware",
+  "Unburden",
+  "Unnerve",
+  "Unseen Fist",
+  "Vital Spirit",
+  "Volt Absorb",
+  "Wandering Spirit",
+  "Water Absorb",
+  "Water Bubble",
+  "Weak Armor",
+  "White Smoke",
+  "Zero to Hero"
+ ],
+ "mega_stones": {
+  "Abomasite": {
+   "Abomasnow": "Abomasnow-Mega"
+  },
+  "Absolite": {
+   "Absol": "Absol-Mega"
+  },
+  "Aerodactylite": {
+   "Aerodactyl": "Aerodactyl-Mega"
+  },
+  "Aggronite": {
+   "Aggron": "Aggron-Mega"
+  },
+  "Alakazite": {
+   "Alakazam": "Alakazam-Mega"
+  },
+  "Altarianite": {
+   "Altaria": "Altaria-Mega"
+  },
+  "Ampharosite": {
+   "Ampharos": "Ampharos-Mega"
+  },
+  "Audinite": {
+   "Audino": "Audino-Mega"
+  },
+  "Banettite": {
+   "Banette": "Banette-Mega"
+  },
+  "Beedrillite": {
+   "Beedrill": "Beedrill-Mega"
+  },
+  "Blastoisinite": {
+   "Blastoise": "Blastoise-Mega"
+  },
+  "Blazikenite": {
+   "Blaziken": "Blaziken-Mega"
+  },
+  "Cameruptite": {
+   "Camerupt": "Camerupt-Mega"
+  },
+  "Charizardite X": {
+   "Charizard": "Charizard-Mega-X"
+  },
+  "Charizardite Y": {
+   "Charizard": "Charizard-Mega-Y"
+  },
+  "Crucibellite": {
+   "Crucibelle": "Crucibelle-Mega"
+  },
+  "Diancite": {
+   "Diancie": "Diancie-Mega"
+  },
+  "Galladite": {
+   "Gallade": "Gallade-Mega"
+  },
+  "Garchompite": {
+   "Garchomp": "Garchomp-Mega"
+  },
+  "Gardevoirite": {
+   "Gardevoir": "Gardevoir-Mega"
+  },
+  "Gengarite": {
+   "Gengar": "Gengar-Mega"
+  },
+  "Glalitite": {
+   "Glalie": "Glalie-Mega"
+  },
+  "Gyaradosite": {
+   "Gyarados": "Gyarados-Mega"
+  },
+  "Heracronite": {
+   "Heracross": "Heracross-Mega"
+  },
+  "Houndoominite": {
+   "Houndoom": "Houndoom-Mega"
+  },
+  "Kangaskhanite": {
+   "Kangaskhan": "Kangaskhan-Mega"
+  },
+  "Latiasite": {
+   "Latias": "Latias-Mega"
+  },
+  "Latiosite": {
+   "Latios": "Latios-Mega"
+  },
+  "Lopunnite": {
+   "Lopunny": "Lopunny-Mega"
+  },
+  "Lucarionite": {
+   "Lucario": "Lucario-Mega"
+  },
+  "Manectite": {
+   "Manectric": "Manectric-Mega"
+  },
+  "Mawilite": {
+   "Mawile": "Mawile-Mega"
+  },
+  "Medichamite": {
+   "Medicham": "Medicham-Mega"
+  },
+  "Metagrossite": {
+   "Metagross": "Metagross-Mega"
+  },
+  "Mewtwonite X": {
+   "Mewtwo": "Mewtwo-Mega-X"
+  },
+  "Mewtwonite Y": {
+   "Mewtwo": "Mewtwo-Mega-Y"
+  },
+  "Pidgeotite": {
+   "Pidgeot": "Pidgeot-Mega"
+  },
+  "Pinsirite": {
+   "Pinsir": "Pinsir-Mega"
+  },
+  "Sablenite": {
+   "Sableye": "Sableye-Mega"
+  },
+  "Salamencite": {
+   "Salamence": "Salamence-Mega"
+  },
+  "Sceptilite": {
+   "Sceptile": "Sceptile-Mega"
+  },
+  "Scizorite": {
+   "Scizor": "Scizor-Mega"
+  },
+  "Sharpedonite": {
+   "Sharpedo": "Sharpedo-Mega"
+  },
+  "Slowbronite": {
+   "Slowbro": "Slowbro-Mega"
+  },
+  "Steelixite": {
+   "Steelix": "Steelix-Mega"
+  },
+  "Swampertite": {
+   "Swampert": "Swampert-Mega"
+  },
+  "Tyranitarite": {
+   "Tyranitar": "Tyranitar-Mega"
+  },
+  "Venusaurite": {
+   "Venusaur": "Venusaur-Mega"
+  },
+  "Absolite Z": {
+   "Absol": "Absol-Mega-Z"
+  },
+  "Barbaracite": {
+   "Barbaracle": "Barbaracle-Mega"
+  },
+  "Baxcalibrite": {
+   "Baxcalibur": "Baxcalibur-Mega"
+  },
+  "Chandelurite": {
+   "Chandelure": "Chandelure-Mega"
+  },
+  "Chesnaughtite": {
+   "Chesnaught": "Chesnaught-Mega"
+  },
+  "Chimechite": {
+   "Chimecho": "Chimecho-Mega"
+  },
+  "Clefablite": {
+   "Clefable": "Clefable-Mega"
+  },
+  "Crabominite": {
+   "Crabominable": "Crabominable-Mega"
+  },
+  "Darkranite": {
+   "Darkrai": "Darkrai-Mega"
+  },
+  "Delphoxite": {
+   "Delphox": "Delphox-Mega"
+  },
+  "Dragalgite": {
+   "Dragalge": "Dragalge-Mega"
+  },
+  "Dragoninite": {
+   "Dragonite": "Dragonite-Mega"
+  },
+  "Drampanite": {
+   "Drampa": "Drampa-Mega"
+  },
+  "Eelektrossite": {
+   "Eelektross": "Eelektross-Mega"
+  },
+  "Emboarite": {
+   "Emboar": "Emboar-Mega"
+  },
+  "Excadrite": {
+   "Excadrill": "Excadrill-Mega"
+  },
+  "Falinksite": {
+   "Falinks": "Falinks-Mega"
+  },
+  "Feraligite": {
+   "Feraligatr": "Feraligatr-Mega"
+  },
+  "Floettite": {
+   "Floette-Eternal": "Floette-Mega"
+  },
+  "Froslassite": {
+   "Froslass": "Froslass-Mega"
+  },
+  "Garchompite Z": {
+   "Garchomp": "Garchomp-Mega-Z"
+  },
+  "Glimmoranite": {
+   "Glimmora": "Glimmora-Mega"
+  },
+  "Golisopite": {
+   "Golisopod": "Golisopod-Mega"
+  },
+  "Golurkite": {
+   "Golurk": "Golurk-Mega"
+  },
+  "Greninjite": {
+   "Greninja": "Greninja-Mega"
+  },
+  "Hawluchanite": {
+   "Hawlucha": "Hawlucha-Mega"
+  },
+  "Heatranite": {
+   "Heatran": "Heatran-Mega"
+  },
+  "Lucarionite Z": {
+   "Lucario": "Lucario-Mega-Z"
+  },
+  "Magearnite": {
+   "Magearna": "Magearna-Mega",
+   "Magearna-Original": "Magearna-Original-Mega"
+  },
+  "Malamarite": {
+   "Malamar": "Malamar-Mega"
+  },
+  "Meganiumite": {
+   "Meganium": "Meganium-Mega"
+  },
+  "Meowsticite": {
+   "Meowstic": "Meowstic-M-Mega",
+   "Meowstic-F": "Meowstic-F-Mega"
+  },
+  "Pyroarite": {
+   "Pyroar": "Pyroar-Mega"
+  },
+  "Raichunite X": {
+   "Raichu": "Raichu-Mega-X"
+  },
+  "Raichunite Y": {
+   "Raichu": "Raichu-Mega-Y"
+  },
+  "Scolipite": {
+   "Scolipede": "Scolipede-Mega"
+  },
+  "Scovillainite": {
+   "Scovillain": "Scovillain-Mega"
+  },
+  "Scraftinite": {
+   "Scrafty": "Scrafty-Mega"
+  },
+  "Skarmorite": {
+   "Skarmory": "Skarmory-Mega"
+  },
+  "Staraptite": {
+   "Staraptor": "Staraptor-Mega"
+  },
+  "Starminite": {
+   "Starmie": "Starmie-Mega"
+  },
+  "Tatsugirinite": {
+   "Tatsugiri": "Tatsugiri-Curly-Mega",
+   "Tatsugiri-Droopy": "Tatsugiri-Droopy-Mega",
+   "Tatsugiri-Stretchy": "Tatsugiri-Stretchy-Mega"
+  },
+  "Victreebelite": {
+   "Victreebel": "Victreebel-Mega"
+  },
+  "Zeraorite": {
+   "Zeraora": "Zeraora-Mega"
+  },
+  "Zygardite": {
+   "Zygarde-Complete": "Zygarde-Mega"
+  }
+ },
+ "natures": [
+  {
+   "name": "Adamant",
+   "plus": "atk",
+   "minus": "spa"
+  },
+  {
+   "name": "Bashful",
+   "plus": "spa",
+   "minus": "spa"
+  },
+  {
+   "name": "Bold",
+   "plus": "def",
+   "minus": "atk"
+  },
+  {
+   "name": "Brave",
+   "plus": "atk",
+   "minus": "spe"
+  },
+  {
+   "name": "Calm",
+   "plus": "spd",
+   "minus": "atk"
+  },
+  {
+   "name": "Careful",
+   "plus": "spd",
+   "minus": "spa"
+  },
+  {
+   "name": "Docile",
+   "plus": "def",
+   "minus": "def"
+  },
+  {
+   "name": "Gentle",
+   "plus": "spd",
+   "minus": "def"
+  },
+  {
+   "name": "Hardy",
+   "plus": "atk",
+   "minus": "atk"
+  },
+  {
+   "name": "Hasty",
+   "plus": "spe",
+   "minus": "def"
+  },
+  {
+   "name": "Impish",
+   "plus": "def",
+   "minus": "spa"
+  },
+  {
+   "name": "Jolly",
+   "plus": "spe",
+   "minus": "spa"
+  },
+  {
+   "name": "Lax",
+   "plus": "def",
+   "minus": "spd"
+  },
+  {
+   "name": "Lonely",
+   "plus": "atk",
+   "minus": "def"
+  },
+  {
+   "name": "Mild",
+   "plus": "spa",
+   "minus": "def"
+  },
+  {
+   "name": "Modest",
+   "plus": "spa",
+   "minus": "atk"
+  },
+  {
+   "name": "Naive",
+   "plus": "spe",
+   "minus": "spd"
+  },
+  {
+   "name": "Naughty",
+   "plus": "atk",
+   "minus": "spd"
+  },
+  {
+   "name": "Quiet",
+   "plus": "spa",
+   "minus": "spe"
+  },
+  {
+   "name": "Quirky",
+   "plus": "spd",
+   "minus": "spd"
+  },
+  {
+   "name": "Rash",
+   "plus": "spa",
+   "minus": "spd"
+  },
+  {
+   "name": "Relaxed",
+   "plus": "def",
+   "minus": "spe"
+  },
+  {
+   "name": "Sassy",
+   "plus": "spd",
+   "minus": "spe"
+  },
+  {
+   "name": "Serious",
+   "plus": "spe",
+   "minus": "spe"
+  },
+  {
+   "name": "Timid",
+   "plus": "spe",
+   "minus": "atk"
+  }
+ ]
+}

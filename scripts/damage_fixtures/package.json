@@ -1,0 +1,10 @@
+{
+  "name": "pcpt-damage-fixtures",
+  "private": true,
+  "type": "module",
+  "description": "Generates golden damage fixtures from the Smogon damage calculator's Pokémon Champions module.",
+  "scripts": {
+    "setup": "node setup.mjs",
+    "gen": "node gen_damage_fixtures.mjs"
+  }
+}

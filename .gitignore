@@ -217,3 +217,7 @@ pyrightconfig.json
 *.csv
 # View preferences written next to the database at runtime
 preferences.json
+
+# damage-calc fixture generator (dev only)
+scripts/damage_fixtures/.work/
+scripts/damage_fixtures/node_modules/

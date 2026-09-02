@@ -1,0 +1,6823 @@
+{
+ "meta": {
+  "schema": 1,
+  "calc_commit": "2c50a89d9e369289965b1448a6f5c1b7d41520c7",
+  "node": "v22.22.0",
+  "gen": 0
+ },
+ "items": [
+  {
+   "kind": "Item",
+   "id": "abomasite",
+   "name": "Abomasite",
+   "megaStone": {
+    "Abomasnow": "Abomasnow-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "absolite",
+   "name": "Absolite",
+   "megaStone": {
+    "Absol": "Absol-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "aerodactylite",
+   "name": "Aerodactylite",
+   "megaStone": {
+    "Aerodactyl": "Aerodactyl-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "aggronite",
+   "name": "Aggronite",
+   "megaStone": {
+    "Aggron": "Aggron-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "alakazite",
+   "name": "Alakazite",
+   "megaStone": {
+    "Alakazam": "Alakazam-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "altarianite",
+   "name": "Altarianite",
+   "megaStone": {
+    "Altaria": "Altaria-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "ampharosite",
+   "name": "Ampharosite",
+   "megaStone": {
+    "Ampharos": "Ampharos-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "aspearberry",
+   "name": "Aspear Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Ice"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "audinite",
+   "name": "Audinite",
+   "megaStone": {
+    "Audino": "Audino-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "babiriberry",
+   "name": "Babiri Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Steel"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "banettite",
+   "name": "Banettite",
+   "megaStone": {
+    "Banette": "Banette-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "barbaracite",
+   "name": "Barbaracite",
+   "megaStone": {
+    "Barbaracle": "Barbaracle-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "beedrillite",
+   "name": "Beedrillite",
+   "megaStone": {
+    "Beedrill": "Beedrill-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "bigroot",
+   "name": "Big Root"
+  },
+  {
+   "kind": "Item",
+   "id": "blackbelt",
+   "name": "Black Belt"
+  },
+  {
+   "kind": "Item",
+   "id": "blackglasses",
+   "name": "Black Glasses"
+  },
+  {
+   "kind": "Item",
+   "id": "blastoisinite",
+   "name": "Blastoisinite",
+   "megaStone": {
+    "Blastoise": "Blastoise-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "blazikenite",
+   "name": "Blazikenite",
+   "megaStone": {
+    "Blaziken": "Blaziken-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "brightpowder",
+   "name": "Bright Powder"
+  },
+  {
+   "kind": "Item",
+   "id": "cameruptite",
+   "name": "Cameruptite",
+   "megaStone": {
+    "Camerupt": "Camerupt-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chandelurite",
+   "name": "Chandelurite",
+   "megaStone": {
+    "Chandelure": "Chandelure-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "charcoal",
+   "name": "Charcoal"
+  },
+  {
+   "kind": "Item",
+   "id": "charizarditex",
+   "name": "Charizardite X",
+   "megaStone": {
+    "Charizard": "Charizard-Mega-X"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "charizarditey",
+   "name": "Charizardite Y",
+   "megaStone": {
+    "Charizard": "Charizard-Mega-Y"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chartiberry",
+   "name": "Charti Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Rock"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "cheriberry",
+   "name": "Cheri Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Fire"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chesnaughtite",
+   "name": "Chesnaughtite",
+   "megaStone": {
+    "Chesnaught": "Chesnaught-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chestoberry",
+   "name": "Chesto Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Water"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chilanberry",
+   "name": "Chilan Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Normal"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "chimechite",
+   "name": "Chimechite",
+   "megaStone": {
+    "Chimecho": "Chimecho-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "choicescarf",
+   "name": "Choice Scarf"
+  },
+  {
+   "kind": "Item",
+   "id": "chopleberry",
+   "name": "Chople Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Fighting"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "clefablite",
+   "name": "Clefablite",
+   "megaStone": {
+    "Clefable": "Clefable-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "cobaberry",
+   "name": "Coba Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Flying"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "colburberry",
+   "name": "Colbur Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Dark"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "crabominite",
+   "name": "Crabominite",
+   "megaStone": {
+    "Crabominable": "Crabominable-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "damprock",
+   "name": "Damp Rock"
+  },
+  {
+   "kind": "Item",
+   "id": "delphoxite",
+   "name": "Delphoxite",
+   "megaStone": {
+    "Delphox": "Delphox-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "dragalgite",
+   "name": "Dragalgite",
+   "megaStone": {
+    "Dragalge": "Dragalge-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "dragonfang",
+   "name": "Dragon Fang"
+  },
+  {
+   "kind": "Item",
+   "id": "dragoninite",
+   "name": "Dragoninite",
+   "megaStone": {
+    "Dragonite": "Dragonite-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "drampanite",
+   "name": "Drampanite",
+   "megaStone": {
+    "Drampa": "Drampa-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "eelektrossite",
+   "name": "Eelektrossite",
+   "megaStone": {
+    "Eelektross": "Eelektross-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "emboarite",
+   "name": "Emboarite",
+   "megaStone": {
+    "Emboar": "Emboar-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "excadrite",
+   "name": "Excadrite",
+   "megaStone": {
+    "Excadrill": "Excadrill-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "expertbelt",
+   "name": "Expert Belt"
+  },
+  {
+   "kind": "Item",
+   "id": "fairyfeather",
+   "name": "Fairy Feather"
+  },
+  {
+   "kind": "Item",
+   "id": "falinksite",
+   "name": "Falinksite",
+   "megaStone": {
+    "Falinks": "Falinks-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "feraligite",
+   "name": "Feraligite",
+   "megaStone": {
+    "Feraligatr": "Feraligatr-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "floettite",
+   "name": "Floettite",
+   "megaStone": {
+    "Floette-Eternal": "Floette-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "focusband",
+   "name": "Focus Band"
+  },
+  {
+   "kind": "Item",
+   "id": "focussash",
+   "name": "Focus Sash"
+  },
+  {
+   "kind": "Item",
+   "id": "froslassite",
+   "name": "Froslassite",
+   "megaStone": {
+    "Froslass": "Froslass-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "galladite",
+   "name": "Galladite",
+   "megaStone": {
+    "Gallade": "Gallade-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "garchompite",
+   "name": "Garchompite",
+   "megaStone": {
+    "Garchomp": "Garchomp-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "gardevoirite",
+   "name": "Gardevoirite",
+   "megaStone": {
+    "Gardevoir": "Gardevoir-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "gengarite",
+   "name": "Gengarite",
+   "megaStone": {
+    "Gengar": "Gengar-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "glalitite",
+   "name": "Glalitite",
+   "megaStone": {
+    "Glalie": "Glalie-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "glimmoranite",
+   "name": "Glimmoranite",
+   "megaStone": {
+    "Glimmora": "Glimmora-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "golurkite",
+   "name": "Golurkite",
+   "megaStone": {
+    "Golurk": "Golurk-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "greninjite",
+   "name": "Greninjite",
+   "megaStone": {
+    "Greninja": "Greninja-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "gyaradosite",
+   "name": "Gyaradosite",
+   "megaStone": {
+    "Gyarados": "Gyarados-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "habanberry",
+   "name": "Haban Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Dragon"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "hardstone",
+   "name": "Hard Stone"
+  },
+  {
+   "kind": "Item",
+   "id": "hawluchanite",
+   "name": "Hawluchanite",
+   "megaStone": {
+    "Hawlucha": "Hawlucha-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "heatrock",
+   "name": "Heat Rock"
+  },
+  {
+   "kind": "Item",
+   "id": "heracronite",
+   "name": "Heracronite",
+   "megaStone": {
+    "Heracross": "Heracross-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "houndoominite",
+   "name": "Houndoominite",
+   "megaStone": {
+    "Houndoom": "Houndoom-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "icyrock",
+   "name": "Icy Rock"
+  },
+  {
+   "kind": "Item",
+   "id": "ironball",
+   "name": "Iron Ball"
+  },
+  {
+   "kind": "Item",
+   "id": "kangaskhanite",
+   "name": "Kangaskhanite",
+   "megaStone": {
+    "Kangaskhan": "Kangaskhan-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "kasibberry",
+   "name": "Kasib Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Ghost"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "kebiaberry",
+   "name": "Kebia Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Poison"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "kingsrock",
+   "name": "King's Rock"
+  },
+  {
+   "kind": "Item",
+   "id": "leftovers",
+   "name": "Leftovers"
+  },
+  {
+   "kind": "Item",
+   "id": "leppaberry",
+   "name": "Leppa Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Fighting"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "lifeorb",
+   "name": "Life Orb"
+  },
+  {
+   "kind": "Item",
+   "id": "lightball",
+   "name": "Light Ball"
+  },
+  {
+   "kind": "Item",
+   "id": "lightclay",
+   "name": "Light Clay"
+  },
+  {
+   "kind": "Item",
+   "id": "lopunnite",
+   "name": "Lopunnite",
+   "megaStone": {
+    "Lopunny": "Lopunny-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "lucarionite",
+   "name": "Lucarionite",
+   "megaStone": {
+    "Lucario": "Lucario-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "lumberry",
+   "name": "Lum Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Flying"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "magnet",
+   "name": "Magnet"
+  },
+  {
+   "kind": "Item",
+   "id": "malamarite",
+   "name": "Malamarite",
+   "megaStone": {
+    "Malamar": "Malamar-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "manectite",
+   "name": "Manectite",
+   "megaStone": {
+    "Manectric": "Manectric-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "mawilite",
+   "name": "Mawilite",
+   "megaStone": {
+    "Mawile": "Mawile-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "medichamite",
+   "name": "Medichamite",
+   "megaStone": {
+    "Medicham": "Medicham-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "meganiumite",
+   "name": "Meganiumite",
+   "megaStone": {
+    "Meganium": "Meganium-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "mentalherb",
+   "name": "Mental Herb"
+  },
+  {
+   "kind": "Item",
+   "id": "meowsticite",
+   "name": "Meowsticite",
+   "megaStone": {
+    "Meowstic": "Meowstic-M-Mega",
+    "Meowstic-F": "Meowstic-F-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "metagrossite",
+   "name": "Metagrossite",
+   "megaStone": {
+    "Metagross": "Metagross-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "metalcoat",
+   "name": "Metal Coat"
+  },
+  {
+   "kind": "Item",
+   "id": "metronome",
+   "name": "Metronome"
+  },
+  {
+   "kind": "Item",
+   "id": "miracleseed",
+   "name": "Miracle Seed"
+  },
+  {
+   "kind": "Item",
+   "id": "muscleband",
+   "name": "Muscle Band"
+  },
+  {
+   "kind": "Item",
+   "id": "mysticwater",
+   "name": "Mystic Water"
+  },
+  {
+   "kind": "Item",
+   "id": "nevermeltice",
+   "name": "Never-Melt Ice"
+  },
+  {
+   "kind": "Item",
+   "id": "occaberry",
+   "name": "Occa Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Fire"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "oranberry",
+   "name": "Oran Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Poison"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "passhoberry",
+   "name": "Passho Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Water"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "payapaberry",
+   "name": "Payapa Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Psychic"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "pechaberry",
+   "name": "Pecha Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Electric"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "persimberry",
+   "name": "Persim Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Ground"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "pidgeotite",
+   "name": "Pidgeotite",
+   "megaStone": {
+    "Pidgeot": "Pidgeot-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "pinsirite",
+   "name": "Pinsirite",
+   "megaStone": {
+    "Pinsir": "Pinsir-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "poisonbarb",
+   "name": "Poison Barb"
+  },
+  {
+   "kind": "Item",
+   "id": "pyroarite",
+   "name": "Pyroarite",
+   "megaStone": {
+    "Pyroar": "Pyroar-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "quickclaw",
+   "name": "Quick Claw"
+  },
+  {
+   "kind": "Item",
+   "id": "raichunitex",
+   "name": "Raichunite X",
+   "megaStone": {
+    "Raichu": "Raichu-Mega-X"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "raichunitey",
+   "name": "Raichunite Y",
+   "megaStone": {
+    "Raichu": "Raichu-Mega-Y"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "rawstberry",
+   "name": "Rawst Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Grass"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "rindoberry",
+   "name": "Rindo Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Grass"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "roseliberry",
+   "name": "Roseli Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Fairy"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "sablenite",
+   "name": "Sablenite",
+   "megaStone": {
+    "Sableye": "Sableye-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "sceptilite",
+   "name": "Sceptilite",
+   "megaStone": {
+    "Sceptile": "Sceptile-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "scizorite",
+   "name": "Scizorite",
+   "megaStone": {
+    "Scizor": "Scizor-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "scolipite",
+   "name": "Scolipite",
+   "megaStone": {
+    "Scolipede": "Scolipede-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "scopelens",
+   "name": "Scope Lens"
+  },
+  {
+   "kind": "Item",
+   "id": "scovillainite",
+   "name": "Scovillainite",
+   "megaStone": {
+    "Scovillain": "Scovillain-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "scraftinite",
+   "name": "Scraftinite",
+   "megaStone": {
+    "Scrafty": "Scrafty-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "sharpbeak",
+   "name": "Sharp Beak"
+  },
+  {
+   "kind": "Item",
+   "id": "sharpedonite",
+   "name": "Sharpedonite",
+   "megaStone": {
+    "Sharpedo": "Sharpedo-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "shedshell",
+   "name": "Shed Shell"
+  },
+  {
+   "kind": "Item",
+   "id": "shellbell",
+   "name": "Shell Bell"
+  },
+  {
+   "kind": "Item",
+   "id": "shucaberry",
+   "name": "Shuca Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Ground"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "silkscarf",
+   "name": "Silk Scarf"
+  },
+  {
+   "kind": "Item",
+   "id": "silverpowder",
+   "name": "Silver Powder"
+  },
+  {
+   "kind": "Item",
+   "id": "sitrusberry",
+   "name": "Sitrus Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Psychic"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "skarmorite",
+   "name": "Skarmorite",
+   "megaStone": {
+    "Skarmory": "Skarmory-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "slowbronite",
+   "name": "Slowbronite",
+   "megaStone": {
+    "Slowbro": "Slowbro-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "smoothrock",
+   "name": "Smooth Rock"
+  },
+  {
+   "kind": "Item",
+   "id": "softsand",
+   "name": "Soft Sand"
+  },
+  {
+   "kind": "Item",
+   "id": "spelltag",
+   "name": "Spell Tag"
+  },
+  {
+   "kind": "Item",
+   "id": "staraptite",
+   "name": "Staraptite",
+   "megaStone": {
+    "Staraptor": "Staraptor-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "starminite",
+   "name": "Starminite",
+   "megaStone": {
+    "Starmie": "Starmie-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "steelixite",
+   "name": "Steelixite",
+   "megaStone": {
+    "Steelix": "Steelix-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "swampertite",
+   "name": "Swampertite",
+   "megaStone": {
+    "Swampert": "Swampert-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "tangaberry",
+   "name": "Tanga Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Bug"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "twistedspoon",
+   "name": "Twisted Spoon"
+  },
+  {
+   "kind": "Item",
+   "id": "tyranitarite",
+   "name": "Tyranitarite",
+   "megaStone": {
+    "Tyranitar": "Tyranitar-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "venusaurite",
+   "name": "Venusaurite",
+   "megaStone": {
+    "Venusaur": "Venusaur-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "victreebelite",
+   "name": "Victreebelite",
+   "megaStone": {
+    "Victreebel": "Victreebel-Mega"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "wacanberry",
+   "name": "Wacan Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Electric"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "whiteherb",
+   "name": "White Herb"
+  },
+  {
+   "kind": "Item",
+   "id": "widelens",
+   "name": "Wide Lens"
+  },
+  {
+   "kind": "Item",
+   "id": "wiseglasses",
+   "name": "Wise Glasses"
+  },
+  {
+   "kind": "Item",
+   "id": "yacheberry",
+   "name": "Yache Berry",
+   "isBerry": true,
+   "naturalGift": {
+    "basePower": 60,
+    "type": "Ice"
+   }
+  },
+  {
+   "kind": "Item",
+   "id": "zoomlens",
+   "name": "Zoom Lens"
+  }
+ ],
+ "abilities": [
+  "Adaptability",
+  "Aerilate",
+  "Aftermath",
+  "Analytic",
+  "Anger Point",
+  "Anticipation",
+  "Armor Tail",
+  "Aroma Veil",
+  "Battle Armor",
+  "Berserk",
+  "Big Pecks",
+  "Blaze",
+  "Bulletproof",
+  "Cheek Pouch",
+  "Chlorophyll",
+  "Clear Body",
+  "Cloud Nine",
+  "Competitive",
+  "Compound Eyes",
+  "Contrary",
+  "Corrosion",
+  "Cud Chew",
+  "Curious Medicine",
+  "Cursed Body",
+  "Cute Charm",
+  "Damp",
+  "Defiant",
+  "Disguise",
+  "Dragonize",
+  "Drizzle",
+  "Drought",
+  "Dry Skin",
+  "Early Bird",
+  "Earth Eater",
+  "Eelevate",
+  "Effect Spore",
+  "Electric Surge",
+  "Electromorphosis",
+  "Fairy Aura",
+  "Filter",
+  "Fire Mane",
+  "Flame Body",
+  "Flash Fire",
+  "Flower Veil",
+  "Fluffy",
+  "Forecast",
+  "Forewarn",
+  "Friend Guard",
+  "Frisk",
+  "Fur Coat",
+  "Gale Wings",
+  "Gluttony",
+  "Good as Gold",
+  "Gooey",
+  "Guts",
+  "Harvest",
+  "Healer",
+  "Heatproof",
+  "Heavy Metal",
+  "Hospitality",
+  "Huge Power",
+  "Hunger Switch",
+  "Hustle",
+  "Hydration",
+  "Hyper Cutter",
+  "Ice Body",
+  "Illuminate",
+  "Illusion",
+  "Immunity",
+  "Imposter",
+  "Infiltrator",
+  "Innards Out",
+  "Inner Focus",
+  "Insomnia",
+  "Intimidate",
+  "Iron Fist",
+  "Justified",
+  "Keen Eye",
+  "Klutz",
+  "Leaf Guard",
+  "Levitate",
+  "Light Metal",
+  "Lightning Rod",
+  "Limber",
+  "Liquid Voice",
+  "Long Reach",
+  "Magic Bounce",
+  "Magic Guard",
+  "Magician",
+  "Magma Armor",
+  "Marvel Scale",
+  "Mega Launcher",
+  "Mega Sol",
+  "Merciless",
+  "Mimicry",
+  "Minus",
+  "Mirror Armor",
+  "Mold Breaker",
+  "Moody",
+  "Motor Drive",
+  "Moxie",
+  "Multiscale",
+  "Mummy",
+  "Natural Cure",
+  "No Guard",
+  "Oblivious",
+  "Opportunist",
+  "Overcoat",
+  "Overgrow",
+  "Own Tempo",
+  "Parental Bond",
+  "Pickpocket",
+  "Pickup",
+  "Piercing Drill",
+  "Pixilate",
+  "Plus",
+  "Poison Heal",
+  "Poison Point",
+  "Poison Touch",
+  "Prankster",
+  "Pressure",
+  "Protean",
+  "Pure Power",
+  "Purifying Salt",
+  "Queenly Majesty",
+  "Quick Draw",
+  "Quick Feet",
+  "Rain Dish",
+  "Receiver",
+  "Reckless",
+  "Refrigerate",
+  "Regenerator",
+  "Ripen",
+  "Rivalry",
+  "Rock Head",
+  "Rough Skin",
+  "Sand Force",
+  "Sand Rush",
+  "Sand Spit",
+  "Sand Stream",
+  "Sand Veil",
+  "Sap Sipper",
+  "Scrappy",
+  "Screen Cleaner",
+  "Shadow Tag",
+  "Sharpness",
+  "Shed Skin",
+  "Sheer Force",
+  "Shell Armor",
+  "Shield Dust",
+  "Skill Link",
+  "Slush Rush",
+  "Sniper",
+  "Snow Cloak",
+  "Snow Warning",
+  "Solar Power",
+  "Solid Rock",
+  "Soundproof",
+  "Speed Boost",
+  "Spicy Spray",
+  "Stall",
+  "Stalwart",
+  "Stamina",
+  "Stance Change",
+  "Static",
+  "Steadfast",
+  "Stench",
+  "Sticky Hold",
+  "Strong Jaw",
+  "Sturdy",
+  "Suction Cups",
+  "Super Luck",
+  "Supersweet Syrup",
+  "Supreme Overlord",
+  "Surge Surfer",
+  "Swarm",
+  "Sweet Veil",
+  "Swift Swim",
+  "Symbiosis",
+  "Synchronize",
+  "Tangled Feet",
+  "Technician",
+  "Telepathy",
+  "Thick Fat",
+  "Torrent",
+  "Tough Claws",
+  "Toxic Debris",
+  "Trace",
+  "Unaware",
+  "Unburden",
+  "Unnerve",
+  "Unseen Fist",
+  "Vital Spirit",
+  "Volt Absorb",
+  "Wandering Spirit",
+  "Water Absorb",
+  "Water Bubble",
+  "Weak Armor",
+  "White Smoke",
+  "Zero to Hero"
+ ],
+ "natures": [
+  {
+   "kind": "Nature",
+   "id": "adamant",
+   "name": "Adamant",
+   "plus": "atk",
+   "minus": "spa"
+  },
+  {
+   "kind": "Nature",
+   "id": "bashful",
+   "name": "Bashful",
+   "plus": "spa",
+   "minus": "spa"
+  },
+  {
+   "kind": "Nature",
+   "id": "bold",
+   "name": "Bold",
+   "plus": "def",
+   "minus": "atk"
+  },
+  {
+   "kind": "Nature",
+   "id": "brave",
+   "name": "Brave",
+   "plus": "atk",
+   "minus": "spe"
+  },
+  {
+   "kind": "Nature",
+   "id": "calm",
+   "name": "Calm",
+   "plus": "spd",
+   "minus": "atk"
+  },
+  {
+   "kind": "Nature",
+   "id": "careful",
+   "name": "Careful",
+   "plus": "spd",
+   "minus": "spa"
+  },
+  {
+   "kind": "Nature",
+   "id": "docile",
+   "name": "Docile",
+   "plus": "def",
+   "minus": "def"
+  },
+  {
+   "kind": "Nature",
+   "id": "gentle",
+   "name": "Gentle",
+   "plus": "spd",
+   "minus": "def"
+  },
+  {
+   "kind": "Nature",
+   "id": "hardy",
+   "name": "Hardy",
+   "plus": "atk",
+   "minus": "atk"
+  },
+  {
+   "kind": "Nature",
+   "id": "hasty",
+   "name": "Hasty",
+   "plus": "spe",
+   "minus": "def"
+  },
+  {
+   "kind": "Nature",
+   "id": "impish",
+   "name": "Impish",
+   "plus": "def",
+   "minus": "spa"
+  },
+  {
+   "kind": "Nature",
+   "id": "jolly",
+   "name": "Jolly",
+   "plus": "spe",
+   "minus": "spa"
+  },
+  {
+   "kind": "Nature",
+   "id": "lax",
+   "name": "Lax",
+   "plus": "def",
+   "minus": "spd"
+  },
+  {
+   "kind": "Nature",
+   "id": "lonely",
+   "name": "Lonely",
+   "plus": "atk",
+   "minus": "def"
+  },
+  {
+   "kind": "Nature",
+   "id": "mild",
+   "name": "Mild",
+   "plus": "spa",
+   "minus": "def"
+  },
+  {
+   "kind": "Nature",
+   "id": "modest",
+   "name": "Modest",
+   "plus": "spa",
+   "minus": "atk"
+  },
+  {
+   "kind": "Nature",
+   "id": "naive",
+   "name": "Naive",
+   "plus": "spe",
+   "minus": "spd"
+  },
+  {
+   "kind": "Nature",
+   "id": "naughty",
+   "name": "Naughty",
+   "plus": "atk",
+   "minus": "spd"
+  },
+  {
+   "kind": "Nature",
+   "id": "quiet",
+   "name": "Quiet",
+   "plus": "spa",
+   "minus": "spe"
+  },
+  {
+   "kind": "Nature",
+   "id": "quirky",
+   "name": "Quirky",
+   "plus": "spd",
+   "minus": "spd"
+  },
+  {
+   "kind": "Nature",
+   "id": "rash",
+   "name": "Rash",
+   "plus": "spa",
+   "minus": "spd"
+  },
+  {
+   "kind": "Nature",
+   "id": "relaxed",
+   "name": "Relaxed",
+   "plus": "def",
+   "minus": "spe"
+  },
+  {
+   "kind": "Nature",
+   "id": "sassy",
+   "name": "Sassy",
+   "plus": "spd",
+   "minus": "spe"
+  },
+  {
+   "kind": "Nature",
+   "id": "serious",
+   "name": "Serious",
+   "plus": "spe",
+   "minus": "spe"
+  },
+  {
+   "kind": "Nature",
+   "id": "timid",
+   "name": "Timid",
+   "plus": "spe",
+   "minus": "atk"
+  }
+ ],
+ "mega_stones": {
+  "Abomasite": {
+   "Abomasnow": "Abomasnow-Mega"
+  },
+  "Absolite": {
+   "Absol": "Absol-Mega"
+  },
+  "Aerodactylite": {
+   "Aerodactyl": "Aerodactyl-Mega"
+  },
+  "Aggronite": {
+   "Aggron": "Aggron-Mega"
+  },
+  "Alakazite": {
+   "Alakazam": "Alakazam-Mega"
+  },
+  "Altarianite": {
+   "Altaria": "Altaria-Mega"
+  },
+  "Ampharosite": {
+   "Ampharos": "Ampharos-Mega"
+  },
+  "Audinite": {
+   "Audino": "Audino-Mega"
+  },
+  "Banettite": {
+   "Banette": "Banette-Mega"
+  },
+  "Beedrillite": {
+   "Beedrill": "Beedrill-Mega"
+  },
+  "Blastoisinite": {
+   "Blastoise": "Blastoise-Mega"
+  },
+  "Blazikenite": {
+   "Blaziken": "Blaziken-Mega"
+  },
+  "Cameruptite": {
+   "Camerupt": "Camerupt-Mega"
+  },
+  "Charizardite X": {
+   "Charizard": "Charizard-Mega-X"
+  },
+  "Charizardite Y": {
+   "Charizard": "Charizard-Mega-Y"
+  },
+  "Crucibellite": {
+   "Crucibelle": "Crucibelle-Mega"
+  },
+  "Diancite": {
+   "Diancie": "Diancie-Mega"
+  },
+  "Galladite": {
+   "Gallade": "Gallade-Mega"
+  },
+  "Garchompite": {
+   "Garchomp": "Garchomp-Mega"
+  },
+  "Gardevoirite": {
+   "Gardevoir": "Gardevoir-Mega"
+  },
+  "Gengarite": {
+   "Gengar": "Gengar-Mega"
+  },
+  "Glalitite": {
+   "Glalie": "Glalie-Mega"
+  },
+  "Gyaradosite": {
+   "Gyarados": "Gyarados-Mega"
+  },
+  "Heracronite": {
+   "Heracross": "Heracross-Mega"
+  },
+  "Houndoominite": {
+   "Houndoom": "Houndoom-Mega"
+  },
+  "Kangaskhanite": {
+   "Kangaskhan": "Kangaskhan-Mega"
+  },
+  "Latiasite": {
+   "Latias": "Latias-Mega"
+  },
+  "Latiosite": {
+   "Latios": "Latios-Mega"
+  },
+  "Lopunnite": {
+   "Lopunny": "Lopunny-Mega"
+  },
+  "Lucarionite": {
+   "Lucario": "Lucario-Mega"
+  },
+  "Manectite": {
+   "Manectric": "Manectric-Mega"
+  },
+  "Mawilite": {
+   "Mawile": "Mawile-Mega"
+  },
+  "Medichamite": {
+   "Medicham": "Medicham-Mega"
+  },
+  "Metagrossite": {
+   "Metagross": "Metagross-Mega"
+  },
+  "Mewtwonite X": {
+   "Mewtwo": "Mewtwo-Mega-X"
+  },
+  "Mewtwonite Y": {
+   "Mewtwo": "Mewtwo-Mega-Y"
+  },
+  "Pidgeotite": {
+   "Pidgeot": "Pidgeot-Mega"
+  },
+  "Pinsirite": {
+   "Pinsir": "Pinsir-Mega"
+  },
+  "Sablenite": {
+   "Sableye": "Sableye-Mega"
+  },
+  "Salamencite": {
+   "Salamence": "Salamence-Mega"
+  },
+  "Sceptilite": {
+   "Sceptile": "Sceptile-Mega"
+  },
+  "Scizorite": {
+   "Scizor": "Scizor-Mega"
+  },
+  "Sharpedonite": {
+   "Sharpedo": "Sharpedo-Mega"
+  },
+  "Slowbronite": {
+   "Slowbro": "Slowbro-Mega"
+  },
+  "Steelixite": {
+   "Steelix": "Steelix-Mega"
+  },
+  "Swampertite": {
+   "Swampert": "Swampert-Mega"
+  },
+  "Tyranitarite": {
+   "Tyranitar": "Tyranitar-Mega"
+  },
+  "Venusaurite": {
+   "Venusaur": "Venusaur-Mega"
+  },
+  "Absolite Z": {
+   "Absol": "Absol-Mega-Z"
+  },
+  "Barbaracite": {
+   "Barbaracle": "Barbaracle-Mega"
+  },
+  "Baxcalibrite": {
+   "Baxcalibur": "Baxcalibur-Mega"
+  },
+  "Chandelurite": {
+   "Chandelure": "Chandelure-Mega"
+  },
+  "Chesnaughtite": {
+   "Chesnaught": "Chesnaught-Mega"
+  },
+  "Chimechite": {
+   "Chimecho": "Chimecho-Mega"
+  },
+  "Clefablite": {
+   "Clefable": "Clefable-Mega"
+  },
+  "Crabominite": {
+   "Crabominable": "Crabominable-Mega"
+  },
+  "Darkranite": {
+   "Darkrai": "Darkrai-Mega"
+  },
+  "Delphoxite": {
+   "Delphox": "Delphox-Mega"
+  },
+  "Dragalgite": {
+   "Dragalge": "Dragalge-Mega"
+  },
+  "Dragoninite": {
+   "Dragonite": "Dragonite-Mega"
+  },
+  "Drampanite": {
+   "Drampa": "Drampa-Mega"
+  },
+  "Eelektrossite": {
+   "Eelektross": "Eelektross-Mega"
+  },
+  "Emboarite": {
+   "Emboar": "Emboar-Mega"
+  },
+  "Excadrite": {
+   "Excadrill": "Excadrill-Mega"
+  },
+  "Falinksite": {
+   "Falinks": "Falinks-Mega"
+  },
+  "Feraligite": {
+   "Feraligatr": "Feraligatr-Mega"
+  },
+  "Floettite": {
+   "Floette-Eternal": "Floette-Mega"
+  },
+  "Froslassite": {
+   "Froslass": "Froslass-Mega"
+  },
+  "Garchompite Z": {
+   "Garchomp": "Garchomp-Mega-Z"
+  },
+  "Glimmoranite": {
+   "Glimmora": "Glimmora-Mega"
+  },
+  "Golisopite": {
+   "Golisopod": "Golisopod-Mega"
+  },
+  "Golurkite": {
+   "Golurk": "Golurk-Mega"
+  },
+  "Greninjite": {
+   "Greninja": "Greninja-Mega"
+  },
+  "Hawluchanite": {
+   "Hawlucha": "Hawlucha-Mega"
+  },
+  "Heatranite": {
+   "Heatran": "Heatran-Mega"
+  },
+  "Lucarionite Z": {
+   "Lucario": "Lucario-Mega-Z"
+  },
+  "Magearnite": {
+   "Magearna": "Magearna-Mega",
+   "Magearna-Original": "Magearna-Original-Mega"
+  },
+  "Malamarite": {
+   "Malamar": "Malamar-Mega"
+  },
+  "Meganiumite": {
+   "Meganium": "Meganium-Mega"
+  },
+  "Meowsticite": {
+   "Meowstic": "Meowstic-M-Mega",
+   "Meowstic-F": "Meowstic-F-Mega"
+  },
+  "Pyroarite": {
+   "Pyroar": "Pyroar-Mega"
+  },
+  "Raichunite X": {
+   "Raichu": "Raichu-Mega-X"
+  },
+  "Raichunite Y": {
+   "Raichu": "Raichu-Mega-Y"
+  },
+  "Scolipite": {
+   "Scolipede": "Scolipede-Mega"
+  },
+  "Scovillainite": {
+   "Scovillain": "Scovillain-Mega"
+  },
+  "Scraftinite": {
+   "Scrafty": "Scrafty-Mega"
+  },
+  "Skarmorite": {
+   "Skarmory": "Skarmory-Mega"
+  },
+  "Staraptite": {
+   "Staraptor": "Staraptor-Mega"
+  },
+  "Starminite": {
+   "Starmie": "Starmie-Mega"
+  },
+  "Tatsugirinite": {
+   "Tatsugiri": "Tatsugiri-Curly-Mega",
+   "Tatsugiri-Droopy": "Tatsugiri-Droopy-Mega",
+   "Tatsugiri-Stretchy": "Tatsugiri-Stretchy-Mega"
+  },
+  "Victreebelite": {
+   "Victreebel": "Victreebel-Mega"
+  },
+  "Zeraorite": {
+   "Zeraora": "Zeraora-Mega"
+  },
+  "Zygardite": {
+   "Zygarde-Complete": "Zygarde-Mega"
+  }
+ },
+ "moves": {
+  "acrobatics": {
+   "kind": "Move",
+   "id": "acrobatics",
+   "name": "Acrobatics",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Flying",
+   "category": "Physical",
+   "basePower": 55,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "aerialace": {
+   "kind": "Move",
+   "id": "aerialace",
+   "name": "Aerial Ace",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Flying",
+   "category": "Physical",
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "airslash": {
+   "kind": "Move",
+   "id": "airslash",
+   "name": "Air Slash",
+   "flags": {
+    "slicing": 1
+   },
+   "type": "Flying",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "aquatail": {
+   "kind": "Move",
+   "id": "aquatail",
+   "name": "Aqua Tail",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Water",
+   "category": "Physical",
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "assurance": {
+   "kind": "Move",
+   "id": "assurance",
+   "name": "Assurance",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "aurawheel": {
+   "kind": "Move",
+   "id": "aurawheel",
+   "name": "Aura Wheel",
+   "flags": {},
+   "type": "Electric",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 110,
+   "zMove": {
+    "basePower": 185
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "barbbarrage": {
+   "kind": "Move",
+   "id": "barbbarrage",
+   "name": "Barb Barrage",
+   "flags": {},
+   "type": "Poison",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 80
+   }
+  },
+  "bodypress": {
+   "kind": "Move",
+   "id": "bodypress",
+   "name": "Body Press",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "overrideOffensiveStat": "def",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "bodyslam": {
+   "kind": "Move",
+   "id": "bodyslam",
+   "name": "Body Slam",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 85,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "bonerush": {
+   "kind": "Move",
+   "id": "bonerush",
+   "name": "Bone Rush",
+   "flags": {},
+   "type": "Ground",
+   "multihit": [
+    2,
+    5
+   ],
+   "category": "Physical",
+   "basePower": 30,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "bravebird": {
+   "kind": "Move",
+   "id": "bravebird",
+   "name": "Brave Bird",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Flying",
+   "recoil": [
+    33,
+    100
+   ],
+   "category": "Physical",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "brickbreak": {
+   "kind": "Move",
+   "id": "brickbreak",
+   "name": "Brick Break",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "bulldoze": {
+   "kind": "Move",
+   "id": "bulldoze",
+   "name": "Bulldoze",
+   "flags": {},
+   "type": "Ground",
+   "target": "allAdjacent",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "bulletpunch": {
+   "kind": "Move",
+   "id": "bulletpunch",
+   "name": "Bullet Punch",
+   "flags": {
+    "contact": 1,
+    "punch": 1
+   },
+   "type": "Steel",
+   "priority": 1,
+   "category": "Physical",
+   "basePower": 40,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "clangingscales": {
+   "kind": "Move",
+   "id": "clangingscales",
+   "name": "Clanging Scales",
+   "flags": {
+    "sound": 1
+   },
+   "type": "Dragon",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "basePower": 110,
+   "zMove": {
+    "basePower": 185
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "clangoroussoul": {
+   "kind": "Move",
+   "id": "clangoroussoul",
+   "name": "Clangorous Soul",
+   "flags": {
+    "sound": 1
+   },
+   "type": "Dragon",
+   "basePower": 0
+  },
+  "closecombat": {
+   "kind": "Move",
+   "id": "closecombat",
+   "name": "Close Combat",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 95
+   }
+  },
+  "counter": {
+   "kind": "Move",
+   "id": "counter",
+   "name": "Counter",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 75
+   }
+  },
+  "crunch": {
+   "kind": "Move",
+   "id": "crunch",
+   "name": "Crunch",
+   "flags": {
+    "contact": 1,
+    "bite": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "crushclaw": {
+   "kind": "Move",
+   "id": "crushclaw",
+   "name": "Crush Claw",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "darkpulse": {
+   "kind": "Move",
+   "id": "darkpulse",
+   "name": "Dark Pulse",
+   "flags": {
+    "pulse": 1
+   },
+   "type": "Dark",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "dazzlinggleam": {
+   "kind": "Move",
+   "id": "dazzlinggleam",
+   "name": "Dazzling Gleam",
+   "flags": {},
+   "type": "Fairy",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "doubleedge": {
+   "kind": "Move",
+   "id": "doubleedge",
+   "name": "Double-Edge",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "recoil": [
+    33,
+    100
+   ],
+   "category": "Physical",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "doublehit": {
+   "kind": "Move",
+   "id": "doublehit",
+   "name": "Double Hit",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "multihit": 2,
+   "category": "Physical",
+   "basePower": 35,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "dracometeor": {
+   "kind": "Move",
+   "id": "dracometeor",
+   "name": "Draco Meteor",
+   "flags": {},
+   "type": "Dragon",
+   "self": {
+    "boosts": {
+     "spa": -2
+    }
+   },
+   "category": "Special",
+   "basePower": 130,
+   "zMove": {
+    "basePower": 195
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "dragonclaw": {
+   "kind": "Move",
+   "id": "dragonclaw",
+   "name": "Dragon Claw",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Dragon",
+   "category": "Physical",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "dragondarts": {
+   "kind": "Move",
+   "id": "dragondarts",
+   "name": "Dragon Darts",
+   "flags": {},
+   "type": "Dragon",
+   "multihit": 2,
+   "category": "Physical",
+   "basePower": 50,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "drainingkiss": {
+   "kind": "Move",
+   "id": "drainingkiss",
+   "name": "Draining Kiss",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fairy",
+   "drain": [
+    3,
+    4
+   ],
+   "category": "Special",
+   "basePower": 50,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "drainpunch": {
+   "kind": "Move",
+   "id": "drainpunch",
+   "name": "Drain Punch",
+   "flags": {
+    "contact": 1,
+    "punch": 1
+   },
+   "type": "Fighting",
+   "drain": [
+    1,
+    2
+   ],
+   "category": "Physical",
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "dualwingbeat": {
+   "kind": "Move",
+   "id": "dualwingbeat",
+   "name": "Dual Wingbeat",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Flying",
+   "category": "Physical",
+   "multihit": 2,
+   "basePower": 40,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "earthquake": {
+   "kind": "Move",
+   "id": "earthquake",
+   "name": "Earthquake",
+   "flags": {},
+   "type": "Ground",
+   "target": "allAdjacent",
+   "category": "Physical",
+   "basePower": 100,
+   "zMove": {
+    "basePower": 180
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "electroball": {
+   "kind": "Move",
+   "id": "electroball",
+   "name": "Electro Ball",
+   "flags": {
+    "bullet": 1
+   },
+   "type": "Electric",
+   "category": "Special",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "electroshot": {
+   "kind": "Move",
+   "id": "electroshot",
+   "name": "Electro Shot",
+   "flags": {},
+   "type": "Electric",
+   "category": "Special",
+   "basePower": 130,
+   "zMove": {
+    "basePower": 195
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "eruption": {
+   "kind": "Move",
+   "id": "eruption",
+   "name": "Eruption",
+   "flags": {},
+   "type": "Fire",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "basePower": 150,
+   "zMove": {
+    "basePower": 200
+   },
+   "maxMove": {
+    "basePower": 150
+   }
+  },
+  "expandingforce": {
+   "kind": "Move",
+   "id": "expandingforce",
+   "name": "Expanding Force",
+   "flags": {},
+   "type": "Psychic",
+   "category": "Special",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "facade": {
+   "kind": "Move",
+   "id": "facade",
+   "name": "Facade",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "basePower": 70,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "fakeout": {
+   "kind": "Move",
+   "id": "fakeout",
+   "name": "Fake Out",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "priority": 3,
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 40,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "feint": {
+   "kind": "Move",
+   "id": "feint",
+   "name": "Feint",
+   "flags": {},
+   "type": "Normal",
+   "priority": 2,
+   "breaksProtect": true,
+   "category": "Physical",
+   "basePower": 30,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "finalgambit": {
+   "kind": "Move",
+   "id": "finalgambit",
+   "name": "Final Gambit",
+   "flags": {},
+   "type": "Fighting",
+   "category": "Special",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 180
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "firespin": {
+   "kind": "Move",
+   "id": "firespin",
+   "name": "Fire Spin",
+   "flags": {},
+   "type": "Fire",
+   "category": "Special",
+   "basePower": 35,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "flail": {
+   "kind": "Move",
+   "id": "flail",
+   "name": "Flail",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "flamethrower": {
+   "kind": "Move",
+   "id": "flamethrower",
+   "name": "Flamethrower",
+   "flags": {},
+   "type": "Fire",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "flareblitz": {
+   "kind": "Move",
+   "id": "flareblitz",
+   "name": "Flare Blitz",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fire",
+   "recoil": [
+    33,
+    100
+   ],
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "fling": {
+   "kind": "Move",
+   "id": "fling",
+   "name": "Fling",
+   "flags": {},
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "flyingpress": {
+   "kind": "Move",
+   "id": "flyingpress",
+   "name": "Flying Press",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 100,
+   "zMove": {
+    "basePower": 170
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "foulplay": {
+   "kind": "Move",
+   "id": "foulplay",
+   "name": "Foul Play",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "overrideOffensivePokemon": "target",
+   "basePower": 95,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "freezedry": {
+   "kind": "Move",
+   "id": "freezedry",
+   "name": "Freeze-Dry",
+   "flags": {},
+   "type": "Ice",
+   "category": "Special",
+   "basePower": 70,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "frostbreath": {
+   "kind": "Move",
+   "id": "frostbreath",
+   "name": "Frost Breath",
+   "flags": {},
+   "type": "Ice",
+   "willCrit": true,
+   "category": "Special",
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "futuresight": {
+   "kind": "Move",
+   "id": "futuresight",
+   "name": "Future Sight",
+   "flags": {},
+   "type": "Psychic",
+   "category": "Special",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "gigadrain": {
+   "kind": "Move",
+   "id": "gigadrain",
+   "name": "Giga Drain",
+   "flags": {},
+   "type": "Grass",
+   "drain": [
+    1,
+    2
+   ],
+   "category": "Special",
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "grassknot": {
+   "kind": "Move",
+   "id": "grassknot",
+   "name": "Grass Knot",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Grass",
+   "category": "Special",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "grassyglide": {
+   "kind": "Move",
+   "id": "grassyglide",
+   "name": "Grassy Glide",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Grass",
+   "category": "Physical",
+   "basePower": 55,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "gravapple": {
+   "kind": "Move",
+   "id": "gravapple",
+   "name": "Grav Apple",
+   "flags": {},
+   "type": "Grass",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "gyroball": {
+   "kind": "Move",
+   "id": "gyroball",
+   "name": "Gyro Ball",
+   "flags": {
+    "contact": 1,
+    "bullet": 1
+   },
+   "type": "Steel",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "hardpress": {
+   "kind": "Move",
+   "id": "hardpress",
+   "name": "Hard Press",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Steel",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "headsmash": {
+   "kind": "Move",
+   "id": "headsmash",
+   "name": "Head Smash",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Rock",
+   "recoil": [
+    1,
+    2
+   ],
+   "category": "Physical",
+   "basePower": 150,
+   "zMove": {
+    "basePower": 200
+   },
+   "maxMove": {
+    "basePower": 150
+   }
+  },
+  "heatcrash": {
+   "kind": "Move",
+   "id": "heatcrash",
+   "name": "Heat Crash",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fire",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "heatwave": {
+   "kind": "Move",
+   "id": "heatwave",
+   "name": "Heat Wave",
+   "flags": {
+    "wind": 1
+   },
+   "type": "Fire",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 95,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "heavyslam": {
+   "kind": "Move",
+   "id": "heavyslam",
+   "name": "Heavy Slam",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Steel",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "hex": {
+   "kind": "Move",
+   "id": "hex",
+   "name": "Hex",
+   "flags": {},
+   "type": "Ghost",
+   "category": "Special",
+   "basePower": 65,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "highjumpkick": {
+   "kind": "Move",
+   "id": "highjumpkick",
+   "name": "High Jump Kick",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "hasCrashDamage": true,
+   "category": "Physical",
+   "basePower": 130,
+   "zMove": {
+    "basePower": 195
+   },
+   "maxMove": {
+    "basePower": 95
+   }
+  },
+  "hurricane": {
+   "kind": "Move",
+   "id": "hurricane",
+   "name": "Hurricane",
+   "flags": {
+    "wind": 1
+   },
+   "type": "Flying",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 110,
+   "zMove": {
+    "basePower": 185
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "hypervoice": {
+   "kind": "Move",
+   "id": "hypervoice",
+   "name": "Hyper Voice",
+   "flags": {
+    "sound": 1
+   },
+   "type": "Normal",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "icebeam": {
+   "kind": "Move",
+   "id": "icebeam",
+   "name": "Ice Beam",
+   "flags": {},
+   "type": "Ice",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "icepunch": {
+   "kind": "Move",
+   "id": "icepunch",
+   "name": "Ice Punch",
+   "flags": {
+    "contact": 1,
+    "punch": 1
+   },
+   "type": "Ice",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "icywind": {
+   "kind": "Move",
+   "id": "icywind",
+   "name": "Icy Wind",
+   "flags": {
+    "wind": 1
+   },
+   "type": "Ice",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 55,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "infernalparade": {
+   "kind": "Move",
+   "id": "infernalparade",
+   "name": "Infernal Parade",
+   "flags": {},
+   "type": "Ghost",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 65,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "ironhead": {
+   "kind": "Move",
+   "id": "ironhead",
+   "name": "Iron Head",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Steel",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "knockoff": {
+   "kind": "Move",
+   "id": "knockoff",
+   "name": "Knock Off",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 65,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "kowtowcleave": {
+   "kind": "Move",
+   "id": "kowtowcleave",
+   "name": "Kowtow Cleave",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 85,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "lashout": {
+   "kind": "Move",
+   "id": "lashout",
+   "name": "Lash Out",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "leechlife": {
+   "kind": "Move",
+   "id": "leechlife",
+   "name": "Leech Life",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Bug",
+   "drain": [
+    1,
+    2
+   ],
+   "category": "Physical",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "liquidation": {
+   "kind": "Move",
+   "id": "liquidation",
+   "name": "Liquidation",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Water",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 85,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "lowkick": {
+   "kind": "Move",
+   "id": "lowkick",
+   "name": "Low Kick",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "makeitrain": {
+   "kind": "Move",
+   "id": "makeitrain",
+   "name": "Make It Rain",
+   "flags": {},
+   "type": "Steel",
+   "category": "Special",
+   "target": "allAdjacentFoes",
+   "self": {
+    "boosts": {
+     "spa": -2
+    }
+   },
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "meteorbeam": {
+   "kind": "Move",
+   "id": "meteorbeam",
+   "name": "Meteor Beam",
+   "flags": {},
+   "type": "Rock",
+   "category": "Special",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "mistyexplosion": {
+   "kind": "Move",
+   "id": "mistyexplosion",
+   "name": "Misty Explosion",
+   "flags": {},
+   "type": "Fairy",
+   "category": "Special",
+   "target": "allAdjacent",
+   "basePower": 100,
+   "zMove": {
+    "basePower": 180
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "moonblast": {
+   "kind": "Move",
+   "id": "moonblast",
+   "name": "Moonblast",
+   "flags": {},
+   "type": "Fairy",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 95,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "nightshade": {
+   "kind": "Move",
+   "id": "nightshade",
+   "name": "Night Shade",
+   "flags": {},
+   "type": "Ghost",
+   "category": "Special",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "overheat": {
+   "kind": "Move",
+   "id": "overheat",
+   "name": "Overheat",
+   "flags": {},
+   "type": "Fire",
+   "self": {
+    "boosts": {
+     "spa": -2
+    }
+   },
+   "category": "Special",
+   "basePower": 130,
+   "zMove": {
+    "basePower": 195
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "painsplit": {
+   "kind": "Move",
+   "id": "painsplit",
+   "name": "Pain Split",
+   "flags": {},
+   "category": "Status",
+   "type": "Normal",
+   "basePower": 0
+  },
+  "payback": {
+   "kind": "Move",
+   "id": "payback",
+   "name": "Payback",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 50,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "pinmissile": {
+   "kind": "Move",
+   "id": "pinmissile",
+   "name": "Pin Missile",
+   "flags": {},
+   "type": "Bug",
+   "multihit": [
+    2,
+    5
+   ],
+   "category": "Physical",
+   "basePower": 25,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "playrough": {
+   "kind": "Move",
+   "id": "playrough",
+   "name": "Play Rough",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fairy",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "poltergeist": {
+   "kind": "Move",
+   "id": "poltergeist",
+   "name": "Poltergeist",
+   "flags": {},
+   "type": "Ghost",
+   "category": "Physical",
+   "basePower": 110,
+   "zMove": {
+    "basePower": 185
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "populationbomb": {
+   "kind": "Move",
+   "id": "populationbomb",
+   "name": "Population Bomb",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "multihit": 10,
+   "multiaccuracy": true,
+   "basePower": 20,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "powertrip": {
+   "kind": "Move",
+   "id": "powertrip",
+   "name": "Power Trip",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "category": "Physical",
+   "basePower": 20,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "psychic": {
+   "kind": "Move",
+   "id": "psychic",
+   "name": "Psychic",
+   "flags": {},
+   "type": "Psychic",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "psychicfangs": {
+   "kind": "Move",
+   "id": "psychicfangs",
+   "name": "Psychic Fangs",
+   "flags": {
+    "contact": 1,
+    "bite": 1
+   },
+   "type": "Psychic",
+   "category": "Physical",
+   "basePower": 85,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "psychicnoise": {
+   "kind": "Move",
+   "id": "psychicnoise",
+   "name": "Psychic Noise",
+   "flags": {
+    "sound": 1
+   },
+   "type": "Psychic",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "psyshock": {
+   "kind": "Move",
+   "id": "psyshock",
+   "name": "Psyshock",
+   "flags": {},
+   "type": "Psychic",
+   "category": "Special",
+   "overrideDefensiveStat": "def",
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "quickattack": {
+   "kind": "Move",
+   "id": "quickattack",
+   "name": "Quick Attack",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "priority": 1,
+   "category": "Physical",
+   "basePower": 40,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "ragingbull": {
+   "kind": "Move",
+   "id": "ragingbull",
+   "name": "Raging Bull",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "reversal": {
+   "kind": "Move",
+   "id": "reversal",
+   "name": "Reversal",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "risingvoltage": {
+   "kind": "Move",
+   "id": "risingvoltage",
+   "name": "Rising Voltage",
+   "flags": {},
+   "type": "Electric",
+   "category": "Special",
+   "basePower": 70,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "rockblast": {
+   "kind": "Move",
+   "id": "rockblast",
+   "name": "Rock Blast",
+   "flags": {
+    "bullet": 1
+   },
+   "type": "Rock",
+   "multihit": [
+    2,
+    5
+   ],
+   "category": "Physical",
+   "basePower": 25,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "rockslide": {
+   "kind": "Move",
+   "id": "rockslide",
+   "name": "Rock Slide",
+   "flags": {},
+   "type": "Rock",
+   "target": "allAdjacentFoes",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "sacredsword": {
+   "kind": "Move",
+   "id": "sacredsword",
+   "name": "Sacred Sword",
+   "flags": {
+    "contact": 1,
+    "slicing": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "ignoreDefensive": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "seismictoss": {
+   "kind": "Move",
+   "id": "seismictoss",
+   "name": "Seismic Toss",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Fighting",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 75
+   }
+  },
+  "shadowball": {
+   "kind": "Move",
+   "id": "shadowball",
+   "name": "Shadow Ball",
+   "flags": {
+    "bullet": 1
+   },
+   "type": "Ghost",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 80,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "shellsidearm": {
+   "kind": "Move",
+   "id": "shellsidearm",
+   "name": "Shell Side Arm",
+   "flags": {},
+   "type": "Poison",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "sludgebomb": {
+   "kind": "Move",
+   "id": "sludgebomb",
+   "name": "Sludge Bomb",
+   "flags": {
+    "bullet": 1
+   },
+   "type": "Poison",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "solarbeam": {
+   "kind": "Move",
+   "id": "solarbeam",
+   "name": "Solar Beam",
+   "flags": {},
+   "type": "Grass",
+   "category": "Special",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "spore": {
+   "kind": "Move",
+   "id": "spore",
+   "name": "Spore",
+   "flags": {},
+   "category": "Status",
+   "type": "Grass",
+   "basePower": 0
+  },
+  "steelbeam": {
+   "kind": "Move",
+   "id": "steelbeam",
+   "name": "Steel Beam",
+   "flags": {},
+   "type": "Steel",
+   "mindBlownRecoil": true,
+   "category": "Special",
+   "basePower": 140,
+   "zMove": {
+    "basePower": 200
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "steelroller": {
+   "kind": "Move",
+   "id": "steelroller",
+   "name": "Steel Roller",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Steel",
+   "category": "Physical",
+   "basePower": 130,
+   "zMove": {
+    "basePower": 195
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "stoneedge": {
+   "kind": "Move",
+   "id": "stoneedge",
+   "name": "Stone Edge",
+   "flags": {},
+   "type": "Rock",
+   "category": "Physical",
+   "basePower": 100,
+   "zMove": {
+    "basePower": 180
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "storedpower": {
+   "kind": "Move",
+   "id": "storedpower",
+   "name": "Stored Power",
+   "flags": {},
+   "type": "Psychic",
+   "category": "Special",
+   "basePower": 20,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "struggle": {
+   "kind": "Move",
+   "id": "struggle",
+   "name": "Struggle",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "struggleRecoil": true,
+   "basePower": 50
+  },
+  "suckerpunch": {
+   "kind": "Move",
+   "id": "suckerpunch",
+   "name": "Sucker Punch",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Dark",
+   "priority": 1,
+   "category": "Physical",
+   "basePower": 70,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "superfang": {
+   "kind": "Move",
+   "id": "superfang",
+   "name": "Super Fang",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Normal",
+   "category": "Physical",
+   "basePower": 0,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 100
+   }
+  },
+  "surf": {
+   "kind": "Move",
+   "id": "surf",
+   "name": "Surf",
+   "flags": {},
+   "type": "Water",
+   "target": "allAdjacent",
+   "category": "Special",
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "terrainpulse": {
+   "kind": "Move",
+   "id": "terrainpulse",
+   "name": "Terrain Pulse",
+   "flags": {
+    "pulse": 1
+   },
+   "type": "Normal",
+   "category": "Special",
+   "basePower": 50,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "thunderbolt": {
+   "kind": "Move",
+   "id": "thunderbolt",
+   "name": "Thunderbolt",
+   "flags": {},
+   "type": "Electric",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "thunderpunch": {
+   "kind": "Move",
+   "id": "thunderpunch",
+   "name": "Thunder Punch",
+   "flags": {
+    "contact": 1,
+    "punch": 1
+   },
+   "type": "Electric",
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 75,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "tripleaxel": {
+   "kind": "Move",
+   "id": "tripleaxel",
+   "name": "Triple Axel",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Ice",
+   "category": "Physical",
+   "multihit": 3,
+   "multiaccuracy": true,
+   "basePower": 20,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "uturn": {
+   "kind": "Move",
+   "id": "uturn",
+   "name": "U-turn",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Bug",
+   "category": "Physical",
+   "basePower": 70,
+   "zMove": {
+    "basePower": 140
+   },
+   "maxMove": {
+    "basePower": 120
+   }
+  },
+  "venoshock": {
+   "kind": "Move",
+   "id": "venoshock",
+   "name": "Venoshock",
+   "flags": {},
+   "type": "Poison",
+   "category": "Special",
+   "basePower": 65,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 85
+   }
+  },
+  "volttackle": {
+   "kind": "Move",
+   "id": "volttackle",
+   "name": "Volt Tackle",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Electric",
+   "recoil": [
+    33,
+    100
+   ],
+   "category": "Physical",
+   "secondaries": true,
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "waterpulse": {
+   "kind": "Move",
+   "id": "waterpulse",
+   "name": "Water Pulse",
+   "flags": {
+    "pulse": 1
+   },
+   "type": "Water",
+   "category": "Special",
+   "secondaries": true,
+   "basePower": 60,
+   "zMove": {
+    "basePower": 120
+   },
+   "maxMove": {
+    "basePower": 110
+   }
+  },
+  "waterspout": {
+   "kind": "Move",
+   "id": "waterspout",
+   "name": "Water Spout",
+   "flags": {},
+   "type": "Water",
+   "target": "allAdjacentFoes",
+   "category": "Special",
+   "basePower": 150,
+   "zMove": {
+    "basePower": 200
+   },
+   "maxMove": {
+    "basePower": 150
+   }
+  },
+  "wavecrash": {
+   "kind": "Move",
+   "id": "wavecrash",
+   "name": "Wave Crash",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Water",
+   "category": "Physical",
+   "recoil": [
+    33,
+    100
+   ],
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  },
+  "weatherball": {
+   "kind": "Move",
+   "id": "weatherball",
+   "name": "Weather Ball",
+   "flags": {
+    "bullet": 1
+   },
+   "type": "Normal",
+   "category": "Special",
+   "basePower": 50,
+   "zMove": {
+    "basePower": 160
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "whirlpool": {
+   "kind": "Move",
+   "id": "whirlpool",
+   "name": "Whirlpool",
+   "flags": {},
+   "type": "Water",
+   "category": "Special",
+   "basePower": 35,
+   "zMove": {
+    "basePower": 100
+   },
+   "maxMove": {
+    "basePower": 90
+   }
+  },
+  "wildcharge": {
+   "kind": "Move",
+   "id": "wildcharge",
+   "name": "Wild Charge",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Electric",
+   "recoil": [
+    1,
+    4
+   ],
+   "category": "Physical",
+   "basePower": 90,
+   "zMove": {
+    "basePower": 175
+   },
+   "maxMove": {
+    "basePower": 130
+   }
+  },
+  "woodhammer": {
+   "kind": "Move",
+   "id": "woodhammer",
+   "name": "Wood Hammer",
+   "flags": {
+    "contact": 1
+   },
+   "type": "Grass",
+   "recoil": [
+    33,
+    100
+   ],
+   "category": "Physical",
+   "basePower": 120,
+   "zMove": {
+    "basePower": 190
+   },
+   "maxMove": {
+    "basePower": 140
+   }
+  }
+ },
+ "species": {
+  "aggronmega": {
+   "kind": "Species",
+   "id": "aggronmega",
+   "name": "Aggron-Mega",
+   "baseStats": {
+    "hp": 70,
+    "atk": 140,
+    "def": 230,
+    "spa": 60,
+    "spd": 80,
+    "spe": 50
+   },
+   "types": [
+    "Steel"
+   ],
+   "weightkg": 395,
+   "abilities": {
+    "0": "Filter"
+   },
+   "baseSpecies": "Aggron"
+  },
+  "altaria": {
+   "kind": "Species",
+   "id": "altaria",
+   "name": "Altaria",
+   "baseStats": {
+    "hp": 75,
+    "atk": 70,
+    "def": 90,
+    "spa": 70,
+    "spd": 105,
+    "spe": 80
+   },
+   "types": [
+    "Dragon",
+    "Flying"
+   ],
+   "weightkg": 20.6,
+   "abilities": {
+    "0": "Natural Cure"
+   },
+   "otherFormes": [
+    "Altaria-Mega"
+   ]
+  },
+  "altariamega": {
+   "kind": "Species",
+   "id": "altariamega",
+   "name": "Altaria-Mega",
+   "baseStats": {
+    "hp": 75,
+    "atk": 110,
+    "def": 110,
+    "spa": 110,
+    "spd": 105,
+    "spe": 80
+   },
+   "types": [
+    "Dragon",
+    "Fairy"
+   ],
+   "weightkg": 20.6,
+   "abilities": {
+    "0": "Pixilate"
+   },
+   "baseSpecies": "Altaria"
+  },
+  "annihilape": {
+   "kind": "Species",
+   "id": "annihilape",
+   "name": "Annihilape",
+   "baseStats": {
+    "hp": 110,
+    "atk": 115,
+    "def": 80,
+    "spa": 50,
+    "spd": 90,
+    "spe": 90
+   },
+   "types": [
+    "Fighting",
+    "Ghost"
+   ],
+   "weightkg": 56,
+   "abilities": {
+    "0": "Vital Spirit"
+   }
+  },
+  "appletun": {
+   "kind": "Species",
+   "id": "appletun",
+   "name": "Appletun",
+   "baseStats": {
+    "hp": 110,
+    "atk": 85,
+    "def": 80,
+    "spa": 100,
+    "spd": 80,
+    "spe": 30
+   },
+   "types": [
+    "Grass",
+    "Dragon"
+   ],
+   "weightkg": 13,
+   "abilities": {
+    "0": "Ripen"
+   },
+   "canGigantamax": "G-Max Sweetness"
+  },
+  "araquanid": {
+   "kind": "Species",
+   "id": "araquanid",
+   "name": "Araquanid",
+   "baseStats": {
+    "hp": 68,
+    "atk": 70,
+    "def": 92,
+    "spa": 50,
+    "spd": 132,
+    "spe": 42
+   },
+   "types": [
+    "Water",
+    "Bug"
+   ],
+   "weightkg": 82,
+   "abilities": {
+    "0": "Water Bubble"
+   }
+  },
+  "arcanine": {
+   "kind": "Species",
+   "id": "arcanine",
+   "name": "Arcanine",
+   "baseStats": {
+    "hp": 90,
+    "atk": 110,
+    "def": 80,
+    "spa": 100,
+    "spd": 80,
+    "spe": 95
+   },
+   "types": [
+    "Fire"
+   ],
+   "weightkg": 155,
+   "abilities": {
+    "0": "Intimidate"
+   },
+   "otherFormes": [
+    "Arcanine-Hisui"
+   ]
+  },
+  "archaludon": {
+   "kind": "Species",
+   "id": "archaludon",
+   "name": "Archaludon",
+   "baseStats": {
+    "hp": 90,
+    "atk": 105,
+    "def": 130,
+    "spa": 125,
+    "spd": 65,
+    "spe": 85
+   },
+   "types": [
+    "Steel",
+    "Dragon"
+   ],
+   "weightkg": 60,
+   "abilities": {
+    "0": "Stamina"
+   }
+  },
+  "audino": {
+   "kind": "Species",
+   "id": "audino",
+   "name": "Audino",
+   "baseStats": {
+    "hp": 103,
+    "atk": 60,
+    "def": 86,
+    "spa": 60,
+    "spd": 86,
+    "spe": 50
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 31,
+   "abilities": {
+    "0": "Healer"
+   },
+   "otherFormes": [
+    "Audino-Mega"
+   ]
+  },
+  "avalugg": {
+   "kind": "Species",
+   "id": "avalugg",
+   "name": "Avalugg",
+   "baseStats": {
+    "hp": 95,
+    "atk": 117,
+    "def": 184,
+    "spa": 44,
+    "spd": 46,
+    "spe": 28
+   },
+   "types": [
+    "Ice"
+   ],
+   "weightkg": 505,
+   "abilities": {
+    "0": "Own Tempo"
+   },
+   "otherFormes": [
+    "Avalugg-Hisui"
+   ]
+  },
+  "azumarill": {
+   "kind": "Species",
+   "id": "azumarill",
+   "name": "Azumarill",
+   "baseStats": {
+    "hp": 100,
+    "atk": 50,
+    "def": 80,
+    "spa": 60,
+    "spd": 80,
+    "spe": 50
+   },
+   "types": [
+    "Water",
+    "Fairy"
+   ],
+   "weightkg": 28.5,
+   "abilities": {
+    "0": "Thick Fat"
+   }
+  },
+  "basculegion": {
+   "kind": "Species",
+   "id": "basculegion",
+   "name": "Basculegion",
+   "baseStats": {
+    "hp": 120,
+    "atk": 112,
+    "def": 65,
+    "spa": 80,
+    "spd": 75,
+    "spe": 78
+   },
+   "types": [
+    "Water",
+    "Ghost"
+   ],
+   "weightkg": 110,
+   "gender": "M",
+   "abilities": {
+    "0": "Swift Swim"
+   },
+   "otherFormes": [
+    "Basculegion-F"
+   ]
+  },
+  "basculegionf": {
+   "kind": "Species",
+   "id": "basculegionf",
+   "name": "Basculegion-F",
+   "baseStats": {
+    "hp": 120,
+    "atk": 92,
+    "def": 65,
+    "spa": 100,
+    "spd": 75,
+    "spe": 78
+   },
+   "types": [
+    "Water",
+    "Ghost"
+   ],
+   "weightkg": 110,
+   "gender": "F",
+   "abilities": {
+    "0": "Swift Swim"
+   },
+   "baseSpecies": "Basculegion"
+  },
+  "bastiodon": {
+   "kind": "Species",
+   "id": "bastiodon",
+   "name": "Bastiodon",
+   "baseStats": {
+    "hp": 60,
+    "atk": 52,
+    "def": 168,
+    "spa": 47,
+    "spd": 138,
+    "spe": 30
+   },
+   "types": [
+    "Rock",
+    "Steel"
+   ],
+   "weightkg": 149.5,
+   "abilities": {
+    "0": "Sturdy"
+   }
+  },
+  "beartic": {
+   "kind": "Species",
+   "id": "beartic",
+   "name": "Beartic",
+   "baseStats": {
+    "hp": 95,
+    "atk": 130,
+    "def": 80,
+    "spa": 70,
+    "spd": 80,
+    "spe": 50
+   },
+   "types": [
+    "Ice"
+   ],
+   "weightkg": 260,
+   "abilities": {
+    "0": "Snow Cloak"
+   }
+  },
+  "camerupt": {
+   "kind": "Species",
+   "id": "camerupt",
+   "name": "Camerupt",
+   "baseStats": {
+    "hp": 70,
+    "atk": 100,
+    "def": 70,
+    "spa": 105,
+    "spd": 75,
+    "spe": 40
+   },
+   "types": [
+    "Fire",
+    "Ground"
+   ],
+   "weightkg": 220,
+   "abilities": {
+    "0": "Magma Armor"
+   },
+   "otherFormes": [
+    "Camerupt-Mega"
+   ]
+  },
+  "castform": {
+   "kind": "Species",
+   "id": "castform",
+   "name": "Castform",
+   "baseStats": {
+    "hp": 70,
+    "atk": 70,
+    "def": 70,
+    "spa": 70,
+    "spd": 70,
+    "spe": 70
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 0.8,
+   "abilities": {
+    "0": "Forecast"
+   },
+   "otherFormes": [
+    "Castform-Rainy",
+    "Castform-Snowy",
+    "Castform-Sunny"
+   ]
+  },
+  "chandelure": {
+   "kind": "Species",
+   "id": "chandelure",
+   "name": "Chandelure",
+   "baseStats": {
+    "hp": 60,
+    "atk": 55,
+    "def": 90,
+    "spa": 145,
+    "spd": 90,
+    "spe": 80
+   },
+   "types": [
+    "Ghost",
+    "Fire"
+   ],
+   "weightkg": 34.3,
+   "abilities": {
+    "0": "Flash Fire"
+   },
+   "otherFormes": [
+    "Chandelure-Mega"
+   ]
+  },
+  "charizard": {
+   "kind": "Species",
+   "id": "charizard",
+   "name": "Charizard",
+   "baseStats": {
+    "hp": 78,
+    "atk": 84,
+    "def": 78,
+    "spa": 109,
+    "spd": 85,
+    "spe": 100
+   },
+   "types": [
+    "Fire",
+    "Flying"
+   ],
+   "weightkg": 90.5,
+   "abilities": {
+    "0": "Blaze"
+   },
+   "otherFormes": [
+    "Charizard-Mega-X",
+    "Charizard-Mega-Y"
+   ],
+   "canGigantamax": "G-Max Wildfire"
+  },
+  "charizardmegax": {
+   "kind": "Species",
+   "id": "charizardmegax",
+   "name": "Charizard-Mega-X",
+   "baseStats": {
+    "hp": 78,
+    "atk": 130,
+    "def": 111,
+    "spa": 130,
+    "spd": 85,
+    "spe": 100
+   },
+   "types": [
+    "Fire",
+    "Dragon"
+   ],
+   "weightkg": 110.5,
+   "abilities": {
+    "0": "Tough Claws"
+   },
+   "baseSpecies": "Charizard"
+  },
+  "charizardmegay": {
+   "kind": "Species",
+   "id": "charizardmegay",
+   "name": "Charizard-Mega-Y",
+   "baseStats": {
+    "hp": 78,
+    "atk": 104,
+    "def": 78,
+    "spa": 159,
+    "spd": 115,
+    "spe": 100
+   },
+   "types": [
+    "Fire",
+    "Flying"
+   ],
+   "weightkg": 100.5,
+   "abilities": {
+    "0": "Drought"
+   },
+   "baseSpecies": "Charizard"
+  },
+  "chesnaught": {
+   "kind": "Species",
+   "id": "chesnaught",
+   "name": "Chesnaught",
+   "baseStats": {
+    "hp": 88,
+    "atk": 107,
+    "def": 122,
+    "spa": 74,
+    "spd": 75,
+    "spe": 64
+   },
+   "types": [
+    "Grass",
+    "Fighting"
+   ],
+   "weightkg": 90,
+   "abilities": {
+    "0": "Overgrow"
+   },
+   "otherFormes": [
+    "Chesnaught-Mega"
+   ]
+  },
+  "clawitzer": {
+   "kind": "Species",
+   "id": "clawitzer",
+   "name": "Clawitzer",
+   "baseStats": {
+    "hp": 71,
+    "atk": 73,
+    "def": 88,
+    "spa": 120,
+    "spd": 89,
+    "spe": 59
+   },
+   "types": [
+    "Water"
+   ],
+   "weightkg": 35.3,
+   "abilities": {
+    "0": "Mega Launcher"
+   }
+  },
+  "clefable": {
+   "kind": "Species",
+   "id": "clefable",
+   "name": "Clefable",
+   "baseStats": {
+    "hp": 95,
+    "atk": 70,
+    "def": 73,
+    "spa": 95,
+    "spd": 90,
+    "spe": 60
+   },
+   "types": [
+    "Fairy"
+   ],
+   "weightkg": 40,
+   "abilities": {
+    "0": "Cute Charm"
+   },
+   "otherFormes": [
+    "Clefable-Mega"
+   ]
+  },
+  "cofagrigus": {
+   "kind": "Species",
+   "id": "cofagrigus",
+   "name": "Cofagrigus",
+   "baseStats": {
+    "hp": 58,
+    "atk": 50,
+    "def": 145,
+    "spa": 95,
+    "spd": 105,
+    "spe": 30
+   },
+   "types": [
+    "Ghost"
+   ],
+   "weightkg": 76.5,
+   "abilities": {
+    "0": "Mummy"
+   }
+  },
+  "dragalge": {
+   "kind": "Species",
+   "id": "dragalge",
+   "name": "Dragalge",
+   "baseStats": {
+    "hp": 65,
+    "atk": 75,
+    "def": 90,
+    "spa": 97,
+    "spd": 123,
+    "spe": 44
+   },
+   "types": [
+    "Poison",
+    "Dragon"
+   ],
+   "weightkg": 81.5,
+   "abilities": {
+    "0": "Poison Point"
+   },
+   "otherFormes": [
+    "Dragalge-Mega"
+   ]
+  },
+  "dragapult": {
+   "kind": "Species",
+   "id": "dragapult",
+   "name": "Dragapult",
+   "baseStats": {
+    "hp": 88,
+    "atk": 120,
+    "def": 75,
+    "spa": 100,
+    "spd": 75,
+    "spe": 142
+   },
+   "types": [
+    "Dragon",
+    "Ghost"
+   ],
+   "weightkg": 50,
+   "abilities": {
+    "0": "Clear Body"
+   }
+  },
+  "dragonite": {
+   "kind": "Species",
+   "id": "dragonite",
+   "name": "Dragonite",
+   "baseStats": {
+    "hp": 91,
+    "atk": 134,
+    "def": 95,
+    "spa": 100,
+    "spd": 100,
+    "spe": 80
+   },
+   "types": [
+    "Dragon",
+    "Flying"
+   ],
+   "weightkg": 210,
+   "abilities": {
+    "0": "Inner Focus"
+   },
+   "otherFormes": [
+    "Dragonite-Mega"
+   ]
+  },
+  "dragonitemega": {
+   "kind": "Species",
+   "id": "dragonitemega",
+   "name": "Dragonite-Mega",
+   "baseStats": {
+    "hp": 91,
+    "atk": 124,
+    "def": 115,
+    "spa": 145,
+    "spd": 125,
+    "spe": 100
+   },
+   "types": [
+    "Dragon",
+    "Flying"
+   ],
+   "weightkg": 290,
+   "abilities": {
+    "0": "Multiscale"
+   },
+   "baseSpecies": "Dragonite"
+  },
+  "excadrill": {
+   "kind": "Species",
+   "id": "excadrill",
+   "name": "Excadrill",
+   "baseStats": {
+    "hp": 110,
+    "atk": 135,
+    "def": 60,
+    "spa": 50,
+    "spd": 65,
+    "spe": 88
+   },
+   "types": [
+    "Ground",
+    "Steel"
+   ],
+   "weightkg": 40.4,
+   "abilities": {
+    "0": "Sand Rush"
+   },
+   "otherFormes": [
+    "Excadrill-Mega"
+   ]
+  },
+  "farigiraf": {
+   "kind": "Species",
+   "id": "farigiraf",
+   "name": "Farigiraf",
+   "baseStats": {
+    "hp": 120,
+    "atk": 90,
+    "def": 70,
+    "spa": 110,
+    "spd": 70,
+    "spe": 60
+   },
+   "types": [
+    "Normal",
+    "Psychic"
+   ],
+   "weightkg": 160,
+   "abilities": {
+    "0": "Cud Chew"
+   }
+  },
+  "feraligatr": {
+   "kind": "Species",
+   "id": "feraligatr",
+   "name": "Feraligatr",
+   "baseStats": {
+    "hp": 85,
+    "atk": 105,
+    "def": 100,
+    "spa": 79,
+    "spd": 83,
+    "spe": 78
+   },
+   "types": [
+    "Water"
+   ],
+   "weightkg": 88.8,
+   "abilities": {
+    "0": "Torrent"
+   },
+   "otherFormes": [
+    "Feraligatr-Mega"
+   ]
+  },
+  "floetteeternal": {
+   "kind": "Species",
+   "id": "floetteeternal",
+   "name": "Floette-Eternal",
+   "baseStats": {
+    "hp": 74,
+    "atk": 65,
+    "def": 67,
+    "spa": 125,
+    "spd": 128,
+    "spe": 92
+   },
+   "types": [
+    "Fairy"
+   ],
+   "weightkg": 0.9,
+   "gender": "F",
+   "abilities": {
+    "0": "Flower Veil"
+   },
+   "otherFormes": [
+    "Floette-Mega"
+   ]
+  },
+  "forretress": {
+   "kind": "Species",
+   "id": "forretress",
+   "name": "Forretress",
+   "baseStats": {
+    "hp": 75,
+    "atk": 90,
+    "def": 140,
+    "spa": 60,
+    "spd": 60,
+    "spe": 40
+   },
+   "types": [
+    "Bug",
+    "Steel"
+   ],
+   "weightkg": 125.8,
+   "abilities": {
+    "0": "Sturdy"
+   }
+  },
+  "furfrou": {
+   "kind": "Species",
+   "id": "furfrou",
+   "name": "Furfrou",
+   "baseStats": {
+    "hp": 75,
+    "atk": 80,
+    "def": 60,
+    "spa": 65,
+    "spd": 90,
+    "spe": 102
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 28,
+   "abilities": {
+    "0": "Fur Coat"
+   }
+  },
+  "gallade": {
+   "kind": "Species",
+   "id": "gallade",
+   "name": "Gallade",
+   "baseStats": {
+    "hp": 68,
+    "atk": 125,
+    "def": 65,
+    "spa": 65,
+    "spd": 115,
+    "spe": 80
+   },
+   "types": [
+    "Psychic",
+    "Fighting"
+   ],
+   "weightkg": 52,
+   "gender": "M",
+   "abilities": {
+    "0": "Steadfast"
+   },
+   "otherFormes": [
+    "Gallade-Mega"
+   ]
+  },
+  "garchomp": {
+   "kind": "Species",
+   "id": "garchomp",
+   "name": "Garchomp",
+   "baseStats": {
+    "hp": 108,
+    "atk": 130,
+    "def": 95,
+    "spa": 80,
+    "spd": 85,
+    "spe": 102
+   },
+   "types": [
+    "Dragon",
+    "Ground"
+   ],
+   "weightkg": 95,
+   "abilities": {
+    "0": "Sand Veil"
+   },
+   "otherFormes": [
+    "Garchomp-Mega"
+   ]
+  },
+  "gardevoir": {
+   "kind": "Species",
+   "id": "gardevoir",
+   "name": "Gardevoir",
+   "baseStats": {
+    "hp": 68,
+    "atk": 65,
+    "def": 65,
+    "spa": 125,
+    "spd": 115,
+    "spe": 80
+   },
+   "types": [
+    "Psychic",
+    "Fairy"
+   ],
+   "weightkg": 48.4,
+   "abilities": {
+    "0": "Synchronize"
+   },
+   "otherFormes": [
+    "Gardevoir-Mega"
+   ]
+  },
+  "gardevoirmega": {
+   "kind": "Species",
+   "id": "gardevoirmega",
+   "name": "Gardevoir-Mega",
+   "baseStats": {
+    "hp": 68,
+    "atk": 85,
+    "def": 65,
+    "spa": 165,
+    "spd": 135,
+    "spe": 100
+   },
+   "types": [
+    "Psychic",
+    "Fairy"
+   ],
+   "weightkg": 48.4,
+   "abilities": {
+    "0": "Pixilate"
+   },
+   "baseSpecies": "Gardevoir"
+  },
+  "garganacl": {
+   "kind": "Species",
+   "id": "garganacl",
+   "name": "Garganacl",
+   "baseStats": {
+    "hp": 100,
+    "atk": 100,
+    "def": 130,
+    "spa": 45,
+    "spd": 90,
+    "spe": 35
+   },
+   "types": [
+    "Rock"
+   ],
+   "weightkg": 240,
+   "abilities": {
+    "0": "Purifying Salt"
+   }
+  },
+  "gengar": {
+   "kind": "Species",
+   "id": "gengar",
+   "name": "Gengar",
+   "baseStats": {
+    "hp": 60,
+    "atk": 65,
+    "def": 60,
+    "spa": 130,
+    "spd": 75,
+    "spe": 110
+   },
+   "types": [
+    "Ghost",
+    "Poison"
+   ],
+   "weightkg": 40.5,
+   "abilities": {
+    "0": "Cursed Body"
+   },
+   "otherFormes": [
+    "Gengar-Mega"
+   ],
+   "canGigantamax": "G-Max Terror"
+  },
+  "gengarmega": {
+   "kind": "Species",
+   "id": "gengarmega",
+   "name": "Gengar-Mega",
+   "baseStats": {
+    "hp": 60,
+    "atk": 65,
+    "def": 80,
+    "spa": 170,
+    "spd": 95,
+    "spe": 130
+   },
+   "types": [
+    "Ghost",
+    "Poison"
+   ],
+   "weightkg": 40.5,
+   "abilities": {
+    "0": "Shadow Tag"
+   },
+   "baseSpecies": "Gengar"
+  },
+  "gholdengo": {
+   "kind": "Species",
+   "id": "gholdengo",
+   "name": "Gholdengo",
+   "baseStats": {
+    "hp": 87,
+    "atk": 60,
+    "def": 95,
+    "spa": 133,
+    "spd": 91,
+    "spe": 84
+   },
+   "types": [
+    "Steel",
+    "Ghost"
+   ],
+   "weightkg": 30,
+   "gender": "N",
+   "abilities": {
+    "0": "Good as Gold"
+   }
+  },
+  "glaliemega": {
+   "kind": "Species",
+   "id": "glaliemega",
+   "name": "Glalie-Mega",
+   "baseStats": {
+    "hp": 80,
+    "atk": 120,
+    "def": 80,
+    "spa": 120,
+    "spd": 80,
+    "spe": 100
+   },
+   "types": [
+    "Ice"
+   ],
+   "weightkg": 350.2,
+   "abilities": {
+    "0": "Refrigerate"
+   },
+   "baseSpecies": "Glalie"
+  },
+  "glimmora": {
+   "kind": "Species",
+   "id": "glimmora",
+   "name": "Glimmora",
+   "baseStats": {
+    "hp": 83,
+    "atk": 55,
+    "def": 90,
+    "spa": 130,
+    "spd": 81,
+    "spe": 86
+   },
+   "types": [
+    "Rock",
+    "Poison"
+   ],
+   "weightkg": 45,
+   "abilities": {
+    "0": "Toxic Debris"
+   },
+   "otherFormes": [
+    "Glimmora-Mega"
+   ]
+  },
+  "goodra": {
+   "kind": "Species",
+   "id": "goodra",
+   "name": "Goodra",
+   "baseStats": {
+    "hp": 90,
+    "atk": 100,
+    "def": 70,
+    "spa": 110,
+    "spd": 150,
+    "spe": 80
+   },
+   "types": [
+    "Dragon"
+   ],
+   "weightkg": 150.5,
+   "abilities": {
+    "0": "Sap Sipper"
+   },
+   "otherFormes": [
+    "Goodra-Hisui"
+   ]
+  },
+  "greninja": {
+   "kind": "Species",
+   "id": "greninja",
+   "name": "Greninja",
+   "baseStats": {
+    "hp": 72,
+    "atk": 95,
+    "def": 67,
+    "spa": 103,
+    "spd": 71,
+    "spe": 122
+   },
+   "types": [
+    "Water",
+    "Dark"
+   ],
+   "weightkg": 40,
+   "abilities": {
+    "0": "Torrent"
+   },
+   "otherFormes": [
+    "Greninja-Mega"
+   ]
+  },
+  "grimmsnarl": {
+   "kind": "Species",
+   "id": "grimmsnarl",
+   "name": "Grimmsnarl",
+   "baseStats": {
+    "hp": 95,
+    "atk": 120,
+    "def": 65,
+    "spa": 95,
+    "spd": 75,
+    "spe": 60
+   },
+   "types": [
+    "Dark",
+    "Fairy"
+   ],
+   "weightkg": 61,
+   "gender": "M",
+   "abilities": {
+    "0": "Prankster"
+   },
+   "canGigantamax": "G-Max Snooze"
+  },
+  "gyarados": {
+   "kind": "Species",
+   "id": "gyarados",
+   "name": "Gyarados",
+   "baseStats": {
+    "hp": 95,
+    "atk": 125,
+    "def": 79,
+    "spa": 60,
+    "spd": 100,
+    "spe": 81
+   },
+   "types": [
+    "Water",
+    "Flying"
+   ],
+   "weightkg": 235,
+   "abilities": {
+    "0": "Intimidate"
+   },
+   "otherFormes": [
+    "Gyarados-Mega"
+   ]
+  },
+  "gyaradosmega": {
+   "kind": "Species",
+   "id": "gyaradosmega",
+   "name": "Gyarados-Mega",
+   "baseStats": {
+    "hp": 95,
+    "atk": 155,
+    "def": 109,
+    "spa": 70,
+    "spd": 130,
+    "spe": 81
+   },
+   "types": [
+    "Water",
+    "Dark"
+   ],
+   "weightkg": 305,
+   "abilities": {
+    "0": "Mold Breaker"
+   },
+   "baseSpecies": "Gyarados"
+  },
+  "hatterene": {
+   "kind": "Species",
+   "id": "hatterene",
+   "name": "Hatterene",
+   "baseStats": {
+    "hp": 57,
+    "atk": 90,
+    "def": 95,
+    "spa": 136,
+    "spd": 103,
+    "spe": 29
+   },
+   "types": [
+    "Psychic",
+    "Fairy"
+   ],
+   "weightkg": 5.1,
+   "gender": "F",
+   "abilities": {
+    "0": "Healer"
+   },
+   "canGigantamax": "G-Max Smite"
+  },
+  "hawlucha": {
+   "kind": "Species",
+   "id": "hawlucha",
+   "name": "Hawlucha",
+   "baseStats": {
+    "hp": 78,
+    "atk": 92,
+    "def": 75,
+    "spa": 74,
+    "spd": 63,
+    "spe": 118
+   },
+   "types": [
+    "Fighting",
+    "Flying"
+   ],
+   "weightkg": 21.5,
+   "abilities": {
+    "0": "Limber"
+   },
+   "otherFormes": [
+    "Hawlucha-Mega"
+   ]
+  },
+  "heracrossmega": {
+   "kind": "Species",
+   "id": "heracrossmega",
+   "name": "Heracross-Mega",
+   "baseStats": {
+    "hp": 80,
+    "atk": 185,
+    "def": 115,
+    "spa": 40,
+    "spd": 105,
+    "spe": 75
+   },
+   "types": [
+    "Bug",
+    "Fighting"
+   ],
+   "weightkg": 62.5,
+   "abilities": {
+    "0": "Skill Link"
+   },
+   "baseSpecies": "Heracross"
+  },
+  "hippowdon": {
+   "kind": "Species",
+   "id": "hippowdon",
+   "name": "Hippowdon",
+   "baseStats": {
+    "hp": 108,
+    "atk": 112,
+    "def": 118,
+    "spa": 68,
+    "spd": 72,
+    "spe": 47
+   },
+   "types": [
+    "Ground"
+   ],
+   "weightkg": 300,
+   "abilities": {
+    "0": "Sand Stream"
+   }
+  },
+  "hydreigon": {
+   "kind": "Species",
+   "id": "hydreigon",
+   "name": "Hydreigon",
+   "baseStats": {
+    "hp": 92,
+    "atk": 105,
+    "def": 90,
+    "spa": 125,
+    "spd": 90,
+    "spe": 98
+   },
+   "types": [
+    "Dark",
+    "Dragon"
+   ],
+   "weightkg": 160,
+   "abilities": {
+    "0": "Levitate"
+   }
+  },
+  "incineroar": {
+   "kind": "Species",
+   "id": "incineroar",
+   "name": "Incineroar",
+   "baseStats": {
+    "hp": 95,
+    "atk": 115,
+    "def": 90,
+    "spa": 80,
+    "spd": 90,
+    "spe": 60
+   },
+   "types": [
+    "Fire",
+    "Dark"
+   ],
+   "weightkg": 83,
+   "abilities": {
+    "0": "Blaze"
+   }
+  },
+  "jolteon": {
+   "kind": "Species",
+   "id": "jolteon",
+   "name": "Jolteon",
+   "baseStats": {
+    "hp": 65,
+    "atk": 65,
+    "def": 60,
+    "spa": 110,
+    "spd": 95,
+    "spe": 130
+   },
+   "types": [
+    "Electric"
+   ],
+   "weightkg": 24.5,
+   "abilities": {
+    "0": "Volt Absorb"
+   }
+  },
+  "kangaskhanmega": {
+   "kind": "Species",
+   "id": "kangaskhanmega",
+   "name": "Kangaskhan-Mega",
+   "baseStats": {
+    "hp": 105,
+    "atk": 125,
+    "def": 100,
+    "spa": 60,
+    "spd": 100,
+    "spe": 100
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 100,
+   "gender": "F",
+   "abilities": {
+    "0": "Parental Bond"
+   },
+   "baseSpecies": "Kangaskhan"
+  },
+  "kingambit": {
+   "kind": "Species",
+   "id": "kingambit",
+   "name": "Kingambit",
+   "baseStats": {
+    "hp": 100,
+    "atk": 135,
+    "def": 120,
+    "spa": 60,
+    "spd": 85,
+    "spe": 50
+   },
+   "types": [
+    "Dark",
+    "Steel"
+   ],
+   "weightkg": 120,
+   "abilities": {
+    "0": "Defiant"
+   }
+  },
+  "kommoo": {
+   "kind": "Species",
+   "id": "kommoo",
+   "name": "Kommo-o",
+   "baseStats": {
+    "hp": 75,
+    "atk": 110,
+    "def": 125,
+    "spa": 100,
+    "spd": 105,
+    "spe": 85
+   },
+   "types": [
+    "Dragon",
+    "Fighting"
+   ],
+   "weightkg": 78.2,
+   "abilities": {
+    "0": "Bulletproof"
+   }
+  },
+  "lopunnymega": {
+   "kind": "Species",
+   "id": "lopunnymega",
+   "name": "Lopunny-Mega",
+   "baseStats": {
+    "hp": 65,
+    "atk": 136,
+    "def": 94,
+    "spa": 54,
+    "spd": 96,
+    "spe": 135
+   },
+   "types": [
+    "Normal",
+    "Fighting"
+   ],
+   "weightkg": 28.3,
+   "abilities": {
+    "0": "Scrappy"
+   },
+   "baseSpecies": "Lopunny"
+  },
+  "lucario": {
+   "kind": "Species",
+   "id": "lucario",
+   "name": "Lucario",
+   "baseStats": {
+    "hp": 70,
+    "atk": 110,
+    "def": 70,
+    "spa": 115,
+    "spd": 70,
+    "spe": 90
+   },
+   "types": [
+    "Fighting",
+    "Steel"
+   ],
+   "weightkg": 54,
+   "abilities": {
+    "0": "Steadfast"
+   },
+   "otherFormes": [
+    "Lucario-Mega"
+   ]
+  },
+  "lucariomega": {
+   "kind": "Species",
+   "id": "lucariomega",
+   "name": "Lucario-Mega",
+   "baseStats": {
+    "hp": 70,
+    "atk": 145,
+    "def": 88,
+    "spa": 140,
+    "spd": 70,
+    "spe": 112
+   },
+   "types": [
+    "Fighting",
+    "Steel"
+   ],
+   "weightkg": 57.5,
+   "abilities": {
+    "0": "Adaptability"
+   },
+   "baseSpecies": "Lucario"
+  },
+  "luxray": {
+   "kind": "Species",
+   "id": "luxray",
+   "name": "Luxray",
+   "baseStats": {
+    "hp": 80,
+    "atk": 120,
+    "def": 79,
+    "spa": 95,
+    "spd": 79,
+    "spe": 70
+   },
+   "types": [
+    "Electric"
+   ],
+   "weightkg": 42,
+   "abilities": {
+    "0": "Rivalry"
+   }
+  },
+  "machamp": {
+   "kind": "Species",
+   "id": "machamp",
+   "name": "Machamp",
+   "baseStats": {
+    "hp": 90,
+    "atk": 130,
+    "def": 80,
+    "spa": 65,
+    "spd": 85,
+    "spe": 55
+   },
+   "types": [
+    "Fighting"
+   ],
+   "weightkg": 130,
+   "abilities": {
+    "0": "Guts"
+   },
+   "canGigantamax": "G-Max Chi Strike"
+  },
+  "maushold": {
+   "kind": "Species",
+   "id": "maushold",
+   "name": "Maushold",
+   "baseStats": {
+    "hp": 74,
+    "atk": 75,
+    "def": 70,
+    "spa": 65,
+    "spd": 75,
+    "spe": 111
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 2.3,
+   "gender": "N",
+   "abilities": {
+    "0": "Friend Guard"
+   },
+   "otherFormes": [
+    "Maushold-Four"
+   ]
+  },
+  "mawile": {
+   "kind": "Species",
+   "id": "mawile",
+   "name": "Mawile",
+   "baseStats": {
+    "hp": 50,
+    "atk": 85,
+    "def": 85,
+    "spa": 55,
+    "spd": 55,
+    "spe": 50
+   },
+   "types": [
+    "Steel",
+    "Fairy"
+   ],
+   "weightkg": 11.5,
+   "abilities": {
+    "0": "Hyper Cutter"
+   },
+   "otherFormes": [
+    "Mawile-Mega"
+   ]
+  },
+  "mawilemega": {
+   "kind": "Species",
+   "id": "mawilemega",
+   "name": "Mawile-Mega",
+   "baseStats": {
+    "hp": 50,
+    "atk": 105,
+    "def": 125,
+    "spa": 55,
+    "spd": 95,
+    "spe": 50
+   },
+   "types": [
+    "Steel",
+    "Fairy"
+   ],
+   "weightkg": 23.5,
+   "abilities": {
+    "0": "Huge Power"
+   },
+   "baseSpecies": "Mawile"
+  },
+  "medichammega": {
+   "kind": "Species",
+   "id": "medichammega",
+   "name": "Medicham-Mega",
+   "baseStats": {
+    "hp": 60,
+    "atk": 100,
+    "def": 85,
+    "spa": 80,
+    "spd": 85,
+    "spe": 100
+   },
+   "types": [
+    "Fighting",
+    "Psychic"
+   ],
+   "weightkg": 31.5,
+   "abilities": {
+    "0": "Pure Power"
+   },
+   "baseSpecies": "Medicham"
+  },
+  "meganium": {
+   "kind": "Species",
+   "id": "meganium",
+   "name": "Meganium",
+   "baseStats": {
+    "hp": 80,
+    "atk": 82,
+    "def": 100,
+    "spa": 83,
+    "spd": 100,
+    "spe": 80
+   },
+   "types": [
+    "Grass"
+   ],
+   "weightkg": 100.5,
+   "abilities": {
+    "0": "Overgrow"
+   },
+   "otherFormes": [
+    "Meganium-Mega"
+   ]
+  },
+  "meowstic": {
+   "kind": "Species",
+   "id": "meowstic",
+   "name": "Meowstic",
+   "baseStats": {
+    "hp": 74,
+    "atk": 48,
+    "def": 76,
+    "spa": 83,
+    "spd": 81,
+    "spe": 104
+   },
+   "types": [
+    "Psychic"
+   ],
+   "weightkg": 8.5,
+   "gender": "M",
+   "abilities": {
+    "0": "Keen Eye"
+   },
+   "otherFormes": [
+    "Meowstic-F",
+    "Meowstic-F-Mega",
+    "Meowstic-M-Mega"
+   ]
+  },
+  "meowsticf": {
+   "kind": "Species",
+   "id": "meowsticf",
+   "name": "Meowstic-F",
+   "baseStats": {
+    "hp": 74,
+    "atk": 48,
+    "def": 76,
+    "spa": 83,
+    "spd": 81,
+    "spe": 104
+   },
+   "types": [
+    "Psychic"
+   ],
+   "weightkg": 8.5,
+   "gender": "F",
+   "abilities": {
+    "0": "Keen Eye"
+   },
+   "baseSpecies": "Meowstic"
+  },
+  "metagross": {
+   "kind": "Species",
+   "id": "metagross",
+   "name": "Metagross",
+   "baseStats": {
+    "hp": 80,
+    "atk": 135,
+    "def": 130,
+    "spa": 95,
+    "spd": 90,
+    "spe": 70
+   },
+   "types": [
+    "Steel",
+    "Psychic"
+   ],
+   "weightkg": 550,
+   "gender": "N",
+   "abilities": {
+    "0": "Clear Body"
+   },
+   "otherFormes": [
+    "Metagross-Mega"
+   ]
+  },
+  "metagrossmega": {
+   "kind": "Species",
+   "id": "metagrossmega",
+   "name": "Metagross-Mega",
+   "baseStats": {
+    "hp": 80,
+    "atk": 145,
+    "def": 150,
+    "spa": 105,
+    "spd": 110,
+    "spe": 110
+   },
+   "types": [
+    "Steel",
+    "Psychic"
+   ],
+   "weightkg": 942.9,
+   "gender": "N",
+   "abilities": {
+    "0": "Tough Claws"
+   },
+   "baseSpecies": "Metagross"
+  },
+  "milotic": {
+   "kind": "Species",
+   "id": "milotic",
+   "name": "Milotic",
+   "baseStats": {
+    "hp": 95,
+    "atk": 60,
+    "def": 79,
+    "spa": 100,
+    "spd": 125,
+    "spe": 81
+   },
+   "types": [
+    "Water"
+   ],
+   "weightkg": 162,
+   "abilities": {
+    "0": "Marvel Scale"
+   }
+  },
+  "mimikyu": {
+   "kind": "Species",
+   "id": "mimikyu",
+   "name": "Mimikyu",
+   "baseStats": {
+    "hp": 55,
+    "atk": 90,
+    "def": 80,
+    "spa": 50,
+    "spd": 105,
+    "spe": 96
+   },
+   "types": [
+    "Ghost",
+    "Fairy"
+   ],
+   "weightkg": 0.7,
+   "abilities": {
+    "0": "Disguise"
+   },
+   "otherFormes": [
+    "Mimikyu-Busted"
+   ]
+  },
+  "morpeko": {
+   "kind": "Species",
+   "id": "morpeko",
+   "name": "Morpeko",
+   "baseStats": {
+    "hp": 58,
+    "atk": 95,
+    "def": 58,
+    "spa": 70,
+    "spd": 58,
+    "spe": 97
+   },
+   "types": [
+    "Electric",
+    "Dark"
+   ],
+   "weightkg": 3,
+   "abilities": {
+    "0": "Hunger Switch"
+   },
+   "otherFormes": [
+    "Morpeko-Hangry"
+   ]
+  },
+  "morpekohangry": {
+   "kind": "Species",
+   "id": "morpekohangry",
+   "name": "Morpeko-Hangry",
+   "baseStats": {
+    "hp": 58,
+    "atk": 95,
+    "def": 58,
+    "spa": 70,
+    "spd": 58,
+    "spe": 97
+   },
+   "types": [
+    "Electric",
+    "Dark"
+   ],
+   "weightkg": 3,
+   "abilities": {
+    "0": "Hunger Switch"
+   },
+   "baseSpecies": "Morpeko"
+  },
+  "mudsdale": {
+   "kind": "Species",
+   "id": "mudsdale",
+   "name": "Mudsdale",
+   "baseStats": {
+    "hp": 100,
+    "atk": 125,
+    "def": 100,
+    "spa": 55,
+    "spd": 85,
+    "spe": 35
+   },
+   "types": [
+    "Ground"
+   ],
+   "weightkg": 920,
+   "abilities": {
+    "0": "Own Tempo"
+   }
+  },
+  "orthworm": {
+   "kind": "Species",
+   "id": "orthworm",
+   "name": "Orthworm",
+   "baseStats": {
+    "hp": 70,
+    "atk": 85,
+    "def": 145,
+    "spa": 60,
+    "spd": 55,
+    "spe": 65
+   },
+   "types": [
+    "Steel"
+   ],
+   "weightkg": 310,
+   "abilities": {
+    "0": "Earth Eater"
+   }
+  },
+  "overqwil": {
+   "kind": "Species",
+   "id": "overqwil",
+   "name": "Overqwil",
+   "baseStats": {
+    "hp": 85,
+    "atk": 115,
+    "def": 95,
+    "spa": 65,
+    "spd": 65,
+    "spe": 85
+   },
+   "types": [
+    "Dark",
+    "Poison"
+   ],
+   "weightkg": 60.5,
+   "abilities": {
+    "0": "Poison Point"
+   }
+  },
+  "pelipper": {
+   "kind": "Species",
+   "id": "pelipper",
+   "name": "Pelipper",
+   "baseStats": {
+    "hp": 60,
+    "atk": 50,
+    "def": 100,
+    "spa": 95,
+    "spd": 70,
+    "spe": 65
+   },
+   "types": [
+    "Water",
+    "Flying"
+   ],
+   "weightkg": 28,
+   "abilities": {
+    "0": "Keen Eye"
+   }
+  },
+  "pikachu": {
+   "kind": "Species",
+   "id": "pikachu",
+   "name": "Pikachu",
+   "baseStats": {
+    "hp": 35,
+    "atk": 55,
+    "def": 40,
+    "spa": 50,
+    "spd": 50,
+    "spe": 90
+   },
+   "types": [
+    "Electric"
+   ],
+   "weightkg": 6,
+   "nfe": true,
+   "abilities": {
+    "0": "Static"
+   },
+   "canGigantamax": "G-Max Volt Crash"
+  },
+  "politoed": {
+   "kind": "Species",
+   "id": "politoed",
+   "name": "Politoed",
+   "baseStats": {
+    "hp": 90,
+    "atk": 75,
+    "def": 75,
+    "spa": 90,
+    "spd": 100,
+    "spe": 70
+   },
+   "types": [
+    "Water"
+   ],
+   "weightkg": 33.9,
+   "abilities": {
+    "0": "Water Absorb"
+   }
+  },
+  "primarina": {
+   "kind": "Species",
+   "id": "primarina",
+   "name": "Primarina",
+   "baseStats": {
+    "hp": 80,
+    "atk": 74,
+    "def": 74,
+    "spa": 126,
+    "spd": 116,
+    "spe": 60
+   },
+   "types": [
+    "Water",
+    "Fairy"
+   ],
+   "weightkg": 44,
+   "abilities": {
+    "0": "Torrent"
+   }
+  },
+  "raichu": {
+   "kind": "Species",
+   "id": "raichu",
+   "name": "Raichu",
+   "baseStats": {
+    "hp": 60,
+    "atk": 90,
+    "def": 55,
+    "spa": 90,
+    "spd": 80,
+    "spe": 110
+   },
+   "types": [
+    "Electric"
+   ],
+   "weightkg": 30,
+   "abilities": {
+    "0": "Static"
+   },
+   "otherFormes": [
+    "Raichu-Alola",
+    "Raichu-Mega-X",
+    "Raichu-Mega-Y"
+   ]
+  },
+  "raichualola": {
+   "kind": "Species",
+   "id": "raichualola",
+   "name": "Raichu-Alola",
+   "baseStats": {
+    "hp": 60,
+    "atk": 85,
+    "def": 50,
+    "spa": 95,
+    "spd": 85,
+    "spe": 110
+   },
+   "types": [
+    "Electric",
+    "Psychic"
+   ],
+   "weightkg": 21,
+   "abilities": {
+    "0": "Surge Surfer"
+   },
+   "baseSpecies": "Raichu"
+  },
+  "rotomheat": {
+   "kind": "Species",
+   "id": "rotomheat",
+   "name": "Rotom-Heat",
+   "baseStats": {
+    "hp": 50,
+    "atk": 65,
+    "def": 107,
+    "spa": 105,
+    "spd": 107,
+    "spe": 86
+   },
+   "types": [
+    "Electric",
+    "Fire"
+   ],
+   "weightkg": 0.3,
+   "gender": "N",
+   "abilities": {
+    "0": "Levitate"
+   },
+   "baseSpecies": "Rotom"
+  },
+  "rotomwash": {
+   "kind": "Species",
+   "id": "rotomwash",
+   "name": "Rotom-Wash",
+   "baseStats": {
+    "hp": 50,
+    "atk": 65,
+    "def": 107,
+    "spa": 105,
+    "spd": 107,
+    "spe": 86
+   },
+   "types": [
+    "Electric",
+    "Water"
+   ],
+   "weightkg": 0.3,
+   "gender": "N",
+   "abilities": {
+    "0": "Levitate"
+   },
+   "baseSpecies": "Rotom"
+  },
+  "sandaconda": {
+   "kind": "Species",
+   "id": "sandaconda",
+   "name": "Sandaconda",
+   "baseStats": {
+    "hp": 72,
+    "atk": 107,
+    "def": 125,
+    "spa": 65,
+    "spd": 70,
+    "spe": 71
+   },
+   "types": [
+    "Ground"
+   ],
+   "weightkg": 65.5,
+   "abilities": {
+    "0": "Sand Spit"
+   },
+   "canGigantamax": "G-Max Sandblast"
+  },
+  "scizor": {
+   "kind": "Species",
+   "id": "scizor",
+   "name": "Scizor",
+   "baseStats": {
+    "hp": 70,
+    "atk": 130,
+    "def": 100,
+    "spa": 55,
+    "spd": 80,
+    "spe": 65
+   },
+   "types": [
+    "Bug",
+    "Steel"
+   ],
+   "weightkg": 118,
+   "abilities": {
+    "0": "Swarm"
+   },
+   "otherFormes": [
+    "Scizor-Mega"
+   ]
+  },
+  "scizormega": {
+   "kind": "Species",
+   "id": "scizormega",
+   "name": "Scizor-Mega",
+   "baseStats": {
+    "hp": 70,
+    "atk": 150,
+    "def": 140,
+    "spa": 65,
+    "spd": 100,
+    "spe": 75
+   },
+   "types": [
+    "Bug",
+    "Steel"
+   ],
+   "weightkg": 125,
+   "abilities": {
+    "0": "Technician"
+   },
+   "baseSpecies": "Scizor"
+  },
+  "slowbro": {
+   "kind": "Species",
+   "id": "slowbro",
+   "name": "Slowbro",
+   "baseStats": {
+    "hp": 95,
+    "atk": 75,
+    "def": 110,
+    "spa": 100,
+    "spd": 80,
+    "spe": 30
+   },
+   "types": [
+    "Water",
+    "Psychic"
+   ],
+   "weightkg": 78.5,
+   "abilities": {
+    "0": "Oblivious"
+   },
+   "otherFormes": [
+    "Slowbro-Galar",
+    "Slowbro-Mega"
+   ]
+  },
+  "sneasler": {
+   "kind": "Species",
+   "id": "sneasler",
+   "name": "Sneasler",
+   "baseStats": {
+    "hp": 80,
+    "atk": 130,
+    "def": 60,
+    "spa": 40,
+    "spd": 80,
+    "spe": 120
+   },
+   "types": [
+    "Fighting",
+    "Poison"
+   ],
+   "weightkg": 43,
+   "abilities": {
+    "0": "Pressure"
+   }
+  },
+  "snorlax": {
+   "kind": "Species",
+   "id": "snorlax",
+   "name": "Snorlax",
+   "baseStats": {
+    "hp": 160,
+    "atk": 110,
+    "def": 65,
+    "spa": 65,
+    "spd": 110,
+    "spe": 30
+   },
+   "types": [
+    "Normal"
+   ],
+   "weightkg": 460,
+   "abilities": {
+    "0": "Immunity"
+   },
+   "canGigantamax": "G-Max Replenish"
+  },
+  "spiritomb": {
+   "kind": "Species",
+   "id": "spiritomb",
+   "name": "Spiritomb",
+   "baseStats": {
+    "hp": 50,
+    "atk": 92,
+    "def": 108,
+    "spa": 92,
+    "spd": 108,
+    "spe": 35
+   },
+   "types": [
+    "Ghost",
+    "Dark"
+   ],
+   "weightkg": 108,
+   "abilities": {
+    "0": "Pressure"
+   }
+  },
+  "swampert": {
+   "kind": "Species",
+   "id": "swampert",
+   "name": "Swampert",
+   "baseStats": {
+    "hp": 100,
+    "atk": 110,
+    "def": 90,
+    "spa": 85,
+    "spd": 90,
+    "spe": 60
+   },
+   "types": [
+    "Water",
+    "Ground"
+   ],
+   "weightkg": 81.9,
+   "abilities": {
+    "0": "Torrent"
+   },
+   "otherFormes": [
+    "Swampert-Mega"
+   ]
+  },
+  "sylveon": {
+   "kind": "Species",
+   "id": "sylveon",
+   "name": "Sylveon",
+   "baseStats": {
+    "hp": 95,
+    "atk": 65,
+    "def": 65,
+    "spa": 110,
+    "spd": 130,
+    "spe": 60
+   },
+   "types": [
+    "Fairy"
+   ],
+   "weightkg": 23.5,
+   "abilities": {
+    "0": "Cute Charm"
+   }
+  },
+  "talonflame": {
+   "kind": "Species",
+   "id": "talonflame",
+   "name": "Talonflame",
+   "baseStats": {
+    "hp": 78,
+    "atk": 81,
+    "def": 71,
+    "spa": 74,
+    "spd": 69,
+    "spe": 126
+   },
+   "types": [
+    "Fire",
+    "Flying"
+   ],
+   "weightkg": 24.5,
+   "abilities": {
+    "0": "Flame Body"
+   }
+  },
+  "taurospaldeaaqua": {
+   "kind": "Species",
+   "id": "taurospaldeaaqua",
+   "name": "Tauros-Paldea-Aqua",
+   "baseStats": {
+    "hp": 75,
+    "atk": 110,
+    "def": 105,
+    "spa": 30,
+    "spd": 70,
+    "spe": 100
+   },
+   "types": [
+    "Fighting",
+    "Water"
+   ],
+   "weightkg": 110,
+   "gender": "M",
+   "abilities": {
+    "0": "Intimidate"
+   },
+   "baseSpecies": "Tauros"
+  },
+  "taurospaldeablaze": {
+   "kind": "Species",
+   "id": "taurospaldeablaze",
+   "name": "Tauros-Paldea-Blaze",
+   "baseStats": {
+    "hp": 75,
+    "atk": 110,
+    "def": 105,
+    "spa": 30,
+    "spd": 70,
+    "spe": 100
+   },
+   "types": [
+    "Fighting",
+    "Fire"
+   ],
+   "weightkg": 85,
+   "gender": "M",
+   "abilities": {
+    "0": "Intimidate"
+   },
+   "baseSpecies": "Tauros"
+  },
+  "taurospaldeacombat": {
+   "kind": "Species",
+   "id": "taurospaldeacombat",
+   "name": "Tauros-Paldea-Combat",
+   "baseStats": {
+    "hp": 75,
+    "atk": 110,
+    "def": 105,
+    "spa": 30,
+    "spd": 70,
+    "spe": 100
+   },
+   "types": [
+    "Fighting"
+   ],
+   "weightkg": 115,
+   "gender": "M",
+   "abilities": {
+    "0": "Intimidate"
+   },
+   "baseSpecies": "Tauros"
+  },
+  "torkoal": {
+   "kind": "Species",
+   "id": "torkoal",
+   "name": "Torkoal",
+   "baseStats": {
+    "hp": 70,
+    "atk": 85,
+    "def": 140,
+    "spa": 85,
+    "spd": 70,
+    "spe": 20
+   },
+   "types": [
+    "Fire"
+   ],
+   "weightkg": 80.4,
+   "abilities": {
+    "0": "White Smoke"
+   }
+  },
+  "toxapex": {
+   "kind": "Species",
+   "id": "toxapex",
+   "name": "Toxapex",
+   "baseStats": {
+    "hp": 50,
+    "atk": 63,
+    "def": 152,
+    "spa": 53,
+    "spd": 142,
+    "spe": 35
+   },
+   "types": [
+    "Poison",
+    "Water"
+   ],
+   "weightkg": 14.5,
+   "abilities": {
+    "0": "Merciless"
+   }
+  },
+  "toxicroak": {
+   "kind": "Species",
+   "id": "toxicroak",
+   "name": "Toxicroak",
+   "baseStats": {
+    "hp": 83,
+    "atk": 106,
+    "def": 65,
+    "spa": 86,
+    "spd": 65,
+    "spe": 85
+   },
+   "types": [
+    "Poison",
+    "Fighting"
+   ],
+   "weightkg": 44.4,
+   "abilities": {
+    "0": "Anticipation"
+   }
+  },
+  "tsareena": {
+   "kind": "Species",
+   "id": "tsareena",
+   "name": "Tsareena",
+   "baseStats": {
+    "hp": 72,
+    "atk": 120,
+    "def": 98,
+    "spa": 50,
+    "spd": 98,
+    "spe": 72
+   },
+   "types": [
+    "Grass"
+   ],
+   "weightkg": 21.4,
+   "gender": "F",
+   "abilities": {
+    "0": "Leaf Guard"
+   }
+  },
+  "tyranitar": {
+   "kind": "Species",
+   "id": "tyranitar",
+   "name": "Tyranitar",
+   "baseStats": {
+    "hp": 100,
+    "atk": 134,
+    "def": 110,
+    "spa": 95,
+    "spd": 100,
+    "spe": 61
+   },
+   "types": [
+    "Rock",
+    "Dark"
+   ],
+   "weightkg": 202,
+   "abilities": {
+    "0": "Sand Stream"
+   },
+   "otherFormes": [
+    "Tyranitar-Mega"
+   ]
+  },
+  "tyrantrum": {
+   "kind": "Species",
+   "id": "tyrantrum",
+   "name": "Tyrantrum",
+   "baseStats": {
+    "hp": 82,
+    "atk": 121,
+    "def": 119,
+    "spa": 69,
+    "spd": 59,
+    "spe": 71
+   },
+   "types": [
+    "Rock",
+    "Dragon"
+   ],
+   "weightkg": 270,
+   "abilities": {
+    "0": "Strong Jaw"
+   }
+  },
+  "vaporeon": {
+   "kind": "Species",
+   "id": "vaporeon",
+   "name": "Vaporeon",
+   "baseStats": {
+    "hp": 130,
+    "atk": 65,
+    "def": 60,
+    "spa": 110,
+    "spd": 95,
+    "spe": 65
+   },
+   "types": [
+    "Water"
+   ],
+   "weightkg": 29,
+   "abilities": {
+    "0": "Water Absorb"
+   }
+  },
+  "venusaur": {
+   "kind": "Species",
+   "id": "venusaur",
+   "name": "Venusaur",
+   "baseStats": {
+    "hp": 80,
+    "atk": 82,
+    "def": 83,
+    "spa": 100,
+    "spd": 100,
+    "spe": 80
+   },
+   "types": [
+    "Grass",
+    "Poison"
+   ],
+   "weightkg": 100,
+   "abilities": {
+    "0": "Overgrow"
+   },
+   "otherFormes": [
+    "Venusaur-Mega"
+   ],
+   "canGigantamax": "G-Max Vine Lash"
+  },
+  "vileplume": {
+   "kind": "Species",
+   "id": "vileplume",
+   "name": "Vileplume",
+   "baseStats": {
+    "hp": 75,
+    "atk": 80,
+    "def": 85,
+    "spa": 110,
+    "spd": 90,
+    "spe": 50
+   },
+   "types": [
+    "Grass",
+    "Poison"
+   ],
+   "weightkg": 18.6,
+   "abilities": {
+    "0": "Chlorophyll"
+   }
+  },
+  "volcarona": {
+   "kind": "Species",
+   "id": "volcarona",
+   "name": "Volcarona",
+   "baseStats": {
+    "hp": 85,
+    "atk": 60,
+    "def": 65,
+    "spa": 135,
+    "spd": 105,
+    "spe": 100
+   },
+   "types": [
+    "Bug",
+    "Fire"
+   ],
+   "weightkg": 46,
+   "abilities": {
+    "0": "Flame Body"
+   }
+  },
+  "weavile": {
+   "kind": "Species",
+   "id": "weavile",
+   "name": "Weavile",
+   "baseStats": {
+    "hp": 70,
+    "atk": 120,
+    "def": 65,
+    "spa": 45,
+    "spd": 85,
+    "spe": 125
+   },
+   "types": [
+    "Dark",
+    "Ice"
+   ],
+   "weightkg": 34,
+   "abilities": {
+    "0": "Pressure"
+   }
+  },
+  "whimsicott": {
+   "kind": "Species",
+   "id": "whimsicott",
+   "name": "Whimsicott",
+   "baseStats": {
+    "hp": 60,
+    "atk": 67,
+    "def": 85,
+    "spa": 77,
+    "spd": 75,
+    "spe": 116
+   },
+   "types": [
+    "Grass",
+    "Fairy"
+   ],
+   "weightkg": 6.6,
+   "abilities": {
+    "0": "Prankster"
+   }
+  }
+ },
+ "species_names": [
+  "Abomasnow",
+  "Abomasnow-Mega",
+  "Absol",
+  "Absol-Mega",
+  "Aegislash-Blade",
+  "Aegislash-Both",
+  "Aegislash-Shield",
+  "Aerodactyl",
+  "Aerodactyl-Mega",
+  "Aggron",
+  "Aggron-Mega",
+  "Alakazam",
+  "Alakazam-Mega",
+  "Alcremie",
+  "Altaria",
+  "Altaria-Mega",
+  "Ampharos",
+  "Ampharos-Mega",
+  "Annihilape",
+  "Appletun",
+  "Araquanid",
+  "Arbok",
+  "Arcanine",
+  "Arcanine-Hisui",
+  "Archaludon",
+  "Ariados",
+  "Armarouge",
+  "Aromatisse",
+  "Audino",
+  "Audino-Mega",
+  "Aurorus",
+  "Avalugg",
+  "Avalugg-Hisui",
+  "Azumarill",
+  "Banette",
+  "Banette-Mega",
+  "Barbaracle",
+  "Barbaracle-Mega",
+  "Basculegion",
+  "Basculegion-F",
+  "Bastiodon",
+  "Beartic",
+  "Beedrill",
+  "Beedrill-Mega",
+  "Bellibolt",
+  "Blastoise",
+  "Blastoise-Mega",
+  "Blaziken",
+  "Blaziken-Mega",
+  "Camerupt",
+  "Camerupt-Mega",
+  "Castform",
+  "Castform-Rainy",
+  "Castform-Snowy",
+  "Castform-Sunny",
+  "Ceruledge",
+  "Chandelure",
+  "Chandelure-Mega",
+  "Charizard",
+  "Charizard-Mega-X",
+  "Charizard-Mega-Y",
+  "Chesnaught",
+  "Chesnaught-Mega",
+  "Chimecho",
+  "Chimecho-Mega",
+  "Clawitzer",
+  "Clefable",
+  "Clefable-Mega",
+  "Cofagrigus",
+  "Conkeldurr",
+  "Corviknight",
+  "Crabominable",
+  "Crabominable-Mega",
+  "Decidueye",
+  "Decidueye-Hisui",
+  "Dedenne",
+  "Delphox",
+  "Delphox-Mega",
+  "Diggersby",
+  "Ditto",
+  "Dragalge",
+  "Dragalge-Mega",
+  "Dragapult",
+  "Dragonite",
+  "Dragonite-Mega",
+  "Drampa",
+  "Drampa-Mega",
+  "Eelektross",
+  "Eelektross-Mega",
+  "Emboar",
+  "Emboar-Mega",
+  "Emolga",
+  "Empoleon",
+  "Espathra",
+  "Espeon",
+  "Excadrill",
+  "Excadrill-Mega",
+  "Falinks",
+  "Falinks-Mega",
+  "Farigiraf",
+  "Feraligatr",
+  "Feraligatr-Mega",
+  "Flapple",
+  "Flareon",
+  "Floette-Eternal",
+  "Floette-Mega",
+  "Florges",
+  "Forretress",
+  "Froslass",
+  "Froslass-Mega",
+  "Furfrou",
+  "Gallade",
+  "Gallade-Mega",
+  "Garbodor",
+  "Garchomp",
+  "Garchomp-Mega",
+  "Gardevoir",
+  "Gardevoir-Mega",
+  "Garganacl",
+  "Gengar",
+  "Gengar-Mega",
+  "Gholdengo",
+  "Glaceon",
+  "Glalie",
+  "Glalie-Mega",
+  "Glimmora",
+  "Glimmora-Mega",
+  "Gliscor",
+  "Golurk",
+  "Golurk-Mega",
+  "Goodra",
+  "Goodra-Hisui",
+  "Gourgeist",
+  "Gourgeist-Large",
+  "Gourgeist-Small",
+  "Gourgeist-Super",
+  "Greninja",
+  "Greninja-Mega",
+  "Grimmsnarl",
+  "Gyarados",
+  "Gyarados-Mega",
+  "Hatterene",
+  "Hawlucha",
+  "Hawlucha-Mega",
+  "Heliolisk",
+  "Heracross",
+  "Heracross-Mega",
+  "Hippowdon",
+  "Houndoom",
+  "Houndoom-Mega",
+  "Houndstone",
+  "Hydrapple",
+  "Hydreigon",
+  "Incineroar",
+  "Infernape",
+  "Jolteon",
+  "Kangaskhan",
+  "Kangaskhan-Mega",
+  "Kingambit",
+  "Kleavor",
+  "Klefki",
+  "Kommo-o",
+  "Krookodile",
+  "Leafeon",
+  "Liepard",
+  "Lopunny",
+  "Lopunny-Mega",
+  "Lucario",
+  "Lucario-Mega",
+  "Luxray",
+  "Lycanroc",
+  "Lycanroc-Dusk",
+  "Lycanroc-Midnight",
+  "Machamp",
+  "Malamar",
+  "Malamar-Mega",
+  "Mamoswine",
+  "Manectric",
+  "Manectric-Mega",
+  "Maushold",
+  "Maushold-Four",
+  "Mawile",
+  "Mawile-Mega",
+  "Medicham",
+  "Medicham-Mega",
+  "Meganium",
+  "Meganium-Mega",
+  "Meowscarada",
+  "Meowstic",
+  "Meowstic-F",
+  "Meowstic-F-Mega",
+  "Meowstic-M-Mega",
+  "Metagross",
+  "Metagross-Mega",
+  "Milotic",
+  "Mimikyu",
+  "Mimikyu-Busted",
+  "Morpeko",
+  "Morpeko-Hangry",
+  "Mr. Rime",
+  "Mudsdale",
+  "Musharna",
+  "Ninetales",
+  "Ninetales-Alola",
+  "Noivern",
+  "Oranguru",
+  "Orthworm",
+  "Overqwil",
+  "Palafin",
+  "Palafin-Hero",
+  "Pangoro",
+  "Passimian",
+  "Pelipper",
+  "Pidgeot",
+  "Pidgeot-Mega",
+  "Pikachu",
+  "Pinsir",
+  "Pinsir-Mega",
+  "Politoed",
+  "Polteageist",
+  "Polteageist-Antique",
+  "Primarina",
+  "Pyroar",
+  "Pyroar-Mega",
+  "Quaquaval",
+  "Qwilfish",
+  "Raichu",
+  "Raichu-Alola",
+  "Raichu-Mega-X",
+  "Raichu-Mega-Y",
+  "Rampardos",
+  "Reuniclus",
+  "Rhyperior",
+  "Roserade",
+  "Rotom",
+  "Rotom-Fan",
+  "Rotom-Frost",
+  "Rotom-Heat",
+  "Rotom-Mow",
+  "Rotom-Wash",
+  "Runerigus",
+  "Sableye",
+  "Sableye-Mega",
+  "Salazzle",
+  "Samurott",
+  "Samurott-Hisui",
+  "Sandaconda",
+  "Sceptile",
+  "Sceptile-Mega",
+  "Scizor",
+  "Scizor-Mega",
+  "Scolipede",
+  "Scolipede-Mega",
+  "Scovillain",
+  "Scovillain-Mega",
+  "Scrafty",
+  "Scrafty-Mega",
+  "Serperior",
+  "Sharpedo",
+  "Sharpedo-Mega",
+  "Simipour",
+  "Simisage",
+  "Simisear",
+  "Sinistcha",
+  "Sinistcha-Masterpiece",
+  "Skarmory",
+  "Skarmory-Mega",
+  "Skeledirge",
+  "Slowbro",
+  "Slowbro-Galar",
+  "Slowbro-Mega",
+  "Slowking",
+  "Slowking-Galar",
+  "Slurpuff",
+  "Sneasler",
+  "Snorlax",
+  "Spiritomb",
+  "Staraptor",
+  "Staraptor-Mega",
+  "Starmie",
+  "Starmie-Mega",
+  "Steelix",
+  "Steelix-Mega",
+  "Stunfisk",
+  "Stunfisk-Galar",
+  "Swampert",
+  "Swampert-Mega",
+  "Sylveon",
+  "Talonflame",
+  "Tauros",
+  "Tauros-Paldea-Aqua",
+  "Tauros-Paldea-Blaze",
+  "Tauros-Paldea-Combat",
+  "Tinkaton",
+  "Torkoal",
+  "Torterra",
+  "Toucannon",
+  "Toxapex",
+  "Toxicroak",
+  "Trevenant",
+  "Tsareena",
+  "Typhlosion",
+  "Typhlosion-Hisui",
+  "Tyranitar",
+  "Tyranitar-Mega",
+  "Tyrantrum",
+  "Umbreon",
+  "Vanilluxe",
+  "Vaporeon",
+  "Venusaur",
+  "Venusaur-Mega",
+  "Victreebel",
+  "Victreebel-Mega",
+  "Vileplume",
+  "Vivillon",
+  "Vivillon-Fancy",
+  "Vivillon-Pokeball",
+  "Volcarona",
+  "Watchog",
+  "Weavile",
+  "Whimsicott",
+  "Wyrdeer",
+  "Zoroark",
+  "Zoroark-Hisui"
+ ]
+}

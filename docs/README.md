@@ -15,7 +15,7 @@ This folder contains the planning documents for the Pokemon Champions planning t
 
 ## Current Implementation Status
 
-The repository currently has a CLI prototype that queries PokéAPI, stores the current box state in SQLite via SQLModel, exports the current box to CSV, and exposes basic box/team terminal commands. The planned GUI, richer filtering, and visualization features are documented here but not implemented yet.
+The application is a Flet desktop GUI (with a CLI fallback) backed by SQLite via SQLModel: a filterable Box roster, a six-slot team builder with items, spreads, moves and Showdown import/export, a tournament Meta explorer fed by Limitless and Victory Road, and a Settings page for the data syncs. Phases 0–7 of the [roadmap](roadmap.md) are complete; the remaining backlog is listed there. `architecture.md` describes the current `ui/` package.
 
 ## Recommended Reading Order
 

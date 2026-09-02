@@ -246,5 +246,22 @@ class TestLegalityInTeamBuilder(unittest.TestCase):
         serialise(view)
 
 
+
+    def test_import_preview_flags_moves_outside_the_learnset(self):
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.import_dialog import ImportDialog
+
+        page = StubPage()
+        ctx = AppContext(page, catalogs=self.catalogs)
+        paste = "Charizard @ Charcoal\nAbility: Blaze\n- Heat Wave\n- Aqua Jet\n- Knock Off\n- Protect\n"
+        dialog = ImportDialog(ctx, self.store, initial_text=paste, initial_title="Sun")
+        self.assertEqual(dialog.step, 1)
+        row = dialog._preview.controls[0]
+        chip_row = row.content.controls[1].controls[2]
+        self.assertTrue(chip_row.visible)
+        self.assertEqual(chip_row.controls[0]._label.value, "2 moves not in Champions learnset")
+        self.assertEqual(chip_row.controls[0].tooltip, "Aqua Jet, Knock Off")
+        serialise(dialog)
+
+
 if __name__ == "__main__":
     unittest.main()

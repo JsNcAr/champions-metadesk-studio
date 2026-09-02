@@ -35,8 +35,8 @@ class MetaView(ft.Column):
         self._loading = False
         self._groups: dict[str, EventGroup] = {}
         self._cards: dict[str, EventCard] = {}
-        self.view_mode = "rows"     # "rows" | "cards"
-        self.collapsed = True       # rows mode: only the winner of each event until expanded
+        self.view_mode = "cards" if ctx.prefs.get("meta.view_mode") == "cards" else "rows"
+        self.collapsed = bool(ctx.prefs.get("meta.collapsed", True))   # rows mode: only the winner of each event until expanded
         self._fill_pages = 0
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
 
@@ -114,9 +114,9 @@ class MetaView(ft.Column):
         )
         self._active_chips = ft.Row(spacing=Space.SM, wrap=True, visible=False)
         self._order_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
-        self._collapse_button = ft.TextButton("Expand all", icon=ft.Icons.UNFOLD_MORE, on_click=lambda _e: self._toggle_all())
+        self._collapse_button = ft.TextButton("Expand all" if self.collapsed else "Collapse all", icon=ft.Icons.UNFOLD_MORE if self.collapsed else ft.Icons.UNFOLD_LESS, on_click=lambda _e: self._toggle_all())
         self._layout_toggle = ft.SegmentedButton(
-            selected=["rows"],
+            selected=[self.view_mode],
             allow_multiple_selection=False,
             allow_empty_selection=False,
             show_selected_icon=False,
@@ -334,6 +334,7 @@ class MetaView(ft.Column):
 
     def _toggle_all(self) -> None:
         self.collapsed = not self.collapsed
+        self.ctx.prefs.set("meta.collapsed", self.collapsed)
         self._collapse_button.content = "Expand all" if self.collapsed else "Collapse all"
         self._collapse_button.icon = ft.Icons.UNFOLD_MORE if self.collapsed else ft.Icons.UNFOLD_LESS
         for group in self._groups.values():
@@ -350,6 +351,7 @@ class MetaView(ft.Column):
 
     def _set_view_mode(self, mode: str) -> None:
         self.view_mode = "cards" if mode == "cards" else "rows"
+        self.ctx.prefs.set("meta.view_mode", self.view_mode)
         self._layout_toggle.selected = [self.view_mode]
         has_rows = bool(self.store.rows)
         self._list.visible = self.view_mode == "rows" or not has_rows

@@ -66,21 +66,26 @@
 
 ---
 
-## Upcoming Planned Features (Missing Backlog)
+## Phase 6: UI Overhaul [COMPLETED — 2026-09-01]
+- New `ui/` package replacing the single-function GUI: navigation rail shell, per-view stores (Flet-free, one session per call), event bus, background-task helper, dialog helpers, design tokens (dark theme, per-section accents), and a component library.
+- **Box**: filterable card grid and stat table, inline filter drawer (types, BST and per-stat range sliders), sort by any stat, detail panel with defensive multipliers, multi-select bulk bar (favourite, tag, delete), Undo toasts for reversible deletes, explicit CSV export.
+- **Team builder**: six restyled slot cards, form / ability / Tera selectors, item picker with guardrails and stat deltas, spread editor, slot swap and reorder (menu and drag-and-drop), summary panel with averages, health checks and the defensive coverage grid, stepped Showdown import (paste → preview → readiness → done) and export / publish dialogs.
+- **Meta explorer**: event-grouped rows (winner only until expanded, per event or all), a card layout with a standings dialog per event, official vs community source filter with an official tier filter (Worlds, Internationals, Regionals, Special Events), stable paging.
+- **Settings** as a page with per-source sync rows and live sync progress.
+- Verified with headless serialisation, a layout lint, and desktop-client screenshots under a virtual display.
 
-### 🛡️ Feature 1: Type Coverage & Vulnerability Matrix (Team Builder)
-- **Defensive Type Matrix**: Visual chart showing team-wide weaknesses, resistances, and immunities per attacking type (e.g., *“3 members weak to Ground, 1 immunity”*).
-- **Offensive STAB & Move Coverage**: Summary highlighting uncovered attacking types based on team movesets and primary types.
+## Phase 7: Data Quality & Moves [COMPLETED — 2026-09-02]
+- **Tournament sync budget**: incremental listing, rate-budgeted standings fetches, retry only on retryable errors, unfinished events retried, Victory Road pages fetched once, partial events resumed, a launch-time throttle, WAL journaling and batched writes.
+- **Event tiers**: tournaments classified as official (Worlds / International / Regional / Special Event) or community, stored and backfilled.
+- **Move catalogue**: Pokémon Showdown's Champions learnsets, move data and Champions move changes synced into local tables; per-species move usage aggregated from stored rosters.
+- **Move picker**: legal moves per species (megas use the base form), ranked by tournament usage, illegal moves hidden unless "Show all moves" is on, warnings on cards, in the health checks and in the import preview.
+- **Persisted view preferences**: box layout and stats-on-cards, team summary panel and show-all-moves, meta layout and collapsed state.
 
-### 🔄 Feature 2: Quick Slot Reordering & Swapping (Team Builder)
-- Reorder team slots (e.g. *"Move to Lead"*, *"Swap Slot 2 with Slot 5"*) via slot card action buttons without clearing slots.
-
-### 🔍 Feature 3: Move Autocomplete & Move Legality Service
-- Search/autocomplete move catalog service for 4-slot chips to verify move legality for chosen species and active form against PokéAPI learnsets.
-
-### 📊 Feature 4: BST Range Slider Filter (Box Roster)
-- Min/max BST range slider in the Box toolbar to filter entries by base stat total threshold (e.g., BST 500–700).
-
-### 🏷️ Feature 5: Bulk Roster Actions (Box Roster)
-- Multi-select box entries to batch-tag, batch-favorite, batch-delete, or assign to teams simultaneously.
-
+## Remaining Backlog
+- **Offensive coverage (FR-12)**: team-level attacking matrix from assigned moves; the slot card reserves a caption row for it. All prerequisites (move types, categories) now exist.
+- **Bulk "Add to team"** from the Box multi-select bar (fill empty slots or a chosen slot).
+- **Extra stat columns (FR-6)**: choosing table columns (abilities, Pokédex number, date added).
+- **Filtered CSV export (FR-7)**: export the visible or selected entries rather than the whole box.
+- **Team comparison (FR-13)**: side-by-side totals for two teams.
+- **Saved filter views** (user story), **offline sprite caching**, **configurable database path**, **battle-log parser** (integration backlog).
+- **Victory Road registry**: only Internationals and Worlds are listed; Regional and Special Event pages must be added to the registry for those tiers to fill.

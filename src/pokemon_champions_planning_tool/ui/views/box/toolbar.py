@@ -294,6 +294,12 @@ class BoxToolbar(ft.Column):
             slider.start_value, slider.end_value = lo, hi
             self._stat_labels[stat].value = f"{lo} – {hi}"
 
+    def set_view_state(self, view_mode: str, show_stats: bool) -> None:
+        """Reflect restored preferences in the grid/table switch and the View menu."""
+        self._view_mode.selected = [view_mode]
+        self.show_stats = show_stats
+        self._stats_item.checked = show_stats
+
     def _toggle_stats(self) -> None:
         self.show_stats = not self.show_stats
         self._stats_item.checked = self.show_stats

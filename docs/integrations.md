@@ -30,9 +30,12 @@ PokéAPI is the main external data source for the project.
 The Limitless API (`play.limitlesstcg.com/api`) supplies official competitive tournament lists and player standings for Pokémon VGC events.
 
 ### Features & Rate-Limiting Strategy
-- **Endpoints**: `/tournaments?game=VGC` and `/tournaments/{id}/standings`.
-- **HTTP 429 Exponential Backoff**: Retries failed requests up to 3 times with progressive delays (`1s`, `2s`, `4s`).
-- **Inter-Page Throttling**: Adds a 0.5s pause between paginated requests to prevent hitting server rate limits.
+- **Endpoints**: `/tournaments?game=VGC` (200 per page; `format=` is honoured server-side) and `/tournaments/{id}/standings` (full decklists).
+- **Budget**: the API allows 50 requests per 5 minutes and reports it in a `ratelimit` header (`r=` remaining, `t=` seconds to reset). The provider reads it after every response and stops a standings batch when only a reserve (8) is left; the per-run cap is 40 standings requests.
+- **Incremental listing**: paging stops at the first page made entirely of Champions-format tournaments already stored (one request in steady state). A forced sync re-reads the whole one-year window.
+- **Retries** only for what can succeed on retry: 429 (waiting for `Retry-After` or the window reset, capped at 90 s), 5xx, connection errors and timeouts. Other 4xx raise at once.
+- **Unfinished events**: no standings request before an event's date; an empty answer from an event less than three days old is retried later instead of being marked complete.
+- **Backlog**: tournaments whose standings were not fetched yet stay `standings_synced=False` and are drained a slice per run, limited to the one-year window. The launch-time sync is skipped when one completed within six hours and nothing is pending; "Sync now" always runs, and only one sync runs per process.
 - **Defensive Parsing**: Safe integer conversion (`_safe_int`) handles missing or `None` values for placement standings gracefully.
 
 ---
@@ -50,6 +53,8 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
 - **Custom User-Agent & Timeouts**: Configured with a 25-second timeout, two retries, and
   modern browser headers to reliably fetch large event pages.
 - **Poképaste Sheet Extraction**: Extracts Poképaste URLs and player standings directly into `TournamentTeamRecord`.
+- **Fetch once**: an event already ingested completely is never requested again; a partially ingested event (some pastes failed) stays pending and only its missing pastes are fetched on the next run. Paste fetches get one retry and a short pause.
+- **Registry**: events come from a static registry in the provider (`OFFICIAL_EVENT_SLUGS`); adding a Regional or Special Event page means adding an entry there. Events are classified into tiers (Worlds, International, Regional, Special Event) from the organizer and name; everything from Limitless is community.
 
 > **Fragility note**: the cell layout was hand-verified against victoryroad.pro on 2026-08-31
 > (see the module docstring in `victory_road_provider.py`). Any site redesign will silently
@@ -66,10 +71,21 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
 
 ---
 
+## Move Catalogue (Pokémon Showdown)
+
+Three static files, fetched at most every 30 days or from Settings:
+- `https://play.pokemonshowdown.com/data/moves.json` — every move with type, category, base power, accuracy, PP, priority, target and description.
+- `data/mods/champions/learnsets.ts` (Showdown repository) — the moves each species can learn in Champions. Mega forms use their base species' learnset.
+- `data/mods/champions/moves.ts` — moves Champions removed (`isNonstandard: "Past"`) or rebalanced. Removed moves are never offered.
+
+Stored in `moves`, `learnsets` and `move_catalog_meta`. Species keys are Showdown's (`urshifurapidstrike`); `domain/moves.py` maps our PokéAPI-style ids to them with a fallback to the nearest keyed form. Per-species move usage comes from the `moves` column on `tournament_team_members`, aggregated with `json_each`.
+
+---
+
 ## CSV Export
 
 CSV remains a useful export format for spreadsheet tools.
-- Automatically synchronized with `BoxEntryRecord` mutations.
+- Written on demand from the Box toolbar's Export button (no longer on every write).
 - Stable column order containing canonical identity, display name, base stats, types, and favorite status.
 
 ---

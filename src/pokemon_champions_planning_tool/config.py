@@ -3,6 +3,7 @@
 APP_NAME = "Pokemon Champions Planning Tool"
 DEFAULT_CSV_FILENAME = "pokemon_team_stats.csv"
 DEFAULT_DATABASE_FILENAME = "pokemon_champions.db"
+DEFAULT_PREFERENCES_FILENAME = "preferences.json"
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
 POKEAPI_TIMEOUT_SECONDS = 5
 

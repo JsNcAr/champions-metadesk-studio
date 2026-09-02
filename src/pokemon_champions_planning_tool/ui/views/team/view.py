@@ -52,9 +52,9 @@ class TeamView(ft.Column):
         )
         self._summary_toggle = ft.IconButton(icon=ft.Icons.VIEW_SIDEBAR_OUTLINED, icon_size=20, tooltip="Toggle summary panel", selected=True, on_click=lambda _e: self._toggle_summary())
         # Move legality: the picker hides moves outside the Champions learnset unless this is on.
-        self.show_all_moves = False
+        self.show_all_moves = bool(ctx.prefs.get("team.show_all_moves", False))
         self._show_all_moves_item = ft.PopupMenuItem(
-            content=ft.Text("Show all moves (ignore legality)"), checked=False,
+            content=ft.Text("Show all moves (ignore legality)"), checked=self.show_all_moves,
             on_click=lambda _e: self._set_show_all_moves(not self.show_all_moves),
         )
         self._more = ft.PopupMenuButton(
@@ -92,6 +92,8 @@ class TeamView(ft.Column):
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
         self.grid = ft.GridView(expand=True, max_extent=SLOT_CARD_MAX_EXTENT, child_aspect_ratio=1.15, spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, controls=list(self.cards))
         self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=self._focus)
+        self.summary.visible = bool(ctx.prefs.get("team.summary_visible", True))
+        self._summary_toggle.selected = self.summary.visible
         self._empty = EmptyState(ft.Icons.GROUPS_OUTLINED, "No teams yet", "Create a team, or import one from a Showdown paste or the Meta explorer.",
                                  action_label="Create team", on_action=lambda: self.ctx.page.run_task(self._new_team),
                                  secondary_label="Import", on_secondary=self._import)
@@ -277,6 +279,7 @@ class TeamView(ft.Column):
 
     def _set_show_all_moves(self, value: bool) -> None:
         self.show_all_moves = value
+        self.ctx.prefs.set("team.show_all_moves", value)
         self._show_all_moves_item.checked = value
         if is_mounted(self._show_all_moves_item):
             self._show_all_moves_item.update()
@@ -373,6 +376,7 @@ class TeamView(ft.Column):
     def _toggle_summary(self) -> None:
         self.summary.visible = not self.summary.visible
         self._summary_toggle.selected = self.summary.visible
+        self.ctx.prefs.set("team.summary_visible", self.summary.visible)
         self._relayout()
         self._update_self()
 

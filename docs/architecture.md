@@ -72,6 +72,9 @@ ui/
 - Verification without a browser: `scripts/ui_smoke.py` builds the whole UI against a
   stub page and pushes every view through Flet's real diff/serialise path.
 
+- `ui/preferences.py`: layout preferences (box layout and stats-on-cards, team summary panel and show-all-moves, meta layout and collapsed state) in `preferences.json` next to the database; in-memory in tests.
+- `ui/catalogs.py` also holds the move catalogue (`moves_by_id`, `learnsets`) with `move_legality()` used by the slot cards, the health checks, the move picker and the import preview.
+
 ### 2. Service & Domain Layer (`src/pokemon_champions_planning_tool/services/` & `domain/`)
 - Pure Python domain rules independent of UI widgets or HTTP APIs.
 - Handles species identity normalization (`format_api_name`, `format_display_name`), canonical sprite resolution (`get_pokemon_sprite_url`), held item stat modifier logic, EV/IV spread calculations, and co-occurrence synergy scoring.

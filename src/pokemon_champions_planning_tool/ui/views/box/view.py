@@ -29,8 +29,8 @@ class BoxView(ft.Row):
         super().__init__(spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
         self.ctx = ctx
         self.store = store or BoxStore(ctx.catalogs)
-        self.view_mode = "grid"
-        self.show_stats = False
+        self.view_mode = "table" if ctx.prefs.get("box.view_mode") == "table" else "grid"
+        self.show_stats = bool(ctx.prefs.get("box.show_stats", False))
         self._cards: dict[UUID, PokemonCard] = {}
 
         # -- header: add by name -------------------------------------------------------------
@@ -51,6 +51,7 @@ class BoxView(ft.Row):
 
         # -- toolbar ---------------------------------------------------------------------------
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats)
+        self.toolbar.set_view_state(self.view_mode, self.show_stats)
 
         # -- content ---------------------------------------------------------------------------
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
@@ -257,11 +258,13 @@ class BoxView(ft.Row):
 
     def _set_view_mode(self, mode: str) -> None:
         self.view_mode = mode
+        self.ctx.prefs.set("box.view_mode", mode)
         self._render()
         self._update_self()
 
     def _set_show_stats(self, show: bool) -> None:
         self.show_stats = show
+        self.ctx.prefs.set("box.show_stats", show)
         self._render()
         self._update_self()
 

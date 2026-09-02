@@ -6,13 +6,14 @@ from pathlib import Path
 
 import flet as ft
 
-from ..config import APP_NAME
+from ..config import APP_NAME, DEFAULT_PREFERENCES_FILENAME
 from ..infrastructure.database.database import get_session
 from ..services.tournament_service import TournamentService
 from ..services.tournament_sync_service import sync_tournaments_once_per_process
 from . import events
 from .catalogs import Catalogs
 from .context import AppContext
+from .preferences import Preferences
 from .shell import AppShell
 from .theme import apply_theme
 from .views.box import BoxView
@@ -61,6 +62,7 @@ def main(page: ft.Page) -> None:
 
     _seed_once()
     ctx = AppContext(page)
+    ctx.prefs = Preferences(Path(DEFAULT_PREFERENCES_FILENAME))
     ctx.catalogs = Catalogs.load()
     # Subscribed before any view so a reloaded catalogue is in place when views react.
     ctx.bus.on(events.CATALOGS_RELOADED, lambda _kind: setattr(ctx, "catalogs", Catalogs.load()))

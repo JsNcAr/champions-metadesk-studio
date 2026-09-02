@@ -10,6 +10,7 @@ import flet as ft
 
 from . import dialogs, tasks
 from .events import EventBus
+from .preferences import Preferences
 
 
 @dataclass
@@ -23,6 +24,7 @@ class AppContext:
     page: ft.Page
     bus: EventBus = field(default_factory=EventBus)
     catalogs: Any = None
+    prefs: Preferences = field(default_factory=Preferences)   # in-memory unless the app installs a file-backed one
     _clipboard: Any = field(default=None, init=False, repr=False)
 
     def post(self, fn, *args) -> None:

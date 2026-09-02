@@ -138,34 +138,44 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
 
 ### `TournamentRecord` (Table: `tournaments`)
-- `tournament_id: str` (Primary Key, e.g. `"limitless-NAIC-2026"`)
+- `tournament_id: str` (Primary Key, `"limitless-<id>"` or `"vr-<slug>"`)
 - `name: str` (Indexed)
-- `format_regulation: str` (Indexed, e.g. `"Regulation M-A"`)
-- `game_platform: str` (Indexed, e.g. `"VGC"`)
 - `event_date: datetime` (Indexed)
-- `source_provider: str` (`"limitless"` or `"victory_road"`)
+- `format_regulation: str` (Indexed, e.g. `"Regulation M-A"`)
+- `game_platform: str` (Indexed, `"Pokémon Champions"` or `"Scarlet & Violet"`)
+- `organizer: str`, `location: str`, `total_players: int`
 - `source_url: str | None`
-- `created_at: datetime`
+- `standings_synced: bool` (Indexed; False = standings still to be fetched, the sync backlog)
+- `event_tier: str` (Indexed; `worlds` / `international` / `regional` / `special` / `community`)
+- `created_at`, `updated_at: datetime`
 
 ### `TournamentTeamRecord` (Table: `tournament_teams`)
 - `tournament_team_id: UUID` (Primary Key, Indexed)
 - `tournament_id: str` (Foreign Key -> `tournaments.tournament_id`, Indexed)
 - `player_name: str` (Indexed)
-- `placement: int` (Indexed)
-- `pokepaste_url: str | None`
+- `placement: int` (Indexed), `standing_label: str`
+- `pokepast_url: str | None`
+- `showdown_text: str` (the full sheet; parsed lazily by the UI)
+- `source_dataset: str`, `sync_source: str` (Indexed), `division: str` (Indexed; only `masters` is ingested)
 - `created_at: datetime`
 
 ### `TournamentTeamMemberRecord` (Table: `tournament_team_members`)
-- `member_id: UUID` (Primary Key, Indexed)
+- `id: UUID` (Primary Key)
 - `tournament_team_id: UUID` (Foreign Key -> `tournament_teams.tournament_team_id`, Indexed)
 - `slot_position: int`
-- `species_name: str` (Indexed)
-- `canonical_id: str` (Indexed)
-- `form_name: str`
-- `item: str | None`
-- `ability: str | None`
-- `moveset: list[str]` (Stored as JSON array)
-- `tera_type: str | None`
+- `canonical_id: str` (Indexed), `species_name: str` (Indexed)
+- `moves: list[str]` (JSON array; aggregated per species for the move picker's usage ranking)
+
+### `MoveRecord` (Table: `moves`)
+- `move_id: str` (Primary Key; Showdown id such as `"fakeout"`)
+- `name`, `type`, `category`, `power`, `accuracy`, `pp`, `priority`, `target`, `short_desc`
+- `is_legal: bool` (Indexed; False for moves Champions removed)
+
+### `LearnsetRecord` (Table: `learnsets`)
+- `species_key: str` + `move_id: str` (composite Primary Key; Showdown species key, base form for megas)
+
+### `MoveCatalogMetaRecord` (Table: `move_catalog_meta`)
+- Singleton: `move_count`, `learnset_count`, `species_count`, `last_synced_at`
 
 ### `ItemRecord` (Table: `item_catalog`)
 - `canonical_id: str` (Primary Key)

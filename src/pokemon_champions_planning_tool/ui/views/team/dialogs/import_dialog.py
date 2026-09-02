@@ -228,9 +228,13 @@ class ImportDialog(ft.AlertDialog):
             status_by_slot[id(slot)] = ("Not Champions-legal", "error")
 
         rows: list[ft.Control] = []
+        catalogs = self.store.catalogs
         for slot in self.parsed.slots[:6]:
             label, tone = status_by_slot.get(id(slot), ("", "neutral"))
-            rows.append(self._slot_row(slot, label, tone))
+            # Cheap dictionary lookups; None (no learnset known) never flags anything.
+            cid = slot.resolved_canonical_id or slot.showdown_form_key
+            flagged = [m for m in slot.moves if catalogs.move_legality(cid, m) is False]
+            rows.append(self._slot_row(slot, label, tone, flagged_moves=flagged))
         self._preview.controls = rows
         warnings = list(self.parsed.warnings)
         if warnings:
@@ -239,7 +243,7 @@ class ImportDialog(ft.AlertDialog):
             self._preview_banner.hide()
 
     @staticmethod
-    def _slot_row(slot: ParsedSlot, status: str, tone: str) -> ft.Control:
+    def _slot_row(slot: ParsedSlot, status: str, tone: str, *, flagged_moves: list[str] | None = None) -> ft.Control:
         from .....domain.pokemon_identity import get_pokemon_sprite_url
 
         bits = []
@@ -252,6 +256,10 @@ class ImportDialog(ft.AlertDialog):
         detail = ft.Column(spacing=2, tight=True, expand=True, controls=[
             ft.Text(" · ".join(bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=bool(bits)),
             ft.Text(" / ".join(slot.moves), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=bool(slot.moves)),
+            ft.Row(spacing=Space.XS, tight=True, visible=bool(flagged_moves), controls=[
+                StatusChip(f"{len(flagged_moves or [])} move{'s' if len(flagged_moves or []) != 1 else ''} not in Champions learnset", "warning",
+                           icon=ft.Icons.WARNING_AMBER_ROUNDED, tooltip=", ".join(flagged_moves or [])),
+            ]),
         ])
         row = IdentityRow(name=slot.species_name, sprite_url=get_pokemon_sprite_url(slot.showdown_form_key or slot.species_name),
                           trailing=StatusChip(status, tone) if status else None)  # type: ignore[arg-type]

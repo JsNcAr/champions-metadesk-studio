@@ -34,7 +34,7 @@ The tool should make it easy to add a Pokemon by name, review its stats and typi
 
 ## Current State
 
-The current codebase is a structured Python CLI application implementing the core domain, service, and infrastructure layers. It queries PokéAPI, persists data (box, teams, members, and stats) in a local SQLite database via SQLModel, and mirrors/exports box entries to CSV. The planned GUI layout and frontend components described here are not yet implemented.
+The codebase is a layered Python application (domain, services, infrastructure, Flet UI) with a local SQLite database via SQLModel. The GUI covers the Box roster, the team builder, the tournament Meta explorer and Settings; PokéAPI, Pokémon Showdown, Limitless and Victory Road feed the local catalogues. See the roadmap for what is done and what remains.
 
 ## Suggested Product Direction
 

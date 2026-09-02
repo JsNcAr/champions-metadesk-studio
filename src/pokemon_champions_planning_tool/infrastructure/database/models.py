@@ -292,6 +292,50 @@ class MegaCheckedSpeciesRecord(SQLModel, table=True):
 
 
 
+class SpeciesRecord(SQLModel, table=True):
+    """One species or form from Showdown's pokedex: base stats, types, abilities, weight.
+
+    Every non-CAP species is stored so any tournament roster resolves; ``is_legal`` marks the
+    ones Pokémon Champions allows (from the Champions mod's formats data).
+    """
+
+    __tablename__: ClassVar[str] = "species_catalog"
+
+    showdown_id: str = Field(primary_key=True)          # "charizardmegay"
+    canonical_id: str = Field(index=True)               # "charizard-mega-y"
+    name: str = Field(index=True)                       # "Charizard-Mega-Y"
+    dex_number: int = Field(default=0)
+    base_species_id: str = Field(default="", index=True)
+    forme: str | None = None
+    types: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    hp: int = Field(default=0)
+    attack: int = Field(default=0)
+    defense: int = Field(default=0)
+    special_attack: int = Field(default=0)
+    special_defense: int = Field(default=0)
+    speed: int = Field(default=0)
+    abilities: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    hidden_ability: str | None = None
+    weightkg: float = Field(default=0.0)
+    gender: str | None = None
+    required_item: str | None = None
+    battle_only: str | None = None
+    is_mega: bool = Field(default=False, index=True)
+    is_legal: bool = Field(default=False, index=True)
+
+
+class SpeciesCatalogMetaRecord(SQLModel, table=True):
+    """Singleton row: when the species catalogue was last synced and how big it is."""
+
+    __tablename__: ClassVar[str] = "species_catalog_meta"
+
+    id: int = Field(default=1, primary_key=True)
+    species_count: int = Field(default=0)
+    legal_count: int = Field(default=0)
+    last_synced_at: datetime = Field(default_factory=_utc_now)
+    schema_version: int = Field(default=1)
+
+
 class ItemRecord(SQLModel, table=True):
     """Persisted held item with Champions format legality and stat modifier data."""
 

@@ -20,6 +20,8 @@ from ..infrastructure.database.repositories import ChampionsCatalogRepository, M
 from ..domain.moves import MoveInfo, move_key, resolve_learnset_key
 from ..services.items_catalog_service import load_items_catalog
 from ..services.move_catalog_service import load_move_catalog
+from ..services.species_catalog_service import load_species_catalog
+from ..domain.species import SpeciesInfo, resolve_species_key
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
@@ -33,6 +35,28 @@ class Catalogs:
     mega_stone_map: dict[str, list[ItemRecord]] = field(default_factory=dict)
     moves_by_id: dict[str, MoveInfo] = field(default_factory=dict)
     learnsets: dict[str, frozenset[str]] = field(default_factory=dict)   # Showdown species key -> move ids
+    species_by_canonical: dict[str, SpeciesInfo] = field(default_factory=dict)   # base stats/abilities/weight for every species and form
+
+    # -- species catalogue (damage calculator) --------------------------------------------
+
+    @property
+    def has_species(self) -> bool:
+        return bool(self.species_by_canonical)
+
+    def species_for(self, canonical_id: str | None) -> SpeciesInfo | None:
+        """Catalogue entry for one of our ids (megas and forms are their own rows)."""
+        key = resolve_species_key(canonical_id, self.species_by_canonical)
+        return self.species_by_canonical.get(key) if key else None
+
+    def search_species(self, query: str, limit: int = 8, *, legal_only: bool = True) -> list[SpeciesInfo]:
+        """Prefix matches first, then contains, on the calculator names; megas included."""
+        q = query.strip().lower()
+        if len(q) < 2:
+            return []
+        pool = [s for s in self.species_by_canonical.values() if s.is_legal or not legal_only]
+        starts = sorted((s for s in pool if s.name.lower().startswith(q)), key=lambda s: (len(s.name), s.name))
+        contains = sorted((s for s in pool if not s.name.lower().startswith(q) and q in s.name.lower()), key=lambda s: (len(s.name), s.name))
+        return (starts + contains)[:limit]
 
     # -- moves --------------------------------------------------------------------------------
 
@@ -109,6 +133,7 @@ class Catalogs:
             megas = tuple(MegaEvolutionRepository(session).list_all())
             load_items_catalog(session, state)
             moves_by_id, learnsets = load_move_catalog(session)
+            species = load_species_catalog(session)
         return cls(
             champions=champions,
             megas=megas,
@@ -117,4 +142,5 @@ class Catalogs:
             mega_stone_map={k: list(v) for k, v in (state.get("mega_stone_map") or {}).items()},
             moves_by_id=moves_by_id,
             learnsets=learnsets,
+            species_by_canonical=species,
         )

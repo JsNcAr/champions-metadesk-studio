@@ -58,6 +58,10 @@ SHOWDOWN_CHAMPIONS_MOVES_URL = "https://raw.githubusercontent.com/smogon/pokemon
 MOVE_CATALOG_MAX_AGE_DAYS = 30
 # Bump when the stored move shape changes; a lower stored version triggers one re-sync.
 MOVE_CATALOG_SCHEMA_VERSION = 2
+# Species catalogue (base stats, abilities, weights, forms) for the damage calculator
+SHOWDOWN_POKEDEX_JSON_URL = "https://play.pokemonshowdown.com/data/pokedex.json"
+SHOWDOWN_CHAMPIONS_FORMATS_DATA_URL = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions/formats-data.ts"
+SPECIES_CATALOG_SCHEMA_VERSION = 1
 
 TOURNAMENT_SYNC_TIMEOUT = 12
 

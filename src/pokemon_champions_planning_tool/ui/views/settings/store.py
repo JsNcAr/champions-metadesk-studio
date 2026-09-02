@@ -29,6 +29,7 @@ from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
 from ....infrastructure.database.repositories import BoxRepository
 from ....services.move_catalog_service import sync_move_catalog
+from ....services.species_catalog_service import sync_species_catalog
 from ....services.pokemon_import_service import refresh_stub_pokemon
 from ....services.tournament_service import TournamentService
 
@@ -96,8 +97,13 @@ class SettingsStore:
             return sync_items_catalog(s, force=True)
 
     def sync_moves(self) -> dict[str, Any]:
+        """Showdown data: moves + learnsets, then the species catalogue (stats, weights, abilities)."""
         with self._sf() as s:
-            return sync_move_catalog(s, force=True)
+            result = dict(sync_move_catalog(s, force=True))
+            species = sync_species_catalog(s, force=True)
+            result["species_catalog"] = species.get("species", 0)
+            result["species_status"] = species.get("status")
+            return result
 
     def repair_data(self) -> dict[str, Any]:
         """Re-fetch placeholder Pokémon referenced by the box."""

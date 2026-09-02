@@ -18,7 +18,7 @@ def move_catalog_is_stale(session: Session, max_age_days: int = MOVE_CATALOG_MAX
     meta = repo.get_meta()
     if meta is None or meta.move_count == 0 or meta.learnset_count == 0:
         return True
-    if (meta.schema_version or 1) < MOVE_CATALOG_SCHEMA_VERSION:
+    if meta.schema_version is None or meta.schema_version < MOVE_CATALOG_SCHEMA_VERSION:
         return True  # the stored shape is older than the code expects: re-sync once
     synced = meta.last_synced_at
     if synced.tzinfo is None:

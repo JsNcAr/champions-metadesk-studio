@@ -104,7 +104,7 @@ class SettingsView(ft.Column):
         self.header = PageHeader("Settings", icon=ft.Icons.SETTINGS, accent=Accent.SETTINGS)
         self.row_megas = SyncRow(ft.Icons.BOLT, "Mega Evolutions", lambda: self._sync("megas"))
         self.row_items = SyncRow(ft.Icons.DIAMOND_OUTLINED, "Held items", lambda: self._sync("items"))
-        self.row_moves = SyncRow(ft.Icons.SPORTS_MARTIAL_ARTS, "Moves & learnsets", lambda: self._sync("moves"))
+        self.row_moves = SyncRow(ft.Icons.SPORTS_MARTIAL_ARTS, "Moves, learnsets & species", lambda: self._sync("moves"))
         self.row_tournaments = SyncRow(ft.Icons.EMOJI_EVENTS_OUTLINED, "Tournaments", lambda: self._sync("tournaments"))
         self.row_health = SyncRow(ft.Icons.HEALTH_AND_SAFETY_OUTLINED, "Data health", lambda: self._sync("health"), button_label="Repair")
         self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "health": self.row_health}
@@ -261,7 +261,7 @@ def _result_summary(kind: str, result: dict[str, Any]) -> str:
     if kind == "items":
         return f"+{result.get('added', 0)} added · {result.get('updated', 0)} updated"
     if kind == "moves":
-        return f"{result.get('moves', 0):,} moves · {result.get('species', 0):,} learnsets"
+        return f"{result.get('moves', 0):,} moves · {result.get('species', 0):,} learnsets · {result.get('species_catalog', 0):,} species"
     if kind == "health":
         return f"{result.get('repaired', 0)} of {result.get('stubs', 0)} repaired"
     limitless = result.get("limitless", {})

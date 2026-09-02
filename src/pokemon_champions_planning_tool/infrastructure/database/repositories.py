@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import func, or_
 from sqlmodel import Session, delete, func, select
 
-from ...config import MOVE_CATALOG_SCHEMA_VERSION
+from ...config import MOVE_CATALOG_SCHEMA_VERSION, SPECIES_CATALOG_SCHEMA_VERSION
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.event_tier import classify_event_tier
 from ...domain.entities.pokemon import Pokemon
@@ -25,6 +25,8 @@ from .models import (
     ItemRecord,
     LearnsetRecord,
     MegaCheckedSpeciesRecord,
+    SpeciesCatalogMetaRecord,
+    SpeciesRecord,
     MegaEvolutionRecord,
     MoveCatalogMetaRecord,
     MoveRecord,
@@ -797,6 +799,47 @@ class MoveRepository:
         self.session.add(meta)
         self.session.commit()
         return len(moves), pairs
+
+
+class SpeciesRepository:
+    """Species catalogue from Showdown's pokedex and the sync sentinel."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get_meta(self) -> SpeciesCatalogMetaRecord | None:
+        return self.session.get(SpeciesCatalogMetaRecord, 1)
+
+    def count(self) -> int:
+        return int(self.session.exec(select(func.count()).select_from(SpeciesRecord)).one() or 0)
+
+    def get(self, showdown_id: str) -> SpeciesRecord | None:
+        record = self.session.get(SpeciesRecord, showdown_id)
+        if record is not None:
+            self.session.expunge(record)
+        return record
+
+    def list_all(self) -> list[SpeciesRecord]:
+        records = list(self.session.exec(select(SpeciesRecord)).all())
+        for r in records:
+            self.session.expunge(r)
+        return records
+
+    def replace_all(self, records: list[SpeciesRecord]) -> tuple[int, int]:
+        """Swap the whole catalogue (~1.5k rows) in one transaction; returns (count, legal)."""
+        self.session.exec(delete(SpeciesRecord))
+        legal = 0
+        for r in records:
+            self.session.add(r)
+            legal += 1 if r.is_legal else 0
+        meta = self.get_meta() or SpeciesCatalogMetaRecord(id=1)
+        meta.species_count = len(records)
+        meta.legal_count = legal
+        meta.last_synced_at = _utc_now()
+        meta.schema_version = SPECIES_CATALOG_SCHEMA_VERSION
+        self.session.add(meta)
+        self.session.commit()
+        return len(records), legal
 
 
 class TournamentRepository:

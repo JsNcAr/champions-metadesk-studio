@@ -13,7 +13,7 @@ import flet as ft
 
 from ..theme import Palette, Radius, alpha, type_color
 
-Ring = Literal["none", "type", "mega", "planned", "selected", "error"]
+Ring = Literal["none", "type", "mega", "planned", "selected", "error", "missing"]
 
 
 class Sprite(ft.Container):
@@ -131,6 +131,10 @@ class Sprite(ft.Container):
             colour = Palette.PRIMARY
         elif ring == "error":
             colour = Palette.ERROR
+        elif ring == "missing":
+            # Not in the box: dimmed with a plain outline ring.
+            colour = Palette.OUTLINE
+            self._image.opacity = 0.45
         self._circle.border = ft.Border.all(width, colour) if colour else None
         self._circle.shadow = (
             ft.BoxShadow(blur_radius=6, spread_radius=1, color=alpha(Palette.PRIMARY, 0.35))

@@ -43,7 +43,7 @@ def _tier_chip(tier: str) -> StatusChip:
 
 
 EVENT_CARD_MAX_EXTENT = 340
-EVENT_CARD_HEIGHT = 262
+EVENT_CARD_HEIGHT = 292
 
 
 def _event_meta_bits(row: MetaTeamRow) -> list[str]:
@@ -53,6 +53,25 @@ def _event_meta_bits(row: MetaTeamRow) -> list[str]:
     if row.location:
         bits.append(row.location)
     return bits
+
+
+def _member_sprite(m, size: int) -> Sprite:
+    if not m.is_legal:
+        return Sprite(m.sprite_url, size=size, ring="error", tooltip=f"{m.species_name} — not in the Champions Pokédex")
+    if m.in_box is False:
+        return Sprite(m.sprite_url, size=size, ring="missing", tooltip=f"{m.species_name} — not in your box")
+    return Sprite(m.sprite_url, size=size, ring="none", tooltip=m.species_name)
+
+
+def _box_chip(row: MetaTeamRow) -> StatusChip | None:
+    """"6/6 in box" (success), "5/6" (info), fewer (neutral); None when no box is known."""
+    label = row.box_label
+    if label is None or not row.members:
+        return None
+    missing = row.missing_count or 0
+    tone = "success" if missing == 0 else ("info" if missing == 1 else "neutral")
+    lacking = [m.species_name for m in row.members if m.in_box is False]
+    return StatusChip(label, tone, icon=ft.Icons.INVENTORY_2_OUTLINED, tooltip=("Missing: " + ", ".join(lacking)) if lacking else "Every member is in your box")
 
 
 class EventHeader(ft.Container):
@@ -162,9 +181,8 @@ class EventCard(ft.Container):
                     ft.Text(row.player_name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip=row.player_name),
                     *winner_actions,
                 ]),
-                ft.Row(spacing=4, controls=[
-                    Sprite(m.sprite_url, size=36, ring="none" if m.is_legal else "error", tooltip=m.species_name) for m in row.members
-                ]),
+                ft.Row(spacing=4, controls=[_member_sprite(m, 36) for m in row.members]),
+                *([ft.Row(controls=[_box_chip(row)])] if _box_chip(row) is not None else []),
                 ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                     self._count,
                     ft.TextButton("View standings", icon=ft.Icons.LIST_ALT, on_click=lambda _e: on_open(self.row.tournament_id)),
@@ -250,14 +268,8 @@ class TeamRow(ft.Container):
         self._expanded = False
         self._details: ft.Control | None = None
 
-        sprites = ft.Row(
-            spacing=4,
-            controls=[
-                Sprite(m.sprite_url, size=32, ring="none" if m.is_legal else "error",
-                       tooltip=m.species_name if m.is_legal else f"{m.species_name} — not in the Champions Pokédex")
-                for m in row.members
-            ],
-        )
+        sprites = ft.Row(spacing=4, controls=[_member_sprite(m, 32) for m in row.members])
+        box_chip = _box_chip(row)
         if not row.legality_known:
             legality = StatusChip("Legality unknown", "neutral")
         elif row.is_legal:
@@ -284,6 +296,7 @@ class TeamRow(ft.Container):
                     ft.Text(row.player_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, width=180, tooltip=row.player_name),
                     sprites,
                     ft.Container(expand=True),
+                    *([box_chip] if box_chip is not None else []),
                     legality,
                     ft.Row(spacing=Space.XS, controls=actions),
                     self._chevron,

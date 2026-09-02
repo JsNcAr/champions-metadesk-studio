@@ -69,6 +69,12 @@
 - The system should sum stats across all Pokemon on the team.
 - The summary should support quick comparison between teams.
 
+### FR-14 Find tournament teams buildable from the box
+- The user must be able to filter tournament teams by how many members are missing from the box (none, at most one, two or three).
+- Each listed team must show how many of its members are in the box and mark the missing ones.
+- Only owned box entries count; planned entries do not. A Mega form counts as its base species; other forms are distinct.
+- The filter must keep exact counts and paging (it is applied in the query, not after).
+
 ## Quality and Usability Requirements
 
 ### QR-1 Fast lookup workflow

@@ -157,6 +157,7 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `pokepast_url: str | None`
 - `showdown_text: str` (the full sheet; parsed lazily by the UI)
 - `source_dataset: str`, `sync_source: str` (Indexed), `division: str` (Indexed; only `masters` is ingested)
+- `member_count: int` (roster size, so the Box filter compares against it without grouping every roster row)
 - `created_at: datetime`
 
 ### `TournamentTeamMemberRecord` (Table: `tournament_team_members`)
@@ -165,6 +166,7 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `slot_position: int`
 - `canonical_id: str` (Indexed), `species_name: str` (Indexed)
 - `moves: list[str]` (JSON array; aggregated per species for the move picker's usage ranking)
+- `base_canonical_id: str` (Indexed; Mega-stripped species id, e.g. `charizard` for `charizard-mega-y`, used to match rosters against the box)
 
 ### `MoveRecord` (Table: `moves`)
 - `move_id: str` (Primary Key; Showdown id such as `"fakeout"`)

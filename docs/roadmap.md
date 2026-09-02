@@ -93,6 +93,10 @@
 - **Narrow-window layout (QR-3)**: compact icon rail below 1280px, side panels overlay the content below 1024px, grids keep their card heights.
 - **Help dialog** (F1 / Ctrl+/ / rail button): shortcuts and non-obvious features.
 
+## Phase 9: Build From Your Box [COMPLETED — 2026-09-02]
+- **Box filter in the Meta explorer (FR-14)**: teams with all members in the box, or at most one, two or three missing; per-row "N/6 in box" chip and greyed missing sprites, in rows, cards and the standings dialog; updates when the box changes.
+- **Data**: `base_canonical_id` on roster rows (Megas → base species, forms kept), indexed, so the match is an `IN()` per query.
+
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.

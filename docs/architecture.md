@@ -74,6 +74,7 @@ ui/
 
 - `ui/components/layout.py` (`SplitPane`): a view's main content beside its side panel above 1024px, the panel overlaid on the right below it; the shell compacts the rail to icons and tightens page padding below 1280px and forwards every resize to every built view (`handle_resize(width, height)`), which also recompute their grid tile heights.
 - `ui/help.py`: the Help dialog (F1, Ctrl+/, the rail's "?" button) — keyboard shortcuts and the features that are not self-evident.
+- `ui/views/meta/store.py` also holds the owned box species (base ids, refreshed on BOX_CHANGED) and passes them with every query, so rows carry in-box marks and the Box filter counts against them in SQL.
 - `ui/preferences.py`: layout preferences (box layout and stats-on-cards, team summary panel and show-all-moves, meta layout and collapsed state) in `preferences.json` next to the database; in-memory in tests.
 - `ui/catalogs.py` also holds the move catalogue (`moves_by_id`, `learnsets`) with `move_legality()` used by the slot cards, the health checks, the move picker and the import preview.
 

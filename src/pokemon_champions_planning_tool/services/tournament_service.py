@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Session, func, select
 
-from ..domain.pokemon_identity import format_api_name, get_pokemon_sprite_url
+from ..domain.pokemon_identity import base_canonical_id, format_api_name, get_pokemon_sprite_url
 from datetime import datetime
 from ..infrastructure.database.models import (
     PokemonRecord,
@@ -43,6 +43,7 @@ class MetaMemberRow:
     canonical_id: str
     sprite_url: str
     is_legal: bool
+    in_box: bool | None = None   # None: no box was supplied
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ class MetaTeamRow:
     showdown_text: str
     members: tuple[MetaMemberRow, ...]
     legality_known: bool
+    missing_count: int | None = None   # members not in the box; None when no box was supplied
 
     @property
     def illegal_species(self) -> list[str]:
@@ -75,6 +77,13 @@ class MetaTeamRow:
     @property
     def is_legal(self) -> bool:
         return self.legality_known and not self.illegal_species
+
+    @property
+    def box_label(self) -> str | None:
+        """"6/6 in box" for the chip; None when no box was supplied."""
+        if self.missing_count is None:
+            return None
+        return f"{len(self.members) - self.missing_count}/{len(self.members)} in box"
 
 
 @dataclass(frozen=True)
@@ -263,6 +272,8 @@ class TournamentService:
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
         tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
     ) -> list[TournamentTeamRecord]:
         return self.repo.search_teams(
             query=query,
@@ -275,6 +286,8 @@ class TournamentService:
             offset=offset,
             event_tiers=event_tiers,
             tournament_id_filter=tournament_id_filter,
+            owned_species=owned_species,
+            max_missing=max_missing,
         )
 
     def count_teams(self, **filters: Any) -> int:
@@ -310,6 +323,8 @@ class TournamentService:
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
         tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
     ) -> list[MetaTeamRow]:
         """Search teams and return detached rows with event context, roster and legality.
 
@@ -328,6 +343,8 @@ class TournamentService:
             offset=offset,
             event_tiers=event_tiers,
             tournament_id_filter=tournament_id_filter,
+            owned_species=owned_species,
+            max_missing=max_missing,
         )
         if not teams:
             return []
@@ -352,10 +369,12 @@ class TournamentService:
         ).all():
             members_by_team.setdefault(m.tournament_team_id, []).append(m)
 
+        owned = {o for o in (owned_species or ()) if o} if owned_species is not None else None
         rows: list[MetaTeamRow] = []
         for team in teams:
             tournament = tournaments.get(team.tournament_id)
             members = sorted(members_by_team.get(team.tournament_team_id, []), key=lambda m: m.slot_position)
+            in_box = [((m.base_canonical_id or base_canonical_id(m.canonical_id)) in owned) if owned is not None else None for m in members]
             rows.append(
                 MetaTeamRow(
                     team_id=team.tournament_team_id,
@@ -381,10 +400,12 @@ class TournamentService:
                             canonical_id=m.canonical_id,
                             sprite_url=get_pokemon_sprite_url(m.canonical_id or m.species_name),
                             is_legal=(not legality_known) or _is_legal(m.species_name, m.canonical_id, lookup),
+                            in_box=in_box[index],
                         )
-                        for m in members
+                        for index, m in enumerate(members)
                     ),
                     legality_known=legality_known,
+                    missing_count=(sum(1 for flag in in_box if flag is False) if owned is not None else None),
                 )
             )
         return rows

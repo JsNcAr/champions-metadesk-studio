@@ -17,7 +17,7 @@ from ...tasks import Debouncer, grid_tile_aspect, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
-from .store import TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
+from .store import BOX_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
 # With groups collapsed (or as cards) a 20-team page shows only two or three events, so
@@ -105,12 +105,20 @@ class MetaView(ft.Column):
             visible=self.store.filters.source == "official",
             on_select=lambda e: self._apply(tier=e.control.value or "All"),
         )
+        self._box = ft.Dropdown(
+            value=self.store.filters.box,
+            options=[ft.DropdownOption(key=v, text=label) for v, label in BOX_OPTIONS],
+            width=195,
+            leading_icon=ft.Icons.INVENTORY_2_OUTLINED,
+            tooltip="Teams you can build from your box (owned entries; Megas count as their base species)",
+            on_select=lambda e: self._apply(box=e.control.value or "any"),
+        )
         self._search_button = ft.OutlinedButton("Search", icon=ft.Icons.SEARCH, on_click=lambda _e: self._apply(query=self._search.value or "", force=True))
         self.filter_bar = ft.Row(
             spacing=Space.SM,
             wrap=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._search, self._placement, self._source, self._tier, self._regulation, self._recency, self._game, self._search_button],
+            controls=[self._search, self._placement, self._source, self._tier, self._box, self._regulation, self._recency, self._game, self._search_button],
         )
         self._active_chips = ft.Row(spacing=Space.SM, wrap=True, visible=False)
         self._order_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
@@ -156,6 +164,7 @@ class MetaView(ft.Column):
         ctx.bus.on(events.META_SYNCED, self._on_meta_synced)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.SYNC_PROGRESS, self._on_sync_progress)
+        ctx.bus.on(events.BOX_CHANGED, self._on_box_changed)
 
     def handle_key(self, e) -> bool:
         if e.ctrl and (e.key or "").lower() == "f" and is_mounted(self._search):
@@ -192,6 +201,7 @@ class MetaView(ft.Column):
         self.store.set_filters(new_filters)
         self._tier.visible = new_filters.source == "official"
         self._tier.value = new_filters.tier
+        self._box.value = new_filters.box
         if force:
             self.store.invalidate()
         self._reload()
@@ -220,6 +230,7 @@ class MetaView(ft.Column):
         self._source.selected = [f.source]
         self._tier.value = f.tier
         self._tier.visible = f.source == "official"
+        self._box.value = f.box
 
     def _render_active_chips(self) -> None:
         active = self.store.filters.active()
@@ -401,6 +412,27 @@ class MetaView(ft.Column):
                 secondary_label="Open Settings",
                 on_secondary=lambda: self.ctx.bus.emit(events.NAVIGATE, "settings"),
             )
+        if self.store.filters.box != "any" and not self.store.box_species:
+            return EmptyState(
+                ft.Icons.INVENTORY_2_OUTLINED,
+                "Your box is empty",
+                "Add the Pokémon you own to find tournament teams you can build.",
+                action_label="Go to Box",
+                on_action=lambda: self.ctx.bus.emit(events.NAVIGATE, "box"),
+                secondary_label="Show all teams",
+                on_secondary=lambda: self._apply(box="any"),
+            )
+        if self.store.filters.box != "any":
+            limit = dict(BOX_OPTIONS)[self.store.filters.box]
+            return EmptyState(
+                ft.Icons.INVENTORY_2_OUTLINED,
+                "No team is that close to your box",
+                f"No roster matches “{limit}” with the other filters. Allow more missing Pokémon or widen the other filters.",
+                action_label="Allow more missing" if self.store.filters.box != "3" else "Clear filters",
+                on_action=(lambda: self._apply(box="3")) if self.store.filters.box != "3" else self._clear_filters,
+                secondary_label="Show all teams",
+                on_secondary=lambda: self._apply(box="any"),
+            )
         return EmptyState(
             ft.Icons.SEARCH_OFF,
             "No teams match",
@@ -471,6 +503,14 @@ class MetaView(ft.Column):
             self._update_self()
         elif is_mounted(self) and not self.store.loaded:
             self._reload()
+
+    def _on_box_changed(self, _payload) -> None:
+        """The box changed: marks and the Box filter must be recomputed on the next load."""
+        before = self.store.box_species
+        if self.store.refresh_box() != before or not self.store.loaded:
+            self.store.invalidate()
+            if is_mounted(self) and self.store.loaded:
+                self._reload()
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
         if kind == "tournaments" and is_mounted(self):

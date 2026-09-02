@@ -43,6 +43,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Events show their winner only; \"Show N more\" or Expand all reveals the rest. The cards layout opens a full standings dialog per event.",
         "Official (Play! Pokémon) and Community are separate sources; under Official you can pick Worlds, Internationals, Regionals or Special Events.",
         "Search matches species, players and event names; the Search button re-queries even when nothing changed.",
+        "Box ▾ finds teams you can build: all six in your box, or one to three missing. Greyed sprites are the ones you lack; the chip says how many you have. Owned entries only; Megas count as their base species.",
     ),
     "Data & syncing": (
         "Tournaments sync at launch when the last sync is older than six hours or a backlog is waiting; Settings › Sync now always runs.",

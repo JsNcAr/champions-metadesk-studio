@@ -91,6 +91,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
         # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
+        # tournament_teams — roster size (Box filter: size minus owned members)
+        "ALTER TABLE tournament_teams ADD COLUMN member_count INTEGER NOT NULL DEFAULT 0;",
         # tournament_team_members — mega-stripped species id for box matching
         "ALTER TABLE tournament_team_members ADD COLUMN base_canonical_id VARCHAR NOT NULL DEFAULT '';",
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_base_canonical_id ON tournament_team_members (base_canonical_id);",
@@ -115,6 +117,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_event_tiers(conn)
         _backfill_member_moves(conn)
         _backfill_member_base_ids(conn)
+        _backfill_member_counts(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -142,6 +145,20 @@ def _backfill_member_base_ids(conn) -> None:
         base = base_canonical_id(canonical_id)
         if base != canonical_id:
             conn.execute(text("UPDATE tournament_team_members SET base_canonical_id = :base WHERE canonical_id = :cid"), {"base": base, "cid": canonical_id})
+    conn.commit()
+
+
+def _backfill_member_counts(conn) -> None:
+    """Fill tournament_teams.member_count for rows stored before the column existed."""
+    try:
+        pending = conn.execute(text("SELECT COUNT(*) FROM tournament_teams WHERE member_count = 0")).scalar()
+    except Exception:
+        return
+    if not pending:
+        return
+    conn.execute(text(
+        "UPDATE tournament_teams SET member_count = (SELECT COUNT(*) FROM tournament_team_members m WHERE m.tournament_team_id = tournament_teams.tournament_team_id) WHERE member_count = 0"
+    ))
     conn.commit()
 
 

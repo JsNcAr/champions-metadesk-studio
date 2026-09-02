@@ -75,6 +75,7 @@ class TestMigrations(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         conn.execute("DROP INDEX IF EXISTS ix_tournament_team_members_base_canonical_id")
         conn.execute("ALTER TABLE tournament_team_members DROP COLUMN base_canonical_id")
+        conn.execute("ALTER TABLE tournament_teams DROP COLUMN member_count")
         conn.execute(
             "INSERT INTO tournaments (tournament_id, name, event_date, format_regulation, game_platform, organizer, location, total_players, created_at, updated_at, standings_synced, event_tier)"
             " VALUES ('t', 'T', '2026-01-01', 'Regulation M-B', 'Pokémon Champions', 'Limitless Community', 'Online', 8, '2026-01-01', '2026-01-01', 1, 'community')"
@@ -96,6 +97,9 @@ class TestMigrations(unittest.TestCase):
         rows = dict(conn.execute("SELECT canonical_id, base_canonical_id FROM tournament_team_members").fetchall())
         conn.close()
         self.assertEqual(rows, {"charizard-mega-y": "charizard", "rotom-wash": "rotom-wash", "incineroar": "incineroar"})
+        conn = sqlite3.connect(self.db_path)
+        self.assertEqual(conn.execute("SELECT member_count FROM tournament_teams").fetchone()[0], 3, "roster size backfilled")
+        conn.close()
         database._DB_INITIALIZED.discard(str(self.db_path))
         database.get_engine.cache_clear()
         database.initialize_database(str(self.db_path))

@@ -944,6 +944,7 @@ class TournamentRepository:
         short — the UI reads the same file while a sync runs.
         """
         for team, members in entries:
+            team.member_count = len(members)
             self.session.add(team)
             for m in members:
                 m.tournament_team_id = team.tournament_team_id
@@ -954,6 +955,7 @@ class TournamentRepository:
     def save_team(
         self, team: TournamentTeamRecord, members: list[TournamentTeamMemberRecord]
     ) -> TournamentTeamRecord:
+        team.member_count = len(members)
         self.session.add(team)
         self.session.commit()
         self.session.refresh(team)
@@ -1010,11 +1012,32 @@ class TournamentRepository:
         max_age_days: int | None,
         event_tiers: Sequence[str] | None = None,
         tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
     ):
         """Shared WHERE clauses for search_teams and count_teams."""
 
         if tournament_id_filter:
             stmt = stmt.where(TournamentTeamRecord.tournament_id == tournament_id_filter)
+
+        if max_missing is not None:
+            # "At most N of the roster is missing from the box": roster size minus the
+            # members whose base species is owned. Both aggregates group the indexed
+            # members table once; an empty box matches nothing.
+            owned = sorted({o for o in (owned_species or ()) if o})
+            if not owned:
+                return stmt.where(False)
+            # Only rows whose base species is owned are touched (indexed); the roster size
+            # is stored on the team, so nothing groups the whole members table.
+            hits = (
+                select(TournamentTeamMemberRecord.tournament_team_id.label("team_id"), func.count().label("hits"))
+                .where(TournamentTeamMemberRecord.base_canonical_id.in_(owned))
+                .group_by(TournamentTeamMemberRecord.tournament_team_id)
+                .subquery("roster_hits")
+            )
+            stmt = stmt.outerjoin(hits, hits.c.team_id == TournamentTeamRecord.tournament_team_id).where(
+                TournamentTeamRecord.member_count - func.coalesce(hits.c.hits, 0) <= max_missing
+            )
 
         if regulation_filter and regulation_filter != "All":
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
@@ -1093,6 +1116,8 @@ class TournamentRepository:
         offset: int = 0,
         event_tiers: Sequence[str] | None = None,
         tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
     ) -> list[TournamentTeamRecord]:
         stmt = self._apply_search_filters(
             self._joined_teams(),
@@ -1104,6 +1129,8 @@ class TournamentRepository:
             max_age_days=max_age_days,
             event_tiers=event_tiers,
             tournament_id_filter=tournament_id_filter,
+            owned_species=owned_species,
+            max_missing=max_missing,
         )
 
         # Newest event first, then best placement within that event. Ordering by
@@ -1136,6 +1163,8 @@ class TournamentRepository:
         max_age_days: int | None = None,
         event_tiers: Sequence[str] | None = None,
         tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
     ) -> int:
         """Number of teams matching the same filters as search_teams."""
         stmt = self._apply_search_filters(
@@ -1148,6 +1177,8 @@ class TournamentRepository:
             max_age_days=max_age_days,
             event_tiers=event_tiers,
             tournament_id_filter=tournament_id_filter,
+            owned_species=owned_species,
+            max_missing=max_missing,
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
 

@@ -379,6 +379,9 @@ class TournamentTeamRecord(SQLModel, table=True):
     # Age division this roster placed in. Only "masters" is ingested; premier events
     # publish Seniors/Juniors on the same page with placements restarting at 1.
     division: str = Field(default="masters", index=True)
+    # Roster size, kept on the team so the Box filter needs one indexed pass over the
+    # owned members instead of grouping every roster row per query.
+    member_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=_utc_now)
 
 

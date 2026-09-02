@@ -57,10 +57,10 @@ def _event_meta_bits(row: MetaTeamRow) -> list[str]:
 
 def _member_sprite(m, size: int) -> Sprite:
     if not m.is_legal:
-        return Sprite(m.sprite_url, size=size, ring="error", tooltip=f"{m.species_name} — not in the Champions Pokédex")
+        return Sprite(m.sprite_url, size=size, ring="error", tooltip=f"{m.display_name} — not in the Champions Pokédex")
     if m.in_box is False:
-        return Sprite(m.sprite_url, size=size, ring="missing", tooltip=f"{m.species_name} — not in your box")
-    return Sprite(m.sprite_url, size=size, ring="none", tooltip=m.species_name)
+        return Sprite(m.sprite_url, size=size, ring="missing", tooltip=f"{m.display_name} — not in your box")
+    return Sprite(m.sprite_url, size=size, ring="none", tooltip=m.display_name)
 
 
 def _box_chip(row: MetaTeamRow) -> StatusChip | None:
@@ -70,7 +70,7 @@ def _box_chip(row: MetaTeamRow) -> StatusChip | None:
         return None
     missing = row.missing_count or 0
     tone = "success" if missing == 0 else ("info" if missing == 1 else "neutral")
-    lacking = [m.species_name for m in row.members if m.in_box is False]
+    lacking = [m.display_name for m in row.members if m.in_box is False]
     return StatusChip(label, tone, icon=ft.Icons.INVENTORY_2_OUTLINED, tooltip=("Missing: " + ", ".join(lacking)) if lacking else "Every member is in your box")
 
 
@@ -341,7 +341,7 @@ class TeamRow(ft.Container):
         for index, member in enumerate(self.row.members):
             slot = slots[index] if index < len(slots) else None
             lines: list[ft.Control] = [
-                ft.Text(member.species_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE),
+                ft.Text(member.display_name, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE),
             ]
             if slot is not None:
                 bits = []

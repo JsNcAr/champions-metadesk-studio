@@ -129,7 +129,7 @@ class PokemonCard(ft.Container):
         primary_type = pokemon.types[0] if pokemon.types else None
         self._band.bgcolor = alpha(Palette.TERTIARY if entry.is_planned else type_color(primary_type), 0.32)
         self.sprite.set_src(pokemon.sprite_url)
-        self.sprite.set_tooltip(pokemon.display_name)
+        self.sprite.set_tooltip(pokemon.qualified_name)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if mega_capable else "type"), primary_type)
 
         self._name.value = pokemon.display_name

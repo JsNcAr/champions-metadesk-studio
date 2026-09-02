@@ -246,7 +246,7 @@ class SlotCard(ft.Container):
         primary = form.types[0] if form.types else None
         self._header.bgcolor = alpha(type_color(primary), 0.30)
         self.sprite.set_src(form.sprite_url)
-        self.sprite.set_tooltip(pokemon.display_name)
+        self.sprite.set_tooltip(pokemon.qualified_name)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if form.is_mega else "type"), primary)
         self._name.value = pokemon.display_name
         self._form_caption.value = form.label if form.is_mega else (pokemon.form_name if pokemon.form_name and pokemon.form_name.lower() != "base" else "")
@@ -324,7 +324,7 @@ class SlotCard(ft.Container):
         self._notes_toggle.icon = ft.Icons.NOTES if not member.notes else ft.Icons.STICKY_NOTE_2
         self._notes_toggle.icon_color = Palette.PRIMARY if member.notes else Palette.ON_SURFACE_VARIANT
 
-        self._drag_name.value = pokemon.display_name
+        self._drag_name.value = pokemon.qualified_name
         self._inner.content = self._filled_body
         self.padding = 0
         self._apply_frame()

@@ -71,6 +71,21 @@ class TestMigrations(unittest.TestCase):
 
 
 
+    def test_default_form_labels_are_backfilled_onto_old_records(self):
+        conn = sqlite3.connect(self.db_path)
+        for cid, form in (("basculegion", "Base"), ("kingambit", "Base"), ("charizard-mega-x", "Mega")):
+            conn.execute(
+                "INSERT INTO pokemon_records (canonical_id, display_name, species_name, form_name, types, hp, attack, defense, special_attack, special_defense, speed, abilities, moves, available_forms, created_at, updated_at, is_placeholder)"
+                f" VALUES ('{cid}', '{cid.title()}', '{cid}', '{form}', '[]', 1, 1, 1, 1, 1, 1, '[]', '[]', '[]', '2026-01-01', '2026-01-01', 0)"
+            )
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        conn = sqlite3.connect(self.db_path)
+        forms = dict(conn.execute("SELECT canonical_id, form_name FROM pokemon_records").fetchall())
+        conn.close()
+        self.assertEqual(forms, {"basculegion": "Male", "kingambit": "Base", "charizard-mega-x": "Mega"})
+
     def test_base_canonical_id_is_added_and_backfilled(self):
         conn = sqlite3.connect(self.db_path)
         conn.execute("DROP INDEX IF EXISTS ix_tournament_team_members_base_canonical_id")

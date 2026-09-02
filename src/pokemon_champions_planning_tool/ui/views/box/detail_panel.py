@@ -122,7 +122,7 @@ class DetailPanel(SidePanel):
         pokemon = entry.pokemon
         form = detail.form(self.form_id)
 
-        self.set_title(pokemon.display_name)
+        self.set_title(pokemon.qualified_name)
         self.sprite.set_src(form.sprite_url or pokemon.sprite_url)
         self.sprite.set_tooltip(form.label)
         self.sprite.set_ring("planned" if entry.is_planned else ("mega" if form.is_mega else "type"), form.types[0] if form.types else None)

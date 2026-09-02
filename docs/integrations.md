@@ -20,7 +20,9 @@ PokéAPI is the main external data source for the project.
   `/pokemon-species/<species>` for the default variety and fetches that form instead
   (basculegion → basculegion-male, aegislash → aegislash-shield, lycanroc → lycanroc-midday,
   mimikyu, morpeko, palafin, maushold, gourgeist, meowstic, pyroar). The stored record keeps
-  the species slug as its id so it matches the Champions catalogue, rosters and learnsets.
+  the species slug as its id so it matches the Champions catalogue, rosters and learnsets,
+  and `form_name` carries the default form's label ("Male", "Shield") so the UI can say which
+  variation it is; tournament rosters get the same label from `DEFAULT_FORM_LABELS`.
 - All outbound HTTP in the project goes through the `requests` library; providers wrap
   failures in their own domain exception type (`LimitlessNetworkError`,
   `VictoryRoadNetworkError`, `VRPasteNetworkError`, `PokepastNetworkError`) so services

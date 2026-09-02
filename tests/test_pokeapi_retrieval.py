@@ -69,6 +69,8 @@ class DefaultVarietyFallbackTests(unittest.TestCase):
         self.assertEqual(pokemon.canonical_id, "basculegion")  # the species slug, not the form's
         self.assertEqual(pokemon.display_name, "Basculegion")
         self.assertEqual(pokemon.species_name, "basculegion")
+        self.assertEqual(pokemon.form_name, "Male")  # the default form is named, not hidden
+        self.assertEqual(pokemon.qualified_name, "Basculegion (Male)")
         self.assertEqual(pokemon.types, ["water", "ghost"])
         self.assertEqual(pokemon.stats.hp, 120)
         self.assertEqual(pokemon.dex_number, 902)

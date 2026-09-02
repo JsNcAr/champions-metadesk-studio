@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlmodel import Session, func, select
 
-from ..domain.pokemon_identity import base_canonical_id, format_api_name, get_pokemon_sprite_url
+from ..domain.pokemon_identity import base_canonical_id, format_api_name, get_pokemon_sprite_url, qualified_name
 from datetime import datetime
 from ..infrastructure.database.models import (
     PokemonRecord,
@@ -45,6 +45,11 @@ class MetaMemberRow:
     is_legal: bool
     in_box: bool | None = None   # None: no box was supplied
 
+    @property
+    def display_name(self) -> str:
+        """Provider name plus the implicit default form: "Basculegion (Male)"."""
+        return qualified_name(self.species_name, self.canonical_id)
+
 
 @dataclass(frozen=True)
 class MetaTeamRow:
@@ -72,7 +77,7 @@ class MetaTeamRow:
 
     @property
     def illegal_species(self) -> list[str]:
-        return [m.species_name for m in self.members if not m.is_legal]
+        return [m.display_name for m in self.members if not m.is_legal]
 
     @property
     def is_legal(self) -> bool:
@@ -212,8 +217,8 @@ class MetaSynergyService:
             # seen in imported rosters), so fall back to the same CDN resolver the
             # Tournament Explorer uses instead of rendering a blank pill.
             pokemon_record = self.session.get(PokemonRecord, canonical_id)
-            display_name = (
-                pokemon_record.display_name if pokemon_record else (species_name or canonical_id.title())
+            display_name = qualified_name(
+                pokemon_record.display_name if pokemon_record else (species_name or canonical_id.title()), canonical_id
             )
             sprite_url = (
                 pokemon_record.sprite_url

@@ -7,7 +7,7 @@ from uuid import UUID
 import flet as ft
 
 from ....domain.entities.box_entry import BoxEntry
-from ....domain.pokemon_identity import get_pokemon_sprite_url
+from ....domain.pokemon_identity import get_pokemon_sprite_url, qualified_name
 from ... import events
 from ...components import EmptyState, PageHeader, SplitPane
 from ...components.banner import InlineBanner
@@ -421,7 +421,7 @@ class BoxView(ft.Row):
         # icon appears if the image fails). The first chip is outlined: Enter adds it.
         self._suggestions.controls = [
             ft.Chip(
-                label=ft.Text(r.display_name),
+                label=ft.Text(qualified_name(r.display_name, r.species_name)),
                 leading=ft.Image(
                     src=get_pokemon_sprite_url(r.species_name or r.display_name), width=22, height=22, fit=ft.BoxFit.CONTAIN,
                     error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Palette.ON_SURFACE_VARIANT),

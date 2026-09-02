@@ -28,6 +28,40 @@ def format_display_name(api_name):
     return api_name.title()
 
 
+# Species whose plain id names a specific default form. PokéAPI and Showdown both file
+# these under the bare species id, so the name alone hides which form it is; the label is
+# shown next to the name wherever a Pokémon is rendered. Maushold is left out on purpose:
+# Showdown's default is Family of Three while PokéAPI's is Family of Four.
+DEFAULT_FORM_LABELS: dict[str, str] = {
+    "basculegion": "Male",
+    "meowstic": "Male",
+    "pyroar": "Male",
+    "indeedee": "Male",
+    "oinkologne": "Male",
+    "aegislash": "Shield",
+    "lycanroc": "Midday",
+    "mimikyu": "Disguised",
+    "morpeko": "Full Belly",
+    "palafin": "Zero",
+    "gourgeist": "Average",
+    "urshifu": "Single Strike",
+    "ogerpon": "Teal Mask",
+    "tatsugiri": "Curly",
+    "toxtricity": "Amped",
+}
+
+
+def default_form_label(canonical_id: str | None) -> str | None:
+    """The implicit form behind a bare species id ("basculegion" → "Male"), else None."""
+    return DEFAULT_FORM_LABELS.get((canonical_id or "").strip().lower())
+
+
+def qualified_name(display_name: str, canonical_id: str | None) -> str:
+    """``display_name`` with the implicit default form appended: "Basculegion (Male)"."""
+    label = default_form_label(canonical_id)
+    return f"{display_name} ({label})" if label and label.lower() not in display_name.lower() else display_name
+
+
 # Explicit canonical overrides for common VGC / Showdown display names
 _SPECIES_ALIAS_MAP: dict[str, str] = {
     "rapid strike urshifu": "urshifu-rapid-strike",

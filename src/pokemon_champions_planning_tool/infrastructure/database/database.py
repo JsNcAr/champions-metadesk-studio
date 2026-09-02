@@ -121,6 +121,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_member_moves(conn)
         _backfill_member_base_ids(conn)
         _backfill_member_counts(conn)
+        _backfill_default_form_labels(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -149,6 +150,21 @@ def _backfill_member_base_ids(conn) -> None:
         if base != canonical_id:
             conn.execute(text("UPDATE tournament_team_members SET base_canonical_id = :base WHERE canonical_id = :cid"), {"base": base, "cid": canonical_id})
     conn.commit()
+
+
+def _backfill_default_form_labels(conn) -> None:
+    """Label records fetched before default forms were named ("basculegion" → form "Male")."""
+    from ...domain.pokemon_identity import DEFAULT_FORM_LABELS
+
+    try:
+        for canonical_id, label in DEFAULT_FORM_LABELS.items():
+            conn.execute(
+                text("UPDATE pokemon_records SET form_name = :label WHERE canonical_id = :cid AND lower(form_name) = 'base'"),
+                {"label": label, "cid": canonical_id},
+            )
+        conn.commit()
+    except Exception:
+        return
 
 
 def _backfill_member_counts(conn) -> None:

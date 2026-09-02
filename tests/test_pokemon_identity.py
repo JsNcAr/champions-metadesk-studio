@@ -100,3 +100,39 @@ class TestShowdownSpriteSlug(unittest.TestCase):
             "https://play.pokemonshowdown.com/sprites/gen5/lycanroc-dusk.png",
         )
         self.assertIn("poke-ball", get_pokemon_sprite_url(""))
+
+
+class TestDefaultFormLabels(unittest.TestCase):
+    def test_bare_species_with_an_implicit_default_form_are_labelled(self):
+        from pokemon_champions_planning_tool.domain.pokemon_identity import default_form_label, qualified_name
+
+        self.assertEqual(default_form_label("basculegion"), "Male")
+        self.assertEqual(default_form_label("Aegislash"), "Shield")
+        self.assertIsNone(default_form_label("kingambit"))
+        self.assertIsNone(default_form_label("basculegion-f"))  # the name already says which form
+        self.assertIsNone(default_form_label(None))
+        self.assertEqual(qualified_name("Basculegion", "basculegion"), "Basculegion (Male)")
+        self.assertEqual(qualified_name("Kingambit", "kingambit"), "Kingambit")
+        self.assertEqual(qualified_name("Lycanroc Midday", "lycanroc"), "Lycanroc Midday")  # never doubled
+
+    def test_pokemon_entity_exposes_the_label(self):
+        from pokemon_champions_planning_tool.domain.entities.pokemon import Pokemon
+        from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
+
+        stats = PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)
+        p = Pokemon(canonical_id="basculegion", display_name="Basculegion", form_name="Male", stats=stats)
+        self.assertEqual(p.form_label, "Male")
+        self.assertEqual(p.qualified_name, "Basculegion (Male)")
+        base = Pokemon(canonical_id="kingambit", display_name="Kingambit", form_name="Base", stats=stats)
+        self.assertIsNone(base.form_label)
+        self.assertEqual(base.qualified_name, "Kingambit")
+        mega = Pokemon(canonical_id="charizard-mega-x", display_name="Mega Charizard X", form_name="Mega", stats=stats)
+        self.assertEqual(mega.qualified_name, "Mega Charizard X")
+
+    def test_meta_member_row_shows_the_label(self):
+        from pokemon_champions_planning_tool.services.tournament_service import MetaMemberRow
+
+        row = MetaMemberRow(slot=1, species_name="Basculegion", canonical_id="basculegion", sprite_url="", is_legal=True)
+        self.assertEqual(row.display_name, "Basculegion (Male)")
+        female = MetaMemberRow(slot=2, species_name="Basculegion ♀", canonical_id="basculegion-f", sprite_url="", is_legal=True)
+        self.assertEqual(female.display_name, "Basculegion ♀")

@@ -74,6 +74,18 @@ class Pokemon(BaseModel):
         )
 
     @property
+    def form_label(self) -> str | None:
+        """The specific form behind the name ("Male", "Shield"); None for plain/mega/regional."""
+        form = (self.form_name or "").strip()
+        return form if form and form.lower() not in ("base", "mega", "regional") else None
+
+    @property
+    def qualified_name(self) -> str:
+        """Display name with the form label appended: "Basculegion (Male)"."""
+        label = self.form_label
+        return f"{self.display_name} ({label})" if label and label.lower() not in self.display_name.lower() else self.display_name
+
+    @property
     def is_stub(self) -> bool:
         """True for a placeholder: flagged explicitly, or (older rows) no types and no stats."""
         return self.is_placeholder or (not self.types and self.stats.total == 0)

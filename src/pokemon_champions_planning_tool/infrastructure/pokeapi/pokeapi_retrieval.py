@@ -7,7 +7,7 @@ from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
 from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_ability import PokemonAbility
 from ...domain.entities.pokemon_stats import PokemonStats
-from ...domain.pokemon_identity import format_display_name, format_api_name
+from ...domain.pokemon_identity import default_form_label, format_display_name, format_api_name
 from ..database.models import MegaEvolutionRecord
 
 
@@ -85,7 +85,7 @@ def get_official_stats(pokemon_name):
         for ability_data in pokemon_data.get('abilities', [])
     ]
 
-    form = "Base"
+    form = default_form_label(api_name) or "Base"
     if "mega" in api_name:
         form = "Mega"
     elif any(region in api_name for region in ["alola", "galar", "hisui", "paldea"]):

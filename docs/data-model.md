@@ -11,7 +11,7 @@ Represents a specific Pokemon species/form and its API-backed attributes.
 - `canonical_id: str` — Stable PokéAPI identifier (e.g. `"pikachu"`, `"charizard-mega-x"`).
 - `display_name: str` — Human-readable name (e.g. `"Pikachu"`, `"Mega Charizard X"`).
 - `species_name: str | None` — Base species name when the record represents a specific form.
-- `form_name: str` — Form label such as `"Base"`, `"Mega"`, or `"Regional"`.
+- `form_name: str` — Form label such as `"Base"`, `"Mega"`, or `"Regional"`; for species whose bare id names a specific default form it is that form (`"basculegion"` → `"Male"`, `"aegislash"` → `"Shield"`, see `DEFAULT_FORM_LABELS` in `domain/pokemon_identity.py`). `Pokemon.qualified_name` renders `"Basculegion (Male)"` and the UI shows the label as a caption on cards and rows.
 - `dex_number: int | None` — National Pokédex number when available.
 - `types: list[str]` — Primary and secondary Pokemon types.
 - `sprite_url: str | None` — Default sprite or artwork URL.

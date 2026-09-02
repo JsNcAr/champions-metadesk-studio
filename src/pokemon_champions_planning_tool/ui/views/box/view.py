@@ -41,7 +41,7 @@ class BoxView(ft.Row):
             dense=True,
             height=Layout.TOOLBAR_HEIGHT - 8,
             on_change=lambda e: self._suggest(e.control.value or ""),
-            on_submit=lambda e: self._add(e.control.value or ""),
+            on_submit=lambda e: self._add(self._resolve_name(e.control.value or "")),
         )
         self._add_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
@@ -417,12 +417,29 @@ class BoxView(ft.Row):
         catalogs = self.ctx.catalogs or self.store.catalogs
         matches = catalogs.suggest_species(text, limit=_MAX_SUGGESTIONS)
         self._suggestions.controls = [
-            ft.Chip(label=ft.Text(r.display_name), leading=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16), show_checkmark=False,
+            ft.Chip(label=ft.Text(r.display_name), leading=ft.Icon(ft.Icons.KEYBOARD_RETURN if i == 0 else ft.Icons.CATCHING_POKEMON, size=16), show_checkmark=False,
+                    tooltip="Enter adds this one" if i == 0 else None,
                     on_click=lambda _e, name=r.display_name: self._add(name))
-            for r in matches
+            for i, r in enumerate(matches)
         ]
         self._suggestions.visible = bool(matches)
         self._safe_update(self._suggestions)
+
+    def _resolve_name(self, text: str) -> str:
+        """Enter on a partial name adds the first suggestion ("kinga" -> Kingambit).
+
+        An exact catalogue match keeps what was typed; text matching nothing is passed
+        through so PokéAPI can still resolve names outside the Champions catalogue.
+        """
+        query = text.strip()
+        if not query:
+            return ""
+        catalogs = self.ctx.catalogs or self.store.catalogs
+        matches = catalogs.suggest_species(query, limit=_MAX_SUGGESTIONS)
+        if not matches:
+            return query
+        exact = next((r for r in matches if r.display_name.lower() == query.lower() or (r.species_name or "").lower() == query.lower()), None)
+        return (exact or matches[0]).display_name
 
     def _add(self, name: str) -> None:
         name = name.strip()

@@ -122,5 +122,22 @@ class TestBoxActions(unittest.TestCase):
             self.assertEqual([e.pokemon.display_name for e in export.call_args.args[0]], ["Gardevoir"])
 
 
+
+    def test_enter_on_a_partial_name_adds_the_first_suggestion(self):
+        from pokemon_champions_planning_tool.infrastructure.database.models import ChampionsSpeciesRecord
+        from pokemon_champions_planning_tool.ui.catalogs import Catalogs
+
+        with self.db.session() as s:
+            for i, (sid, name) in enumerate((("kingambit", "Kingambit"), ("kingdra", "Kingdra"), ("charizard", "Charizard")), start=1):
+                s.add(ChampionsSpeciesRecord(entry_number=i, species_name=sid, display_name=name))
+            s.commit()
+        self.ctx.catalogs = Catalogs.load(self.db.session)
+        self.assertEqual(self.view._resolve_name("kinga"), "Kingambit", "first suggestion for a partial name")
+        self.assertEqual(self.view._resolve_name("kingdra"), "Kingdra", "an exact match is kept even if it is not the first suggestion")
+        self.assertEqual(self.view._resolve_name("KINGDRA"), "Kingdra")
+        self.assertEqual(self.view._resolve_name("mew"), "mew", "no suggestion: passed through for PokéAPI")
+        self.assertEqual(self.view._resolve_name("  "), "")
+
+
 if __name__ == "__main__":
     unittest.main()

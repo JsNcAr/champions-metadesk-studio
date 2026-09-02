@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session
 
-from ..config import MOVE_CATALOG_MAX_AGE_DAYS
-from ..domain.moves import MoveInfo
+from ..config import MOVE_CATALOG_MAX_AGE_DAYS, MOVE_CATALOG_SCHEMA_VERSION
+from ..domain.moves import MoveInfo, MoveMechanics
 from ..infrastructure.database.models import MoveRecord
 from ..infrastructure.database.repositories import MoveRepository
 from ..infrastructure.providers.showdown_moves_provider import ShowdownMovesNetworkError, ShowdownMovesProvider
@@ -18,6 +18,8 @@ def move_catalog_is_stale(session: Session, max_age_days: int = MOVE_CATALOG_MAX
     meta = repo.get_meta()
     if meta is None or meta.move_count == 0 or meta.learnset_count == 0:
         return True
+    if (meta.schema_version or 1) < MOVE_CATALOG_SCHEMA_VERSION:
+        return True  # the stored shape is older than the code expects: re-sync once
     synced = meta.last_synced_at
     if synced.tzinfo is None:
         synced = synced.replace(tzinfo=timezone.utc)
@@ -42,7 +44,7 @@ def sync_move_catalog(session: Session, force: bool = False, provider: ShowdownM
         return {"status": "offline", "moves": meta.move_count if meta else 0, "learnsets": meta.learnset_count if meta else 0, "species": meta.species_count if meta else 0}
     records = [
         MoveRecord(move_id=m.move_id, name=m.name, type=m.type, category=m.category, power=m.power, accuracy=m.accuracy,
-                   pp=m.pp, priority=m.priority, target=m.target, short_desc=m.short_desc, is_legal=m.is_legal)
+                   pp=m.pp, priority=m.priority, target=m.target, short_desc=m.short_desc, is_legal=m.is_legal, mechanics=dict(m.mechanics))
         for m in payload.moves
     ]
     moves, pairs = repo.replace_all(records, {k: list(v) for k, v in payload.learnsets.items()})
@@ -64,7 +66,8 @@ def load_move_catalog(session: Session) -> tuple[dict[str, MoveInfo], dict[str, 
     repo = MoveRepository(session)
     moves = {
         r.move_id: MoveInfo(move_id=r.move_id, name=r.name, type=r.type, category=r.category, power=r.power, accuracy=r.accuracy,
-                            pp=r.pp, priority=r.priority, target=r.target, short_desc=r.short_desc, is_legal=r.is_legal)
+                            pp=r.pp, priority=r.priority, target=r.target, short_desc=r.short_desc, is_legal=r.is_legal,
+                            mechanics=MoveMechanics.from_json(r.mechanics))
         for r in repo.list_moves()
     }
     learnsets = {k: frozenset(v) for k, v in repo.list_learnsets().items()}

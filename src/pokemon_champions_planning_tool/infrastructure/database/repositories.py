@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import func, or_
 from sqlmodel import Session, delete, func, select
 
+from ...config import MOVE_CATALOG_SCHEMA_VERSION
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.event_tier import classify_event_tier
 from ...domain.entities.pokemon import Pokemon
@@ -792,6 +793,7 @@ class MoveRepository:
         meta.learnset_count = pairs
         meta.species_count = len(learnsets)
         meta.last_synced_at = _utc_now()
+        meta.schema_version = MOVE_CATALOG_SCHEMA_VERSION
         self.session.add(meta)
         self.session.commit()
         return len(moves), pairs

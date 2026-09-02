@@ -429,6 +429,9 @@ class MoveRecord(SQLModel, table=True):
     target: str | None = None
     short_desc: str | None = None
     is_legal: bool = Field(default=True, index=True)  # False: removed from Champions
+    # Damage-formula fields (flags, secondaries, recoil, multihit, stat overrides…); see
+    # ``domain.moves.MoveMechanics`` — only non-default keys are stored.
+    mechanics: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
 
 
 class LearnsetRecord(SQLModel, table=True):
@@ -450,6 +453,8 @@ class MoveCatalogMetaRecord(SQLModel, table=True):
     learnset_count: int = Field(default=0)
     species_count: int = Field(default=0)
     last_synced_at: datetime = Field(default_factory=_utc_now)
+    # Bumped when the stored shape changes (e.g. the mechanics column) so one re-sync runs.
+    schema_version: int = Field(default=1)
 
 
 class AppStateRecord(SQLModel, table=True):

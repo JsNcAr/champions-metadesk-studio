@@ -91,6 +91,9 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
         # team_members — Champions stat points (replaces the mainline EV/IV spread)
         "ALTER TABLE team_members ADD COLUMN points JSON NOT NULL DEFAULT '{}';",
+        # moves — damage-formula fields; move_catalog_meta — schema version forcing a re-sync
+        "ALTER TABLE moves ADD COLUMN mechanics JSON NOT NULL DEFAULT '{}';",
+        "ALTER TABLE move_catalog_meta ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;",
         # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
         "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
         # pokemon_records — explicit placeholder flag (records written without PokéAPI data)

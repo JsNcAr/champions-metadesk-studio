@@ -72,6 +72,20 @@ class TestMigrations(unittest.TestCase):
 
 
 
+    def test_move_mechanics_and_schema_version_columns_are_added(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("ALTER TABLE moves DROP COLUMN mechanics")
+        conn.execute("ALTER TABLE move_catalog_meta DROP COLUMN schema_version")
+        conn.execute("INSERT INTO move_catalog_meta (id, move_count, learnset_count, species_count, last_synced_at) VALUES (1, 5, 5, 1, '2026-01-01')")
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        self.assertIn("mechanics", _columns(self.db_path, "moves"))
+        self.assertIn("schema_version", _columns(self.db_path, "move_catalog_meta"))
+        conn = sqlite3.connect(self.db_path)
+        self.assertEqual(conn.execute("SELECT schema_version FROM move_catalog_meta WHERE id = 1").fetchone()[0], 1, "old catalogues report version 1 and re-sync once")
+        conn.close()
+
     def test_legacy_ev_spreads_become_stat_points(self):
         conn = sqlite3.connect(self.db_path)
         conn.execute("ALTER TABLE team_members DROP COLUMN points")

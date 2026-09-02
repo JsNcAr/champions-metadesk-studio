@@ -56,6 +56,8 @@ SHOWDOWN_MOVES_JSON_URL = "https://play.pokemonshowdown.com/data/moves.json"
 SHOWDOWN_CHAMPIONS_LEARNSETS_URL = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions/learnsets.ts"
 SHOWDOWN_CHAMPIONS_MOVES_URL = "https://raw.githubusercontent.com/smogon/pokemon-showdown/master/data/mods/champions/moves.ts"
 MOVE_CATALOG_MAX_AGE_DAYS = 30
+# Bump when the stored move shape changes; a lower stored version triggers one re-sync.
+MOVE_CATALOG_SCHEMA_VERSION = 2
 
 TOURNAMENT_SYNC_TIMEOUT = 12
 

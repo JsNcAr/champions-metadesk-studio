@@ -62,6 +62,27 @@ MOVES_TS = """export const Moves = {
 \t\tisNonstandard: "Past",
 \t\ttier: "Illegal",
 \t},
+\tcrushclaw: {
+\t\tinherit: true,
+\t\tflags: { contact: 1, protect: 1, mirror: 1, metronome: 1, slicing: 1 },
+\t},
+\tfreezedry: {
+\t\tinherit: true,
+\t\tsecondary: undefined, // no inherit
+\t},
+\tmakeitrain: {
+\t\tinherit: true,
+\t\taccuracy: 95,
+\t\tself: {
+\t\t\tboosts: {
+\t\t\t\tspa: -2,
+\t\t\t},
+\t\t},
+\t},
+\tburnup: {
+\t\tinherit: true,
+\t\tisNonstandard: null,
+\t},
 };
 """
 MOVES_JSON = {
@@ -74,6 +95,18 @@ MOVES_JSON = {
     "aquajet": {"name": "Aqua Jet", "type": "Water", "category": "Physical", "basePower": 40, "accuracy": 100, "pp": 20, "priority": 1, "target": "normal"},
     "lastrespects": {"name": "Last Respects", "type": "Ghost", "category": "Physical", "basePower": 50, "accuracy": 100, "pp": 10, "priority": 0, "target": "normal"},
     "paleowave": {"name": "Paleo Wave", "type": "Rock", "category": "Special", "basePower": 85, "accuracy": 100, "pp": 15, "priority": 0, "target": "normal", "isNonstandard": "CAP"},
+}
+# Moves with damage-formula fields; only the parsing test uses them so the counts above stay small.
+MECHANICS_JSON = {
+    "crushclaw": {"name": "Crush Claw", "type": "Normal", "category": "Physical", "basePower": 75, "accuracy": 95, "pp": 10, "priority": 0, "target": "normal", "flags": {"contact": 1}, "secondary": {"chance": 50}},
+    "freezedry": {"name": "Freeze-Dry", "type": "Ice", "category": "Special", "basePower": 70, "accuracy": 100, "pp": 20, "priority": 0, "target": "normal", "secondary": {"chance": 10}},
+    "makeitrain": {"name": "Make It Rain", "type": "Steel", "category": "Special", "basePower": 120, "accuracy": 100, "pp": 5, "priority": 0, "target": "allAdjacentFoes", "self": {"boosts": {"spa": -1}}},
+    "burnup": {"name": "Burn Up", "type": "Fire", "category": "Special", "basePower": 130, "accuracy": 100, "pp": 5, "priority": 0, "target": "normal", "isNonstandard": "Past"},
+    "mindblown": {"name": "Mind Blown", "type": "Fire", "category": "Special", "basePower": 150, "accuracy": 100, "pp": 5, "priority": 0, "target": "allAdjacent", "isNonstandard": "Past", "mindBlownRecoil": True},
+    "wildcharge": {"name": "Wild Charge", "type": "Electric", "category": "Physical", "basePower": 90, "accuracy": 100, "pp": 15, "priority": 0, "target": "normal", "flags": {"contact": 1}, "recoil": [1, 4]},
+    "bonerush": {"name": "Bone Rush", "type": "Ground", "category": "Physical", "basePower": 25, "accuracy": 90, "pp": 10, "priority": 0, "target": "normal", "multihit": [2, 5]},
+    "foulplay": {"name": "Foul Play", "type": "Dark", "category": "Physical", "basePower": 95, "accuracy": 100, "pp": 15, "priority": 0, "target": "normal", "flags": {"contact": 1}, "overrideOffensivePokemon": "target"},
+    "highjumpkick": {"name": "High Jump Kick", "type": "Fighting", "category": "Physical", "basePower": 130, "accuracy": 90, "pp": 10, "priority": 0, "target": "normal", "flags": {"contact": 1}, "hasCrashDamage": True},
 }
 
 
@@ -88,12 +121,26 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(learnsets["charizard"], ("airslash", "flareblitz", "heatwave", "protect"))
         removed, overrides = parse_move_overrides_ts(MOVES_TS)
         self.assertEqual(removed, frozenset({"knockoff"}))
-        self.assertEqual(overrides, {"anchorshot": {"basePower": 90}})
-        payload = _payload()
+        self.assertEqual(overrides["anchorshot"], {"basePower": 90})
+        self.assertEqual(overrides["crushclaw"], {"flags": {"contact": 1, "protect": 1, "mirror": 1, "metronome": 1, "slicing": 1}})
+        self.assertEqual(overrides["freezedry"], {"secondaries": False})
+        self.assertEqual(overrides["makeitrain"], {"accuracy": 95, "self_boosts": {"spa": -2}})
+        self.assertEqual(overrides["burnup"], {"isNonstandard": None})
+        payload = build_catalog({**MOVES_JSON, **MECHANICS_JSON}, parse_learnsets_ts(LEARNSETS_TS), removed, overrides)
         by_id = {m.move_id: m for m in payload.moves}
         self.assertNotIn("paleowave", by_id, "CAP moves dropped")
         self.assertEqual(by_id["anchorshot"].power, 90, "override applied")
         self.assertFalse(by_id["knockoff"].is_legal)
+        self.assertFalse(by_id["mindblown"].is_legal, "Past in the base data and untouched by the mod")
+        self.assertTrue(by_id["burnup"].is_legal, "restored by the mod")
+        self.assertEqual(by_id["crushclaw"].mechanics, {"contact": True, "slicing": True, "secondaries": True})
+        self.assertEqual(by_id["freezedry"].mechanics, {}, "the mod removed the secondary")
+        self.assertEqual(by_id["makeitrain"].mechanics, {"self_boosts": [["spa", -2]]})
+        self.assertEqual(by_id["wildcharge"].mechanics, {"contact": True, "recoil": [1, 4]})
+        self.assertEqual(by_id["bonerush"].mechanics, {"multihit": [2, 5]})
+        self.assertEqual(by_id["foulplay"].mechanics, {"contact": True, "override_offensive_pokemon": "target"})
+        self.assertEqual(by_id["highjumpkick"].mechanics, {"contact": True, "has_crash_damage": True})
+        self.assertEqual(by_id["mindblown"].mechanics, {"mind_blown_recoil": True})
         self.assertIsNone(by_id["protect"].accuracy, "accuracy true -> never misses -> None")
         self.assertEqual(by_id["protect"].priority, 4)
 
@@ -146,10 +193,30 @@ class TestSyncAndUsage(unittest.TestCase):
             moves, learnsets = load_move_catalog(s)
             self.assertEqual(learnsets["charizard"], frozenset({"airslash", "flareblitz", "heatwave", "protect"}))
             self.assertFalse(moves["knockoff"].is_legal)
+            self.assertEqual(moves["anchorshot"].mechanics.to_json(), {}, "mechanics round-trip through the table")
+            meta = MoveRepository(s).get_meta()
+            meta.schema_version = 1
+            s.add(meta); s.commit()
+            self.assertTrue(move_catalog_is_stale(s), "an older stored shape forces a re-sync")
+            self.assertEqual(sync_move_catalog(s, provider=provider)["status"], "synced")
+            self.assertEqual(provider.fetch_move_catalog.call_count, 2)
             # a forced sync with a smaller payload leaves no stale pairs behind
             provider.fetch_move_catalog.return_value = build_catalog(MOVES_JSON, {"charizard": ("protect",)}, frozenset(), {})
             sync_move_catalog(s, force=True, provider=provider)
             self.assertEqual(MoveRepository(s).count_learnsets(), 1)
+
+    def test_mechanics_round_trip_through_the_table(self):
+        removed, overrides = parse_move_overrides_ts(MOVES_TS)
+        provider = MagicMock()
+        provider.fetch_move_catalog.return_value = build_catalog({**MOVES_JSON, **MECHANICS_JSON}, parse_learnsets_ts(LEARNSETS_TS), removed, overrides)
+        with self.db.session() as s:
+            sync_move_catalog(s, provider=provider)
+            moves, _ = load_move_catalog(s)
+            self.assertEqual(moves["makeitrain"].mechanics.drops_stats("Special"), 2)
+            self.assertEqual(moves["bonerush"].mechanics.multihit, (2, 5))
+            self.assertEqual(moves["wildcharge"].mechanics.recoil, (1, 4))
+            self.assertTrue(moves["crushclaw"].mechanics.slicing)
+            self.assertFalse(moves["freezedry"].mechanics.secondaries)
 
     def test_move_usage_counts_megas_with_the_base_species(self):
         with self.db.session() as s:

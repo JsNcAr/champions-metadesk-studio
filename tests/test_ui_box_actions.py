@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, patch
 
 from sqlmodel import Session, SQLModel, create_engine
 
+import flet as ft
+
 from _ui_stubs import StubPage, serialise
 from pokemon_champions_planning_tool.domain.entities.box_entry import BoxEntry
 from pokemon_champions_planning_tool.domain.entities.pokemon import Pokemon
@@ -137,6 +139,13 @@ class TestBoxActions(unittest.TestCase):
         self.assertEqual(self.view._resolve_name("KINGDRA"), "Kingdra")
         self.assertEqual(self.view._resolve_name("mew"), "mew", "no suggestion: passed through for PokéAPI")
         self.assertEqual(self.view._resolve_name("  "), "")
+        self.view._suggest("king")
+        chips = self.view._suggestions.controls
+        self.assertEqual([c.label.value for c in chips], ["Kingambit", "Kingdra"])
+        self.assertTrue(all(isinstance(c.leading, ft.Image) and "kingambit" in c.leading.src or "kingdra" in c.leading.src for c in chips), "sprites from the species id")
+        self.assertIsNotNone(chips[0].border_side, "first chip is outlined: Enter adds it")
+        self.assertIsNone(chips[1].border_side)
+        serialise(self.view)
 
 
 if __name__ == "__main__":

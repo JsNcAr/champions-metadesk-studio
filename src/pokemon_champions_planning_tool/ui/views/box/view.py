@@ -7,6 +7,7 @@ from uuid import UUID
 import flet as ft
 
 from ....domain.entities.box_entry import BoxEntry
+from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ... import events
 from ...components import EmptyState, PageHeader, SplitPane
 from ...components.banner import InlineBanner
@@ -416,10 +417,20 @@ class BoxView(ft.Row):
     def _suggest(self, text: str) -> None:
         catalogs = self.ctx.catalogs or self.store.catalogs
         matches = catalogs.suggest_species(text, limit=_MAX_SUGGESTIONS)
+        # Each chip shows the species' sprite (Showdown CDN, cached by Flutter; the generic
+        # icon appears if the image fails). The first chip is outlined: Enter adds it.
         self._suggestions.controls = [
-            ft.Chip(label=ft.Text(r.display_name), leading=ft.Icon(ft.Icons.KEYBOARD_RETURN if i == 0 else ft.Icons.CATCHING_POKEMON, size=16), show_checkmark=False,
-                    tooltip="Enter adds this one" if i == 0 else None,
-                    on_click=lambda _e, name=r.display_name: self._add(name))
+            ft.Chip(
+                label=ft.Text(r.display_name),
+                leading=ft.Image(
+                    src=get_pokemon_sprite_url(r.species_name or r.display_name), width=22, height=22, fit=ft.BoxFit.CONTAIN,
+                    error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Palette.ON_SURFACE_VARIANT),
+                ),
+                show_checkmark=False,
+                border_side=ft.BorderSide(1, Palette.PRIMARY) if i == 0 else None,
+                tooltip="Enter adds this one" if i == 0 else None,
+                on_click=lambda _e, name=r.display_name: self._add(name),
+            )
             for i, r in enumerate(matches)
         ]
         self._suggestions.visible = bool(matches)

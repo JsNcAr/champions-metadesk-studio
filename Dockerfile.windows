@@ -53,7 +53,7 @@ RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
         --platform win_amd64 \
         --python-version 3.13 \
         --only-binary=:all: && \
-    python3 -m pip download pyinstaller setuptools wheel pefile pywin32-ctypes poetry-core altgraph pyinstaller-hooks-contrib packaging \
+    python3 -m pip download pyinstaller flet flet-desktop setuptools wheel pefile pywin32-ctypes poetry-core altgraph pyinstaller-hooks-contrib packaging \
         --dest /tmp/wheels \
         --platform win_amd64 \
         --python-version 3.13 \
@@ -65,7 +65,7 @@ COPY pyproject.toml poetry.lock pokemon_champions.spec ./
 COPY src/ ./src/
 
 # Install Windows packages offline inside Wine from pre-downloaded wheels
-RUN xvfb-run -a wine C:\\Python313\\python.exe -m pip install --no-index --find-links=/tmp/wheels pyinstaller setuptools wheel altgraph pyinstaller-hooks-contrib pefile pywin32-ctypes -r /tmp/wheels/requirements.txt
+RUN xvfb-run -a wine C:\\Python313\\python.exe -m pip install --no-index --find-links=/tmp/wheels pyinstaller flet flet-desktop setuptools wheel altgraph pyinstaller-hooks-contrib pefile pywin32-ctypes -r /tmp/wheels/requirements.txt
 
 # Build PyInstaller executable inside Wine using script directly
 RUN xvfb-run -a wine C:\\Python313\\Scripts\\pyinstaller.exe pokemon_champions.spec --noconfirm --clean

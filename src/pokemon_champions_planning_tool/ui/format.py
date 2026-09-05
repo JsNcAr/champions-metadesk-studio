@@ -23,7 +23,7 @@ def absolute_time(dt: datetime | None) -> str:
     if dt is None:
         return "never"
     local = _aware(dt).astimezone()
-    return local.strftime("%-d %b %Y, %H:%M")
+    return f"{local.day} {local.strftime('%b %Y, %H:%M')}"
 
 
 def relative_time(dt: datetime | None, *, now: datetime | None = None) -> str:
@@ -43,4 +43,5 @@ def relative_time(dt: datetime | None, *, now: datetime | None = None) -> str:
     days = hours / 24
     if days < 7:
         return f"{int(days)}d ago"
-    return _aware(dt).astimezone().strftime("%-d %b %Y")
+    local = _aware(dt).astimezone()
+    return f"{local.day} {local.strftime('%b %Y')}"

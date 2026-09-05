@@ -89,7 +89,15 @@ def run_in_background(
 
                 toast(page, f"Something went wrong: {exc}", kind="error")
         elif on_done is not None:
-            on_done(result)
+            try:
+                on_done(result)
+            except BaseException as callback_exc:  # noqa: BLE001
+                if on_error is not None:
+                    on_error(callback_exc)
+                else:
+                    from .dialogs import toast
+
+                    toast(page, f"Something went wrong: {callback_exc}", kind="error")
 
     def _worker() -> None:
         try:

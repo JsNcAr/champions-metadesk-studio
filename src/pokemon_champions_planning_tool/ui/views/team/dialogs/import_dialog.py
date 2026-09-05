@@ -38,6 +38,7 @@ class ImportDialog(ft.AlertDialog):
         self.parsed: ParsedTeamResult | None = None
         self.readiness: ImportReadinessReport | None = None
         self.result_team_id: UUID | None = None
+        self._result_team_name: str | None = None
         self.step = 0
         self._use_planned = False
 
@@ -51,7 +52,7 @@ class ImportDialog(ft.AlertDialog):
             indicator_controls.append(ft.Row(spacing=Space.XS, tight=True, controls=[dot, ft.Text(label, theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT)]))
             if i < len(STEPS) - 1:
                 indicator_controls.append(ft.Container(width=24, height=1, bgcolor=Palette.OUTLINE_VARIANT))
-        self._indicator = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=indicator_controls)
+        self._indicator = ft.Row(spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=indicator_controls)
 
         # -- step 1: paste --------------------------------------------------------------------
         self._input = ft.TextField(
@@ -78,7 +79,7 @@ class ImportDialog(ft.AlertDialog):
 
         self._body = ft.Column(spacing=Space.MD, tight=True)
         self._back = ft.TextButton("Back", on_click=lambda _e: self._go(self.step - 1))
-        self._cancel = ft.TextButton("Cancel", on_click=lambda _e: self.close())
+        self._cancel = ft.TextButton("Cancel", on_click=lambda _e: self._cancel_clicked())
         self._next = ft.FilledButton("Next", on_click=lambda _e: self._advance())
         self._import_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self.title = ft.Text("Import team")
@@ -132,12 +133,13 @@ class ImportDialog(ft.AlertDialog):
             self._render_readiness()
             self._body.controls = [self._readiness_summary, self._readiness_banner, self._option_owned, self._option_planned]
         else:
-            self._body.controls = [self._done]
+            self.modal = False
+            self._body.controls = [ft.Container(content=self._done, alignment=ft.Alignment.CENTER, padding=ft.Padding.symmetric(vertical=Space.MD))]
         self._refresh()
 
     def _refresh(self) -> None:
         self._back.visible = 0 < self.step < 3
-        self._cancel.visible = self.step < 3
+        self._cancel.visible = True
         self._cancel.content = "Cancel" if self.step < 3 else "Close"
         if self.step == 0:
             self._next.content = "Next"
@@ -155,6 +157,12 @@ class ImportDialog(ft.AlertDialog):
         if is_mounted(self):
             self.update()
 
+    def _cancel_clicked(self) -> None:
+        name = self._result_team_name if self.step == 3 else None
+        self.close()
+        if name:
+            self.ctx.toast(f"Imported {name}", "success")
+
     def _advance(self) -> None:
         if self.step == 0:
             self._go(1)
@@ -167,12 +175,32 @@ class ImportDialog(ft.AlertDialog):
         elif self.step == 2:
             self._commit(use_planned=self._use_planned)
         else:
+            name = self._result_team_name
+            team_id = self.result_team_id
             self.close()
-            if self._on_done and self.result_team_id:
-                self._on_done(self.result_team_id)
+            if name:
+                self.ctx.toast(f"Imported {name}", "success")
+            if self._on_done and team_id:
+                self._on_done(team_id)
 
     def close(self) -> None:
-        self.ctx.page.pop_dialog()
+        page = getattr(self.ctx, "page", None)
+        if page is not None:
+            if hasattr(page, "_dialogs") and hasattr(page._dialogs, "controls"):
+                for _ in range(len(page._dialogs.controls) + 1):
+                    if not (self in page._dialogs.controls and self.open):
+                        break
+                    popped = page.pop_dialog()
+                    if popped is self:
+                        break
+            elif hasattr(page, "dialogs"):
+                while page.dialogs:
+                    popped = page.pop_dialog()
+                    if popped is self or popped is None:
+                        break
+            elif hasattr(page, "pop_dialog"):
+                page.pop_dialog()
+        self.open = False
 
     # -- paste ---------------------------------------------------------------------------------
 
@@ -298,6 +326,7 @@ class ImportDialog(ft.AlertDialog):
 
         def done(result) -> None:
             self.result_team_id = result.team_id
+            self._result_team_name = result.team_name
             detail = f"{result.team_name} · {len(result.reused)} from your box"
             if result.created_owned:
                 detail += f" · {len(result.created_owned)} added to box"
@@ -305,7 +334,6 @@ class ImportDialog(ft.AlertDialog):
                 detail += f" · {len(result.created_planned)} planned"
             self._done.set_text("Team imported", detail)
             self.ctx.bus.emit(events.TEAMS_CHANGED, result.team_id)
-            self.ctx.toast(f"Imported {result.team_name}", "success")
             self._go(3)
 
         def failed(exc: BaseException) -> None:

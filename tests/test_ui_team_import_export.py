@@ -110,6 +110,13 @@ class TestImportExport(unittest.TestCase):
         self.assertIsNotNone(dialog.result_team_id)
         self.assertEqual(emitted, [dialog.result_team_id])
         self.assertTrue(self.store.slot(2).is_planned)
+        self.assertTrue(dialog._cancel.visible, "Close button must be visible on the done step")
+        self.assertEqual(dialog._cancel.content, "Close")
+        self.assertEqual(dialog._next.content, "Open team")
+        self.assertFalse(dialog.modal, "Modal should be non-blocking on the done step")
+        serialise(dialog)
+        dialog.close()
+        self.assertFalse(dialog.open)
 
     def test_all_in_box_skips_readiness_and_illegal_blocks(self):
         with self.db.session() as s:
@@ -123,6 +130,33 @@ class TestImportExport(unittest.TestCase):
         self.assertEqual(blocked.step, 2)
         self.assertTrue(blocked._next.disabled)
         self.assertTrue(blocked._readiness_banner.visible)
+
+    def test_dialog_advance_on_done_step_invokes_on_done_and_closes(self):
+        called = []
+        dialog = ImportDialog(self.ctx, self.store, initial_text=PASTE, initial_title="Sun", on_done=called.append)
+        dialog._advance()
+        self.assertEqual(dialog.step, 2)
+        dialog._choose(True)
+        dialog._advance()
+        self.assertEqual(dialog.step, 3)
+        self.page.show_dialog(dialog)
+        self.ctx.toast("Imported Sun", "success")
+        dialog._advance()
+        self.assertEqual(called, [dialog.result_team_id])
+        self.assertFalse(dialog.open)
+        self.assertNotIn(dialog, self.page.dialogs)
+
+    def test_dialog_cancel_clicked_on_done_step_closes_dialog_and_toasts(self):
+        dialog = ImportDialog(self.ctx, self.store, initial_text=PASTE, initial_title="Sun")
+        dialog._advance()
+        dialog._choose(True)
+        dialog._advance()
+        self.assertEqual(dialog.step, 3)
+        self.page.show_dialog(dialog)
+        self.assertEqual(dialog._cancel.content, "Close")
+        dialog._cancel_clicked()
+        self.assertFalse(dialog.open)
+        self.assertNotIn(dialog, self.page.dialogs)
 
     def test_view_opens_import_on_bus_and_export_dialog(self):
         view = TeamView(self.ctx, self.store)

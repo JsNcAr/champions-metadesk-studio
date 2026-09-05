@@ -29,12 +29,36 @@ class ExportDialog(ft.AlertDialog):
         self.title = ft.Text(f"Export · {store.active_team_name}")
         self.content = ft.Container(width=640, content=ft.Column(spacing=Space.MD, tight=True, controls=[self._text, self._banner, ft.Row(spacing=Space.SM, controls=[self._link, self._copy_link])]))
         self.actions = [
-            ft.TextButton("Close", on_click=lambda _e: self.ctx.page.pop_dialog()),
+            ft.TextButton("Close", on_click=lambda _e: self.close()),
             ft.FilledTonalButton("Copy", icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._copy()),
             self._spinner,
             self._publish,
         ]
         self.actions_alignment = ft.MainAxisAlignment.END
+
+    def close(self) -> None:
+        page = getattr(self.ctx, "page", None)
+        if page is not None:
+            if hasattr(page, "_dialogs") and hasattr(page._dialogs, "controls"):
+                if self.open and self in page._dialogs.controls:
+                    for _ in range(len(page._dialogs.controls) + 1):
+                        popped = page.pop_dialog()
+                        if popped is self or popped is None or not self.open:
+                            break
+            elif hasattr(page, "dialogs"):
+                if self in page.dialogs or self.open:
+                    while page.dialogs:
+                        popped = page.pop_dialog()
+                        if popped is self or popped is None:
+                            break
+            elif hasattr(page, "pop_dialog"):
+                page.pop_dialog()
+        self.open = False
+        if is_mounted(self):
+            try:
+                self.update()
+            except Exception:
+                pass
 
     def _copy(self) -> None:
         self.ctx.copy_to_clipboard(self._text.value or "")

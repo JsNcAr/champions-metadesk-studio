@@ -1,6 +1,6 @@
 # Documentation Index
 
-This folder contains the planning documents for the Pokemon Champions planning tool. The root [README.md](../README.md) is the project entry point for the current CLI prototype, while this folder tracks the intended GUI product and the current SQLite-backed persistence direction.
+This folder contains the architecture, requirements, data model, and planning documents for the Pokemon Champions Planning Tool. The root [README.md](../README.md) is the main project documentation covering application setup, key features, interface options, and build instructions.
 
 ## How The Docs Fit Together
 
@@ -16,7 +16,7 @@ This folder contains the planning documents for the Pokemon Champions planning t
 
 ## Current Implementation Status
 
-The application is a Flet desktop GUI (with a CLI fallback) backed by SQLite via SQLModel: a filterable Box roster, a six-slot team builder with items, spreads, moves and Showdown import/export, a tournament Meta explorer fed by Limitless and Victory Road, a Champions damage calculator, and a Settings page for the data syncs. Phases 0–10 of the [roadmap](roadmap.md) are complete; the remaining backlog is listed there. `architecture.md` describes the current `ui/` package.
+The application is a modern Flet desktop GUI (with browser and CLI fallback modes) backed by SQLite via SQLModel: a filterable Box roster, a six-slot team builder with items, spreads, moves and Showdown import/export, a tournament Meta explorer fed by Limitless and Victory Road, a Champions damage calculator, and a Settings page for data syncs. Phases 0–11 of the [roadmap](roadmap.md) (including native and Windows Docker cross-compilation builds) are complete. `architecture.md` describes the current `ui/` package and backend layers.
 
 ## Recommended Reading Order
 

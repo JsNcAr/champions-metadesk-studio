@@ -11,7 +11,7 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Packaging & Environment**: Poetry-based project in [pyproject.toml](pyproject.toml) (Python `>=3.13`)
 - **Primary Database**: `pokemon_champions.db` (SQLite managed via SQLModel)
 - **Transitional Data Exports**: `pokemon_team_stats.csv` automatically synchronized with box state
-- **Test Suite**: Automated unit and integration test suite (**68 passing tests**)
+- **Test Suite**: Automated unit and integration test suite (**357 passing tests**)
 
 ## Key Features
 
@@ -30,6 +30,13 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Showdown & Poképaste Integration**: 1-click text export/import and direct publishing to Pokepast.es.
 - **Planned Pokémon (Ghost Entries)**: Store non-owned Pokémon templates (`is_planned=True`) without cluttering the Box roster.
 
+### 🏆 3. Tournament Explorer & Meta Analytics
+- **Live Tournament Sync**: Background thread automatically fetches official standings and team sheets from **Limitless VGC API** and **Victory Road**.
+- **Rate-Limit & Robust Retries**: Implements exponential backoff on HTTP 429 rate limits and 25s timeouts for heavy event pages.
+- **Search & Filtering**: Search tournament teams by contained species, player name, tournament title, regulation format, and placement.
+- **1-Click Roster Import**: Instantly copy any winning 6-Pokémon tournament team directly into your active Team Builder slots.
+- **Teammate Synergy Analytics**: Surfaces top co-occurring partner recommendations based on tournament usage data.
+
 ### 🧮 4. Damage Calculator
 - **Both directions at once**: each move card shows base power, the type multiplier, the damage range, a bar and the KO chance; expand it for the 16 rolls and the Smogon-style description. Status moves with a known effect have an Activate toggle.
 - **One-click field**: tiles for Singles/Doubles, Tailwind per side, Trick Room, weather, terrain and rooms; chips for screens, Helping Hand, hazards, Leech Seed and Spikes per side.
@@ -37,13 +44,6 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Full Champions mechanics**: weather, terrain, screens, Tailwind, Helping Hand, hazards, Leech Seed, status, stat stages, current HP (Eruption, Flail, Hard Press, Multiscale…), weight (Heavy Slam, Low Kick…), abilities, held items, critical hits, doubles spread, multi-hit and Parental Bond.
 - **Verified**: a Python port of the Smogon calculator's Pokémon Champions module, replayed against ~1000 golden scenarios generated from the calculator itself.
 - **Entry points**: "Open in damage calc" on a team slot, "Damage calc vs…" on a Meta team (with the paste's set), "Damage calc" in the Box detail panel; the last calculation is remembered.
-
-### 🏆 3. Tournament Explorer & Meta Analytics
-- **Live Tournament Sync**: Background thread automatically fetches official standings and team sheets from **Limitless VGC API** and **Victory Road**.
-- **Rate-Limit & Robust Retries**: Implements exponential backoff on HTTP 429 rate limits and 25s timeouts for heavy event pages.
-- **Search & Filtering**: Search tournament teams by contained species, player name, tournament title, regulation format, and placement.
-- **1-Click Roster Import**: Instantly copy any winning 6-Pokémon tournament team directly into your active Team Builder slots.
-- **Teammate Synergy Analytics**: Surfaces top co-occurring partner recommendations based on tournament usage data.
 
 ---
 
@@ -135,9 +135,9 @@ src/
         config.py             # Global constants & environment settings
         domain/               # Core entities & domain rules (Pokemon, Team, Identity)
         infrastructure/       # Database models, repositories, PokéAPI, Limitless & Victory Road providers
-        services/             # Business orchestrators (Import, Tournament, Item Catalog, Showdown)
-        ui/                   # Flet GUI views and components (app.py)
-tests/                        # Automated unit & integration test suite
+        services/             # Business orchestrators (Import, Tournament, Item Catalog, Showdown, Damage Calc)
+        ui/                   # Flet GUI views (Box, Teams, Meta, Calc, Settings) and components (app.py)
+tests/                        # Automated unit & integration test suite (357 tests)
 ```
 
 ## Keyboard shortcuts

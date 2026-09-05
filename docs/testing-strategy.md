@@ -35,32 +35,33 @@ Use service or integration-style tests for:
 
 ### UI Tests
 
-When the GUI exists, cover:
+The GUI is validated without requiring an interactive display:
 
-- adding a Pokemon from the box screen
-- selecting a Pokemon for details
-- applying filters and sort options
-- editing team members and movesets
-- viewing coverage and total stat summaries
+- **Headless Component & View Tests (`tests/test_ui_*.py`)**: Using `_ui_stubs.py` (`StubPage`), views and dialogs are tested for event handling, control generation, and store interactions.
+- **Whole-App Serialization Smoke Test (`scripts/ui_smoke.py`)**: Builds the shell and all five views against an actual SQLite database, verifying Flet control tree serialization and database relational integrity.
 
 ## Priority Test Cases
 
-1. The same Pokemon added with different naming styles should map to one canonical entry.
-2. Re-adding an existing Pokemon should update the row rather than duplicate it.
-3. Filtering by stat range should return only matching Pokemon.
-4. Team stat totals should equal the sum of all team members.
-5. Type coverage should classify attacking and defensive multipliers correctly.
+1. The same Pokemon added with different naming styles maps to one canonical entry.
+2. Re-adding an existing Pokemon updates the row rather than duplicating it.
+3. Filtering by stat range, tags, or Mega status returns only matching Pokemon.
+4. Team stat totals and offensive/defensive coverage update dynamically as members change.
+5. Stat points validate against the Champions 66-point budget, and Showdown pastes convert legacy EVs correctly.
+6. The Champions damage calculator reproduces roll-by-roll damage and KO text matching the Smogon calculator.
+7. Tournament syncing adheres to rate budgets and resumes partial event standings correctly.
 
-## Suggested Tooling and Execution
+## Tooling and Execution
 
-The project uses Python's standard `unittest` library for test runner execution to avoid adding external dependencies. 
+The project uses Python's standard `unittest` library for automated test execution to avoid external test runner dependencies.
 
-To run the automated tests:
+### Running Automated Tests
 ```bash
 poetry run python -m unittest discover -s tests
 ```
+The test suite executes **357 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
 
-- `unittest.TestCase` is used for unit and database integration tests.
-- SQLite is tested using temporary folder paths for in-memory/isolated SQLite engines.
-- Future work: Mock PokéAPI responses to keep tests stable and fast.
-- Future work: Introduce a GUI testing framework later, depending on the chosen frontend.
+### Running Headless UI Smoke Test
+```bash
+poetry run python scripts/ui_smoke.py --db pokemon_champions.db
+```
+Serializes all 5 views (Box, Teams, Meta, Calc, Settings) through Flet's control diff pipeline and checks database foreign-key integrity.

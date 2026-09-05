@@ -10,16 +10,21 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
                   |  - Box Roster View               |
                   |  - Team Builder View             |
                   |  - Tournament Explorer View      |
+                  |  - Damage Calculator View        |
+                  |  - Settings View                 |
                   +-----------------+-----------------+
                                     |
                                     v
                   +-----------------------------------+
                   |           Service Layer           |
                   |  - PokemonImportService           |
-                  |  - TournamentService              |
+                  |  - TournamentService & Synergy    |
+                  |  - DamageCalcService              |
                   |  - ItemsCatalogService            |
+                  |  - MoveCatalogService             |
+                  |  - SpeciesCatalogService          |
+                  |  - TournamentSyncService          |
                   |  - ShowdownService                |
-                  |  - MetaSynergyService             |
                   +-----------------+-----------------+
                                     |
             +-----------------------+-----------------------+
@@ -29,14 +34,15 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
 |     Domain Layer      |                       | Infrastructure Layer  |
 | - Pokemon Identity    |                       | - SQLModel DB Repos   |
 | - Item Effects        |                       | - Limitless Provider  |
-| - Team Validation     |                       | - Victory Road Scraper|
-| - Synergy Metrics     |                       | - PokéAPI Adapter     |
+| - Champions Stat Calc |                       | - Victory Road Scraper|
+| - Damage Engine       |                       | - Showdown Providers  |
+| - Team Validation     |                       | - PokéAPI Adapter     |
 +-----------------------+                       +-----------------------+
 ```
 
 ### 1. UI Layer (`src/pokemon_champions_planning_tool/ui/`)
 - Built using **Flet (`>=0.85.3,<0.86.0`)** running on `ft.run()`, Material 3, dark theme.
-- Layout: a `NavigationRail` shell hosting four views, each owning its page header:
+- Layout: a `NavigationRail` shell hosting five views, each owning its page header:
   1. **Box**: add-by-name with suggestions, one-row toolbar (filter, type/BST/stat drawer,
      favourites, mega-capable, planned, tags, sort, cards/table), cached cards or a sortable
      table, multi-select bulk bar, detail panel with forms, stats, abilities, defensive type
@@ -46,7 +52,10 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      18×6 defensive grid, health), assign / item / spread / import / export dialogs.
   3. **Meta**: tournament teams as rows grouped by event with filters, paging and a
      lazily parsed sheet; Import hands the paste to the team builder.
-  4. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
+  4. **Calc**: bi-directional damage calculator, one-click field strip (singles/doubles, weather,
+     terrain, rooms, screens, hazards), team/box rail, result-bearing move cards with status
+     toggles, and opponent sweep rail classifying species against the attacker.
+  5. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
 - Package layout:
 
 ```text

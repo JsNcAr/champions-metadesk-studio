@@ -55,6 +55,19 @@ Represents the base stat block.
 - `learn_method: str | None` — How the move is learned.
 - `level_learned_at: int | None` — Level at which the move is learned.
 
+### `Item` (Pydantic BaseModel)
+Represents a held item or Mega Stone with metadata and stat effects.
+- `canonical_id: str` — Stable slug identifier (e.g. `"choice-scarf"`, `"charizardite-x"`).
+- `display_name: str` — Human-readable name shown in the UI (e.g. `"Choice Scarf"`).
+- `category: str` — Category (`"mega_stone"`, `"choice"`, `"held-items"`, `"other"`).
+- `is_champions_legal: bool` — Legality in the Champions format.
+- `sprite_url: str | None` — Sprite URL.
+- `short_effect: str` — Concise English effect description.
+- `target_species: str | None` — Target species slug for Mega Stones (`"charizard"`).
+- `target_form: str | None` — Target Mega form slug (`"mega-x"`, `"mega-y"`).
+- `stat_modifiers: dict[str, float]` — Stat multipliers when held (`{"speed": 1.5}`).
+- `@property is_mega_stone -> bool` — Derived helper checking whether the category is `"mega_stone"`.
+
 ### `BoxEntry` (Standard Python Dataclass)
 Represents a user's stored Pokemon in their box.
 - `box_entry_id: UUID` — Unique identifier (default: auto-generated `uuid4`).
@@ -62,6 +75,7 @@ Represents a user's stored Pokemon in their box.
 - `notes: str` — User-supplied notes or nicknames.
 - `tags: list[str]` — Custom tags for filtering (e.g. `["lead", "sweeper"]`).
 - `is_favorite: bool` — Mark as favorite.
+- `is_planned: bool` — Mark as template/ghost entry (not owned yet, stays on team plan without cluttering box).
 - `created_at: datetime` — Timestamp of creation (UTC).
 - `updated_at: datetime` — Timestamp of last modification (UTC).
 
@@ -78,14 +92,16 @@ Represents a user-created squad or team.
 Represents one box entry assigned to a specific team slot.
 - `team_member_id: UUID` — Unique identifier.
 - `box_entry_id: UUID` — Foreign reference to a `BoxEntry`.
-- `slot_position: int` — Team slot position index (e.g. 1-6).
-- `item: str | None` — Held item.
+- `slot_position: int` — Team slot position index (1-6).
+- `selected_form: str` — Selected form identifier (`"base"`, `"mega"`, etc.).
+- `item: str | None` — Held item canonical ID.
 - `moveset: list[PokemonMove]` — Assigned moves.
 - `ability: str | None` — Chosen ability.
 - `notes: str` — Slot-specific comments.
-- `points: dict[str, int]` — Champions stat points per stat key (0–32 each, 66 in total); only invested stats are present. Level is fixed at 50 and IVs at 31, so nothing else describes the spread.
+- `points: dict[str, int]` — Champions stat points per stat key (0–32 each, 66 in total); only invested stats are present.
 - `nature: str | None` — Nature name.
-- `tera_type: str | None` — Tera type (Champions has no Terastallization yet; kept for pastes).
+- `level: int` — Battle level (fixed at 50 in Champions).
+- `tera_type: str | None` — Tera type (lowercase name; kept for Showdown pastes).
 
 ---
 
@@ -110,15 +126,17 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `abilities: list[dict]` (Stored as JSON array)
 - `moves: list[dict]` (Stored as JSON array)
 - `available_forms: list[dict]` (Stored as JSON array)
+- `is_placeholder: bool` (default: False, temporary flag during lookups)
 - `created_at: datetime`
 - `updated_at: datetime`
 
 ### `BoxEntryRecord` (Table: `box_entries`)
 - `box_entry_id: UUID` (Primary Key, Indexed)
-- `pokemon_canonical_id: str` (Foreign Key -> `pokemon_records.canonical_id`, Unique, Indexed)
+- `pokemon_canonical_id: str` (Foreign Key -> `pokemon_records.canonical_id`, Indexed; uniqueness is enforced at repository level for non-planned entries)
 - `notes: str`
 - `tags: list[str]` (Stored as JSON array)
 - `is_favorite: bool`
+- `is_planned: bool` (Indexed; default False, allows team planning templates without cluttering the main box roster)
 - `created_at: datetime`
 - `updated_at: datetime`
 
@@ -134,16 +152,14 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `team_id: UUID` (Foreign Key -> `teams.team_id`, Indexed)
 - `box_entry_id: UUID` (Foreign Key -> `box_entries.box_entry_id`, Indexed)
 - `slot_position: int` (Indexed)
+- `selected_form: str` (default: `"base"`, selected Mega or regional variant)
 - `item: str | None`
 - `moveset: list[dict]` (Stored as JSON array)
 - `ability: str | None`
 - `notes: str`
-- `points: dict` (JSON) — Champions stat points; `nature: str | None`; `tera_type: str | None`
-- `evs`, `ivs` (JSON) and `level: int` — legacy mainline spread columns. The initialisation backfill converts an EV dict into `points` with `(EV + 4) // 8` (which keeps every level-50 stat), then clears the legacy columns and pins `level` to 50.
+- `points: dict` (JSON) — Champions stat points; `nature: str | None`; `level: int` (pinned to 50); `tera_type: str | None`
+- `evs`, `ivs` (JSON) — legacy mainline spread columns. The initialisation backfill converts an EV dict into `points` with `(EV + 4) // 8` (which keeps every level-50 stat), then clears the legacy columns.
 - *Constraints*: Table-level Unique Constraint `uq_team_slot` on `(team_id, slot_position)` to guarantee one member per slot.
-
-### `MoveRecord` (Table: `moves`) — `mechanics: dict` (JSON)
-Damage-formula fields beyond power/type/category, stored as non-default keys only and read back as `domain.moves.MoveMechanics`: contact/sound/punch/bite/bullet/pulse/slicing/wind flags, `secondaries`, `recoil`, `drain`, `multihit`, `multiaccuracy`, `will_crit`, `ignore_defensive`, `override_offensive_stat`, `override_defensive_stat`, `override_offensive_pokemon`, `breaks_protect`, `has_crash_damage`, `struggle_recoil`, `mind_blown_recoil`, `self_boosts`, `ohko`. `MoveCatalogMetaRecord.schema_version` triggers one re-sync when this shape changes.
 
 ### `SpeciesRecord` (Table: `species_catalog`)
 - `showdown_id: str` (Primary Key) — "charizardmegay"; `canonical_id: str` (Indexed) — "charizard-mega-y"; `name: str` — "Charizard-Mega-Y"
@@ -186,25 +202,40 @@ Damage-formula fields beyond power/type/category, stored as non-default keys onl
 
 ### `MoveRecord` (Table: `moves`)
 - `move_id: str` (Primary Key; Showdown id such as `"fakeout"`)
-- `name`, `type`, `category`, `power`, `accuracy`, `pp`, `priority`, `target`, `short_desc`
+- `name: str` (Indexed)
+- `type: str | None`, `category: str | None`
+- `power: int | None`, `accuracy: int | None`, `pp: int | None`
+- `priority: int` (default 0)
+- `target: str | None`, `short_desc: str | None`
 - `is_legal: bool` (Indexed; False for moves Champions removed)
+- `mechanics: dict[str, Any]` (JSON): Damage-formula fields beyond power/type/category, stored as non-default keys only and read back as `domain.moves.MoveMechanics`: contact/sound/punch/bite/bullet/pulse/slicing/wind flags, `secondaries`, `recoil`, `drain`, `multihit`, `multiaccuracy`, `will_crit`, `ignore_defensive`, `override_offensive_stat`, `override_defensive_stat`, `override_offensive_pokemon`, `breaks_protect`, `has_crash_damage`, `struggle_recoil`, `mind_blown_recoil`, `self_boosts`, `ohko`.
 
 ### `LearnsetRecord` (Table: `learnsets`)
 - `species_key: str` + `move_id: str` (composite Primary Key; Showdown species key, base form for megas)
 
 ### `MoveCatalogMetaRecord` (Table: `move_catalog_meta`)
-- Singleton: `move_count`, `learnset_count`, `species_count`, `last_synced_at`
+- Singleton: `move_count`, `learnset_count`, `species_count`, `last_synced_at`, `schema_version` (bumped to trigger re-sync on structure changes)
 
-### `ItemRecord` (Table: `item_catalog`)
-- `canonical_id: str` (Primary Key)
-- `name: str` (Indexed)
+### `ItemRecord` (Table: `item_records`)
+- `canonical_id: str` (Primary Key, Indexed)
+- `display_name: str`
 - `category: str` (Indexed)
-- `sprite_url: str | None`
-- `effect_description: str | None`
 - `is_champions_legal: bool` (Indexed)
-- `is_mega_stone: bool` (Indexed)
-- `target_species: str | None`
-- `stat_boosts: dict` (Stored as JSON object, e.g. `{"attack": 1.5}`)
+- `sprite_url: str | None`
+- `short_effect: str`
+- `target_species: str | None` (Indexed)
+- `target_form: str | None`
+- `stat_modifiers: dict[str, float]` (Stored as JSON object, e.g. `{"speed": 1.5}`)
+- `created_at: datetime`, `updated_at: datetime`
+
+### `ItemCatalogMetaRecord` (Table: `item_catalog_meta`)
+- Singleton row: `id: int` (Primary Key), `total_holdable_items: int`, `last_synced_at: datetime`
+
+### `AppStateRecord` (Table: `app_state`)
+- Key/value store for sync bookkeeping: `key: str` (Primary Key), `value: str`, `updated_at: datetime`
+
+### `TournamentSeedMetaRecord` (Table: `tournament_seed_meta`)
+- Tracks tournament seed dataset loading: `id: int` (Primary Key), `seed_version: str`, `total_tournaments: int`, `total_teams: int`, `loaded_at: datetime`
 
 ---
 

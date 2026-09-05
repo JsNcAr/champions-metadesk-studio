@@ -16,13 +16,15 @@ The tool should make it easy to add a Pokemon by name, review its stats and typi
 
 ## In Scope
 
-- Pokemon box management.
-- Team creation and editing.
-- Pokemon stat lookup from PokéAPI.
-- Display of image, name, typing, abilities, moves, and stat summaries.
+- Pokemon box management with tags, favorites, and detailed stat inspection.
+- Team creation, editing, Champions stat-point spread customization, and Showdown/Poképaste integration.
+- Pokemon stat lookup from PokéAPI and Showdown catalogue synchronization (species, moves, learnsets).
+- Tournament Meta analytics, standings ingestion from Limitless and Victory Road, and 1-click roster imports.
+- Pokémon Champions damage calculator (roll-by-roll calculations, field conditions, status-move effects, and opponent sweep classification).
 - Sorting, filtering, and advanced stat visualization.
-- CSV export.
+- CSV export (full and filtered).
 - Damage multiplier breakdowns by attacking type and defensive typing.
+- Portable standalone executable packaging (native host PyInstaller builds and Docker + Wine Windows cross-compilation).
 
 ## Out of Scope for the First Release
 
@@ -34,7 +36,7 @@ The tool should make it easy to add a Pokemon by name, review its stats and typi
 
 ## Current State
 
-The codebase is a layered Python application (domain, services, infrastructure, Flet UI) with a local SQLite database via SQLModel. The GUI covers the Box roster, the team builder, the tournament Meta explorer and Settings; PokéAPI, Pokémon Showdown, Limitless and Victory Road feed the local catalogues. See the roadmap for what is done and what remains.
+The codebase is a layered Python application (domain, services, infrastructure, Flet UI) with a local SQLite database via SQLModel. The GUI provides five full sections: Box roster, Team builder, Tournament Meta explorer, Champions damage calculator, and Settings. Data synchronizations from PokéAPI, Pokémon Showdown, Limitless VGC, and Victory Road feed the local catalogues. Standalone executable packaging is supported natively and via a Docker-based Windows cross-compilation pipeline. See the roadmap for details.
 
 ## Suggested Product Direction
 

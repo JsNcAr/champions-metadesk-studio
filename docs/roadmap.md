@@ -103,6 +103,11 @@
 - **Data**: move mechanics (flags, secondaries, recoil, multihit, stat overrides…) persisted on the move catalogue, with the Past-move legality fix; a Showdown species catalogue (base stats, abilities, weights, forms, Champions legality) synced like the moves.
 - **Calc section (FR-15)**: team/box rail | field strip of one-click tiles over the attacker and defender panels (radar chart, stat-point editor, +/− stages, status chips, type-coloured move cards carrying the results with Activate toggles for status moves) | opponent sweep classifying every species (Crushed / Threat / Wall / Mitigated / Neutral) with tournament sets; entry points from a team slot's menu, a Meta team ("Damage calc vs…") and the Box detail panel; the last calculation remembered.
 
+## Phase 11: Packaging & Cross-Compilation Pipeline [COMPLETED — 2026-09-04]
+- **PyInstaller specification (`pokemon_champions.spec`)**: configured with dynamic imports and data hooks for SQLModel, SQLAlchemy, and Flet Desktop (`flet-desktop` runtime included) to package single-file standalone desktop executables.
+- **Docker + Wine Windows cross-compilation (`scripts/build_windows_docker.sh`, `Dockerfile.windows`)**: automated container pipeline building native Windows `.exe` binaries from Linux hosts without local Wine setup, using offline wheel pre-resolution to circumvent Wine network socket constraints.
+- **Dedicated build guide (`docs/building.md`)**: instructions and best practices for host native builds and cross-compilation outputs.
+
 ## Remaining Backlog
 - **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.

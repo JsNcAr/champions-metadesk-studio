@@ -101,7 +101,13 @@ class TeamStore:
                 if entry is not None:
                     species = entry.pokemon.species_name or entry.pokemon.canonical_id
                     if species not in megas_by_species:
-                        megas_by_species[species] = mega_repo.list_by_species(species)
+                        raw_megas = mega_repo.list_by_species(species)
+                        for rm in raw_megas:
+                            if not rm.ability:
+                                cat_s = self.catalogs.species_for(rm.canonical_id)
+                                if cat_s is not None and cat_s.abilities:
+                                    rm.ability = cat_s.abilities[0]
+                        megas_by_species[species] = raw_megas
         slots = [SlotModel(p) for p in range(1, 7)]
         for m in members:
             entry = entries.get(m.box_entry_id)
@@ -140,7 +146,13 @@ class TeamStore:
                 if entry is not None:
                     species = entry.pokemon.species_name or entry.pokemon.canonical_id
                     if species not in megas_by_species:
-                        megas_by_species[species] = mega_repo.list_by_species(species)
+                        raw_megas = mega_repo.list_by_species(species)
+                        for rm in raw_megas:
+                            if not rm.ability:
+                                cat_s = self.catalogs.species_for(rm.canonical_id)
+                                if cat_s is not None and cat_s.abilities:
+                                    rm.ability = cat_s.abilities[0]
+                        megas_by_species[species] = raw_megas
 
         self.slots = [SlotModel(p) for p in range(1, 7)]
         for m in members:
@@ -313,7 +325,21 @@ class TeamStore:
         self._rebuild_slot(position)
 
     def set_form(self, position: int, form_id: str) -> None:
-        self._update(position, selected_form=form_id or "base")
+        slot = self.slot(position)
+        target = form_id or "base"
+        updates: dict[str, Any] = {"selected_form": target}
+        if slot.entry is not None:
+            choices = slot.form_choices()
+            chosen = next((c for c in choices if c.form_id == target), None)
+            if chosen is not None:
+                if chosen.is_mega and chosen.ability:
+                    updates["ability"] = chosen.ability
+                elif not chosen.is_mega:
+                    current = slot.member.ability if slot.member else None
+                    base_abilities = [a.name.replace("-", " ").title() for a in slot.entry.pokemon.abilities]
+                    if current and current not in base_abilities and base_abilities:
+                        updates["ability"] = base_abilities[0]
+        self._update(position, **updates)
 
     def set_ability(self, position: int, ability: str | None) -> None:
         self._update(position, ability=(ability or "").strip() or None)
@@ -364,7 +390,19 @@ class TeamStore:
                 form = self._mega_form_for(slot, item) or form
         elif form != "base":
             form = "base"
-        self._update(position, item=item.canonical_id if item else None, selected_form=form)
+        updates: dict[str, Any] = {"item": item.canonical_id if item else None, "selected_form": form}
+        if slot.entry is not None:
+            choices = slot.form_choices()
+            chosen = next((c for c in choices if c.form_id == form), None)
+            if chosen is not None:
+                if chosen.is_mega and chosen.ability:
+                    updates["ability"] = chosen.ability
+                elif not chosen.is_mega:
+                    current = slot.member.ability
+                    base_abilities = [a.name.replace("-", " ").title() for a in slot.entry.pokemon.abilities]
+                    if current and current not in base_abilities and base_abilities:
+                        updates["ability"] = base_abilities[0]
+        self._update(position, **updates)
         return item
 
     @staticmethod

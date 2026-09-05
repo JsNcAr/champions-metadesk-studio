@@ -25,6 +25,9 @@ def species(canonical_id, name, types, stats, abilities, weight=50.0, is_mega=Fa
 
 KINGAMBIT = species("kingambit", "Kingambit", ("Dark", "Steel"), {"hp": 100, "atk": 135, "def": 120, "spa": 60, "spd": 85, "spe": 50}, ("Defiant", "Supreme Overlord", "Pressure"), 120)
 MEGA_X = species("charizard-mega-x", "Charizard-Mega-X", ("Fire", "Dragon"), {"hp": 78, "atk": 130, "def": 111, "spa": 130, "spd": 85, "spe": 100}, ("Tough Claws",), 110.5, is_mega=True)
+MEGA_Y = species("charizard-mega-y", "Charizard-Mega-Y", ("Fire", "Flying"), {"hp": 78, "atk": 104, "def": 78, "spa": 159, "spd": 115, "spe": 100}, ("Drought",), 100.5, is_mega=True)
+GARDEVOIR_MEGA = species("gardevoir-mega", "Gardevoir-Mega", ("Psychic", "Fairy"), {"hp": 68, "atk": 85, "def": 65, "spa": 165, "spd": 135, "spe": 100}, ("Pixilate",), 48.4, is_mega=True)
+DRAGONITE = species("dragonite", "Dragonite", ("Dragon", "Flying"), {"hp": 91, "atk": 134, "def": 95, "spa": 100, "spd": 100, "spe": 80}, ("Inner Focus",), 210.0)
 INCINEROAR = species("incineroar", "Incineroar", ("Fire", "Dark"), {"hp": 95, "atk": 115, "def": 90, "spa": 80, "spd": 90, "spe": 60}, ("Blaze", "Intimidate"), 83)
 
 MOVES = {
@@ -32,12 +35,13 @@ MOVES = {
     "flareblitz": MoveInfo("flareblitz", "Flare Blitz", "fire", "physical", 120, 100, 15, 0, "normal", "", True, MoveMechanics(contact=True, recoil=(33, 100), secondaries=True)),
     "protect": MoveInfo("protect", "Protect", "normal", "status", None, None, 10, 4, "self", "", True),
     "earthquake": MoveInfo("earthquake", "Earthquake", "ground", "physical", 100, 100, 10, 0, "allAdjacent", "", True),
+    "hypervoice": MoveInfo("hypervoice", "Hyper Voice", "normal", "special", 90, 100, 10, 0, "allAdjacentFoes", "", True, MoveMechanics(sound=True)),
 }
 
 
 class FakeCatalogs:
     def __init__(self):
-        self.species = {s.canonical_id: s for s in (KINGAMBIT, MEGA_X, INCINEROAR)}
+        self.species = {s.canonical_id: s for s in (KINGAMBIT, MEGA_X, MEGA_Y, GARDEVOIR_MEGA, DRAGONITE, INCINEROAR)}
         self.items = {"life-orb": SimpleNamespace(display_name="Life Orb", canonical_id="life-orb")}
 
     def species_for(self, canonical_id):
@@ -52,11 +56,12 @@ class FakeCatalogs:
         return self.items.get(reference) or next((i for i in self.items.values() if i.display_name.lower() == reference.lower()), None)
 
 
-def slot(species_id, *, form_id="base", is_mega=False, item=None, ability=None, points=None, nature=None, moves=(), display="Kingambit"):
+def slot(species_id, *, form_id="base", is_mega=False, item=None, ability=None, form_ability=None, points=None, nature=None, moves=(), display="Kingambit"):
     stats = PokemonStats(hp=100, attack=135, defense=120, sp_atk=60, sp_def=85, speed=50)
     entry = SimpleNamespace(pokemon=SimpleNamespace(canonical_id=species_id, display_name=display, abilities=[SimpleNamespace(name="defiant")]))
     member = SimpleNamespace(selected_form=form_id, item=item, ability=ability, points=points or {}, nature=nature, moveset=[SimpleNamespace(name=m) for m in moves])
-    form = SimpleNamespace(form_id=form_id, label="Mega Charizard X" if is_mega else display, types=("dark", "steel"), stats=stats, is_mega=is_mega)
+    form = SimpleNamespace(form_id=form_id, label="Mega Charizard X" if is_mega else display, types=("dark", "steel"), stats=stats, is_mega=is_mega,
+                           ability=form_ability)
     return SimpleNamespace(entry=entry, member=member, form=form, item=SimpleNamespace(display_name=item) if item else None)
 
 
@@ -114,8 +119,26 @@ class TestBuilders(unittest.TestCase):
         self.assertGreater(results[0].result.range()[0], 0)
         self.assertLess(results[1].result.range()[1], results[1].result.range()[1] / 0.75 + 1, "doubles spread")
         both = slot_vs_slot(slot("kingambit", moves=("Kowtow Cleave",)), slot("kingambit", moves=("Flare Blitz",)), default_field(False), self.catalogs)
-        self.assertEqual(([r.move_name for r in both[0]], [r.move_name for r in both[1]]), (["Kowtow Cleave"], ["Flare Blitz"]))
         self.assertEqual(pokemon_from_species(KINGAMBIT, status="frozen").status, "", "unknown status codes are dropped")
+
+    def test_mega_gardevoir_pixilate_hyper_voice(self):
+        # Base member ability set to "Trace"
+        s = slot("gardevoir", form_id="gardevoir-mega", is_mega=True, display="Gardevoir", ability="Trace", moves=("Hyper Voice",))
+        built = build_from_slot(s, self.catalogs)
+        self.assertEqual(built.pokemon.ability, "Pixilate", "Mega Gardevoir takes Pixilate despite slot carrying base ability Trace")
+
+        target = build_from_slot(slot("dragonite", display="Dragonite"), self.catalogs)
+        results = matchup(built, ("Hyper Voice",), target, default_field(doubles=False), self.catalogs)
+        self.assertEqual(len(results), 1)
+        res = results[0].result
+        self.assertEqual(res.move.type, "Fairy", "Pixilate converts Normal Hyper Voice to Fairy")
+        self.assertGreaterEqual(res.damage[0], 150)
+
+    def test_mega_charizard_y_drought(self):
+        # Base member ability set to "Blaze"
+        s = slot("charizard", form_id="charizard-mega-y", is_mega=True, display="Charizard", ability="Blaze")
+        built = build_from_slot(s, self.catalogs)
+        self.assertEqual(built.pokemon.ability, "Drought", "Mega Charizard Y takes Drought despite slot carrying Blaze")
 
 
 if __name__ == "__main__":

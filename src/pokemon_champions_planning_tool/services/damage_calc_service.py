@@ -115,13 +115,26 @@ def build_from_slot(slot: Any, catalogs: DamageCatalogs) -> BuiltPokemon | None:
     canonical_id = member.selected_form if form.is_mega and member.selected_form else entry.pokemon.canonical_id
     species = catalogs.species_for(canonical_id)
     if species is None:
+        fallback_ability = getattr(form, "ability", None)
+        fallback_abilities = (fallback_ability,) if fallback_ability else tuple(getattr(form, "abilities", ())) or tuple(a.name.replace("-", " ").title() for a in entry.pokemon.abilities)
         species = species_from_form(canonical_id=canonical_id, name=form.label if form.is_mega else entry.pokemon.display_name, types=form.types, stats=form.stats,
-                                    abilities=tuple(a.name.replace("-", " ").title() for a in entry.pokemon.abilities), is_mega=form.is_mega)
+                                    abilities=fallback_abilities, is_mega=form.is_mega)
         assumptions.append("species not in the Showdown catalogue: weight unknown (0 kg)")
-    ability = canonical_ability_name(member.ability) if member.ability else None
-    if ability is None and species.abilities:
-        ability = species.abilities[0]
-        assumptions.append(f"no ability set: {ability}")
+    if form.is_mega:
+        form_ability = getattr(form, "ability", None)
+        mega_ability = canonical_ability_name(form_ability or (species.abilities[0] if species.abilities else None))
+        member_ability = canonical_ability_name(member.ability) if member.ability else None
+        if member_ability and member_ability == mega_ability:
+            ability = member_ability
+        elif mega_ability:
+            ability = mega_ability
+        else:
+            ability = member_ability
+    else:
+        ability = canonical_ability_name(member.ability) if member.ability else None
+        if ability is None and species.abilities:
+            ability = species.abilities[0]
+            assumptions.append(f"no ability set: {ability}")
     points = dict(getattr(member, "points", None) or {})
     if not points:
         assumptions.append("no stat points set")
@@ -143,10 +156,20 @@ def build_from_roster_member(member: Any, parsed_slot: Any, catalogs: DamageCata
     if species is None:
         return None
     assumptions: list[str] = []
-    ability = canonical_ability_name(getattr(parsed_slot, "ability_name", None)) if parsed_slot is not None and getattr(parsed_slot, "ability_name", None) else None
-    if ability is None and species.abilities:
-        ability = species.abilities[0]
-        assumptions.append(f"ability not in the paste: {ability}")
+    if species.is_mega:
+        mega_ability = canonical_ability_name(species.abilities[0] if species.abilities else None)
+        parsed_ability = canonical_ability_name(getattr(parsed_slot, "ability_name", None)) if parsed_slot is not None and getattr(parsed_slot, "ability_name", None) else None
+        if parsed_ability and parsed_ability == mega_ability:
+            ability = parsed_ability
+        elif mega_ability:
+            ability = mega_ability
+        else:
+            ability = parsed_ability
+    else:
+        ability = canonical_ability_name(getattr(parsed_slot, "ability_name", None)) if parsed_slot is not None and getattr(parsed_slot, "ability_name", None) else None
+        if ability is None and species.abilities:
+            ability = species.abilities[0]
+            assumptions.append(f"ability not in the paste: {ability}")
     item = _item_name(getattr(parsed_slot, "item_name", None), catalogs) if parsed_slot is not None else None
     if item is None:
         assumptions.append("no item in the paste")

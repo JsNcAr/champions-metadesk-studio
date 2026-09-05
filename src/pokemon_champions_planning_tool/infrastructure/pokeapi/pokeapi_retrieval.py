@@ -171,6 +171,8 @@ def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
 
         species_name = data.get("species", {}).get("name", mega_api_name.split("-mega")[0])
         display_name = format_display_name(mega_api_name)
+        parsed_abilities = [format_display_name(a["ability"]["name"]) for a in data.get("abilities", []) if a.get("ability")]
+        ability = parsed_abilities[0] if parsed_abilities else ""
 
         return MegaEvolutionRecord(
             canonical_id=mega_api_name,
@@ -185,6 +187,8 @@ def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
             special_attack=stats.get("special-attack", 0),
             special_defense=stats.get("special-defense", 0),
             speed=stats.get("speed", 0),
+            abilities=[format_display_name(a["ability"]["name"]) for a in data.get("abilities", []) if a.get("ability")],
+            ability=ability,
         )
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Network error fetching Mega details for '{mega_api_name}': {e}")

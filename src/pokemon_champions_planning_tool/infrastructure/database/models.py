@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 from sqlalchemy import Column, ForeignKey, JSON, Text, UniqueConstraint
+from sqlalchemy import Column, ForeignKey, JSON, String, Text, UniqueConstraint
 
 from sqlmodel import Field, SQLModel
 
@@ -278,6 +279,7 @@ class MegaEvolutionRecord(SQLModel, table=True):
     special_attack: int
     special_defense: int
     speed: int
+    ability: str = Field(default="", sa_column=Column(String, nullable=False, server_default=""))
     created_at: datetime = Field(default_factory=_utc_now)
 
 

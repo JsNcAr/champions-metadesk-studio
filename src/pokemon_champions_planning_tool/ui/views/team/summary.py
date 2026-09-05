@@ -32,6 +32,12 @@ class FormChoice:
     types: tuple[str, ...]
     stats: PokemonStats
     is_mega: bool
+    ability: str | None = None
+
+    @property
+    def abilities(self) -> tuple[str, ...]:
+        """Backwards-compatible tuple of abilities."""
+        return (self.ability,) if self.ability else ()
 
 
 @dataclass(frozen=True)
@@ -101,7 +107,8 @@ class SlotModel:
         if self.entry is None:
             return []
         p = self.entry.pokemon
-        base = FormChoice("base", p.form_name or "Base", p.sprite_url, tuple(p.types), p.stats, False)
+        base_abilities = tuple(a.name.replace("-", " ").title() for a in p.abilities)
+        base = FormChoice("base", p.form_name or "Base", p.sprite_url, tuple(p.types), p.stats, False, None)
         return [base] + [
             FormChoice(
                 m.canonical_id,
@@ -110,6 +117,7 @@ class SlotModel:
                 tuple(m.types or ()),
                 PokemonStats(hp=m.hp, attack=m.attack, defense=m.defense, sp_atk=m.special_attack, sp_def=m.special_defense, speed=m.speed),
                 True,
+                m.ability or None,
             )
             for m in self.megas
         ]
@@ -158,7 +166,18 @@ class SlotModel:
     def ability_options(self) -> list[str]:
         if self.entry is None:
             return []
+        form = self.form
+        if form is not None and form.is_mega and form.ability:
+            return [form.ability]
         return [a.name.replace("-", " ").title() for a in self.entry.pokemon.abilities]
+
+    @property
+    def active_ability(self) -> str | None:
+        """The battle ability of the currently selected form."""
+        form = self.form
+        if form is not None and form.is_mega and form.ability:
+            return form.ability
+        return self.member.ability if self.member else None
 
     @property
     def spread_summary(self) -> str:

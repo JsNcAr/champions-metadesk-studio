@@ -263,7 +263,9 @@ class SlotCard(ft.Container):
         self._form.selected = [form.form_id]
 
         abilities = slot.ability_options
-        current = member.ability or (abilities[0] if abilities else "")
+        current = slot.active_ability or member.ability or (abilities[0] if abilities else "")
+        if current and current not in abilities and abilities:
+            current = abilities[0]
         options = list(dict.fromkeys(abilities + ([current] if current and current not in abilities else [])))
         self._ability.options = [ft.DropdownOption(key=a, text=a) for a in options] or [ft.DropdownOption(key="", text="—")]
         self._ability.value = current

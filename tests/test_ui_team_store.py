@@ -51,11 +51,11 @@ class _TeamStoreCase(unittest.TestCase):
             self.lucario = repo.upsert_box_entry(BoxEntry(pokemon=_mon("lucario", "Lucario", ["fighting", "steel"], attack=110))).box_entry_id
             self.ghost = repo.create_planned_entry(BoxEntry(pokemon=_mon("gengar", "Gengar", ["ghost", "poison"]), is_planned=True)).box_entry_id
             s.add(MegaEvolutionRecord(canonical_id="charizard-mega-x", species_name="charizard", display_name="Mega Charizard X", types=["fire", "dragon"],
-                                      hp=78, attack=130, defense=111, special_attack=130, special_defense=85, speed=100))
+                                      hp=78, attack=130, defense=111, special_attack=130, special_defense=85, speed=100, ability="Tough Claws"))
             s.add(MegaEvolutionRecord(canonical_id="charizard-mega-y", species_name="charizard", display_name="Mega Charizard Y", types=["fire", "flying"],
-                                      hp=78, attack=104, defense=78, special_attack=159, special_defense=115, speed=100))
+                                      hp=78, attack=104, defense=78, special_attack=159, special_defense=115, speed=100, ability="Drought"))
             s.add(MegaEvolutionRecord(canonical_id="lucario-mega", species_name="lucario", display_name="Mega Lucario", types=["fighting", "steel"],
-                                      hp=70, attack=145, defense=88, special_attack=140, special_defense=70, speed=112))
+                                      hp=70, attack=145, defense=88, special_attack=140, special_defense=70, speed=112, ability="Adaptability"))
             s.add(ItemRecord(canonical_id="charizardite-x", display_name="Charizardite X", category="mega-stone", is_champions_legal=True, target_species="charizard", target_form="mega-x", stat_modifiers={}))
             s.add(ItemRecord(canonical_id="lucarionite", display_name="Lucarionite", category="mega-stone", is_champions_legal=True, target_species="lucario", target_form="mega", stat_modifiers={}))
             s.add(ItemRecord(canonical_id="choice-band", display_name="Choice Band", category="choice", is_champions_legal=True, stat_modifiers={"attack": 1.5}))
@@ -99,12 +99,31 @@ class TestTeamStore(_TeamStoreCase):
         self.assertEqual(slot.member.selected_form, "charizard-mega-x", "stone's target_form maps to the mega canonical id")
         self.assertEqual(slot.form.label, "Mega Charizard X")
         self.assertEqual(slot.validation.unlocked_form, "mega-x")
-        self.assertTrue(slot.validation.is_valid)
+        self.assertEqual(slot.ability_options, ["Tough Claws"])
+        self.assertEqual(slot.active_ability, "Tough Claws")
+        self.assertEqual(slot.member.ability, "Tough Claws")
         self.store.set_item(1, "choice-band")
         self.assertEqual(self.store.slot(1).member.selected_form, "base", "non-stone item drops the mega form")
         self.assertEqual(self.store.slot(1).effective_stats.attack, 126, "84 × 1.5")
+        self.assertEqual(self.store.slot(1).ability_options, ["Blaze", "Solar Power"])
+        self.assertEqual(self.store.slot(1).active_ability, "Blaze")
         self.store.set_item(1, None)
         self.assertIsNone(self.store.slot(1).item)
+
+    def test_set_form_mega_ability_synchronization(self):
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        slot = self.store.slot(1)
+        self.assertEqual(slot.ability_options, ["Blaze", "Solar Power"])
+        self.store.set_form(1, "charizard-mega-y")
+        slot_y = self.store.slot(1)
+        self.assertEqual(slot_y.ability_options, ["Drought"])
+        self.assertEqual(slot_y.active_ability, "Drought")
+        self.assertEqual(slot_y.member.ability, "Drought")
+        self.store.set_form(1, "base")
+        slot_base = self.store.slot(1)
+        self.assertEqual(slot_base.ability_options, ["Blaze", "Solar Power"])
+        self.assertEqual(slot_base.active_ability, "Blaze")
 
     def test_cross_slot_guardrail_flags_second_mega_stone(self):
         self.store.create_team("Sun")

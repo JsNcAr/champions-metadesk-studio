@@ -152,6 +152,13 @@ class TestCalcStore(_Base):
         self.store.apply_request(CalcRequest(attacker=p, defender=q))
         self.assertEqual((self.store.state.left.species, self.store.state.right.species), ("charizard-mega-y", "incineroar"))
         self.assertTrue(self.store.results.left_vs_right[0].ok)
+        self.assertEqual(self.store.state.field.weather, "Sun", "Mega Charizard Y Drought auto-activates Sun weather")
+
+    def test_mega_drought_auto_activates_weather(self):
+        self.store.set_field(weather=None)
+        self.store.load_species("left", "charizard-mega-y")
+        self.assertEqual(self.store.state.left.ability, "Drought")
+        self.assertEqual(self.store.state.field.weather, "Sun", "Loading Mega Charizard Y automatically sets Sun")
 
 
 class TestCalcView(_Base):

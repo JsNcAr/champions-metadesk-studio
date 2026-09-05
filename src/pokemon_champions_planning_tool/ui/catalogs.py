@@ -129,11 +129,26 @@ class Catalogs:
     def load(cls, session_factory: SessionFactory = get_session) -> "Catalogs":
         state: dict = {}
         with session_factory() as session:
+            session.expire_on_commit = False
             champions = tuple(ChampionsCatalogRepository(session).list_all())
-            megas = tuple(MegaEvolutionRepository(session).list_all())
+            megas_list = MegaEvolutionRepository(session).list_all()
             load_items_catalog(session, state)
             moves_by_id, learnsets = load_move_catalog(session)
             species = load_species_catalog(session)
+            needs_commit = False
+            for m in megas_list:
+                if not m.ability:
+                    s = species.get(m.canonical_id) or (species.get(resolve_species_key(m.canonical_id, species)) if species else None)
+                    if s is not None and s.abilities:
+                        m.ability = s.abilities[0]
+                        session.add(m)
+                        needs_commit = True
+            if needs_commit:
+                try:
+                    session.commit()
+                except Exception:
+                    session.rollback()
+            megas = tuple(megas_list)
         return cls(
             champions=champions,
             megas=megas,

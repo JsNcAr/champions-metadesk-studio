@@ -49,9 +49,19 @@ class FormOption:
     types: tuple[str, ...]
     stats: PokemonStats
     is_mega: bool
+    ability: str | None = None
+
+    @property
+    def abilities(self) -> tuple[str, ...]:
+        """Backwards compatibility property returning abilities tuple."""
+        return (self.ability,) if self.ability else ()
 
     @classmethod
-    def from_mega(cls, mega: MegaEvolutionRecord) -> "FormOption":
+    def from_mega(cls, mega: MegaEvolutionRecord, ability: str | None = None, **kwargs: Any) -> "FormOption":
+        resolved_ability = ability or mega.ability or None
+        if not resolved_ability and "abilities" in kwargs:
+            raw = kwargs["abilities"]
+            resolved_ability = raw[0] if raw else None
         return cls(
             form_id=mega.canonical_id,
             label=mega.display_name,
@@ -62,6 +72,7 @@ class FormOption:
                 sp_atk=mega.special_attack, sp_def=mega.special_defense, speed=mega.speed,
             ),
             is_mega=True,
+            ability=resolved_ability,
         )
 
 
@@ -168,10 +179,19 @@ class BoxStore:
             types=tuple(entry.pokemon.types),
             stats=entry.pokemon.stats,
             is_mega=False,
+            ability=None,
         )
+        mega_options = []
+        for m in megas:
+            m_ability = m.ability or None
+            if not m_ability:
+                cat_s = self.catalogs.species_for(m.canonical_id)
+                if cat_s is not None and cat_s.abilities:
+                    m_ability = cat_s.abilities[0]
+            mega_options.append(FormOption.from_mega(m, ability=m_ability))
         return BoxDetail(
             entry=entry,
-            forms=(base, *[FormOption.from_mega(m) for m in megas]),
+            forms=(base, *mega_options),
             teams=tuple(teams),
             megas_checked=checked or bool(megas),
         )

@@ -73,6 +73,19 @@ FIELD_EFFECTS: dict[str, dict[str, Any]] = {"Sunny Day": {"weather": "Sun"}, "Ra
                                             "Chilly Reception": {"weather": "Snow"}, "Electric Terrain": {"terrain": "Electric"}, "Grassy Terrain": {"terrain": "Grassy"},
                                             "Psychic Terrain": {"terrain": "Psychic"}, "Misty Terrain": {"terrain": "Misty"}, "Gravity": {"gravity": True},
                                             "Trick Room": {"trick_room": True}, "Magic Room": {"magic_room": True}, "Wonder Room": {"wonder_room": True}}
+ABILITY_FIELD_EFFECTS: dict[str, dict[str, Any]] = {
+    "Drought": {"weather": "Sun"},
+    "Orichalcum Pulse": {"weather": "Sun"},
+    "Drizzle": {"weather": "Rain"},
+    "Primordial Sea": {"weather": "Rain"},
+    "Sand Stream": {"weather": "Sand"},
+    "Snow Warning": {"weather": "Snow"},
+    "Electric Surge": {"terrain": "Electric"},
+    "Hadron Engine": {"terrain": "Electric"},
+    "Grassy Surge": {"terrain": "Grassy"},
+    "Psychic Surge": {"terrain": "Psychic"},
+    "Misty Surge": {"terrain": "Misty"},
+}
 FOE_STATUS: dict[str, str] = {"Will-O-Wisp": "brn", "Toxic": "tox", "Thunder Wave": "par", "Glare": "par", "Stun Spore": "par", "Nuzzle": "par", "Spore": "slp", "Sleep Powder": "slp",
                               "Hypnosis": "slp", "Dark Void": "slp", "Yawn": "slp", "Poison Powder": "psn", "Toxic Thread": "psn"}
 
@@ -223,21 +236,39 @@ class CalcStore:
                 self.state = CalcState()
         self._recompute(persist=False)
 
+    def _apply_ability_field(self, ability: str | None, *, force: bool = False) -> None:
+        if not ability:
+            return
+        effect = ABILITY_FIELD_EFFECTS.get(ability)
+        if effect:
+            field_updates = {}
+            for k, v in effect.items():
+                cur = getattr(self.state.field, k, "none")
+                if force or cur in ("none", None, ""):
+                    field_updates[k] = v
+            if field_updates:
+                self.state = replace(self.state, field=replace(self.state.field, **field_updates))
+
     def apply_request(self, req: CalcRequest) -> None:
         if req.attacker is not None:
             self.state = self.state.with_side("left", req.attacker)
+            self._apply_ability_field(req.attacker.ability)
         if req.defender is not None:
             self.state = self.state.with_side("right", req.defender)
+            self._apply_ability_field(req.defender.ability)
         self._commit()
 
     def load_species(self, side: str, canonical_id: str, *, preset: bool = False) -> None:
         species = self.catalogs.species_for(canonical_id)
         moves = self.preset_moves().get(species.canonical_id if species else canonical_id, []) if preset else None
-        self.state = self.state.with_side(side, pokemon_from_species_id(species.canonical_id if species else canonical_id, species, moves=moves))
+        p = pokemon_from_species_id(species.canonical_id if species else canonical_id, species, moves=moves)
+        self.state = self.state.with_side(side, p)
+        self._apply_ability_field(p.ability)
         self._commit()
 
     def load_pokemon(self, side: str, pokemon: PokemonState) -> None:
         self.state = self.state.with_side(side, pokemon)
+        self._apply_ability_field(pokemon.ability)
         self._commit()
 
     # -- readers -----------------------------------------------------------------------------
@@ -347,6 +378,8 @@ class CalcStore:
 
     def set_pokemon(self, side: str, **changes: Any) -> None:
         self.state = self.state.with_side(side, replace(self.state.side(side), **changes))
+        if "ability" in changes:
+            self._apply_ability_field(changes["ability"], force=True)
         self._commit()
 
     def set_nature(self, side: str, nature: str | None) -> None:

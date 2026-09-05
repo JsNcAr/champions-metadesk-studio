@@ -112,6 +112,10 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
+        # mega_evolutions — abilities JSON column
+        "ALTER TABLE mega_evolutions ADD COLUMN abilities JSON NOT NULL DEFAULT '[]';",
+        # mega_evolutions — ability string column
+        "ALTER TABLE mega_evolutions ADD COLUMN ability VARCHAR NOT NULL DEFAULT '';",
     ]
 
 

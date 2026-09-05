@@ -146,15 +146,23 @@ class DetailPanel(SidePanel):
         self._star.icon_color = Palette.PRIMARY if entry.is_favorite else Palette.ON_SURFACE_VARIANT
 
         self._stats.set_stats(form.stats)
-        self._abilities.controls = [
-            ft.Chip(
-                label=ft.Text(a.name.replace("-", " ").title()),
-                leading=ft.Icon(ft.Icons.VISIBILITY_OFF, size=16) if a.is_hidden else None,
-                tooltip="Hidden ability" if a.is_hidden else None,
-                show_checkmark=False,
-            )
-            for a in pokemon.abilities
-        ] or [ft.Text("No ability data", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)]
+        if form.is_mega and form.ability:
+            self._abilities.controls = [
+                ft.Chip(
+                    label=ft.Text(form.ability),
+                    show_checkmark=False,
+                )
+            ]
+        else:
+            self._abilities.controls = [
+                ft.Chip(
+                    label=ft.Text(a.name.replace("-", " ").title()),
+                    leading=ft.Icon(ft.Icons.VISIBILITY_OFF, size=16) if a.is_hidden else None,
+                    tooltip="Hidden ability" if a.is_hidden else None,
+                    show_checkmark=False,
+                )
+                for a in pokemon.abilities
+            ] or [ft.Text("No ability data", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)]
         self._render_defensive(detail.defensive_buckets(self.form_id))
 
         self._notes.value = entry.notes or ""

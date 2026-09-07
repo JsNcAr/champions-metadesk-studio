@@ -1284,6 +1284,66 @@ class TournamentRepository:
                 out.setdefault(str(cid), []).append((str(move), int(n)))
         return out
 
+    def nature_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+        """{base species id: [(nature, count), …] most used first} for every species."""
+        from sqlalchemy import text as _text
+
+        rows = self.session.exec(
+            _text(
+                "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, LOWER(m.nature) AS nature, COUNT(*) AS n "
+                "FROM tournament_team_members m "
+                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.nature IS NOT NULL AND m.nature != '' "
+                "GROUP BY base_cid, cid, LOWER(m.nature) ORDER BY n DESC"
+            )
+        ).all()
+        out: dict[str, list[tuple[str, int]]] = {}
+        for base_cid, cid, nat, n in rows:
+            if nat:
+                target_keys = {str(base_cid), str(cid)} - {""}
+                for k in target_keys:
+                    out.setdefault(k, []).append((str(nat), int(n)))
+        return out
+
+    def item_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+        """{species id: [(item, count), …] most used first} for every species."""
+        from sqlalchemy import text as _text
+
+        rows = self.session.exec(
+            _text(
+                "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.item AS item, COUNT(*) AS n "
+                "FROM tournament_team_members m "
+                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.item IS NOT NULL AND m.item != '' "
+                "GROUP BY base_cid, cid, m.item ORDER BY n DESC"
+            )
+        ).all()
+        out: dict[str, list[tuple[str, int]]] = {}
+        for base_cid, cid, itm, n in rows:
+            if itm:
+                target_keys = {str(base_cid), str(cid)} - {""}
+                for k in target_keys:
+                    out.setdefault(k, []).append((str(itm), int(n)))
+        return out
+
+    def ability_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+        """{species id: [(ability, count), …] most used first} for every species."""
+        from sqlalchemy import text as _text
+
+        rows = self.session.exec(
+            _text(
+                "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.ability AS ability, COUNT(*) AS n "
+                "FROM tournament_team_members m "
+                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.ability IS NOT NULL AND m.ability != '' "
+                "GROUP BY base_cid, cid, m.ability ORDER BY n DESC"
+            )
+        ).all()
+        out: dict[str, list[tuple[str, int]]] = {}
+        for base_cid, cid, ab, n in rows:
+            if ab:
+                target_keys = {str(base_cid), str(cid)} - {""}
+                for k in target_keys:
+                    out.setdefault(k, []).append((str(ab), int(n)))
+        return out
+
     def list_regulations(self) -> list[str]:
         """Distinct regulation labels present in the data, most common first."""
         stmt = (
@@ -1349,13 +1409,27 @@ class TournamentRepository:
                     showdown_text=team_dict.get("showdown_text", ""),
                     source_dataset=version,
                 )
+                showdown_text = team_dict.get("showdown_text", "")
+                try:
+                    from pokemon_champions_planning_tool.services.showdown_service import parse_showdown_text
+                    parsed_slots = list(parse_showdown_text(showdown_text).slots)
+                except Exception:
+                    parsed_slots = []
+                from pokemon_champions_planning_tool.domain.pokemon_identity import base_canonical_id
                 members = []
                 for idx, mem in enumerate(team_dict.get("members", []), start=1):
+                    slot = parsed_slots[idx - 1] if idx - 1 < len(parsed_slots) else None
+                    cid = mem["canonical_id"]
                     members.append(
                         TournamentTeamMemberRecord(
                             slot_position=idx,
-                            canonical_id=mem["canonical_id"],
+                            canonical_id=cid,
                             species_name=mem["species_name"],
+                            base_canonical_id=base_canonical_id(cid),
+                            moves=list(slot.moves) if (slot and slot.moves) else [],
+                            nature=slot.nature.lower() if (slot and slot.nature) else None,
+                            item=slot.item_name if slot else None,
+                            ability=slot.ability_name if slot else None,
                         )
                     )
                 self.save_team(team_rec, members)

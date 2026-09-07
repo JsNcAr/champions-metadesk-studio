@@ -457,6 +457,9 @@ class TournamentTeamMemberRecord(SQLModel, table=True):
     # "rotom-wash" stay as they are) so "is this roster member in my box?" is an
     # indexed IN() instead of a pattern match. Set on ingest, backfilled by migration.
     base_canonical_id: str = Field(default="", index=True)
+    nature: str | None = Field(default=None, index=True)
+    item: str | None = Field(default=None, index=True)
+    ability: str | None = Field(default=None, index=True)
 
 
 class MoveRecord(SQLModel, table=True):

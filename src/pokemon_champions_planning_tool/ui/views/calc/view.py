@@ -13,7 +13,7 @@ from ..team.dialogs.move_picker import MovePickerDialog
 from .field_strip import FieldStrip
 from .panels import PokemonPanel
 from .rail import CalcRail
-from .state import CalcRequest, SweepEntry, pokemon_from_species_id
+from .state import CalcRequest, SweepEntry
 from .store import CalcStore
 from .sweep import SweepPanel
 
@@ -124,11 +124,7 @@ class CalcView(ft.Column):
             done(self.store.compute_sweep())
 
     def _pick_opponent(self, entry: SweepEntry) -> None:
-        species = self.store.catalogs.species_for(entry.canonical_id)
-        if species is None:
-            return
-        moves = list(self.store.preset_moves().get(species.canonical_id, [])) if self.store.sweep_presets else []
-        self.store.load_pokemon("right", pokemon_from_species_id(species.canonical_id, species, source="Opponents" + (" · tournament set" if moves else ""), moves=moves))
+        self.store.load_species("right", entry.canonical_id, preset=self.store.sweep_presets, source="Opponents")
 
     # -- layout ------------------------------------------------------------------------------------
 

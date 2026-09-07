@@ -46,6 +46,7 @@ from ..infrastructure.providers import (
     LimitlessStanding,
     VRPasteResult,
 )
+from .showdown_service import parse_showdown_text
 from ..infrastructure.providers.victory_road_provider import OFFICIAL_EVENT_SLUGS
 
 ProgressCallback = Callable[["SyncProgress"], None]
@@ -365,6 +366,9 @@ def _sync_limitless(
                         species_name=m.display_name,
                         base_canonical_id=base_canonical_id(canon_id),
                         moves=[mv for mv in m.moves if mv],
+                        nature=m.nature.lower() if m.nature else None,
+                        item=m.item,
+                        ability=m.ability,
                     )
                 )
 
@@ -591,17 +595,27 @@ def _sync_victory_road(
                 division=st.division,
             )
 
+            try:
+                parsed_slots = list(parse_showdown_text(showdown_text).slots)
+            except Exception:
+                parsed_slots = []
             member_moves = _moves_by_slot(showdown_text)
-            members: list[TournamentTeamMemberRecord] = [
-                TournamentTeamMemberRecord(
-                    slot_position=pos,
-                    canonical_id=cid,
-                    species_name=sname,
-                    base_canonical_id=base_canonical_id(cid),
-                    moves=member_moves[pos - 1] if pos - 1 < len(member_moves) else [],
+            members: list[TournamentTeamMemberRecord] = []
+            for pos, (cid, sname) in enumerate(members_raw[:6], start=1):
+                slot = parsed_slots[pos - 1] if pos - 1 < len(parsed_slots) else None
+                m_moves = list(slot.moves) if (slot and slot.moves) else (member_moves[pos - 1] if pos - 1 < len(member_moves) else [])
+                members.append(
+                    TournamentTeamMemberRecord(
+                        slot_position=pos,
+                        canonical_id=cid,
+                        species_name=sname,
+                        base_canonical_id=base_canonical_id(cid),
+                        moves=m_moves,
+                        nature=slot.nature.lower() if slot and slot.nature else None,
+                        item=slot.item_name if slot else None,
+                        ability=slot.ability_name if slot else None,
+                    )
                 )
-                for pos, (cid, sname) in enumerate(members_raw[:6], start=1)
-            ]
 
             entries.append((team_record, members))
 

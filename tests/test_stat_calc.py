@@ -17,6 +17,7 @@ from pokemon_champions_planning_tool.domain.stat_calc import (
     points_from_evs,
     points_left,
     validate_points,
+    default_points_for_nature,
 )
 
 GARCHOMP = PokemonStats(hp=108, attack=130, defense=95, sp_atk=80, sp_def=85, speed=102)
@@ -113,6 +114,46 @@ class TestNatures(unittest.TestCase):
     def test_labels(self):
         self.assertEqual(nature_label("timid"), "Timid (+Spe −Atk)")
         self.assertEqual(nature_label("hardy"), "Hardy (neutral)")
+class TestDefaultPointsForNature(unittest.TestCase):
+    def test_speed_boosting_natures(self):
+        timid = default_points_for_nature("timid")
+        self.assertEqual(timid, {"special_attack": 32, "speed": 32, "hp": 2})
+        self.assertEqual(validate_points(timid), [])
+
+        jolly = default_points_for_nature("jolly")
+        self.assertEqual(jolly, {"attack": 32, "speed": 32, "hp": 2})
+        self.assertEqual(validate_points(jolly), [])
+
+    def test_offensive_boosting_natures(self):
+        fast = PokemonStats(hp=80, attack=100, defense=80, sp_atk=100, sp_def=80, speed=100)
+        adamant_fast = default_points_for_nature("adamant", fast)
+        self.assertEqual(adamant_fast, {"attack": 32, "speed": 32, "hp": 2})
+
+        slow = PokemonStats(hp=100, attack=120, defense=100, sp_atk=50, sp_def=80, speed=50)
+        adamant_slow = default_points_for_nature("adamant", slow)
+        self.assertEqual(adamant_slow, {"hp": 32, "attack": 32, "special_defense": 2})
+
+    def test_trick_room_and_defensive(self):
+        quiet = default_points_for_nature("quiet")
+        self.assertEqual(quiet, {"hp": 32, "special_attack": 32, "special_defense": 2})
+        self.assertEqual(validate_points(quiet), [])
+
+        brave = default_points_for_nature("brave")
+        self.assertEqual(brave, {"hp": 32, "attack": 32, "special_defense": 2})
+
+        impish = default_points_for_nature("impish")
+        self.assertEqual(impish, {"hp": 32, "defense": 32, "special_defense": 2})
+
+        calm = default_points_for_nature("calm")
+        self.assertEqual(calm, {"hp": 32, "special_defense": 32, "defense": 2})
+
+    def test_neutral_and_fallback(self):
+        hardy = default_points_for_nature("hardy")
+        self.assertEqual(hardy, {"hp": 32, "defense": 17, "special_defense": 17})
+        self.assertEqual(validate_points(hardy), [])
+
+        none = default_points_for_nature(None)
+        self.assertEqual(none, {"hp": 32, "defense": 17, "special_defense": 17})
 
 
 if __name__ == "__main__":

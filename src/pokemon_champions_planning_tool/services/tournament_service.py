@@ -22,6 +22,17 @@ from ..infrastructure.database.repositories import ChampionsCatalogRepository, T
 
 
 @dataclass(frozen=True)
+class TournamentBuild:
+    """Consolidated tournament build per species."""
+
+    canonical_id: str
+    moves: list[str]
+    nature: str | None = None
+    item: str | None = None
+    ability: str | None = None
+
+
+@dataclass(frozen=True)
 class PartnerRecommendation:
     """Calculated partner synergy recommendation for a given species."""
 
@@ -321,6 +332,29 @@ class TournamentService:
         """The ``top`` most used roster moves per base species id (the "tournament set")."""
         usage = self.repo.move_usage_all()
         return {cid: [name for name, _n in moves[:top]] for cid, moves in usage.items()}
+
+    def common_builds_by_species(self, top_moves: int = 4) -> dict[str, TournamentBuild]:
+        """Tournament build per species: top moves, most common nature, item, and ability."""
+        moves_usage = self.repo.move_usage_all()
+        natures_usage = self.repo.nature_usage_all()
+        items_usage = self.repo.item_usage_all()
+        abilities_usage = self.repo.ability_usage_all()
+
+        all_keys = set(moves_usage.keys()) | set(natures_usage.keys()) | set(items_usage.keys()) | set(abilities_usage.keys())
+        builds: dict[str, TournamentBuild] = {}
+        for cid in all_keys:
+            top_m = [name for name, _n in moves_usage.get(cid, [])[:top_moves]]
+            top_nat = natures_usage.get(cid, [(None, 0)])[0][0] if natures_usage.get(cid) else None
+            top_itm = items_usage.get(cid, [(None, 0)])[0][0] if items_usage.get(cid) else None
+            top_ab = abilities_usage.get(cid, [(None, 0)])[0][0] if abilities_usage.get(cid) else None
+            builds[cid] = TournamentBuild(
+                canonical_id=cid,
+                moves=top_m,
+                nature=top_nat,
+                item=top_itm,
+                ability=top_ab,
+            )
+        return builds
 
     def search_team_rows(
         self,

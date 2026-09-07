@@ -27,13 +27,16 @@ from pokemon_champions_planning_tool.ui.views.team.slot_card import SlotCallback
 
 
 def species(canonical_id, name, types, stats, abilities, weight, is_mega=False):
+def species(canonical_id, name, types, stats, abilities, weight, is_mega=False, required_item=None):
     return SpeciesInfo(canonical_id=canonical_id, showdown_id=name.lower().replace("-", ""), name=name, dex_number=1, base_species_id=name.lower(), forme=None,
                        types=types, base_stats=stats, abilities=abilities, weightkg=weight, gender="M", required_item=None, battle_only=None, is_mega=is_mega, is_legal=True)
+                       types=types, base_stats=stats, abilities=abilities, weightkg=weight, gender="M", required_item=required_item, battle_only=None, is_mega=is_mega, is_legal=True)
 
 
 KINGAMBIT = species("kingambit", "Kingambit", ("Dark", "Steel"), {"hp": 100, "atk": 135, "def": 120, "spa": 60, "spd": 85, "spe": 50}, ("Defiant", "Supreme Overlord", "Pressure"), 120)
 INCINEROAR = species("incineroar", "Incineroar", ("Fire", "Dark"), {"hp": 95, "atk": 115, "def": 90, "spa": 80, "spd": 90, "spe": 60}, ("Blaze", "Intimidate"), 83)
 MEGA_Y = species("charizard-mega-y", "Charizard-Mega-Y", ("Fire", "Flying"), {"hp": 78, "atk": 104, "def": 78, "spa": 159, "spd": 115, "spe": 100}, ("Drought",), 100.5, True)
+MEGA_Y = species("charizard-mega-y", "Charizard-Mega-Y", ("Fire", "Flying"), {"hp": 78, "atk": 104, "def": 78, "spa": 159, "spd": 115, "spe": 100}, ("Drought",), 100.5, True, required_item="Charizardite Y")
 MOVES = {
     "kowtowcleave": MoveInfo("kowtowcleave", "Kowtow Cleave", "dark", "physical", 85, 100, 10, 0, "normal", "", True, MoveMechanics(contact=True, slicing=True)),
     "ironhead": MoveInfo("ironhead", "Iron Head", "steel", "physical", 80, 100, 15, 0, "normal", "", True, MoveMechanics(contact=True, secondaries=True)),
@@ -401,6 +404,88 @@ class TestEntryPoints(unittest.TestCase):
         self.assertEqual(picked, [("Ash", 1)])
         serialise(team_row)
         self.assertFalse(any(isinstance(c, ft.PopupMenuButton) for c in _walk(TeamRow(row, on_import=lambda r: None))))
+
+
+class TestTournamentPresets(_Base):
+    def test_preset_builds_and_load_species_tournament_presets(self):
+        from pokemon_champions_planning_tool.services.tournament_service import TournamentBuild
+
+        builds = {
+            "incineroar": TournamentBuild(
+                canonical_id="incineroar",
+                moves=["Flare Blitz", "Protect"],
+                nature="careful",
+                item="Sitrus Berry",
+                ability="Intimidate",
+            ),
+            "charizard-mega-y": TournamentBuild(
+                canonical_id="charizard-mega-y",
+                moves=["Heat Wave", "Protect"],
+                nature="timid",
+                item="Charizardite Y",
+                ability="Drought",
+            ),
+        }
+        self.store._preset_builds = builds
+
+        # 1. Loading with preset=False uses standard blank defaults
+        self.store.load_species("right", "incineroar", preset=False)
+        self.assertEqual(self.store.state.right.nature, "hardy")
+        self.assertEqual(self.store.state.right.points, {})
+        self.assertIsNone(self.store.state.right.item)
+        self.assertEqual(self.store.state.right.ability, "Blaze")
+        self.assertEqual(self.store.state.right.moves, [None, None, None, None])
+
+        # 2. Loading with preset=True uses tournament build: careful nature, bulky spread, item, ability, moves
+        self.store.load_species("right", "incineroar", preset=True)
+        self.assertEqual(self.store.state.right.nature, "careful")
+        self.assertEqual(self.store.state.right.points, {"hp": 32, "special_defense": 32, "defense": 2})
+        self.assertEqual(self.store.state.right.item, "Sitrus Berry")
+        self.assertEqual(self.store.state.right.ability, "Intimidate")
+        self.assertEqual(self.store.state.right.moves[:2], ["Flare Blitz", "Protect"])
+        self.assertEqual(self.store.state.right.source, "Tournament preset · Careful")
+
+        # 3. Mega evolution gets tournament nature (timid -> 32 SpA / 32 Spe), mega stone, drought ability, field sun
+        self.store.load_species("right", "charizard-mega-y", preset=True)
+        self.assertEqual(self.store.state.right.nature, "timid")
+        self.assertEqual(self.store.state.right.points, {"special_attack": 32, "speed": 32, "hp": 2})
+        self.assertEqual(self.store.state.right.item, "Charizardite Y")
+        self.assertEqual(self.store.state.right.ability, "Drought")
+        self.assertEqual(self.store.state.field.weather, "Sun")
+
+    def test_sweep_uses_tournament_builds(self):
+        from pokemon_champions_planning_tool.services.tournament_service import TournamentBuild
+
+        builds = {
+            "incineroar": TournamentBuild(
+                canonical_id="incineroar",
+                moves=["Flare Blitz", "Protect"],
+                nature="careful",
+                item="Sitrus Berry",
+                ability="Intimidate",
+            ),
+            "charizard-mega-y": TournamentBuild(
+                canonical_id="charizard-mega-y",
+                moves=["Heat Wave", "Protect"],
+                nature="timid",
+                item="Charizardite Y",
+                ability="Drought",
+            ),
+        }
+        self.store._preset_builds = builds
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+
+        # Sweep with presets enabled uses tournament builds
+        self.store.sweep_presets = True
+        entries = self.store.compute_sweep()
+        by = {e.canonical_id: e for e in entries}
+        self.assertIn("incineroar", by)
+        self.assertTrue(by["incineroar"].preset)
+        self.assertIsNotNone(by["incineroar"].their_best)
+
+        # Incineroar has Flare Blitz and attacks Kingambit
+        self.assertIn("Incineroar Flare Blitz", by["incineroar"].their_best.description)
 
 
 if __name__ == "__main__":

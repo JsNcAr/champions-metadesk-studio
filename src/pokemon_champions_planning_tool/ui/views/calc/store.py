@@ -23,12 +23,12 @@ from ....domain.damage.state import FieldState as EngineFieldState, Mon
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.species import SpeciesInfo
-from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champions_stats, points_total
+from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champions_stats, default_points_for_nature, points_total
 from ....domain.type_chart import defensive_multiplier
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
-from ....services.tournament_service import TournamentService
+from ....services.tournament_service import TournamentBuild, TournamentService
 from ...catalogs import Catalogs
 from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, move_options_for
 from .state import (
@@ -207,6 +207,7 @@ class CalcStore:
         self.sweep_presets = True
         self._sweep_key: str | None = None
         self._preset_moves: dict[str, list[str]] | None = None
+        self._preset_builds: dict[str, TournamentBuild] | None = None
         self._cache: OrderedDict[str, CalcResults] = OrderedDict()
         self._listeners: list[Listener] = []
         self.loaded = False
@@ -258,10 +259,39 @@ class CalcStore:
             self._apply_ability_field(req.defender.ability)
         self._commit()
 
-    def load_species(self, side: str, canonical_id: str, *, preset: bool = False) -> None:
+    def load_species(self, side: str, canonical_id: str, *, preset: bool = False, source: str | None = None) -> None:
         species = self.catalogs.species_for(canonical_id)
-        moves = self.preset_moves().get(species.canonical_id if species else canonical_id, []) if preset else None
-        p = pokemon_from_species_id(species.canonical_id if species else canonical_id, species, moves=moves)
+        cid = species.canonical_id if species else canonical_id
+        base_cid = species.base_species_id if species else cid
+        build = (self.preset_builds().get(cid) or self.preset_builds().get(base_cid)) if preset else None
+        if build is not None:
+            nature = (build.nature or "hardy").lower()
+            points = default_points_for_nature(nature, species.stats if species else None)
+            four_moves = list(build.moves)[:4]
+            four_moves += [None] * (4 - len(four_moves))
+            item = build.item
+            if species and species.is_mega and species.required_item and not item:
+                item = species.required_item
+            if species and species.is_mega and species.abilities:
+                ability = species.abilities[0]
+            else:
+                ability = build.ability or (species.abilities[0] if species and species.abilities else None)
+            if source:
+                src = f"{source} · {nature.title()}" if build.nature else source
+            else:
+                src = f"Tournament preset · {nature.title()}" if build.nature else "Tournament preset"
+            p = PokemonState(
+                species=cid,
+                nature=nature,
+                points=points,
+                ability=ability,
+                item=item,
+                moves=four_moves,
+                source=src,
+            )
+        else:
+            moves = self.preset_moves().get(cid, self.preset_moves().get(base_cid, [])) if preset else None
+            p = pokemon_from_species_id(cid, species, source=source or "", moves=moves)
         self.state = self.state.with_side(side, p)
         self._apply_ability_field(p.ability)
         self._commit()
@@ -362,8 +392,23 @@ class CalcStore:
         except Exception:  # noqa: BLE001
             return []
 
+    def preset_builds(self) -> dict[str, TournamentBuild]:
+        """Top build (nature, item, ability, top-4 roster moves) per species from tournament data."""
+        if self._preset_builds is None:
+            self._preset_builds = {}
+            if self._sf is not None:
+                try:
+                    with self._sf() as s:
+                        self._preset_builds = TournamentService(s).common_builds_by_species(top_moves=4)
+                except Exception:  # noqa: BLE001 - presets are a convenience
+                    self._preset_builds = {}
+        return self._preset_builds
+
     def preset_moves(self) -> dict[str, list[str]]:
         """Top-4 roster moves per species from the tournament data (cached for the session)."""
+        builds = self.preset_builds()
+        if builds:
+            return {cid: list(b.moves) for cid, b in builds.items()}
         if self._preset_moves is None:
             self._preset_moves = {}
             if self._sf is not None:
@@ -520,7 +565,7 @@ class CalcStore:
         a_species = self.catalogs.species_for(attacker.species)
         if a_species is None or not any(attacker.moves):
             return ()
-        presets = self.preset_moves() if self.sweep_presets else {}
+        builds = self.preset_builds() if self.sweep_presets else {}
         field_ab = engine_field(self.state.field, attacker_is_left=True)
         field_ba = engine_field(self.state.field, attacker_is_left=False)
         my_speed = final_speed(attacker, a_species, self.state.field, "left")
@@ -528,8 +573,25 @@ class CalcStore:
         for species in self.catalogs.species_by_canonical.values():
             if not species.is_legal:
                 continue
-            their_moves = list(presets.get(species.canonical_id, presets.get(species.base_species_id, [])))[:4] if presets else []
-            defender = pokemon_from_species_id(species.canonical_id, species, moves=their_moves)
+            build = (builds.get(species.canonical_id) or builds.get(species.base_species_id)) if builds else None
+            if build is not None:
+                their_moves = list(build.moves)[:4]
+                nature = (build.nature or "hardy").lower()
+                points = default_points_for_nature(nature, species.stats)
+                item = build.item or (species.required_item if species.is_mega else None)
+                ability = species.abilities[0] if (species.is_mega and species.abilities) else (build.ability or (species.abilities[0] if species.abilities else None))
+                four = list(their_moves) + [None] * (4 - len(their_moves))
+                defender = PokemonState(
+                    species=species.canonical_id,
+                    nature=nature,
+                    points=points,
+                    ability=ability,
+                    item=item,
+                    moves=four,
+                )
+            else:
+                their_moves = []
+                defender = pokemon_from_species_id(species.canonical_id, species)
             yours = best_of(run_side(attacker, defender, field_ab, self.catalogs, self._calc, a_species, species))
             theirs = best_of(run_side(defender, attacker, field_ba, self.catalogs, self._calc, species, a_species)) if their_moves else None
             speed = final_speed(defender, species, self.state.field, "right")

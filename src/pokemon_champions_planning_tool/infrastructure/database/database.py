@@ -116,6 +116,13 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "ALTER TABLE mega_evolutions ADD COLUMN abilities JSON NOT NULL DEFAULT '[]';",
         # mega_evolutions — ability string column
         "ALTER TABLE mega_evolutions ADD COLUMN ability VARCHAR NOT NULL DEFAULT '';",
+        # tournament_team_members — nature, item, ability columns
+        "ALTER TABLE tournament_team_members ADD COLUMN nature VARCHAR;",
+        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_nature ON tournament_team_members (nature);",
+        "ALTER TABLE tournament_team_members ADD COLUMN item VARCHAR;",
+        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_item ON tournament_team_members (item);",
+        "ALTER TABLE tournament_team_members ADD COLUMN ability VARCHAR;",
+        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_ability ON tournament_team_members (ability);",
     ]
 
 
@@ -128,6 +135,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
                 pass  # Column already exists — safe to ignore
         _backfill_event_tiers(conn)
         _backfill_member_moves(conn)
+        _backfill_member_natures(conn)
         _backfill_member_base_ids(conn)
         _backfill_member_counts(conn)
         _backfill_default_form_labels(conn)
@@ -251,6 +259,75 @@ def _backfill_member_moves(conn) -> None:
             if moves:
                 conn.execute(text("UPDATE tournament_team_members SET moves = :moves WHERE id = :id"), {"moves": _json.dumps(list(moves)), "id": member_id})
     conn.commit()
+
+
+def _backfill_member_natures(conn) -> None:
+    """Fill ``tournament_team_members.nature``, item, and ability for rosters stored before the columns existed."""
+    from collections import defaultdict
+    from pokemon_champions_planning_tool.services.showdown_service import parse_showdown_text
+
+    try:
+        already_done = conn.execute(text("SELECT 1 FROM tournament_team_members WHERE nature IS NOT NULL LIMIT 1")).scalar()
+    except Exception:
+        return
+    if already_done:
+        return
+
+    try:
+        team_texts = dict(conn.execute(text(
+            "SELECT tournament_team_id, showdown_text FROM tournament_teams WHERE showdown_text IS NOT NULL AND showdown_text != ''"
+        )).fetchall())
+    except Exception:
+        return
+    if not team_texts:
+        return
+
+    try:
+        members = conn.execute(text(
+            "SELECT id, tournament_team_id, slot_position FROM tournament_team_members ORDER BY tournament_team_id, slot_position"
+        )).fetchall()
+    except Exception:
+        return
+
+    by_team: dict[Any, list[Any]] = defaultdict(list)
+    for m_id, t_id, _slot_pos in members:
+        by_team[t_id].append(m_id)
+
+    updates: list[tuple[str | None, str | None, str | None, Any]] = []
+    for t_id, m_ids in by_team.items():
+        text_content = team_texts.get(t_id)
+        if not text_content:
+            continue
+        try:
+            slots = list(parse_showdown_text(text_content).slots)
+        except Exception:
+            continue
+        for idx, m_id in enumerate(m_ids):
+            if idx < len(slots):
+                slot = slots[idx]
+                nat = slot.nature.lower() if slot.nature else None
+                itm = slot.item_name or None
+                ab = slot.ability_name or None
+                if nat or itm or ab:
+                    updates.append((nat, itm, ab, m_id))
+
+    if updates:
+        raw_conn = getattr(conn, "connection", None)
+        dbapi = getattr(raw_conn, "dbapi_connection", raw_conn)
+        if dbapi is not None and hasattr(dbapi, "cursor"):
+            cursor = dbapi.cursor()
+            batch_size = 20000
+            for i in range(0, len(updates), batch_size):
+                batch = updates[i:i + batch_size]
+                cursor.executemany("UPDATE tournament_team_members SET nature = ?, item = ?, ability = ? WHERE id = ?", batch)
+                dbapi.commit()
+        else:
+            for nat, itm, ab, m_id in updates:
+                conn.execute(
+                    text("UPDATE tournament_team_members SET nature = :nat, item = :itm, ability = :ab WHERE id = :id"),
+                    {"nat": nat, "itm": itm, "ab": ab, "id": m_id}
+                )
+            conn.commit()
 
 
 def _backfill_event_tiers(conn) -> None:

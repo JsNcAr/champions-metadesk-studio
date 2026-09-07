@@ -174,6 +174,61 @@ def format_points(points: Mapping[str, int] | None) -> str:
     return " / ".join(parts)
 
 
+def default_points_for_nature(nature: str | None, base_stats: PokemonStats | None = None) -> dict[str, int]:
+    """Derive a canonical Champions 66-point stat spread aligned with the given Nature and role.
+
+    - Speed-boosting (Timid, Jolly, Naive, Hasty): 32 in primary offensive stat, 32 in Speed, 2 in HP.
+    - Attack/SpA-boosting (Adamant, Modest):
+        - If base speed >= 70: Fast sweeper (32 offensive stat, 32 Speed, 2 HP).
+        - If base speed < 70: Bulky attacker (32 HP, 32 offensive stat, 2 in Def/SpD).
+    - Speed-reducing (Brave, Quiet, Relaxed, Sassy):
+        - Trick Room / bulky (32 HP, 32 boosted stat, 2 in remaining defense, 0 Speed).
+    - Defensive (Bold, Impish, Calm, Careful):
+        - 32 HP, 32 in boosted defense, 2 in remaining defense.
+    - Neutral / None / Other: 32 HP, 17 Def, 17 SpD.
+    """
+    if not nature:
+        return {"hp": 32, "defense": 17, "special_defense": 17}
+
+    nat = nature.strip().lower()
+    boost, drop = NATURES.get(nat, (None, None))
+    if not boost or not drop:
+        return {"hp": 32, "defense": 17, "special_defense": 17}
+
+    # Speed-reducing natures -> Trick Room / slow tank
+    if drop == "speed":
+        primary = boost if boost in ("attack", "special_attack", "defense", "special_defense") else "attack"
+        secondary = "special_defense" if primary != "special_defense" else "defense"
+        return {"hp": 32, primary: 32, secondary: 2}
+
+    # Speed-boosting natures -> Fast sweeper
+    if boost == "speed":
+        if drop == "attack":
+            offensive = "special_attack"
+        elif drop == "special_attack":
+            offensive = "attack"
+        else:
+            atk = getattr(base_stats, "attack", 0) if base_stats else 0
+            spa = getattr(base_stats, "special_attack", 0) if base_stats else 0
+            offensive = "special_attack" if spa > atk else "attack"
+        return {offensive: 32, "speed": 32, "hp": 2}
+
+    # Offensive boosts (Attack / Special Attack)
+    if boost in ("attack", "special_attack"):
+        spe = getattr(base_stats, "speed", 70) if base_stats else 70
+        if spe >= 70:
+            return {boost: 32, "speed": 32, "hp": 2}
+        secondary = "special_defense" if boost == "attack" else "defense"
+        return {"hp": 32, boost: 32, secondary: 2}
+
+    # Defensive boosts (Defense / Special Defense)
+    if boost in ("defense", "special_defense"):
+        secondary = "special_defense" if boost == "defense" else "defense"
+        return {"hp": 32, boost: 32, secondary: 2}
+
+    return {"hp": 32, "defense": 17, "special_defense": 17}
+
+
 # --- Mainline reference formula (level-based, EV/IV) ------------------------------------------
 
 

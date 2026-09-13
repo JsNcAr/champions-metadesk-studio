@@ -1,6 +1,6 @@
-# Pokemon Champions Planning Tool
+# Champions MetaDesk Studio
 
-The **Pokemon Champions Planning Tool** is a feature-rich desktop and web planning application for competitive Pokémon VGC and Champions format players. Built with Python, Flet, SQLModel, and SQLite, it offers box roster management, team building, Poképaste/Showdown competitive imports, and live tournament meta analytics with automated background synchronization from external sources like Limitless VGC and Victory Road.
+The **Champions MetaDesk Studio** is an all-in-one desktop and web planning workbench for competitive Pokémon VGC and Champions format players. Built with Python, Flet, SQLModel, and SQLite, it offers box roster management, team building, Poképaste/Showdown competitive imports, and live tournament meta analytics with automated background synchronization from external sources like Limitless VGC and Victory Road.
 
 ## Current State
 
@@ -11,7 +11,7 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Packaging & Environment**: Poetry-based project in [pyproject.toml](pyproject.toml) (Python `>=3.13`)
 - **Primary Database**: `pokemon_champions.db` (SQLite managed via SQLModel)
 - **Transitional Data Exports**: `pokemon_team_stats.csv` automatically synchronized with box state
-- **Test Suite**: Automated unit and integration test suite (**357 passing tests**)
+- **Test Suite**: Automated unit and integration test suite (**441 passing tests**)
 
 ## Key Features
 
@@ -107,7 +107,7 @@ To build a standalone Windows binary from Linux without installing Wine locally:
 ./scripts/build_windows_docker.sh
 ```
 
-The output executable will be created at: `dist/PokemonChampionsPlanningTool.exe`.
+The output executable will be created at: `dist/ChampionsMetaDeskStudio.exe`.
 
 ### 2. Native Build (Current Host OS)
 
@@ -137,7 +137,7 @@ src/
         infrastructure/       # Database models, repositories, PokéAPI, Limitless & Victory Road providers
         services/             # Business orchestrators (Import, Tournament, Item Catalog, Showdown, Damage Calc)
         ui/                   # Flet GUI views (Box, Teams, Meta, Calc, Settings) and components (app.py)
-tests/                        # Automated unit & integration test suite (357 tests)
+tests/                        # Automated unit & integration test suite (441 tests)
 ```
 
 ## Keyboard shortcuts

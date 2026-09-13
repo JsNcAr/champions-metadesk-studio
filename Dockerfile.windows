@@ -71,4 +71,4 @@ RUN xvfb-run -a wine C:\\Python313\\python.exe -m pip install --no-index --find-
 RUN xvfb-run -a wine C:\\Python313\\Scripts\\pyinstaller.exe pokemon_champions.spec --noconfirm --clean
 
 # Default entrypoint copies the generated .exe to the mapped output directory
-CMD ["cp", "-f", "dist/PokemonChampionsPlanningTool.exe", "/output/"]
+CMD ["cp", "-f", "dist/ChampionsMetaDeskStudio.exe", "/output/"]

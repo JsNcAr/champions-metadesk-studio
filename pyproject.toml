@@ -1,7 +1,7 @@
 [project]
-name = "pokemon-champions-planning-tool"
+name = "champions-metadesk-studio"
 version = "0.1.0"
-description = ""
+description = "All-in-one competitive Pokémon workbench: Box roster, team builder, live tournament meta analytics, and damage calculations."
 authors = [
     {name = "JsNcAr",email = "jn.arias@uniandes.edu.co"}
 ]

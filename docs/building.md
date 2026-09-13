@@ -1,6 +1,6 @@
 # Packaging and Building Executables
 
-This document describes how to package the **Pokemon Champions Planning Tool** into standalone executables for native host environments (Linux / macOS / Windows) and cross-compile portable Windows `.exe` binaries from Linux using Docker and Wine.
+This document describes how to package **Champions MetaDesk Studio** into standalone executables for native host environments (Linux / macOS / Windows) and cross-compile portable Windows `.exe` binaries from Linux using Docker and Wine.
 
 ---
 
@@ -25,9 +25,9 @@ To build a single-file executable directly on your current host operating system
    ```
 
 3. The generated executable will be placed in the `dist/` directory:
-   * **Linux**: `dist/PokemonChampionsPlanningTool`
-   * **Windows**: `dist/PokemonChampionsPlanningTool.exe`
-   * **macOS**: `dist/PokemonChampionsPlanningTool` (or `.app` bundle)
+   * **Linux**: `dist/ChampionsMetaDeskStudio`
+   * **Windows**: `dist/ChampionsMetaDeskStudio.exe`
+   * **macOS**: `dist/ChampionsMetaDeskStudio` (or `.app` bundle)
 
 ---
 
@@ -53,8 +53,8 @@ The automated script builds a container image (`pcpt-windows-builder`) defined i
 1. **Environment Setup**: Uses Ubuntu 24.04 with headless Wine (`xvfb-run`), Python 3.13 Windows Embeddable runtime, and Linux Python.
 2. **Offline Dependency Wheel Resolution**: Due to Wine network socket constraints, the host Linux container pre-downloads all Windows-target `.whl` dependencies (including PyInstaller, SQLModel, Flet, requests, etc.) into `/tmp/wheels`.
 3. **Offline Installation**: Windows Python inside Wine installs all pre-downloaded wheels locally without requiring network sockets.
-4. **Binary Packaging**: PyInstaller compiles `pokemon_champions.spec` inside Wine into a single-file `PokemonChampionsPlanningTool.exe`.
-5. **Output Export**: The container automatically copies the compiled binary to `dist/PokemonChampionsPlanningTool.exe` on your host machine using mounted volume labeling (`:z` flag for SELinux compatibility).
+4. **Binary Packaging**: PyInstaller compiles `pokemon_champions.spec` inside Wine into a single-file `ChampionsMetaDeskStudio.exe`.
+5. **Output Export**: The container automatically copies the compiled binary to `dist/ChampionsMetaDeskStudio.exe` on your host machine using mounted volume labeling (`:z` flag for SELinux compatibility).
 
 ---
 

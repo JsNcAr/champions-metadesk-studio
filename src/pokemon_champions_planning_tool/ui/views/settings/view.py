@@ -267,7 +267,10 @@ class SettingsView(ft.Column):
         try:
             from importlib.metadata import version
 
-            app_version = version("pokemon-champions-planning-tool")
+            try:
+                app_version = version("champions-metadesk-studio")
+            except Exception:
+                app_version = version("pokemon-champions-planning-tool")
         except Exception:  # noqa: BLE001 - not installed as a distribution
             app_version = "dev"
         sources = ft.Row(

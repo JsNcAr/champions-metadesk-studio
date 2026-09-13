@@ -18,7 +18,7 @@ import requests
 
 _BASE_URL = "https://pokepast.es"
 _TIMEOUT_SECONDS = 8
-_USER_AGENT = "PokemonChampionsPlanningTool/1.0 (https://github.com)"
+_USER_AGENT = "ChampionsMetaDeskStudio/1.0 (https://github.com)"
 _PASTE_ID_RE = re.compile(r"pokepast\.es/([a-f0-9]+)", re.IGNORECASE)
 
 

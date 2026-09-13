@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-APP_NAME = "Pokemon Champions Planning Tool"
+APP_NAME = "Champions MetaDesk Studio"
 DEFAULT_CSV_FILENAME = "pokemon_team_stats.csv"
 # Where the SQLite file lives. Relative paths resolve against the working directory.
 # Override with PCPT_DATABASE=/path/to/file.db; preferences.json sits beside it unless
@@ -77,5 +77,5 @@ RECENT_EVENT_GRACE_DAYS = 3
 # The launch-time sync is skipped when a sync completed this recently and no backlog
 # is waiting; "Sync now" in Settings always runs.
 STARTUP_SYNC_MIN_INTERVAL_HOURS = 6
-TOURNAMENT_USER_AGENT = "PokemonChampionsPlanningTool/1.0 (https://github.com)"
+TOURNAMENT_USER_AGENT = "ChampionsMetaDeskStudio/1.0 (https://github.com)"
 

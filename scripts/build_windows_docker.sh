@@ -11,7 +11,7 @@ mkdir -p dist
 # Build Docker image
 docker build -f Dockerfile.windows -t pcpt-windows-builder .
 
-# Run container and export dist/PokemonChampionsPlanningTool.exe
+# Run container and export dist/ChampionsMetaDeskStudio.exe
 docker run --rm -v "$(pwd)/dist:/output:z" pcpt-windows-builder
 
-echo "✅ Windows build complete! Executable located at: dist/PokemonChampionsPlanningTool.exe"
+echo "✅ Windows build complete! Executable located at: dist/ChampionsMetaDeskStudio.exe"

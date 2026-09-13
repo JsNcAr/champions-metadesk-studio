@@ -44,6 +44,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Events show their winner only; \"Show N more\" or Expand all reveals the rest. The cards layout opens a full standings dialog per event.",
         "Official (Play! Pokémon) and Community are separate sources; under Official you can pick Worlds, Internationals, Regionals or Special Events.",
         "Search matches species, players and event names; the Search button re-queries even when nothing changed.",
+        "Search matches species, players and event names. Exclude Pokémon by prefixing with - or ! (e.g. \"pelipper -archaludon\", \"dondozo -tatsugiri\", or \"-incineroar\"); quotes work for multi-word names (e.g. -\"iron hands\"). The Search button re-queries even when nothing changed.",
         "Box ▾ finds teams you can build: all six in your box, or one to three missing. Greyed sprites are the ones you lack; the chip says how many you have. Owned entries only; Megas count as their base species.",
     ),
     "Calc": (

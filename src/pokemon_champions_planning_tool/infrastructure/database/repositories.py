@@ -17,6 +17,7 @@ from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.pokemon_identity import expand_canonical_aliases, format_api_name
+from ...domain.search import parse_search_query
 from .models import (
     AppStateRecord,
     BoxEntryRecord,
@@ -1164,34 +1165,64 @@ class TournamentRepository:
             stmt = stmt.where(TournamentTeamRecord.placement <= placement_filter)
 
         if query:
-            q_raw = query.strip()
-            q_pattern = f"%{q_raw}%"
-            q_canon = format_api_name(q_raw)
-            c_pattern = f"%{q_canon}%" if q_canon else q_pattern
+            parsed = parse_search_query(query)
 
-            # Resolve the text against the (small) species catalogue first: a match turns the
-            # roster clause into an indexed id lookup (forms included via a prefix GLOB)
-            # instead of a substring scan over every roster row. Unknown names fall back to
-            # the scan so rosters from other games stay searchable.
-            species_ids = self._species_ids_matching(q_raw, q_canon)
-            if species_ids:
-                member_clause = or_(
-                    TournamentTeamMemberRecord.canonical_id.in_(species_ids),
-                    *[TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{sid}-*") for sid in species_ids],
+            # 1. Apply exclusions (teams containing the excluded species are omitted)
+            for exc in parsed.excludes:
+                exc_raw = exc.strip()
+                exc_pattern = f"%{exc_raw}%"
+                exc_canon = format_api_name(exc_raw)
+                species_ids = self._species_ids_matching(exc_raw, exc_canon)
+                if species_ids:
+                    member_clause = or_(
+                        TournamentTeamMemberRecord.canonical_id.in_(species_ids),
+                        TournamentTeamMemberRecord.base_canonical_id.in_(species_ids),
+                        *[TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{sid}-*") for sid in species_ids],
+                    )
+                else:
+                    member_clause = (
+                        (TournamentTeamMemberRecord.species_name.ilike(exc_pattern))
+                        | (TournamentTeamMemberRecord.canonical_id.ilike(exc_pattern))
+                        | (TournamentTeamMemberRecord.base_canonical_id.ilike(exc_pattern))
+                    )
+                subq_exc = select(TournamentTeamMemberRecord.tournament_team_id).where(member_clause)
+                stmt = stmt.where(TournamentTeamRecord.tournament_team_id.not_in(subq_exc))
+                if not species_ids:
+                    stmt = stmt.where(
+                        ~TournamentTeamRecord.player_name.ilike(exc_pattern),
+                        ~TournamentRecord.name.ilike(exc_pattern),
+                        ~TournamentTeamRecord.tournament_id.ilike(exc_pattern),
+                    )
+
+            # 2. Apply inclusions (each term must match a team member, player, event, or ID)
+            for inc in parsed.includes:
+                inc_raw = inc.strip()
+                inc_pattern = f"%{inc_raw}%"
+                inc_canon = format_api_name(inc_raw)
+                c_pattern = f"%{inc_canon}%" if inc_canon else inc_pattern
+
+                # Resolve against catalogue first: fast indexed ID lookup
+                species_ids = self._species_ids_matching(inc_raw, inc_canon)
+                if species_ids:
+                    member_clause = or_(
+                        TournamentTeamMemberRecord.canonical_id.in_(species_ids),
+                        TournamentTeamMemberRecord.base_canonical_id.in_(species_ids),
+                        *[TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{sid}-*") for sid in species_ids],
+                    )
+                else:
+                    member_clause = (
+                        (TournamentTeamMemberRecord.species_name.ilike(inc_pattern))
+                        | (TournamentTeamMemberRecord.canonical_id.ilike(inc_pattern))
+                        | (TournamentTeamMemberRecord.base_canonical_id.ilike(inc_pattern))
+                        | (TournamentTeamMemberRecord.canonical_id.ilike(c_pattern))
+                    )
+                subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(member_clause)
+                stmt = stmt.where(
+                    (TournamentTeamRecord.player_name.ilike(inc_pattern))
+                    | (TournamentRecord.name.ilike(inc_pattern))
+                    | (TournamentTeamRecord.tournament_id.ilike(inc_pattern))
+                    | (TournamentTeamRecord.tournament_team_id.in_(subq_member))
                 )
-            else:
-                member_clause = (
-                    (TournamentTeamMemberRecord.species_name.ilike(q_pattern))
-                    | (TournamentTeamMemberRecord.canonical_id.ilike(q_pattern))
-                    | (TournamentTeamMemberRecord.canonical_id.ilike(c_pattern))
-                )
-            subq_member = select(TournamentTeamMemberRecord.tournament_team_id).where(member_clause)
-            stmt = stmt.where(
-                (TournamentTeamRecord.player_name.ilike(q_pattern))
-                | (TournamentRecord.name.ilike(q_pattern))
-                | (TournamentTeamRecord.tournament_id.ilike(q_pattern))
-                | (TournamentTeamRecord.tournament_team_id.in_(subq_member))
-            )
 
         if species_filter:
             s_pattern = f"%{species_filter.strip()}%"

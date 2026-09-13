@@ -15,6 +15,7 @@ from sqlmodel import Session
 
 from ....domain.event_tier import OFFICIAL_TIERS, TIER_LABELS, tiers_for_filter
 from ....domain.pokemon_identity import base_canonical_id, expand_canonical_aliases
+from ....domain.search import parse_search_query, remove_query_token
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
 from ....services.tournament_service import MetaSummary, MetaTeamRow, TournamentService
@@ -87,7 +88,17 @@ class MetaFilters:
         default = MetaFilters()
         out: list[tuple[str, str]] = []
         if self.query.strip():
-            out.append(("query", f"“{self.query.strip()}”"))
+            parsed = parse_search_query(self.query)
+            if len(parsed.tokens) <= 1 and not parsed.excludes:
+                out.append(("query", f"“{self.query.strip()}”"))
+            else:
+                for t in parsed.tokens:
+                    val_title = t.value.title()
+                    if t.is_neg:
+                        out.append((f"query_token:{t.raw_token}", f"- {val_title}"))
+                    else:
+                        label = f"+ {val_title}" if parsed.excludes else f"“{t.value}”"
+                        out.append((f"query_token:{t.raw_token}", label))
         if self.placement != default.placement:
             out.append(("placement", "All placements" if self.placement == "all" else dict(PLACEMENT_OPTIONS)[self.placement]))
         if self.regulation != default.regulation:
@@ -107,6 +118,10 @@ class MetaFilters:
         return out
 
     def without(self, field: str) -> "MetaFilters":
+        if field.startswith("query_token:"):
+            token = field.split(":", 1)[1]
+            new_query = remove_query_token(self.query, token)
+            return replace(self, query=new_query)
         defaults = MetaFilters()
         changes = {field: getattr(defaults, field)}
         if field == "source":

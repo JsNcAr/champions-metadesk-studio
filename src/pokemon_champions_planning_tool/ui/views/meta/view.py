@@ -51,7 +51,8 @@ class MetaView(ft.Column):
 
         # -- filter bar ---------------------------------------------------------------
         self._search = ft.TextField(**SEARCH_FIELD_STYLE, 
-            hint_text="Species, player or event…",
+            hint_text="Species, player, event (-species to exclude)…",
+            tooltip="Search species, players, or events. Prefix with - or ! to exclude (e.g. pelipper -archaludon)",
             prefix_icon=ft.Icons.SEARCH,
             width=320,
             dense=True,

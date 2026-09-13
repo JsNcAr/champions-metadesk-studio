@@ -133,6 +133,74 @@ class TestTournamentRepository(unittest.TestCase):
         self.repo.invalidate_preset_builds_cache()
         self.assertIsNone(self.repo.get_cached_preset_builds("doubles"))
 
+    def test_search_teams_with_exclusions(self):
+        t_rec = TournamentRecord(
+            tournament_id="tourney-exclusion",
+            name="Special Event 2026",
+            event_date=datetime.now(timezone.utc),
+            format_regulation="Regulation H",
+            game_platform="Scarlet & Violet",
+        )
+        self.repo.upsert_tournament(t_rec)
+
+        # Team 1: Pelipper + Archaludon
+        team1 = TournamentTeamRecord(
+            tournament_id="tourney-exclusion",
+            player_name="Player Rain",
+            placement=1,
+            showdown_text="",
+        )
+        m1 = [
+            TournamentTeamMemberRecord(slot_position=1, canonical_id="pelipper", base_canonical_id="pelipper", species_name="Pelipper"),
+            TournamentTeamMemberRecord(slot_position=2, canonical_id="archaludon", base_canonical_id="archaludon", species_name="Archaludon"),
+        ]
+        self.repo.save_team(team1, m1)
+
+        # Team 2: Pelipper + Urshifu (No Archaludon)
+        team2 = TournamentTeamRecord(
+            tournament_id="tourney-exclusion",
+            player_name="Player Water",
+            placement=2,
+            showdown_text="",
+        )
+        m2 = [
+            TournamentTeamMemberRecord(slot_position=1, canonical_id="pelipper", base_canonical_id="pelipper", species_name="Pelipper"),
+            TournamentTeamMemberRecord(slot_position=2, canonical_id="urshifu-rapid-strike", base_canonical_id="urshifu", species_name="Urshifu-Rapid-Strike"),
+        ]
+        self.repo.save_team(team2, m2)
+
+        # Team 3: Dondozo + Tatsugiri
+        team3 = TournamentTeamRecord(
+            tournament_id="tourney-exclusion",
+            player_name="Player Sushi",
+            placement=3,
+            showdown_text="",
+        )
+        m3 = [
+            TournamentTeamMemberRecord(slot_position=1, canonical_id="dondozo", base_canonical_id="dondozo", species_name="Dondozo"),
+            TournamentTeamMemberRecord(slot_position=2, canonical_id="tatsugiri", base_canonical_id="tatsugiri", species_name="Tatsugiri"),
+        ]
+        self.repo.save_team(team3, m3)
+
+        # Query 1: All Pelipper teams -> Team 1 and Team 2
+        pelipper_all = self.repo.search_teams(query="pelipper")
+        self.assertEqual(len(pelipper_all), 2)
+
+        # Query 2: Pelipper without Archaludon -> only Team 2
+        pelipper_no_arch = self.repo.search_teams(query="pelipper -archaludon")
+        self.assertEqual(len(pelipper_no_arch), 1)
+        self.assertEqual(pelipper_no_arch[0].player_name, "Player Water")
+
+        # Query 3: Pure exclusion: teams without Archaludon and without Tatsugiri -> only Team 2
+        no_arch_no_tat = self.repo.search_teams(query="-archaludon -tatsugiri")
+        self.assertEqual(len(no_arch_no_tat), 1)
+        self.assertEqual(no_arch_no_tat[0].player_name, "Player Water")
+
+        # Query 4: Multiple inclusions: Pelipper and Archaludon -> only Team 1
+        rain_both = self.repo.search_teams(query="pelipper archaludon")
+        self.assertEqual(len(rain_both), 1)
+        self.assertEqual(rain_both[0].player_name, "Player Rain")
+
 
 if __name__ == "__main__":
     unittest.main()

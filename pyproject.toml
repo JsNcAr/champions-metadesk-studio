@@ -15,6 +15,10 @@ dependencies = [
     "flet-desktop (>=0.85.3,<0.86.0)"
 ]
 
+[project.scripts]
+champions-metadesk = "pokemon_champions_planning_tool.main:run"
+metadesk = "pokemon_champions_planning_tool.main:run"
+
 [tool.poetry]
 packages = [{include = "pokemon_champions_planning_tool", from = "src"}]
 

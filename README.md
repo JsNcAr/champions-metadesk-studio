@@ -56,6 +56,11 @@ The entry point selects its interface from the command-line flag:
 | `poetry run python -m pokemon_champions_planning_tool.main` | Flet desktop app (default) |
 | `poetry run python -m pokemon_champions_planning_tool.main --web` | Flet GUI in the web browser |
 | `poetry run python -m pokemon_champions_planning_tool.main --cli` | Interactive terminal shell |
+| `poetry run champions-metadesk` (or `poetry run metadesk`) | Flet desktop app (default) |
+| `poetry run champions-metadesk --web` (or `poetry run metadesk --web`) | Flet GUI in the web browser |
+| `poetry run champions-metadesk --cli` (or `poetry run metadesk --cli`) | Interactive terminal shell |
+
+*(You can also execute directly via Python module: `poetry run python -m pokemon_champions_planning_tool.main`)*
 
 ### Running The GUI
 
@@ -63,11 +68,19 @@ To launch the Flet GUI in your web browser:
 
 ```bash
 poetry run python -m pokemon_champions_planning_tool.main --web
+poetry run champions-metadesk --web
+# or: poetry run metadesk --web
 ```
 
 The app will open automatically at `http://localhost:8550`.
 
 Without a flag, the same GUI opens as a native desktop window instead.
+Without the `--web` flag, the same GUI opens as a native desktop window instead:
+
+```bash
+poetry run champions-metadesk
+# or: poetry run metadesk
+```
 
 #### Stopping an Active Server / Port Conflict
 
@@ -79,14 +92,19 @@ fuser -k 8550/tcp
 
 # Or kill by module name:
 pkill -f "pokemon_champions_planning_tool.main"
+# Or kill by process name:
+pkill -f "champions-metadesk|metadesk|pokemon_champions_planning_tool"
 ```
 
 ### Running The Interactive CLI
 
 The terminal shell requires the `--cli` flag; without it the GUI launches instead.
+The terminal shell requires the `--cli` flag:
 
 ```bash
 poetry run python -m pokemon_champions_planning_tool.main --cli
+poetry run champions-metadesk --cli
+# or: poetry run metadesk --cli
 ```
 
 ### Running Tests

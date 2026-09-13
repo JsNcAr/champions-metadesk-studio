@@ -1,6 +1,7 @@
 import unittest
 
 from pokemon_champions_planning_tool.domain.pokemon_identity import (
+    classify_battle_format,
     format_api_name,
     format_display_name,
     get_pokemon_sprite_url,
@@ -203,4 +204,81 @@ class TestNormalizeFormatRegulation(unittest.TestCase):
             "Regulation F",
         )
         self.assertEqual(normalize_format_regulation("", ""), "Champions Season 1")
+
+
+class TestClassifyBattleFormat(unittest.TestCase):
+    def test_singles_detected_from_name(self):
+        self.assertEqual(
+            classify_battle_format("ChampionMads SINGLES Battle Arena #8 - $50 USD"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("Rising Stars - S2 (Single Battle)"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("GVGCL 3v3 Mini Series Tour 1/3"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("Boldore's Gate 10 - Champions SINGLES! - $5 Pool"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("⛩️Chadweezy95 Singles Champions Tournament Ep 1!⛩️"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("Champions 1v1 Fast Cup"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("Champions 6v6 Showdown"),
+            "singles",
+        )
+        self.assertEqual(
+            classify_battle_format("BSS Champions Season 1"),
+            "singles",
+        )
+
+    def test_single_elimination_bracket_is_not_singles(self):
+        self.assertEqual(
+            classify_battle_format("Single Elimination Doubles Tournament"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("VGC 2026 - Single Elim"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("Champions Single-Elimination Weekly"),
+            "doubles",
+        )
+
+    def test_doubles_defaults_and_explicit(self):
+        self.assertEqual(
+            classify_battle_format("2027 Baltimore Regional"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("Alpensee x Smogon VGC Tour (Reg M-B) #70"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("PWC - Battle in the Colosseum #26"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("Trinity Championship 10 (Double Format)"),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format(None, None),
+            "doubles",
+        )
+        self.assertEqual(
+            classify_battle_format("Custom Tour", "SINGLES"),
+            "singles",
+        )
+
 

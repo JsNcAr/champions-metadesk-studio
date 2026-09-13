@@ -295,6 +295,7 @@ def _sync_limitless(
             total_players=t_dto.player_count,
             source_url=f"https://play.limitlesstcg.com/tournament/{t_dto.id}",
             event_tier=classify_event_tier(t_dto.name, t_dto.organizer),
+            battle_format=t_dto.battle_format,
         )
         repo.upsert_tournament(t_record)
         if existing is None or t_id in pending_ids or force:

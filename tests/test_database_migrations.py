@@ -164,6 +164,24 @@ class TestMigrations(unittest.TestCase):
         database.get_engine.cache_clear()
         database.initialize_database(str(self.db_path))
 
+    def test_battle_format_column_is_added_and_remediated(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("DROP INDEX IF EXISTS ix_tournaments_battle_format")
+        conn.execute("ALTER TABLE tournaments DROP COLUMN battle_format")
+        conn.execute(
+            "INSERT INTO tournaments (tournament_id, name, event_date, format_regulation, game_platform, organizer, location, total_players, created_at, updated_at, standings_synced, event_tier)"
+            " VALUES ('singles_tourney', 'ChampionMads SINGLES Battle Arena', '2026-01-01', 'Regulation M-B', 'Pokémon Champions', 'Limitless Community', 'Online', 16, '2026-01-01', '2026-01-01', 1, 'community'),"
+            " ('doubles_tourney', 'Liverpool Regional Championships', '2026-01-01', 'Regulation M-B', 'Pokémon Champions', 'Official VGC', 'Liverpool', 256, '2026-01-01', '2026-01-01', 1, 'regional')"
+        )
+        conn.commit()
+        conn.close()
+        database.initialize_database(str(self.db_path))
+        self.assertIn("battle_format", _columns(self.db_path, "tournaments"))
+        conn = sqlite3.connect(self.db_path)
+        formats = dict(conn.execute("SELECT tournament_id, battle_format FROM tournaments").fetchall())
+        conn.close()
+        self.assertEqual(formats, {"singles_tourney": "singles", "doubles_tourney": "doubles"})
+
 
 if __name__ == "__main__":
     unittest.main()

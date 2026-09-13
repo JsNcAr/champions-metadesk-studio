@@ -46,6 +46,7 @@ from ...config import (
     TOURNAMENT_USER_AGENT,
 )
 from ...domain.pokemon_identity import _CHAMPIONS_REG_RE
+from ...domain.pokemon_identity import _CHAMPIONS_REG_RE, classify_battle_format
 
 # Standings requests per batch unless the rate budget runs out first.
 _MAX_STANDINGS_PER_SYNC = LIMITLESS_STANDINGS_PER_RUN
@@ -101,6 +102,7 @@ class LimitlessTournament:
     format_code: str
     player_count: int
     organizer: str = "Limitless Community"
+    battle_format: str = "doubles"
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -272,6 +274,7 @@ class LimitlessProvider:
                                 format_code=format_code,
                                 player_count=_safe_int(item.get("players"), 0),
                                 organizer=str(item.get("organizer", "Limitless Community")),
+                                battle_format=classify_battle_format(tourney_name, format_code),
                             )
                         )
                 except Exception as exc:

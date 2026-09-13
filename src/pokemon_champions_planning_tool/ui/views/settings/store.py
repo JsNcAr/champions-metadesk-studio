@@ -28,6 +28,7 @@ from ....infrastructure.database.models import (
 from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
 from ....infrastructure.database.repositories import BoxRepository
+from ....infrastructure.database.repositories import BoxRepository, TournamentRepository
 from ....services.move_catalog_service import sync_move_catalog
 from ....services.species_catalog_service import sync_species_catalog
 from ....services.pokemon_import_service import refresh_stub_pokemon
@@ -115,3 +116,18 @@ class SettingsStore:
         # reads only official events not yet ingested. Forcing would re-fetch a year.
         with self._sf() as s:
             return TournamentService(s).sync(force=False, max_age_days=365, include_official=True, on_progress=on_progress)
+
+    def get_battle_format_preference(self) -> str:
+        """Stored tournament battle format preference: 'doubles', 'all', or 'singles'."""
+        with self._sf() as s:
+            repo = TournamentRepository(s)
+            val = repo.get_state("pref_battle_format")
+            return val if val in ("doubles", "all", "singles") else "doubles"
+
+    def set_battle_format_preference(self, pref: str) -> None:
+        """Update stored tournament battle format preference."""
+        if pref not in ("doubles", "all", "singles"):
+            pref = "doubles"
+        with self._sf() as s:
+            repo = TournamentRepository(s)
+            repo.set_state("pref_battle_format", pref)

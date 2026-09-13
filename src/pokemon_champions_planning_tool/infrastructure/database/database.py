@@ -109,6 +109,9 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         # tournaments — official tier (worlds/international/regional/special) or community
         "ALTER TABLE tournaments ADD COLUMN event_tier VARCHAR NOT NULL DEFAULT 'community';",
         "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
+        # tournaments — battle format ("doubles" | "singles")
+        "ALTER TABLE tournaments ADD COLUMN battle_format VARCHAR NOT NULL DEFAULT 'doubles';",
+        "CREATE INDEX IF NOT EXISTS ix_tournaments_battle_format ON tournaments (battle_format);",
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
@@ -141,6 +144,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_default_form_labels(conn)
         _backfill_member_points(conn)
         _remediate_tournament_regulations(conn)
+        _remediate_tournament_battle_formats(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -425,6 +429,40 @@ def _remediate_tournament_regulations(conn) -> None:
             {"fmt": new_fmt, "id": tid},
         )
     conn.commit()
+
+
+def _remediate_tournament_battle_formats(conn) -> None:
+    """Classify tournaments that are singles battles (e.g. Singles, 3v3, BSS, 6v6)."""
+    from pokemon_champions_planning_tool.domain.pokemon_identity import _SINGLES_TOURNAMENT_RE
+
+    try:
+        rows = conn.execute(text("SELECT tournament_id, name, battle_format FROM tournaments")).fetchall()
+    except Exception:
+        return
+
+    if not rows:
+        return
+
+    singles_ids: list[str] = []
+    doubles_ids: list[str] = []
+    for tid, name, stored_format in rows:
+        is_singles = bool(name and _SINGLES_TOURNAMENT_RE.search(name))
+        expected_format = "singles" if is_singles else "doubles"
+        if stored_format != expected_format:
+            if is_singles:
+                singles_ids.append(tid)
+            else:
+                doubles_ids.append(tid)
+
+    if singles_ids:
+        for tid in singles_ids:
+            conn.execute(text("UPDATE tournaments SET battle_format = 'singles' WHERE tournament_id = :id"), {"id": tid})
+    if doubles_ids:
+        for tid in doubles_ids:
+            conn.execute(text("UPDATE tournaments SET battle_format = 'doubles' WHERE tournament_id = :id"), {"id": tid})
+    if singles_ids or doubles_ids:
+        conn.commit()
+
 
 
 

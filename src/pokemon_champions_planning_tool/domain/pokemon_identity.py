@@ -272,6 +272,26 @@ def normalize_format_regulation(raw_format: str, tournament_name: str | None = N
     return "Champions Season 1"
 
 
+_SINGLES_TOURNAMENT_RE = re.compile(
+    r"\b(singles|single\s+battle|1v1|3v3|6v6|bss)\b"
+    r"|\bsingle\b(?![-\s]*elim)",
+    re.IGNORECASE,
+)
+
+
+def classify_battle_format(tournament_name: str | None, raw_format: str | None = None) -> str:
+    """Classifies whether a tournament is 'singles' or 'doubles'.
+
+    Official Play! Pokémon VGC and standard community events are Doubles.
+    Only events explicitly indicating Singles/3v3/6v6/1v1/BSS are classified as 'singles'.
+    """
+    if tournament_name and _SINGLES_TOURNAMENT_RE.search(tournament_name):
+        return "singles"
+    if raw_format and _SINGLES_TOURNAMENT_RE.search(raw_format):
+        return "singles"
+    return "doubles"
+
+
 _MEGA_SUFFIX_RE = re.compile(r"-mega(-[xy])?$")
 _BATTLE_ONLY_SUFFIXES = ("-gmax", "-primal", "-eternamax")
 

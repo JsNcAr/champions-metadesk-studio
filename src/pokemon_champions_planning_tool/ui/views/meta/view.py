@@ -18,6 +18,7 @@ from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Sp
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
 from .store import BOX_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
+from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
 # With groups collapsed (or as cards) a 20-team page shows only two or three events, so
@@ -113,12 +114,19 @@ class MetaView(ft.Column):
             tooltip="Teams you can build from your box (owned entries; Megas count as their base species)",
             on_select=lambda e: self._apply(box=e.control.value or "any"),
         )
+        self._battle_format = ft.Dropdown(
+            value=self.store.filters.battle_format,
+            options=[ft.DropdownOption(key=v, text=label) for v, label in FORMAT_OPTIONS],
+            width=180,
+            visible=self.store.filters.battle_format != "doubles",
+            on_select=lambda e: self._apply(battle_format=e.control.value or "doubles"),
+        )
         self._search_button = ft.OutlinedButton("Search", icon=ft.Icons.SEARCH, on_click=lambda _e: self._apply(query=self._search.value or "", force=True))
         self.filter_bar = ft.Row(
             spacing=Space.SM,
             wrap=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._search, self._placement, self._source, self._tier, self._box, self._regulation, self._recency, self._game, self._search_button],
+            controls=[self._search, self._placement, self._source, self._tier, self._box, self._regulation, self._recency, self._game, self._battle_format, self._search_button],
         )
         self._active_chips = ft.Row(spacing=Space.SM, wrap=True, visible=False)
         self._order_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
@@ -165,6 +173,7 @@ class MetaView(ft.Column):
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.SYNC_PROGRESS, self._on_sync_progress)
         ctx.bus.on(events.BOX_CHANGED, self._on_box_changed)
+        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, self._on_battle_format_changed)
 
     def handle_key(self, e) -> bool:
         if e.ctrl and (e.key or "").lower() == "f" and is_mounted(self._search):
@@ -202,6 +211,8 @@ class MetaView(ft.Column):
         self._tier.visible = new_filters.source == "official"
         self._tier.value = new_filters.tier
         self._box.value = new_filters.box
+        self._battle_format.value = new_filters.battle_format
+        self._battle_format.visible = new_filters.battle_format != "doubles"
         if force:
             self.store.invalidate()
         self._reload()
@@ -217,6 +228,8 @@ class MetaView(ft.Column):
 
     def _clear_filters(self) -> None:
         self.store.set_filters(MetaFilters())
+        pref = self.store.load_preference()
+        self.store.set_filters(MetaFilters(battle_format=pref))
         self._sync_filter_controls()
         self._reload()
 
@@ -231,6 +244,13 @@ class MetaView(ft.Column):
         self._tier.value = f.tier
         self._tier.visible = f.source == "official"
         self._box.value = f.box
+        self._battle_format.value = f.battle_format
+        self._battle_format.visible = f.battle_format != "doubles"
+
+    def _on_battle_format_changed(self, _val: Any = None) -> None:
+        self.store.reload_preference()
+        self._sync_filter_controls()
+        self._reload()
 
     def _render_active_chips(self) -> None:
         active = self.store.filters.active()

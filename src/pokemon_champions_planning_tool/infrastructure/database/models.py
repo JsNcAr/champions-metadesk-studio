@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, ForeignKey, JSON, Text, UniqueConstraint
 from sqlalchemy import Column, ForeignKey, JSON, String, Text, UniqueConstraint
 
 from sqlmodel import Field, SQLModel
@@ -412,6 +411,11 @@ class TournamentRecord(SQLModel, table=True):
     # "worlds" | "international" | "regional" | "special" (official Play! Pokémon) or
     # "community". See domain/event_tier.py; set on ingest and backfilled by migration.
     event_tier: str = Field(default="community", index=True)
+    # "doubles" (default VGC) or "singles"
+    battle_format: str = Field(
+        default="doubles",
+        sa_column=Column(String, nullable=False, server_default="doubles", index=True),
+    )
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 

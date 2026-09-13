@@ -27,6 +27,7 @@ from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champion
 from ....domain.type_chart import defensive_multiplier
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
+from ....infrastructure.database.repositories import BoxRepository, TournamentRepository
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
 from ....services.tournament_service import TournamentBuild, TournamentService
 from ...catalogs import Catalogs
@@ -400,6 +401,8 @@ class CalcStore:
                 try:
                     with self._sf() as s:
                         self._preset_builds = TournamentService(s).common_builds_by_species(top_moves=4)
+                        pref = TournamentRepository(s).get_state("pref_battle_format") or "doubles"
+                        self._preset_builds = TournamentService(s).common_builds_by_species(top_moves=4, battle_format=pref)
                 except Exception:  # noqa: BLE001 - presets are a convenience
                     self._preset_builds = {}
         return self._preset_builds
@@ -415,9 +418,16 @@ class CalcStore:
                 try:
                     with self._sf() as s:
                         self._preset_moves = TournamentService(s).common_moves_by_species(top=4)
+                        pref = TournamentRepository(s).get_state("pref_battle_format") or "doubles"
+                        self._preset_moves = TournamentService(s).common_moves_by_species(top=4, battle_format=pref)
                 except Exception:  # noqa: BLE001 - presets are a convenience
                     self._preset_moves = {}
         return self._preset_moves
+
+    def invalidate_presets(self) -> None:
+        """Clear cached tournament builds and moves so they reload on next lookup."""
+        self._preset_builds = None
+        self._preset_moves = None
 
     # -- mutations ---------------------------------------------------------------------------
 

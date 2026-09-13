@@ -55,6 +55,7 @@ class CalcView(ft.Column):
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())
         ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self.rail.refresh_team())
+        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: self.store.invalidate_presets())
 
     # -- lifecycle -----------------------------------------------------------------------------
 

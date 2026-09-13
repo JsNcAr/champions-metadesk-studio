@@ -24,6 +24,8 @@ TEAMS_CHANGED = "teams.changed"
 CATALOGS_RELOADED = "catalogs.reloaded"
 # Tournament data was synced. Payload: the sync result dict.
 META_SYNCED = "meta.synced"
+# Tournament battle format filter preference changed. Payload: "doubles" | "all" | "singles".
+BATTLE_FORMAT_CHANGED = "tournaments.battle_format_changed"
 # Ask the team builder to import Showdown text. Payload: (text, title).
 IMPORT_REQUESTED = "import.requested"
 # Ask the shell to show a view. Payload: view key.

@@ -111,6 +111,18 @@ class SettingsView(ft.Column):
 
         self.about = KeyValueList(self._about_rows())
 
+        self._format_dropdown = ft.Dropdown(
+            label="Battle format",
+            value=self.store.get_battle_format_preference(),
+            options=[
+                ft.DropdownOption(key="doubles", text="Doubles only (VGC default)"),
+                ft.DropdownOption(key="all", text="All formats (Doubles & Singles)"),
+                ft.DropdownOption(key="singles", text="Singles only"),
+            ],
+            width=320,
+            on_select=lambda e: self._on_format_changed(e.control.value or "doubles"),
+        )
+
         self.controls = [
             self.header,
             ft.Container(
@@ -136,6 +148,26 @@ class SettingsView(ft.Column):
                                 self.row_tournaments,
                                 ft.Divider(),
                                 self.row_health,
+                            ]
+                        ),
+                        Panel(
+                            [
+                                SectionHeader("Tournament preferences"),
+                                ft.Text(
+                                    "Official Play! Pokémon events and standard VGC are Doubles. "
+                                    "When set to Doubles only, community Singles/3v3 tournaments are excluded "
+                                    "from Meta Explorer, partner synergies, and damage calculator build presets.",
+                                    theme_style=ft.TextThemeStyle.BODY_SMALL,
+                                    color=Palette.ON_SURFACE_VARIANT,
+                                ),
+                                ft.Row(
+                                    spacing=Space.MD,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                    controls=[
+                                        ft.Icon(ft.Icons.TUNE, size=IconSize.LG, color=Palette.ON_SURFACE_VARIANT),
+                                        self._format_dropdown,
+                                    ],
+                                ),
                             ]
                         ),
                         Panel([SectionHeader("About"), self.about]),
@@ -172,6 +204,13 @@ class SettingsView(ft.Column):
                 status.tournament_count,
             )
         )
+        self._format_dropdown.value = self.store.get_battle_format_preference()
+
+    def _on_format_changed(self, val: str) -> None:
+        self.store.set_battle_format_preference(val)
+        self.ctx.bus.emit(events.BATTLE_FORMAT_CHANGED, val)
+        labels = {"doubles": "Doubles only", "all": "All formats", "singles": "Singles only"}
+        self.ctx.toast(f"Tournament filter set to {labels.get(val, val)}", "success")
 
     # -- syncing ------------------------------------------------------------------------
 

@@ -860,6 +860,7 @@ class TournamentRepository:
             existing.total_players = tournament.total_players
             existing.source_url = tournament.source_url
             existing.event_tier = tournament.event_tier
+            existing.battle_format = tournament.battle_format
             # standings_synced is owned by the standings fetch, not by metadata
             # refreshes, so a re-listed tournament keeps its backlog state.
             existing.updated_at = _utc_now()
@@ -1076,11 +1077,15 @@ class TournamentRepository:
         tournament_id_filter: str | None = None,
         owned_species: Sequence[str] | None = None,
         max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
     ):
         """Shared WHERE clauses for search_teams and count_teams."""
 
         if tournament_id_filter:
             stmt = stmt.where(TournamentTeamRecord.tournament_id == tournament_id_filter)
+
+        if battle_format_filter and battle_format_filter != "all":
+            stmt = stmt.where(TournamentRecord.battle_format == battle_format_filter)
 
         if max_missing is not None:
             # "At most N of the roster is missing from the box": roster size minus the
@@ -1185,6 +1190,7 @@ class TournamentRepository:
         tournament_id_filter: str | None = None,
         owned_species: Sequence[str] | None = None,
         max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
     ) -> list[TournamentTeamRecord]:
         stmt = self._apply_search_filters(
             self._joined_teams(),
@@ -1198,6 +1204,7 @@ class TournamentRepository:
             tournament_id_filter=tournament_id_filter,
             owned_species=owned_species,
             max_missing=max_missing,
+            battle_format_filter=battle_format_filter,
         )
 
         # Newest event first, then best placement within that event. Ordering by
@@ -1232,6 +1239,7 @@ class TournamentRepository:
         tournament_id_filter: str | None = None,
         owned_species: Sequence[str] | None = None,
         max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
     ) -> int:
         """Number of teams matching the same filters as search_teams."""
         stmt = self._apply_search_filters(
@@ -1246,10 +1254,11 @@ class TournamentRepository:
             tournament_id_filter=tournament_id_filter,
             owned_species=owned_species,
             max_missing=max_missing,
+            battle_format_filter=battle_format_filter,
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
 
-    def move_usage(self, canonical_id: str, *, include_megas: bool = True) -> list[tuple[str, int]]:
+    def move_usage(self, canonical_id: str, *, include_megas: bool = True, battle_format: str | None = "doubles") -> list[tuple[str, int]]:
         """(move name, rosters using it) for a species across every stored team, most used first.
 
         Mega forms share the base species' moves, so "charizard" counts "charizard-mega-y"
@@ -1259,24 +1268,34 @@ class TournamentRepository:
 
         base = canonical_id.lower()
         clause = "m.canonical_id = :cid OR m.canonical_id LIKE :mega" if include_megas else "m.canonical_id = :cid"
+        extra = ""
+        params: dict[str, Any] = {"cid": base, "mega": f"{base}-mega%"}
+        if battle_format and battle_format != "all":
+            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
-                f"WHERE ({clause}) GROUP BY j.value ORDER BY n DESC, move ASC"
-            ).bindparams(cid=base, mega=f"{base}-mega%")
+                f"WHERE ({clause}) {extra}GROUP BY j.value ORDER BY n DESC, move ASC"
+            ).bindparams(**params)
         ).all()
         return [(str(move), int(n)) for move, n in rows if move]
 
-    def move_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+    def move_usage_all(self, *, battle_format: str | None = "doubles") -> dict[str, list[tuple[str, int]]]:
         """{base species id: [(move name, rosters using it), …] most used first} for every species
         in one query (megas fold into their base species)."""
         from sqlalchemy import text as _text
 
+        extra = ""
+        params: dict[str, Any] = {}
+        if battle_format and battle_format != "all":
+            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
-                "WHERE m.base_canonical_id != '' GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
-            )
+                f"WHERE m.base_canonical_id != '' {extra}GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
+            ).bindparams(**params)
         ).all()
         out: dict[str, list[tuple[str, int]]] = {}
         for cid, move, n in rows:
@@ -1284,17 +1303,22 @@ class TournamentRepository:
                 out.setdefault(str(cid), []).append((str(move), int(n)))
         return out
 
-    def nature_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+    def nature_usage_all(self, *, battle_format: str | None = "doubles") -> dict[str, list[tuple[str, int]]]:
         """{base species id: [(nature, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
+        extra = ""
+        params: dict[str, Any] = {}
+        if battle_format and battle_format != "all":
+            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, LOWER(m.nature) AS nature, COUNT(*) AS n "
                 "FROM tournament_team_members m "
-                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.nature IS NOT NULL AND m.nature != '' "
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.nature IS NOT NULL AND m.nature != '' {extra}"
                 "GROUP BY base_cid, cid, LOWER(m.nature) ORDER BY n DESC"
-            )
+            ).bindparams(**params)
         ).all()
         out: dict[str, list[tuple[str, int]]] = {}
         for base_cid, cid, nat, n in rows:
@@ -1304,17 +1328,22 @@ class TournamentRepository:
                     out.setdefault(k, []).append((str(nat), int(n)))
         return out
 
-    def item_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+    def item_usage_all(self, *, battle_format: str | None = "doubles") -> dict[str, list[tuple[str, int]]]:
         """{species id: [(item, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
+        extra = ""
+        params: dict[str, Any] = {}
+        if battle_format and battle_format != "all":
+            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.item AS item, COUNT(*) AS n "
                 "FROM tournament_team_members m "
-                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.item IS NOT NULL AND m.item != '' "
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.item IS NOT NULL AND m.item != '' {extra}"
                 "GROUP BY base_cid, cid, m.item ORDER BY n DESC"
-            )
+            ).bindparams(**params)
         ).all()
         out: dict[str, list[tuple[str, int]]] = {}
         for base_cid, cid, itm, n in rows:
@@ -1324,17 +1353,22 @@ class TournamentRepository:
                     out.setdefault(k, []).append((str(itm), int(n)))
         return out
 
-    def ability_usage_all(self) -> dict[str, list[tuple[str, int]]]:
+    def ability_usage_all(self, *, battle_format: str | None = "doubles") -> dict[str, list[tuple[str, int]]]:
         """{species id: [(ability, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
+        extra = ""
+        params: dict[str, Any] = {}
+        if battle_format and battle_format != "all":
+            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.ability AS ability, COUNT(*) AS n "
                 "FROM tournament_team_members m "
-                "WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.ability IS NOT NULL AND m.ability != '' "
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.ability IS NOT NULL AND m.ability != '' {extra}"
                 "GROUP BY base_cid, cid, m.ability ORDER BY n DESC"
-            )
+            ).bindparams(**params)
         ).all()
         out: dict[str, list[tuple[str, int]]] = {}
         for base_cid, cid, ab, n in rows:

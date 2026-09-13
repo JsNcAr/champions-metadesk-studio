@@ -35,6 +35,13 @@ GAME_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+FORMAT_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("doubles", "Doubles only"),
+    ("all", "All formats"),
+    ("singles", "Singles only"),
+)
+
+
 @dataclass(frozen=True)
 class MetaFilters:
     query: str = ""
@@ -45,6 +52,7 @@ class MetaFilters:
     source: str = "All"      # "All" | "official" | "community"
     tier: str = "All"        # "All" or one of OFFICIAL_TIERS; only meaningful with source "official"
     box: str = "any"         # "any" or the most members allowed to be missing from the box
+    battle_format: str = "doubles"  # "doubles" | "all" | "singles"
 
     @property
     def max_missing(self) -> int | None:
@@ -71,6 +79,7 @@ class MetaFilters:
             "max_age_days": self.max_age_days,
             "event_tiers": self.event_tiers,
             "max_missing": self.max_missing,
+            "battle_format_filter": self.battle_format,
         }
 
     def active(self) -> list[tuple[str, str]]:
@@ -89,6 +98,8 @@ class MetaFilters:
             out.append(("game", self.game))
         if self.box != default.box:
             out.append(("box", f"Box · {dict(BOX_OPTIONS)[self.box]}"))
+        if self.battle_format != default.battle_format:
+            out.append(("battle_format", f"Format · {dict(FORMAT_OPTIONS).get(self.battle_format, self.battle_format)}"))
         if self.tier != default.tier:
             out.append(("tier", f"Official · {TIER_LABELS.get(self.tier, self.tier)}"))
         elif self.source != default.source:
@@ -107,6 +118,8 @@ class MetaStore:
     def __init__(self, session_factory: SessionFactory = get_session) -> None:
         self._sf = session_factory
         self.filters = MetaFilters()
+        pref = self.load_preference()
+        self.filters = MetaFilters(battle_format=pref)
         self.rows: list[MetaTeamRow] = []
         self.total: int = 0
         self.exhausted: bool = False
@@ -116,6 +129,22 @@ class MetaStore:
         # rows are marked, and the Box filter counts against them.
         self.box_species: frozenset[str] = frozenset()
         self._box_loaded = False
+
+    def load_preference(self) -> str:
+        """Load stored battle format preference."""
+        try:
+            with self._sf() as s:
+                from ....infrastructure.database.repositories import TournamentRepository
+                val = TournamentRepository(s).get_state("pref_battle_format")
+                return val if val in ("doubles", "all", "singles") else "doubles"
+        except Exception:
+            return "doubles"
+
+    def reload_preference(self) -> None:
+        pref = self.load_preference()
+        if self.filters.battle_format != pref:
+            self.filters = replace(self.filters, battle_format=pref)
+            self._stale = True
 
     # -- state --------------------------------------------------------------------------
 

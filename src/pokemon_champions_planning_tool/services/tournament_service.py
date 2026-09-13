@@ -138,7 +138,12 @@ class MetaSynergyService:
     def __init__(self, session: Session):
         self.session = session
 
-    def _target_team_ids_subquery(self, clean_target: str, regulation_filter: str | None):
+    def _target_team_ids_subquery(
+        self,
+        clean_target: str,
+        regulation_filter: str | None,
+        battle_format: str | None = "doubles",
+    ):
         """Distinct tournament team IDs whose roster contains the target species."""
         # Indexed: the species id or one of its forms ("charizard-mega-y"). The old
         # lower(species_name) comparison forced a scan of every roster row.
@@ -147,7 +152,10 @@ class MetaSynergyService:
             | (TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{clean_target}-*"))
         )
 
-        if regulation_filter and regulation_filter != "All":
+        has_reg = bool(regulation_filter and regulation_filter != "All")
+        has_bf = bool(battle_format and battle_format != "all")
+
+        if has_reg or has_bf:
             stmt = (
                 stmt.join(
                     TournamentTeamRecord,
@@ -158,8 +166,11 @@ class MetaSynergyService:
                     TournamentRecord,
                     TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id,
                 )
-                .where(TournamentRecord.format_regulation == regulation_filter)
             )
+            if has_reg:
+                stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
+            if has_bf:
+                stmt = stmt.where(TournamentRecord.battle_format == battle_format)
 
         # DISTINCT matters: without it a roster listing the target twice would be
         # counted twice in the denominator.
@@ -173,6 +184,7 @@ class MetaSynergyService:
         min_co_occurrence: int = 1,
         min_synergy_percent: float = 0.0,
         min_sample_teams: int = _DEFAULT_MIN_SAMPLE_TEAMS,
+        battle_format: str | None = "doubles",
     ) -> list[PartnerRecommendation]:
         """Find the most frequent tournament teammates for a target species.
 
@@ -187,9 +199,10 @@ class MetaSynergyService:
             min_synergy_percent: Drop partners below this share of target teams.
             min_sample_teams: Return nothing when the target itself appears in fewer
                 teams than this, since percentages off a tiny sample are misleading.
+            battle_format: Filter by battle format ("doubles" by default, "all", "singles").
         """
         clean_target = format_api_name(species_identifier)
-        target_teams = self._target_team_ids_subquery(clean_target, regulation_filter)
+        target_teams = self._target_team_ids_subquery(clean_target, regulation_filter, battle_format=battle_format)
 
         total_teams_count = self.session.exec(
             select(func.count()).select_from(target_teams.subquery())
@@ -290,6 +303,7 @@ class TournamentService:
         tournament_id_filter: str | None = None,
         owned_species: Sequence[str] | None = None,
         max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
     ) -> list[TournamentTeamRecord]:
         return self.repo.search_teams(
             query=query,
@@ -304,6 +318,7 @@ class TournamentService:
             tournament_id_filter=tournament_id_filter,
             owned_species=owned_species,
             max_missing=max_missing,
+            battle_format_filter=battle_format_filter,
         )
 
     def count_teams(self, **filters: Any) -> int:
@@ -312,12 +327,12 @@ class TournamentService:
     def list_regulations(self) -> list[str]:
         return self.repo.list_regulations()
 
-    def move_usage(self, canonical_id: str) -> dict[str, float]:
+    def move_usage(self, canonical_id: str, *, battle_format: str | None = "doubles") -> dict[str, float]:
         """Share of stored rosters of this species (megas included) carrying each move,
         keyed by the move's Showdown id so it matches the catalogue regardless of spelling."""
         from ..domain.moves import move_key
 
-        counts = self.repo.move_usage(canonical_id)
+        counts = self.repo.move_usage(canonical_id, battle_format=battle_format)
         if not counts:
             return {}
         # Every roster has four moves; teams ≈ total move slots / 4.
@@ -328,17 +343,17 @@ class TournamentService:
             usage[key] = usage.get(key, 0.0) + n / teams
         return usage
 
-    def common_moves_by_species(self, top: int = 4) -> dict[str, list[str]]:
+    def common_moves_by_species(self, top: int = 4, *, battle_format: str | None = "doubles") -> dict[str, list[str]]:
         """The ``top`` most used roster moves per base species id (the "tournament set")."""
-        usage = self.repo.move_usage_all()
+        usage = self.repo.move_usage_all(battle_format=battle_format)
         return {cid: [name for name, _n in moves[:top]] for cid, moves in usage.items()}
 
-    def common_builds_by_species(self, top_moves: int = 4) -> dict[str, TournamentBuild]:
+    def common_builds_by_species(self, top_moves: int = 4, *, battle_format: str | None = "doubles") -> dict[str, TournamentBuild]:
         """Tournament build per species: top moves, most common nature, item, and ability."""
-        moves_usage = self.repo.move_usage_all()
-        natures_usage = self.repo.nature_usage_all()
-        items_usage = self.repo.item_usage_all()
-        abilities_usage = self.repo.ability_usage_all()
+        moves_usage = self.repo.move_usage_all(battle_format=battle_format)
+        natures_usage = self.repo.nature_usage_all(battle_format=battle_format)
+        items_usage = self.repo.item_usage_all(battle_format=battle_format)
+        abilities_usage = self.repo.ability_usage_all(battle_format=battle_format)
 
         all_keys = set(moves_usage.keys()) | set(natures_usage.keys()) | set(items_usage.keys()) | set(abilities_usage.keys())
         builds: dict[str, TournamentBuild] = {}
@@ -369,6 +384,7 @@ class TournamentService:
         tournament_id_filter: str | None = None,
         owned_species: Sequence[str] | None = None,
         max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
     ) -> list[MetaTeamRow]:
         """Search teams and return detached rows with event context, roster and legality.
 
@@ -389,6 +405,7 @@ class TournamentService:
             tournament_id_filter=tournament_id_filter,
             owned_species=owned_species,
             max_missing=max_missing,
+            battle_format_filter=battle_format_filter,
         )
         if not teams:
             return []
@@ -470,12 +487,14 @@ class TournamentService:
         limit: int = 6,
         regulation_filter: str | None = None,
         min_sample_teams: int = _DEFAULT_MIN_SAMPLE_TEAMS,
+        battle_format: str | None = "doubles",
     ) -> list[PartnerRecommendation]:
         return self.synergy_service.get_top_partners(
             species_identifier=species_identifier,
             limit=limit,
             regulation_filter=regulation_filter,
             min_sample_teams=min_sample_teams,
+            battle_format=battle_format,
         )
 
     def sync(

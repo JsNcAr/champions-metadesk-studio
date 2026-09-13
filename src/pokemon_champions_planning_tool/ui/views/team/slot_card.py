@@ -154,10 +154,15 @@ class SlotCard(ft.Container):
         self._item_name = ft.Text("Held item…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._item_clear = ft.IconButton(icon=ft.Icons.CLOSE, icon_size=16, width=28, height=28, padding=0, tooltip="Remove item", visible=False,
                                          on_click=lambda _e: self.cb.on_remove_item(self.position))
-        self._item_field = ft.Container(
-            content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item_sprite, self._item_name, self._item_clear, ft.Icon(ft.Icons.CHEVRON_RIGHT, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT)]),
+        self._item_button = ft.Container(
+            content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item_sprite, self._item_name, ft.Icon(ft.Icons.CHEVRON_RIGHT, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT)]),
             height=40, padding=ft.Padding.symmetric(horizontal=Space.MD), border_radius=Radius.SM, bgcolor=Palette.SURFACE_3, border=ft.Border.all(1, Palette.OUTLINE),
-            on_click=lambda _e: self.cb.on_item(self.position), ink=True, tooltip="Choose held item",
+            on_click=lambda _e: self.cb.on_item(self.position), ink=True, tooltip="Choose held item", expand=True,
+        )
+        self._item_field = ft.Row(
+            spacing=Space.XS,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[self._item_button, self._item_clear],
         )
         self._deltas = ft.Row(spacing=Space.XS, wrap=True, tight=True)
         self._guardrail = InlineBanner(visible=False)
@@ -311,11 +316,11 @@ class SlotCard(ft.Container):
         for i, button in enumerate(self._moves):
             move = moves[i] if i < len(moves) else None
             button.update_from(move, species=pokemon.display_name)
-            self._move_values[i] = move.name if move else ""
         hits = slot.super_effective_against
+        has_any_move = any(m is not None and bool(m.name) for m in slot.moves)
         if not slot.damaging_types:
-            self._coverage_label.value = "No damaging moves" if slot.moves else "Coverage"
-            self._coverage_chips.controls = [] if slot.moves else [ft.Text("pick moves to see what this slot hits", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.DISABLED)]
+            self._coverage_label.value = "No damaging moves" if has_any_move else "Coverage"
+            self._coverage_chips.controls = [] if has_any_move else [ft.Text("pick moves to see what this slot hits", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.DISABLED)]
         else:
             self._coverage_label.value = f"Hits SE · {len(hits)}"
             shown = hits[:8]

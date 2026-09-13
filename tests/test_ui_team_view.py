@@ -118,6 +118,49 @@ class TestTeamView(_TeamViewCase):
         self.assertEqual(card._form_caption.value, "Mega Charizard X")
         self.assertTrue(card._guardrail.visible)
 
+    def test_move_picker_flow_sets_and_clears_specific_slots(self):
+        self.view.ensure_loaded()
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        card = self.view.cards[0]
+        # Open move picker for Move 3 (index 2) when moves 1 and 2 are empty
+        self.view._open_move_picker(1, 2)
+        dialog = self.page.dialogs[-1]
+        self.assertFalse(dialog._current)
+        dialog._on_pick("Flamethrower")
+        # Ensure slot 3 got Flamethrower, and slot 1/2 remain empty
+        self.assertEqual(card._moves[2]._name.value, "Flamethrower")
+        self.assertEqual(card._moves[0]._name.value, "Move 1…")
+        self.assertEqual(card._moves[1]._name.value, "Move 2…")
+        self.assertEqual(self.store.slot(1).moves[2].name, "Flamethrower")
+        self.assertIsNone(self.store.slot(1).moves[0])
+        # Open Move 3 picker again: current should now be Flamethrower
+        self.view._open_move_picker(1, 2)
+        dialog2 = self.page.dialogs[-1]
+        self.assertEqual(dialog2._current, "Flamethrower")
+        # Clear move
+        dialog2._on_pick(None)
+        self.assertEqual(card._moves[2]._name.value, "Move 3…")
+        self.assertIsNone(self.store.slot(1).moves[2])
+
+    def test_item_clear_removes_item_without_opening_dialog(self):
+        self.view.ensure_loaded()
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        self.store.set_item(1, "choice-band")
+        card = self.view.cards[0]
+        self.assertEqual(card._item_name.value, "Choice Band")
+        self.assertTrue(card._item_clear.visible)
+        dialog_count = len(self.page.dialogs)
+        # Click item clear button directly
+        card._item_clear.on_click(None)
+        self.assertIsNone(self.store.slot(1).item)
+        self.assertEqual(card._item_name.value, "Held item…")
+        self.assertFalse(card._item_clear.visible)
+        # Verify no ItemPickerDialog was opened
+        new_dialogs = self.page.dialogs[dialog_count:]
+        self.assertFalse(any(isinstance(d, ItemPickerDialog) for d in new_dialogs))
+
     def test_spread_dialog_saves_and_rejects(self):
         self.view.ensure_loaded()
         self.store.create_team("Sun")

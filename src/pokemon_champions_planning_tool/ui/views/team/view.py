@@ -82,7 +82,7 @@ class TeamView(ft.Column):
             on_ability=self.store.set_ability,
             on_tera=self.store.set_tera,
             on_item=self._open_item_picker,
-            on_remove_item=lambda p: self.store.set_item(p, None),
+            on_remove_item=self._remove_item,
             on_move=self.store.set_move,
             on_move_pick=self._open_move_picker,
             on_notes=self.store.set_notes,
@@ -305,12 +305,17 @@ class TeamView(ft.Column):
         if slot.entry is None:
             return
         options = self.store.move_options(position)
-        current = slot.moves[index].name if index < len(slot.moves) else None
+        current = slot.moves[index].name if (index < len(slot.moves) and slot.moves[index] is not None) else None
         page = self.ctx.page
 
         def pick(name: str | None) -> None:
             page.pop_dialog()
             self.store.set_move(position, index, name or "")
+            mon = slot.entry.pokemon.display_name if slot.entry else "Pokémon"
+            if name:
+                self.ctx.toast(f"{mon} learned {name}", "success")
+            else:
+                self.ctx.toast(f"Cleared move {index + 1} on {mon}", "info")
 
         dialog = MovePickerDialog(
             species_label=slot.entry.pokemon.display_name,
@@ -335,6 +340,14 @@ class TeamView(ft.Column):
             self.ctx.toast("This slot cannot be calculated", "warning")
             return
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=pokemon))
+
+    def _remove_item(self, position: int) -> None:
+        slot = self.store.slot(position)
+        if not slot.filled:
+            return
+        name = slot.entry.pokemon.display_name if slot.entry else "Pokémon"
+        self.store.set_item(position, None)
+        self.ctx.toast(f"Removed item from {name}", "info")
 
     def _open_item_picker(self, position: int) -> None:
         slot = self.store.slot(position)

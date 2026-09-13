@@ -266,7 +266,7 @@ class TestLegalityInTeamBuilder(unittest.TestCase):
         self.store.set_move(1, 0, "Heat Wave")
         self.store.set_move(1, 1, "Aqua Jet")
         slot = self.store.slot(1)
-        self.assertEqual([(m.name, m.legal) for m in slot.moves], [("Heat Wave", True), ("Aqua Jet", False)])
+        self.assertEqual([(m.name, m.legal) for m in slot.moves if m], [("Heat Wave", True), ("Aqua Jet", False)])
         self.assertEqual(slot.illegal_moves, ["Aqua Jet"])
         self.assertIn("1 move flagged", [c.label for c in self.store.summary.checks])
         # megas use the base learnset

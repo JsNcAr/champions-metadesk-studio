@@ -350,15 +350,23 @@ class TeamStore:
     def set_notes(self, position: int, notes: str) -> None:
         self._update(position, notes=notes.strip())
 
-    def _resolve_moves(self, slot: SlotModel) -> tuple[SlotMove, ...]:
+    def _resolve_moves(self, slot: SlotModel) -> tuple[SlotMove | None, ...]:
         if slot.member is None or slot.entry is None:
             return ()
         cid = slot.entry.pokemon.canonical_id
-        return tuple(
-            SlotMove(name=m.name, info=self.catalogs.move_by_name(m.name), legal=self.catalogs.move_legality(cid, m.name))
-            for m in slot.member.moveset[:4]
-            if m.name
-        )
+        raw = list(slot.member.moveset)[:4]
+        while len(raw) < 4:
+            raw.append(PokemonMove(name=""))
+        resolved: list[SlotMove | None] = []
+        for m in raw:
+            if m and m.name and m.name.strip():
+                name = m.name.strip()
+                resolved.append(
+                    SlotMove(name=name, info=self.catalogs.move_by_name(name), legal=self.catalogs.move_legality(cid, name))
+                )
+            else:
+                resolved.append(None)
+        return tuple(resolved)
 
     def move_options(self, position: int) -> MoveOptions:
         """Legal moves for the slot's species (base form for megas), every other move, and
@@ -372,10 +380,14 @@ class TeamStore:
         slot = self.slot(position)
         if slot.member is None:
             return
-        moves: list[PokemonMove | None] = list(slot.member.moveset)[:4]
-        moves += [None] * (4 - len(moves))
-        moves[index] = PokemonMove(name=name.strip()) if name.strip() else None
-        self._update(position, moveset=[m for m in moves if m is not None])
+        moves: list[PokemonMove] = [
+            PokemonMove(name=m.name.strip()) if (m and m.name and m.name.strip()) else PokemonMove(name="")
+            for m in slot.member.moveset[:4]
+        ]
+        while len(moves) < 4:
+            moves.append(PokemonMove(name=""))
+        moves[index] = PokemonMove(name=name.strip())
+        self._update(position, moveset=moves)
 
     def set_item(self, position: int, item_id: str | None) -> ItemRecord | None:
         """Hold an item. A Mega Stone for this species switches to its mega form; removing
@@ -385,10 +397,11 @@ class TeamStore:
             return None
         item = self.catalogs.item_for(item_id) if item_id else None
         form = slot.member.selected_form or "base"
+        is_currently_mega = slot.form is not None and slot.form.is_mega
         if item is not None and item.target_species:
             if item.target_species.lower() == slot.species_name.lower():
                 form = self._mega_form_for(slot, item) or form
-        elif form != "base":
+        elif is_currently_mega:
             form = "base"
         updates: dict[str, Any] = {"item": item.canonical_id if item else None, "selected_form": form}
         if slot.entry is not None:
@@ -397,7 +410,7 @@ class TeamStore:
             if chosen is not None:
                 if chosen.is_mega and chosen.ability:
                     updates["ability"] = chosen.ability
-                elif not chosen.is_mega:
+                elif not chosen.is_mega and is_currently_mega:
                     current = slot.member.ability
                     base_abilities = [a.name.replace("-", " ").title() for a in slot.entry.pokemon.abilities]
                     if current and current not in base_abilities and base_abilities:

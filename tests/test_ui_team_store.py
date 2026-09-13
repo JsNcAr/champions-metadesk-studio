@@ -110,6 +110,17 @@ class TestTeamStore(_TeamStoreCase):
         self.store.set_item(1, None)
         self.assertIsNone(self.store.slot(1).item)
 
+    def test_set_item_preserves_non_mega_form(self):
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        # Manually set a non-base, non-mega form (e.g. regional or gender variant)
+        self.store._update(1, selected_form="charizard")
+        self.assertEqual(self.store.slot(1).member.selected_form, "charizard")
+        self.store.set_item(1, "choice-band")
+        self.assertEqual(self.store.slot(1).member.selected_form, "charizard", "Non-mega forms are preserved when equipping items")
+        self.store.set_item(1, None)
+        self.assertEqual(self.store.slot(1).member.selected_form, "charizard", "Non-mega forms are preserved when removing items")
+
     def test_set_form_mega_ability_synchronization(self):
         self.store.create_team("Sun")
         self.store.assign(1, self.charizard)
@@ -188,7 +199,9 @@ class TestTeamStore(_TeamStoreCase):
         self.store.set_move(1, 0, "Heat Wave")
         self.store.set_move(1, 3, "Protect")
         self.store.set_move(1, 0, "")
-        self.assertEqual([m.name for m in self.store.slot(1).member.moveset], ["Protect"])
+        self.assertIsNone(self.store.slot(1).moves[0])
+        self.assertEqual(self.store.slot(1).moves[3].name, "Protect")
+        self.assertEqual([m.name for m in self.store.slot(1).member.moveset if m.name], ["Protect"])
         self.store.set_tera(1, "Grass")
         self.store.set_notes(1, "  lead  ")
         member = self.store.slot(1).member
@@ -196,6 +209,7 @@ class TestTeamStore(_TeamStoreCase):
         text = self.store.export_text()
         self.assertIn("Charizard", text)
         self.assertIn("Tera Type: Grass", text)
+        self.assertIn("- Protect", text)
 
     def test_clear_restore_swap_rename_delete(self):
         self.store.create_team("Sun")

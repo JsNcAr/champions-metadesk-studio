@@ -59,7 +59,7 @@ class SlotModel:
     megas: list[MegaEvolutionRecord] = field(default_factory=list)
     item: ItemRecord | None = None
     validation: ValidationResult | None = None
-    moves: tuple[SlotMove, ...] = ()
+    moves: tuple[SlotMove | None, ...] = ()
 
     # -- derived -------------------------------------------------------------------------
 
@@ -74,6 +74,8 @@ class SlotModel:
         Showdown lists their base power as 0."""
         out: list[str] = []
         for m in self.moves:
+            if m is None:
+                continue
             info = m.info
             if info is None or not info.type or (info.category or "").lower() == "status":
                 continue
@@ -91,7 +93,7 @@ class SlotModel:
 
     @property
     def illegal_moves(self) -> list[str]:
-        return [m.name for m in self.moves if m.legal is False]
+        return [m.name for m in self.moves if m is not None and m.legal is False]
 
     @property
     def is_planned(self) -> bool:

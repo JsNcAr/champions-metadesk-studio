@@ -21,6 +21,7 @@ from pokemon_champions_planning_tool.ui.help import TIPS  # noqa: E402
 from pokemon_champions_planning_tool.ui.preferences import Preferences  # noqa: E402
 from pokemon_champions_planning_tool.ui.theme import Accent  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc import CalcRequest, CalcState, CalcStore, CalcView, PokemonState, pokemon_from_parsed, pokemon_from_slot  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.calc.sweep import SweepPanel  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.store import PREF_STATE  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.meta.row import TeamRow  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.team.slot_card import SlotCallbacks  # noqa: E402
@@ -676,6 +677,69 @@ class TestCalcStoreDbUsage(unittest.TestCase):
         self.assertEqual(sweep[0].canonical_id, "incineroar")
         self.assertEqual(sweep[0].usage_count, 2)
 
+    def test_progressive_sweep_and_cache(self):
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+
+        # Mock progressive callback
+        progressive_results = []
+        def on_prog(entries):
+            progressive_results.append(entries)
+
+        # Add dummy species to catalogs so count exceeds 30
+        for i in range(35):
+            cid = f"dummy_{i}"
+            sp = species(cid, f"Dummy {i}", ("Normal",), {"hp": 100, "atk": 100, "def": 100, "spa": 100, "spd": 100, "spe": 100}, (), 50)
+            self.store.catalogs.species_by_canonical[cid] = sp
+
+        final_sweep = self.store.compute_sweep(on_progressive=on_prog)
+        self.assertTrue(len(progressive_results) >= 1)
+        self.assertEqual(len(progressive_results[0]), 30)
+        self.assertGreater(len(final_sweep), 30)
+
+        # publish_progressive_sweep does not set sweep_key
+        initial_key = self.store._sweep_key
+        self.store._sweep_key = None
+        self.store.publish_progressive_sweep(progressive_results[0])
+        self.assertIsNone(self.store._sweep_key)
+        self.assertEqual(len(self.store.sweep), 30)
+
+        # publish_sweep sets sweep_key
+        self.store.publish_sweep(final_sweep)
+        self.assertEqual(self.store._sweep_key, self.store.sweep_key())
+        self.assertEqual(len(self.store.sweep), len(final_sweep))
+
+    def test_sweep_panel_pagination(self):
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+
+        # Create 50 dummy entries in sweep
+        for i in range(50):
+            cid = f"dummy_panel_{i}"
+            sp = species(cid, f"Dummy Panel {i}", ("Normal",), {"hp": 100, "atk": 100, "def": 100, "spa": 100, "spd": 100, "spe": 100}, (), 50)
+            self.store.catalogs.species_by_canonical[cid] = sp
+
+        sweep = self.store.compute_sweep()
+        self.store.publish_sweep(sweep)
+        self.assertGreater(len(self.store.sweep), 40)
+
+        panel = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=lambda _e: None)
+        panel.render()
+
+        # Should render 40 cards + 1 show more button
+        self.assertEqual(len(panel._list.controls), 41)
+        btn_container = panel._list.controls[-1]
+        self.assertIsInstance(btn_container, ft.Container)
+        self.assertIsInstance(btn_container.content, ft.TextButton)
+        self.assertIn("remaining", str(btn_container.content.content))
+
+        # Trigger show more
+        btn_container.content.on_click(None)
+        self.assertEqual(panel._limit, 80)
+        self.assertEqual(len(panel._list.controls), len(sweep))
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

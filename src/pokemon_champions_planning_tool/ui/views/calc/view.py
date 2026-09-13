@@ -109,11 +109,19 @@ class CalcView(ft.Column):
             return
         self._sweep_running = True
         self.sweep.set_busy(True)
+        key = self.store.sweep_key()
 
-        def done(entries) -> None:
+        def prog(entries: tuple[SweepEntry, ...]) -> None:
+            if self._sweep_running and self.store.sweep_key() == key:
+                self.store.publish_progressive_sweep(entries)
+
+        def done(entries: tuple[SweepEntry, ...]) -> None:
             self._sweep_running = False
             self.sweep.set_busy(False)
-            self.store.publish_sweep(entries)
+            if self.store.sweep_key() == key:
+                self.store.publish_sweep(entries)
+            else:
+                self._maybe_sweep()
 
         def failed(exc: BaseException) -> None:
             self._sweep_running = False
@@ -122,7 +130,11 @@ class CalcView(ft.Column):
             print(f"⚠️ Opponent sweep failed: {exc}")
 
         try:
-            self.ctx.run_in_background(self.store.compute_sweep, on_done=done, on_error=failed)
+            self.ctx.run_in_background(
+                lambda: self.store.compute_sweep(on_progressive=lambda e: self.ctx.post(prog, e)),
+                on_done=done,
+                on_error=failed,
+            )
         except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
             done(self.store.compute_sweep())
 

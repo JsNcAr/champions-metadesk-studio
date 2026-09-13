@@ -23,7 +23,8 @@ CLASS_HELP = {
     "mitigated": "you win the race",
     "crushed": "you KO in one hit and they cannot KO you first",
 }
-_LIMIT = 80
+_INITIAL_LIMIT = 40
+_PAGE_SIZE = 40
 
 
 class SweepCard(ft.Container):
@@ -31,7 +32,6 @@ class SweepCard(ft.Container):
         super().__init__()
         e = entry
         yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
-        theirs = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
         theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
         theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
         speed = ft.Text(f"Spe {e.speed} {'▼' if e.faster else '▲'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
@@ -53,7 +53,6 @@ class SweepCard(ft.Container):
         self.bgcolor = Palette.SURFACE_2
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.ink = True
-        self.tooltip = "Load as defender"
         self.tooltip = f"Load as defender · {e.usage_count} tournament teams" if e.usage_count > 0 else "Load as defender"
         self.on_click = lambda _e: on_pick(entry)
 
@@ -65,6 +64,7 @@ class SweepPanel(ft.Container):
         self._on_pick = on_pick
         self.query = ""
         self.klass: str | None = None
+        self._limit = _INITIAL_LIMIT
         self._presets = ft.Switch(label="Tournament sets", value=store.sweep_presets, tooltip="Give each opponent its four most used moves from the stored rosters",
                                   on_change=lambda e: store.set_sweep_presets(bool(e.control.value)))
         self._sort = ft.Dropdown(
@@ -89,7 +89,6 @@ class SweepPanel(ft.Container):
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
         self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
             SectionHeader("Opponents", accent=accent, action=ft.IconButton(icon=ft.Icons.HELP_OUTLINE, icon_size=IconSize.SM, tooltip="\n".join(f"{dict(SWEEP_CLASSES)[k]}: {v}" for k, v in CLASS_HELP.items()))),
-            self._presets, self._search, self._chip_row,
             self._presets, self._sort, self._search, self._chip_row,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
             self._list,
@@ -123,6 +122,7 @@ class SweepPanel(ft.Container):
     def _on_sort_changed(self, value: str | None) -> None:
         if not value:
             return
+        self._limit = _INITIAL_LIMIT
         if value.startswith("usage:"):
             reg = value.split(":", 1)[1]
             self.store.set_sweep_sort("usage", reg)
@@ -131,10 +131,12 @@ class SweepPanel(ft.Container):
 
     def _set_query(self, query: str) -> None:
         self.query = query
+        self._limit = _INITIAL_LIMIT
         self.render()
 
     def _set_class(self, key: str | None) -> None:
         self.klass = key
+        self._limit = _INITIAL_LIMIT
         for k, chip in self._chips.items():
             chip.selected = k == key
         self.render()
@@ -166,9 +168,25 @@ class SweepPanel(ft.Container):
             self._list.controls = []
         else:
             self._status.value = f"{len(shown)} of {len(entries)} opponents vs {attacker.name if attacker else '?'}"
-            self._list.controls = [SweepCard(e, on_pick=self._on_pick) for e in shown[:_LIMIT]]
-            if len(shown) > _LIMIT:
-                self._list.controls.append(ft.Text(f"… {len(shown) - _LIMIT} more — narrow the search", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
+            self._list.controls = [SweepCard(e, on_pick=self._on_pick) for e in shown[:self._limit]]
+            if len(shown) > self._limit:
+                remaining = len(shown) - self._limit
+
+                def _show_more(_e: ft.ControlEvent) -> None:
+                    self._limit += _PAGE_SIZE
+                    self.render()
+
+                self._list.controls.append(
+                    ft.Container(
+                        alignment=ft.Alignment.CENTER,
+                        padding=ft.Padding.symmetric(vertical=Space.XS),
+                        content=ft.TextButton(
+                            f"Show more opponents ({remaining} remaining)…",
+                            icon=ft.Icons.EXPAND_MORE,
+                            on_click=_show_more,
+                        ),
+                    )
+                )
         self._safe_update(self)
 
     @staticmethod

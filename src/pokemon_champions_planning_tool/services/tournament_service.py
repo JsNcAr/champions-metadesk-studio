@@ -361,6 +361,19 @@ class TournamentService:
 
     def common_builds_by_species(self, top_moves: int = 4, *, battle_format: str | None = "doubles") -> dict[str, TournamentBuild]:
         """Tournament build per species: top moves, most common nature, item, and ability."""
+        cached = self.repo.get_cached_preset_builds(battle_format)
+        if cached is not None:
+            return {
+                cid: TournamentBuild(
+                    canonical_id=d.get("canonical_id", cid),
+                    moves=list(d.get("moves", []))[:top_moves],
+                    nature=d.get("nature"),
+                    item=d.get("item"),
+                    ability=d.get("ability"),
+                )
+                for cid, d in cached.items()
+            }
+
         moves_usage = self.repo.move_usage_all(battle_format=battle_format)
         natures_usage = self.repo.nature_usage_all(battle_format=battle_format)
         items_usage = self.repo.item_usage_all(battle_format=battle_format)
@@ -368,18 +381,28 @@ class TournamentService:
 
         all_keys = set(moves_usage.keys()) | set(natures_usage.keys()) | set(items_usage.keys()) | set(abilities_usage.keys())
         builds: dict[str, TournamentBuild] = {}
+        cached_data: dict[str, dict[str, Any]] = {}
         for cid in all_keys:
             top_m = [name for name, _n in moves_usage.get(cid, [])[:top_moves]]
             top_nat = natures_usage.get(cid, [(None, 0)])[0][0] if natures_usage.get(cid) else None
             top_itm = items_usage.get(cid, [(None, 0)])[0][0] if items_usage.get(cid) else None
             top_ab = abilities_usage.get(cid, [(None, 0)])[0][0] if abilities_usage.get(cid) else None
-            builds[cid] = TournamentBuild(
+            b = TournamentBuild(
                 canonical_id=cid,
                 moves=top_m,
                 nature=top_nat,
                 item=top_itm,
                 ability=top_ab,
             )
+            builds[cid] = b
+            cached_data[cid] = {
+                "canonical_id": cid,
+                "moves": top_m,
+                "nature": top_nat,
+                "item": top_itm,
+                "ability": top_ab,
+            }
+        self.repo.set_cached_preset_builds(battle_format, cached_data)
         return builds
 
     def search_team_rows(

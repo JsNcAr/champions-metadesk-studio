@@ -141,18 +141,23 @@ def final_speed(p: PokemonState, species: SpeciesInfo, field: FieldState, side: 
 
 
 def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catalogs: Catalogs, calc: Callable = calculate,
-             a_species: SpeciesInfo | None = None, d_species: SpeciesInfo | None = None) -> tuple[MoveResult, ...]:
+             a_species: SpeciesInfo | None = None, d_species: SpeciesInfo | None = None,
+             *, fast: bool = False, a_engine: CalcPokemon | None = None, d_engine: CalcPokemon | None = None,
+             prebuilt_moves: list[tuple[Any, str]] | None = None) -> tuple[MoveResult, ...]:
     a_species = a_species or catalogs.species_for(attacker.species)
     d_species = d_species or catalogs.species_for(defender.species)
     if a_species is None or d_species is None:
         return ()
-    a = engine_pokemon(attacker, a_species)
-    d = engine_pokemon(defender, d_species)
+    a = a_engine if a_engine is not None else engine_pokemon(attacker, a_species)
+    d = d_engine if d_engine is not None else engine_pokemon(defender, d_species)
     out: list[MoveResult] = []
-    for index, name in enumerate(attacker.moves):
+    moves_iter = prebuilt_moves if prebuilt_moves is not None else [
+        (build_calc_move(name, catalogs, attacker_ability=a.ability or (a.abilities[0] if a.abilities else None), is_crit=bool(attacker.crit[index])) if name else None, name)
+        for index, name in enumerate(attacker.moves)
+    ]
+    for index, (move, name) in enumerate(moves_iter):
         if not name:
             continue
-        move = build_calc_move(name, catalogs, attacker_ability=a.ability or (a.abilities[0] if a.abilities else None), is_crit=bool(attacker.crit[index]))
         if move is None:
             out.append(MoveResult(index, name, None, None, 0, 0, 0.0, 0.0, (), "", "", error="Not in the move catalogue"))
             continue
@@ -168,11 +173,21 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
                 continue
             try:
                 description = result.desc()
-                ko_text = result.ko_chance().text
             except DescError:
-                description, ko_text = "", ""
+                description = ""
+            if fast:
+                ko_text = ""
+                recoil = None
+                recovery = None
+            else:
+                try:
+                    ko_text = result.ko_chance().text
+                except DescError:
+                    ko_text = ""
+                recoil = result.recoil()[1] or None
+                recovery = result.recovery()[1] or None
             mr = MoveResult(index, name, result.move.type, move.category, lo, hi, result.min_pct, result.max_pct, tuple(result.rolls), description, ko_text,
-                            result.recoil()[1] or None, result.recovery()[1] or None, bp=result.move_bp, effectiveness=eff)
+                            recoil, recovery, bp=result.move_bp, effectiveness=eff)
             out.append(replace(mr, ko_hits=hits_to_ko(mr)))
         except Exception as exc:  # noqa: BLE001 - one bad move must not hide the others
             out.append(MoveResult(index, name, move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error=f"{type(exc).__name__}: {exc}"))
@@ -421,7 +436,6 @@ class CalcStore:
             if self._sf is not None:
                 try:
                     with self._sf() as s:
-                        self._preset_builds = TournamentService(s).common_builds_by_species(top_moves=4)
                         pref = TournamentRepository(s).get_state("pref_battle_format") or "doubles"
                         self._preset_builds = TournamentService(s).common_builds_by_species(top_moves=4, battle_format=pref)
                 except Exception:  # noqa: BLE001 - presets are a convenience
@@ -438,7 +452,6 @@ class CalcStore:
             if self._sf is not None:
                 try:
                     with self._sf() as s:
-                        self._preset_moves = TournamentService(s).common_moves_by_species(top=4)
                         pref = TournamentRepository(s).get_state("pref_battle_format") or "doubles"
                         self._preset_moves = TournamentService(s).common_moves_by_species(top=4, battle_format=pref)
                 except Exception:  # noqa: BLE001 - presets are a convenience
@@ -702,7 +715,12 @@ class CalcStore:
             res.sort(key=lambda e: e.name.lower())
         return tuple(res)
 
-    def compute_sweep(self) -> tuple[SweepEntry, ...]:
+    def publish_progressive_sweep(self, entries: tuple[SweepEntry, ...]) -> None:
+        """Publish partial progressive sweep results without marking the full sweep as complete."""
+        self.sweep = self._order_sweep(entries, self.sweep_sort)
+        self._notify(("sweep",))
+
+    def compute_sweep(self, on_progressive: Callable[[tuple[SweepEntry, ...]], None] | None = None) -> tuple[SweepEntry, ...]:
         """Every legal species against the attacker: their class, speed and both best moves.
         Pure computation (no notification) so it can run on a worker thread; call
         ``publish_sweep`` with the result on the UI thread."""
@@ -716,10 +734,35 @@ class CalcStore:
         field_ba = engine_field(self.state.field, attacker_is_left=False)
         my_speed = final_speed(attacker, a_species, self.state.field, "left")
         umap = self.get_usage_map(self.sweep_regulation)
+
+        a_engine = engine_pokemon(attacker, a_species)
+        a_moves = [
+            (
+                build_calc_move(
+                    name,
+                    self.catalogs,
+                    attacker_ability=a_engine.ability or (a_engine.abilities[0] if a_engine.abilities else None),
+                    is_crit=bool(attacker.crit[i]),
+                ),
+                name,
+            )
+            if name
+            else (None, None)
+            for i, name in enumerate(attacker.moves)
+        ]
+
+        legal_species = [s for s in self.catalogs.species_by_canonical.values() if s.is_legal]
+        legal_species.sort(
+            key=lambda s: (
+                umap.get(s.canonical_id.lower()) or umap.get((s.base_species_id or "").lower(), 0),
+                s.name.lower(),
+            ),
+            reverse=True,
+        )
+
         entries: list[SweepEntry] = []
-        for species in self.catalogs.species_by_canonical.values():
-            if not species.is_legal:
-                continue
+        notified_progressive = False
+        for species in legal_species:
             build = (builds.get(species.canonical_id) or builds.get(species.base_species_id)) if builds else None
             if build is not None:
                 their_moves = list(build.moves)[:4]
@@ -739,14 +782,39 @@ class CalcStore:
             else:
                 their_moves = []
                 defender = pokemon_from_species_id(species.canonical_id, species)
-            yours = best_of(run_side(attacker, defender, field_ab, self.catalogs, self._calc, a_species, species))
-            theirs = best_of(run_side(defender, attacker, field_ba, self.catalogs, self._calc, species, a_species)) if their_moves else None
+            d_engine = engine_pokemon(defender, species)
+            yours = best_of(
+                run_side(
+                    attacker, defender, field_ab, self.catalogs, self._calc,
+                    a_species, species,
+                    fast=True, a_engine=a_engine, d_engine=d_engine, prebuilt_moves=a_moves,
+                )
+            )
+            theirs = (
+                best_of(
+                    run_side(
+                        defender, attacker, field_ba, self.catalogs, self._calc,
+                        species, a_species,
+                        fast=True, a_engine=d_engine, d_engine=a_engine,
+                    )
+                )
+                if their_moves
+                else None
+            )
             speed = final_speed(defender, species, self.state.field, "right")
             faster = (my_speed > speed) != self.state.field.trick_room if my_speed != speed else False
             cid_lower = species.canonical_id.lower()
             base_lower = (species.base_species_id or "").lower()
             usage = umap.get(cid_lower) or umap.get(base_lower, 0)
             entries.append(SweepEntry(species.canonical_id, species.name, speed, classify(yours, theirs, faster), yours, theirs, faster, bool(their_moves), usage_count=usage))
+
+            if on_progressive is not None and not notified_progressive and len(entries) >= 30:
+                notified_progressive = True
+                try:
+                    on_progressive(self._order_sweep(entries, self.sweep_sort))
+                except Exception:  # noqa: BLE001
+                    pass
+
         self._sweep_key = key
         return self._order_sweep(entries, self.sweep_sort)
 
@@ -816,5 +884,4 @@ class CalcStore:
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]
 __all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]

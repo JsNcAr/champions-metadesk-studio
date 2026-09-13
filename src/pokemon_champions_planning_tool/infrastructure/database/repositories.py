@@ -937,6 +937,39 @@ class TournamentRepository:
         self.session.add(record)
         self.session.commit()
 
+    def get_cached_preset_builds(self, battle_format: str | None) -> dict[str, Any] | None:
+        """Retrieve cached preset builds JSON from AppStateRecord if present."""
+        bformat = battle_format or "doubles"
+        val = self.get_state(f"cache_preset_builds_{bformat}")
+        if val:
+            try:
+                import json
+                return json.loads(val)
+            except Exception:
+                pass
+        return None
+
+    def set_cached_preset_builds(self, battle_format: str | None, builds_data: dict[str, Any]) -> None:
+        """Cache preset builds JSON in AppStateRecord."""
+        bformat = battle_format or "doubles"
+        try:
+            import json
+            self.set_state(f"cache_preset_builds_{bformat}", json.dumps(builds_data))
+        except Exception:
+            pass
+
+    def invalidate_preset_builds_cache(self, *, commit: bool = True) -> None:
+        """Invalidate cached preset builds across all formats."""
+        for bformat in ("doubles", "singles", "all"):
+            record = self.session.get(AppStateRecord, f"cache_preset_builds_{bformat}")
+            if record:
+                self.session.delete(record)
+        if commit:
+            try:
+                self.session.commit()
+            except Exception:
+                self.session.rollback()
+
     def add_tournament_if_missing(self, tournament: TournamentRecord) -> bool:
         """Insert a discovered event; an existing row (and its sync state) is left alone."""
         if self.session.get(TournamentRecord, tournament.tournament_id) is not None:
@@ -990,6 +1023,7 @@ class TournamentRepository:
             self.session.delete(member)
         for team in teams:
             self.session.delete(team)
+        self.invalidate_preset_builds_cache(commit=False)
         self.session.commit()
         return len(teams)
 
@@ -1012,6 +1046,7 @@ class TournamentRepository:
             for m in members:
                 m.tournament_team_id = team.tournament_team_id
                 self.session.add(m)
+        self.invalidate_preset_builds_cache(commit=False)
         self.session.commit()
         return len(entries)
 
@@ -1026,6 +1061,7 @@ class TournamentRepository:
         for m in members:
             m.tournament_team_id = team.tournament_team_id
             self.session.add(m)
+        self.invalidate_preset_builds_cache(commit=False)
         self.session.commit()
         return team
 
@@ -1286,15 +1322,18 @@ class TournamentRepository:
         in one query (megas fold into their base species)."""
         from sqlalchemy import text as _text
 
-        extra = ""
+        joins = ""
+        where = ""
         params: dict[str, Any] = {}
         if battle_format and battle_format != "all":
-            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            joins = "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
+            where = "AND tr.battle_format = :bformat "
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
-                "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
-                f"WHERE m.base_canonical_id != '' {extra}GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
+                "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n FROM tournament_team_members m "
+                f"{joins}, json_each(m.moves) j "
+                f"WHERE m.base_canonical_id != '' {where}GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
             ).bindparams(**params)
         ).all()
         out: dict[str, list[tuple[str, int]]] = {}
@@ -1307,16 +1346,18 @@ class TournamentRepository:
         """{base species id: [(nature, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
-        extra = ""
+        joins = ""
+        where = ""
         params: dict[str, Any] = {}
         if battle_format and battle_format != "all":
-            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            joins = "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
+            where = "AND tr.battle_format = :bformat "
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, LOWER(m.nature) AS nature, COUNT(*) AS n "
-                "FROM tournament_team_members m "
-                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.nature IS NOT NULL AND m.nature != '' {extra}"
+                f"FROM tournament_team_members m {joins}"
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.nature IS NOT NULL AND m.nature != '' {where}"
                 "GROUP BY base_cid, cid, LOWER(m.nature) ORDER BY n DESC"
             ).bindparams(**params)
         ).all()
@@ -1332,16 +1373,18 @@ class TournamentRepository:
         """{species id: [(item, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
-        extra = ""
+        joins = ""
+        where = ""
         params: dict[str, Any] = {}
         if battle_format and battle_format != "all":
-            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            joins = "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
+            where = "AND tr.battle_format = :bformat "
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.item AS item, COUNT(*) AS n "
-                "FROM tournament_team_members m "
-                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.item IS NOT NULL AND m.item != '' {extra}"
+                f"FROM tournament_team_members m {joins}"
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.item IS NOT NULL AND m.item != '' {where}"
                 "GROUP BY base_cid, cid, m.item ORDER BY n DESC"
             ).bindparams(**params)
         ).all()
@@ -1357,16 +1400,18 @@ class TournamentRepository:
         """{species id: [(ability, count), …] most used first} for every species."""
         from sqlalchemy import text as _text
 
-        extra = ""
+        joins = ""
+        where = ""
         params: dict[str, Any] = {}
         if battle_format and battle_format != "all":
-            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            joins = "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
+            where = "AND tr.battle_format = :bformat "
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
                 "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, m.ability AS ability, COUNT(*) AS n "
-                "FROM tournament_team_members m "
-                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.ability IS NOT NULL AND m.ability != '' {extra}"
+                f"FROM tournament_team_members m {joins}"
+                f"WHERE (m.base_canonical_id != '' OR m.canonical_id != '') AND m.ability IS NOT NULL AND m.ability != '' {where}"
                 "GROUP BY base_cid, cid, m.ability ORDER BY n DESC"
             ).bindparams(**params)
         ).all()

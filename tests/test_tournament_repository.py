@@ -122,6 +122,18 @@ class TestTournamentRepository(unittest.TestCase):
         all_teams = self.repo.search_teams(max_age_days=None)
         self.assertEqual(len(all_teams), 2)
 
+    def test_preset_builds_cache(self):
+        self.assertIsNone(self.repo.get_cached_preset_builds("doubles"))
+        sample = {"incineroar": {"canonical_id": "incineroar", "moves": ["Flare Blitz"]}}
+        self.repo.set_cached_preset_builds("doubles", sample)
+        cached = self.repo.get_cached_preset_builds("doubles")
+        self.assertEqual(cached, sample)
+
+        # Invalidate cache
+        self.repo.invalidate_preset_builds_cache()
+        self.assertIsNone(self.repo.get_cached_preset_builds("doubles"))
+
 
 if __name__ == "__main__":
     unittest.main()
+

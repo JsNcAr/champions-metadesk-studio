@@ -138,6 +138,38 @@ class TestStoreAndView(_Db):
         self.assertEqual(state._title.value, "Your box is empty")
         serialise(view)
 
+    def test_adding_pokemon_updates_meta_view_without_restart(self):
+        page = StubPage()
+        ctx = AppContext(page)
+        view = MetaView(ctx, MetaStore(self.sf))
+        view.ensure_loaded()
+
+        # Initially, team "two" has garchomp, kingambit, incineroar.
+        # Box has charizard, incineroar, rotom-wash.
+        # So "two" has 2 missing (garchomp and kingambit).
+        with self.sf() as s:
+            team_two_before = next(r for r in TournamentService(s).search_team_rows(owned_species=sorted(view.store.box_species)) if r.player_name == "two")
+        self.assertEqual(team_two_before.missing_count, 2)
+
+        # Now simulate adding garchomp into the box
+        with self.sf() as s:
+            repo = BoxRepository(s)
+            repo.upsert_box_entry(BoxEntry(pokemon=_mon("garchomp"), is_planned=False))
+            s.commit()
+
+        # Emit BOX_CHANGED (as BoxView._add now does)
+        ctx.bus.emit(events.BOX_CHANGED, None)
+
+        # MetaView reloads on next visit / ensure_loaded without restarting app
+        view.ensure_loaded()
+        self.assertIn("garchomp", view.store.box_species)
+
+        # Team "two" should now have garchomp in box and only 1 missing
+        with self.sf() as s:
+            team_two_after = next(r for r in TournamentService(s).search_team_rows(owned_species=sorted(view.store.box_species)) if r.player_name == "two")
+        self.assertEqual(team_two_after.missing_count, 1)
+        self.assertEqual(team_two_after.box_label, "2/3 in box")
+
 
 if __name__ == "__main__":
     unittest.main()

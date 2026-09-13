@@ -147,6 +147,21 @@ class TestBoxActions(unittest.TestCase):
         self.assertIsNone(chips[1].border_side)
         serialise(self.view)
 
+    def test_add_emits_box_changed_event(self):
+        events_fired = []
+        self.ctx.bus.on(events.BOX_CHANGED, lambda _p: events_fired.append("box_changed"))
+
+        with patch.object(self.store, "add_by_name") as mock_add:
+            p = _mon("pikachu", "Pikachu", ["electric"], 25)
+            new_entry = BoxEntry(pokemon=p)
+            mock_add.return_value = new_entry
+            with self.db.session() as s:
+                BoxRepository(s).upsert_box_entry(new_entry)
+                s.commit()
+            self.view._add("pikachu")
+
+        self.assertIn("box_changed", events_fired)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -333,6 +333,8 @@ class ImportDialog(ft.AlertDialog):
             if result.created_planned:
                 detail += f" · {len(result.created_planned)} planned"
             self._done.set_text("Team imported", detail)
+            if result.created_owned or result.created_planned:
+                self.ctx.bus.emit(events.BOX_CHANGED, None)
             self.ctx.bus.emit(events.TEAMS_CHANGED, result.team_id)
             self._go(3)
 

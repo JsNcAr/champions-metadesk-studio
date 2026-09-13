@@ -446,7 +446,15 @@ class TournamentService:
         for team in teams:
             tournament = tournaments.get(team.tournament_id)
             members = sorted(members_by_team.get(team.tournament_team_id, []), key=lambda m: m.slot_position)
-            in_box = [((m.base_canonical_id or base_canonical_id(m.canonical_id)) in owned) if owned is not None else None for m in members]
+            in_box = [
+                (
+                    ((m.base_canonical_id.lower() if m.base_canonical_id else None) or base_canonical_id(m.canonical_id)) in owned
+                    or (m.canonical_id.lower() if m.canonical_id else "") in owned
+                )
+                if owned is not None
+                else None
+                for m in members
+            ]
             rows.append(
                 MetaTeamRow(
                     team_id=team.tournament_team_id,

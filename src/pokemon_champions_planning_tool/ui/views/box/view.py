@@ -494,6 +494,7 @@ class BoxView(ft.Row):
                 self._add_banner.show(f"{entry.pokemon.display_name} is already in your box", "info")
             else:
                 self.ctx.toast(f"Added {entry.pokemon.display_name}", "success")
+                self.ctx.bus.emit(events.BOX_CHANGED, None)
             self.store.select(entry.box_entry_id)
             self._update_self()
 

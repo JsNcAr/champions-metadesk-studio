@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from sqlmodel import Session
 
 from ....domain.event_tier import OFFICIAL_TIERS, TIER_LABELS, tiers_for_filter
-from ....domain.pokemon_identity import base_canonical_id
+from ....domain.pokemon_identity import base_canonical_id, expand_canonical_aliases
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
 from ....services.tournament_service import MetaSummary, MetaTeamRow, TournamentService
@@ -163,7 +163,8 @@ class MetaStore:
         """Re-read the owned box species (call after BOX_CHANGED); marks a reload as needed."""
         with self._sf() as s:
             entries = BoxRepository(s).list_entries(include_planned=False)
-        species = frozenset(base_canonical_id(e.pokemon.canonical_id) for e in entries if not e.is_planned)
+        raw_ids = [e.pokemon.canonical_id for e in entries if not e.is_planned]
+        species = frozenset(expand_canonical_aliases(raw_ids))
         if species != self.box_species:
             self._stale = True
         self.box_species = species

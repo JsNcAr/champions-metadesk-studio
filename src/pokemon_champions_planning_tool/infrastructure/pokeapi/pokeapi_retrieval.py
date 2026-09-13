@@ -7,7 +7,13 @@ from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
 from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_ability import PokemonAbility
 from ...domain.entities.pokemon_stats import PokemonStats
-from ...domain.pokemon_identity import default_form_label, format_display_name, format_api_name
+from ...domain.pokemon_identity import (
+    SHOWDOWN_TO_POKEAPI_SLUG,
+    default_form_label,
+    format_api_name,
+    format_display_name,
+)
+from ...domain.species import CANONICAL_ALIASES
 from ..database.models import MegaEvolutionRecord
 
 
@@ -59,10 +65,16 @@ def get_official_stats(pokemon_name):
     if not api_name:
         return None
 
-    pokemon_data = _get_json(f"{POKEAPI_BASE_URL}/pokemon/{api_name}")
+    # Map Showdown canonical slug to PokéAPI variety slug if they differ
+    poke_slug = SHOWDOWN_TO_POKEAPI_SLUG.get(api_name, api_name)
+
+    pokemon_data = _get_json(f"{POKEAPI_BASE_URL}/pokemon/{poke_slug}")
     if pokemon_data is None:
-        variety = _default_variety(api_name)
-        pokemon_data = _get_json(f"{POKEAPI_BASE_URL}/pokemon/{variety}") if variety and variety != api_name else None
+        variety = _default_variety(poke_slug)
+        pokemon_data = _get_json(f"{POKEAPI_BASE_URL}/pokemon/{variety}") if variety and variety != poke_slug else None
+        if pokemon_data is None and poke_slug != api_name:
+            variety = _default_variety(api_name)
+            pokemon_data = _get_json(f"{POKEAPI_BASE_URL}/pokemon/{variety}") if variety and variety != api_name else None
         if pokemon_data is None:
             return None
 
@@ -85,15 +97,21 @@ def get_official_stats(pokemon_name):
         for ability_data in pokemon_data.get('abilities', [])
     ]
 
-    form = default_form_label(api_name) or "Base"
-    if "mega" in api_name:
-        form = "Mega"
-    elif any(region in api_name for region in ["alola", "galar", "hisui", "paldea"]):
-        form = "Regional"
+    canon_id = CANONICAL_ALIASES.get(api_name, api_name)
+    form = default_form_label(canon_id)
+    if not form:
+        if canon_id.endswith(("-f", "-female")):
+            form = "Female"
+        elif "mega" in canon_id:
+            form = "Mega"
+        elif any(region in canon_id for region in ["alola", "galar", "hisui", "paldea"]):
+            form = "Regional"
+        else:
+            form = "Base"
 
     return Pokemon(
-        canonical_id=api_name,
-        display_name=format_display_name(api_name),
+        canonical_id=canon_id,
+        display_name=format_display_name(canon_id),
         species_name=pokemon_data.get("species", {}).get("name"),
         form_name=form,
         dex_number=pokemon_data.get("id"),

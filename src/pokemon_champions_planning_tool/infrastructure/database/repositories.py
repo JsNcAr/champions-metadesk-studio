@@ -16,7 +16,7 @@ from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
-from ...domain.pokemon_identity import format_api_name
+from ...domain.pokemon_identity import expand_canonical_aliases, format_api_name
 from .models import (
     AppStateRecord,
     BoxEntryRecord,
@@ -1127,7 +1127,7 @@ class TournamentRepository:
             # "At most N of the roster is missing from the box": roster size minus the
             # members whose base species is owned. Both aggregates group the indexed
             # members table once; an empty box matches nothing.
-            owned = sorted({o for o in (owned_species or ()) if o})
+            owned = sorted(expand_canonical_aliases(owned_species or ()))
             if not owned:
                 return stmt.where(False)
             # Only rows whose base species is owned are touched (indexed); the roster size

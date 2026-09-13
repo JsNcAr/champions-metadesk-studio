@@ -145,6 +145,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_member_points(conn)
         _remediate_tournament_regulations(conn)
         _remediate_tournament_battle_formats(conn)
+        _migrate_canonical_aliases(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -464,6 +465,63 @@ def _remediate_tournament_battle_formats(conn) -> None:
         conn.commit()
 
 
+def _migrate_canonical_aliases(conn) -> None:
+    """Migrate legacy PokéAPI-style variety slugs in stored records to Showdown canonical IDs."""
+    from pokemon_champions_planning_tool.domain.pokemon_identity import format_display_name
+    from pokemon_champions_planning_tool.domain.species import CANONICAL_ALIASES
+
+    for old_id, new_id in CANONICAL_ALIASES.items():
+        if old_id == new_id:
+            continue
+        try:
+            has_old = conn.execute(
+                text("SELECT canonical_id FROM pokemon_records WHERE canonical_id = :old"),
+                {"old": old_id},
+            ).fetchone()
+            if has_old:
+                has_new = conn.execute(
+                    text("SELECT canonical_id FROM pokemon_records WHERE canonical_id = :new"),
+                    {"new": new_id},
+                ).fetchone()
+                if has_new:
+                    conn.execute(
+                        text("UPDATE box_entries SET pokemon_canonical_id = :new WHERE pokemon_canonical_id = :old"),
+                        {"old": old_id, "new": new_id},
+                    )
+                    conn.execute(
+                        text("UPDATE team_members SET pokemon_canonical_id = :new WHERE pokemon_canonical_id = :old"),
+                        {"old": old_id, "new": new_id},
+                    )
+                    conn.execute(
+                        text("DELETE FROM pokemon_records WHERE canonical_id = :old"),
+                        {"old": old_id},
+                    )
+                else:
+                    new_display = format_display_name(new_id)
+                    conn.execute(
+                        text("UPDATE pokemon_records SET canonical_id = :new, display_name = :disp WHERE canonical_id = :old"),
+                        {"old": old_id, "new": new_id, "disp": new_display},
+                    )
+                    conn.execute(
+                        text("UPDATE box_entries SET pokemon_canonical_id = :new WHERE pokemon_canonical_id = :old"),
+                        {"old": old_id, "new": new_id},
+                    )
+                    conn.execute(
+                        text("UPDATE team_members SET pokemon_canonical_id = :new WHERE pokemon_canonical_id = :old"),
+                        {"old": old_id, "new": new_id},
+                    )
+
+            conn.execute(
+                text("UPDATE tournament_team_members SET canonical_id = :new WHERE canonical_id = :old"),
+                {"old": old_id, "new": new_id},
+            )
+            conn.execute(
+                text("UPDATE tournament_team_members SET base_canonical_id = :new WHERE base_canonical_id = :old"),
+                {"old": old_id, "new": new_id},
+            )
+            conn.commit()
+        except Exception:
+            pass
 
 
 @contextmanager

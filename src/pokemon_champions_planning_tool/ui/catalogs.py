@@ -26,6 +26,16 @@ from ..domain.species import SpeciesInfo, resolve_species_key
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+from ..domain.pokemon_identity import format_api_name, format_display_name, qualified_name
+
+
+@dataclass(frozen=True)
+class SpeciesSuggestion:
+    display_name: str
+    species_name: str
+    canonical_id: str = ""
+
+
 @dataclass(frozen=True)
 class Catalogs:
     champions: tuple[ChampionsSpeciesRecord, ...] = ()
@@ -159,12 +169,65 @@ class Catalogs:
             return None
         return self.items_by_id.get(reference) or self.items_by_name.get(reference.lower())
 
-    def suggest_species(self, query: str, limit: int = 8) -> list[ChampionsSpeciesRecord]:
+    def suggest_species(self, query: str, limit: int = 8) -> list[SpeciesSuggestion]:
         q = query.strip().lower()
         if len(q) < 2:
             return []
-        starts = [r for r in self.champions if r.display_name.lower().startswith(q) or (r.species_name or "").lower().startswith(q)]
-        contains = [r for r in self.champions if r not in starts and (q in r.display_name.lower() or q in (r.species_name or "").lower())]
+        q_clean = q.replace("♀", " female").replace("♂", " male").replace("(", " ").replace(")", " ")
+        q_clean = " ".join(q_clean.split())
+
+        # Collect base species from self.champions
+        suggestions: list[SpeciesSuggestion] = []
+        seen_ids: set[str] = set()
+
+        for r in self.champions:
+            cid = (r.species_name or "").lower()
+            if cid and cid not in seen_ids:
+                seen_ids.add(cid)
+                suggestions.append(SpeciesSuggestion(display_name=r.display_name, species_name=cid, canonical_id=cid))
+
+        # Collect legal non-mega, non-battle-only forms from self.species_by_canonical
+        for s in self.species_by_canonical.values():
+            if not s.is_legal or s.is_mega or s.battle_only:
+                continue
+            cid = s.canonical_id.lower()
+            if cid in seen_ids:
+                continue
+            # Format female forms nicely, e.g. "Indeedee (Female)"
+            disp = s.name
+            if cid.endswith("-f"):
+                base_disp = s.name[:-2] if s.name.endswith(("-F", "-f")) else s.name
+                disp = f"{base_disp} (Female)"
+            elif "-" in cid:
+                disp = format_display_name(cid)
+
+            seen_ids.add(cid)
+            suggestions.append(SpeciesSuggestion(display_name=disp, species_name=cid, canonical_id=cid))
+
+        def _get_variants(s: SpeciesSuggestion) -> set[str]:
+            raw_names = [
+                s.display_name.lower(),
+                s.species_name.lower(),
+                s.canonical_id.lower(),
+                qualified_name(s.display_name, s.canonical_id).lower(),
+            ]
+            variants = set(raw_names)
+            for n in raw_names:
+                cleaned = " ".join(n.replace("(", " ").replace(")", " ").replace("-", " ").split())
+                variants.add(cleaned)
+                variants.add(cleaned.replace(" ", "-"))
+            return variants
+
+        def matches_prefix(s: SpeciesSuggestion) -> bool:
+            variants = _get_variants(s)
+            return any(v.startswith(q) or (q_clean and v.startswith(q_clean)) for v in variants)
+
+        def matches_contains(s: SpeciesSuggestion) -> bool:
+            variants = _get_variants(s)
+            return any(q in v or (q_clean and q_clean in v) for v in variants)
+
+        starts = [s for s in suggestions if matches_prefix(s)]
+        contains = [s for s in suggestions if s not in starts and matches_contains(s)]
         return (starts + contains)[:limit]
 
     # -- loading ------------------------------------------------------------------------

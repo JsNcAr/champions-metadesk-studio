@@ -10,7 +10,13 @@ from uuid import UUID
 
 from sqlmodel import Session, func, select
 
-from ..domain.pokemon_identity import base_canonical_id, format_api_name, get_pokemon_sprite_url, qualified_name
+from ..domain.pokemon_identity import (
+    base_canonical_id,
+    expand_canonical_aliases,
+    format_api_name,
+    get_pokemon_sprite_url,
+    qualified_name,
+)
 from datetime import datetime
 from ..infrastructure.database.models import (
     PokemonRecord,
@@ -464,7 +470,7 @@ class TournamentService:
         ).all():
             members_by_team.setdefault(m.tournament_team_id, []).append(m)
 
-        owned = {o for o in (owned_species or ()) if o} if owned_species is not None else None
+        owned = expand_canonical_aliases(owned_species) if owned_species is not None else None
         rows: list[MetaTeamRow] = []
         for team in teams:
             tournament = tournaments.get(team.tournament_id)

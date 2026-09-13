@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import re
 """Canonical Pokemon naming helpers."""
 
@@ -109,6 +110,51 @@ _SPECIES_ALIAS_MAP: dict[str, str] = {
     "thundurus therian": "thundurus-therian",
     "tornadus therian": "tornadus-therian",
     "enamorus therian": "enamorus-therian",
+    # Gender-differentiated forms
+    "indeedee-f": "indeedee-f",
+    "indeedee f": "indeedee-f",
+    "indeedee female": "indeedee-f",
+    "indeedee-female": "indeedee-f",
+    "indeedee (female)": "indeedee-f",
+    "indeedee ♀": "indeedee-f",
+    "indeedee m": "indeedee",
+    "indeedee male": "indeedee",
+    "indeedee-male": "indeedee",
+    "indeedee (male)": "indeedee",
+    "indeedee ♂": "indeedee",
+    "basculegion-f": "basculegion-f",
+    "basculegion f": "basculegion-f",
+    "basculegion female": "basculegion-f",
+    "basculegion-female": "basculegion-f",
+    "basculegion (female)": "basculegion-f",
+    "basculegion ♀": "basculegion-f",
+    "basculegion m": "basculegion",
+    "basculegion male": "basculegion",
+    "basculegion-male": "basculegion",
+    "basculegion (male)": "basculegion",
+    "basculegion ♂": "basculegion",
+    "meowstic-f": "meowstic-f",
+    "meowstic f": "meowstic-f",
+    "meowstic female": "meowstic-f",
+    "meowstic-female": "meowstic-f",
+    "meowstic (female)": "meowstic-f",
+    "meowstic ♀": "meowstic-f",
+    "meowstic m": "meowstic",
+    "meowstic male": "meowstic",
+    "meowstic-male": "meowstic",
+    "meowstic (male)": "meowstic",
+    "meowstic ♂": "meowstic",
+    "oinkologne-f": "oinkologne-f",
+    "oinkologne f": "oinkologne-f",
+    "oinkologne female": "oinkologne-f",
+    "oinkologne-female": "oinkologne-f",
+    "oinkologne (female)": "oinkologne-f",
+    "oinkologne ♀": "oinkologne-f",
+    "oinkologne m": "oinkologne",
+    "oinkologne male": "oinkologne",
+    "oinkologne-male": "oinkologne",
+    "oinkologne (male)": "oinkologne",
+    "oinkologne ♂": "oinkologne",
 }
 
 
@@ -185,10 +231,31 @@ def format_api_name(pokemon_name: str) -> str:
     if not cleaned:
         return ""
 
+    # Clean gender symbols and parentheses before matching
+    cleaned = cleaned.replace("♀", " female").replace("♂", " male")
+    cleaned = cleaned.replace("(", " ").replace(")", " ")
+    cleaned = " ".join(cleaned.split())
+
     if cleaned in _SPECIES_ALIAS_MAP:
         return _SPECIES_ALIAS_MAP[cleaned]
 
+    hyphenated = cleaned.replace(" ", "-")
+    if hyphenated in _SPECIES_ALIAS_MAP:
+        return _SPECIES_ALIAS_MAP[hyphenated]
+
+    # Pattern match for gender suffixes for known gender-differentiated species
+    _gender_species = ("indeedee", "basculegion", "meowstic", "oinkologne")
+    for base in _gender_species:
+        if cleaned.startswith(base):
+            suffix = cleaned[len(base):].strip(" -_")
+            if suffix in ("f", "female"):
+                return f"{base}-f"
+            if suffix in ("m", "male", ""):
+                return base
+
     words = cleaned.split()
+    if not words:
+        return ""
 
     if words[0] == "mega":
         if len(words) == 3 and words[2] in ["x", "y"]:
@@ -202,7 +269,7 @@ def format_api_name(pokemon_name: str) -> str:
         "hisuian": "hisui",
         "paldean": "paldea",
     }
-    if words[0] in regional_map:
+    if words[0] in regional_map and len(words) > 1:
         return f"{words[1]}-{regional_map[words[0]]}"
 
     return "-".join(words)
@@ -308,3 +375,39 @@ def base_canonical_id(canonical_id: str | None) -> str:
         if cid.endswith(suffix):
             cid = cid[: -len(suffix)]
     return cid
+
+
+# Showdown canonical slug -> PokéAPI variety slug for endpoints that differ
+SHOWDOWN_TO_POKEAPI_SLUG: dict[str, str] = {
+    "indeedee-f": "indeedee-female",
+    "basculegion-f": "basculegion-female",
+    "meowstic-f": "meowstic-female",
+    "oinkologne-f": "oinkologne-female",
+    "maushold-four": "maushold-family-of-four",
+    "tauros-paldea-combat": "tauros-paldea-combat-breed",
+    "tauros-paldea-blaze": "tauros-paldea-blaze-breed",
+    "tauros-paldea-aqua": "tauros-paldea-aqua-breed",
+}
+
+
+def expand_canonical_aliases(species_ids: Iterable[str]) -> set[str]:
+    """Expands canonical IDs to include both Showdown IDs and PokéAPI variety slugs."""
+    from .species import CANONICAL_ALIASES
+
+    expanded: set[str] = set()
+    for s in species_ids:
+        if not s:
+            continue
+        clean = s.strip().lower()
+        expanded.add(clean)
+        base = base_canonical_id(clean)
+        expanded.add(base)
+        alias = CANONICAL_ALIASES.get(clean)
+        if alias:
+            expanded.add(alias)
+            expanded.add(base_canonical_id(alias))
+        poke = SHOWDOWN_TO_POKEAPI_SLUG.get(clean)
+        if poke:
+            expanded.add(poke)
+            expanded.add(base_canonical_id(poke))
+    return expanded

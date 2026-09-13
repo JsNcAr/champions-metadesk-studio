@@ -53,6 +53,8 @@ Listener = Callable[[tuple], None]
 
 PREF_STATE = "calc.state"
 PREF_PRESETS = "calc.sweep_presets"
+PREF_SWEEP_SORT = "calc.sweep_sort"
+PREF_SWEEP_REGULATION = "calc.sweep_regulation"
 
 # Status moves the "Activate" toggle knows: stat stages on the user, field or side conditions,
 # or a status on the opponent. Values are applied on activation and reverted on deactivation.
@@ -206,6 +208,9 @@ class CalcStore:
         self.results = CalcResults()
         self.sweep: tuple[SweepEntry, ...] = ()
         self.sweep_presets = True
+        self.sweep_sort: str = "usage"
+        self.sweep_regulation: str = "latest"
+        self._usage_cache: dict[tuple[str, str], dict[str, int]] = {}
         self._sweep_key: str | None = None
         self._preset_moves: dict[str, list[str]] | None = None
         self._preset_builds: dict[str, TournamentBuild] | None = None
@@ -234,6 +239,8 @@ class CalcStore:
             try:
                 self.state = CalcState.from_dict(self._prefs.get(PREF_STATE, None))
                 self.sweep_presets = bool(self._prefs.get(PREF_PRESETS, True))
+                self.sweep_sort = str(self._prefs.get(PREF_SWEEP_SORT, "usage"))
+                self.sweep_regulation = str(self._prefs.get(PREF_SWEEP_REGULATION, "latest"))
             except Exception:  # noqa: BLE001 - a corrupt preference must not break the view
                 self.state = CalcState()
         self._recompute(persist=False)
@@ -353,7 +360,21 @@ class CalcStore:
         return move_options_for(self.catalogs, species.canonical_id, self._sf)
 
     def search_species(self, query: str) -> list[SpeciesInfo]:
-        return self.catalogs.search_species(query)
+        matches = self.catalogs.search_species(query, limit=24)
+        umap = self.get_usage_map()
+        if not umap:
+            return matches[:8]
+        q = query.strip().lower()
+
+        def rank_key(s: SpeciesInfo) -> tuple[int, int, int, str]:
+            cid = s.canonical_id.lower()
+            base_cid = (s.base_species_id or "").lower()
+            usage = umap.get(cid) or umap.get(base_cid, 0)
+            exact = 0 if s.name.lower() == q or cid == q else 1
+            starts = 0 if s.name.lower().startswith(q) else 1
+            return (exact, starts, -usage, s.name.lower())
+
+        return sorted(matches, key=rank_key)[:8]
 
     def damage_preview(self, side: str, move_name: str | None) -> MoveResult | None:
         """What ``move_name`` used by ``side`` would do to the other Pokémon under the current
@@ -424,10 +445,53 @@ class CalcStore:
                     self._preset_moves = {}
         return self._preset_moves
 
+    def latest_regulation(self) -> str:
+        if self._sf is not None:
+            try:
+                with self._sf() as s:
+                    return TournamentRepository(s).get_latest_regulation()
+            except Exception:
+                pass
+        return "Regulation M-C"
+
+    def available_regulations(self) -> list[str]:
+        if self._sf is not None:
+            try:
+                with self._sf() as s:
+                    return TournamentRepository(s).list_regulations_by_date()
+            except Exception:
+                pass
+        return ["Regulation M-C", "Regulation M-B", "Regulation M-A"]
+
+    def get_usage_map(self, regulation: str | None = None) -> dict[str, int]:
+        """Cached {canonical_id: team_count} for the specified regulation (defaults to active sweep_regulation)."""
+        if self._sf is None:
+            return {}
+        try:
+            with self._sf() as s:
+                repo = TournamentRepository(s)
+                bformat = repo.get_state("pref_battle_format") or "doubles"
+                target_reg = self.sweep_regulation if regulation is None else regulation
+                reg = repo.get_latest_regulation() if target_reg == "latest" else target_reg
+                cache_key = (reg, bformat)
+                if cache_key in self._usage_cache:
+                    return self._usage_cache[cache_key]
+                umap = repo.species_usage_by_regulation(regulation=reg, battle_format=bformat)
+                self._usage_cache[cache_key] = umap
+                return umap
+        except Exception:
+            return {}
+
+    def invalidate_usage_cache(self) -> None:
+        """Clear cached tournament usage data so it reloads on next lookup."""
+        self._usage_cache.clear()
+        self._sweep_key = None
+
     def invalidate_presets(self) -> None:
         """Clear cached tournament builds and moves so they reload on next lookup."""
         self._preset_builds = None
         self._preset_moves = None
+        self.invalidate_usage_cache()
 
     # -- mutations ---------------------------------------------------------------------------
 
@@ -614,10 +678,29 @@ class CalcStore:
 
     def sweep_key(self) -> str:
         d = self.state.to_dict()
-        return "|".join((str(d["left"]), str(d["field"]), str(self.sweep_presets)))
+        return "|".join((str(d["left"]), str(d["field"]), str(self.sweep_presets), str(self.sweep_regulation)))
 
     def sweep_stale(self) -> bool:
         return self._sweep_key != self.sweep_key()
+
+    def _order_sweep(self, entries: list[SweepEntry] | tuple[SweepEntry, ...], sort_key: str) -> tuple[SweepEntry, ...]:
+        res = list(entries)
+        if sort_key == "usage":
+            res.sort(key=lambda e: e.name.lower())
+            res.sort(key=lambda e: e.usage_count, reverse=True)
+        elif sort_key == "name":
+            res.sort(key=lambda e: e.name.lower())
+        elif sort_key == "speed":
+            res.sort(key=lambda e: e.name.lower())
+            res.sort(key=lambda e: e.speed, reverse=True)
+        elif sort_key == "threat":
+            threat_ranks = {"threat": 0, "wall": 1, "neutral": 2, "mitigated": 3, "crushed": 4}
+            res.sort(key=lambda e: e.name.lower())
+            res.sort(key=lambda e: e.usage_count, reverse=True)
+            res.sort(key=lambda e: threat_ranks.get(e.klass, 99))
+        else:
+            res.sort(key=lambda e: e.name.lower())
+        return tuple(res)
 
     def compute_sweep(self) -> tuple[SweepEntry, ...]:
         """Every legal species against the attacker: their class, speed and both best moves.
@@ -632,6 +715,7 @@ class CalcStore:
         field_ab = engine_field(self.state.field, attacker_is_left=True)
         field_ba = engine_field(self.state.field, attacker_is_left=False)
         my_speed = final_speed(attacker, a_species, self.state.field, "left")
+        umap = self.get_usage_map(self.sweep_regulation)
         entries: list[SweepEntry] = []
         for species in self.catalogs.species_by_canonical.values():
             if not species.is_legal:
@@ -659,14 +743,53 @@ class CalcStore:
             theirs = best_of(run_side(defender, attacker, field_ba, self.catalogs, self._calc, species, a_species)) if their_moves else None
             speed = final_speed(defender, species, self.state.field, "right")
             faster = (my_speed > speed) != self.state.field.trick_room if my_speed != speed else False
-            entries.append(SweepEntry(species.canonical_id, species.name, speed, classify(yours, theirs, faster), yours, theirs, faster, bool(their_moves)))
+            cid_lower = species.canonical_id.lower()
+            base_lower = (species.base_species_id or "").lower()
+            usage = umap.get(cid_lower) or umap.get(base_lower, 0)
+            entries.append(SweepEntry(species.canonical_id, species.name, speed, classify(yours, theirs, faster), yours, theirs, faster, bool(their_moves), usage_count=usage))
         self._sweep_key = key
-        return tuple(sorted(entries, key=lambda e: e.name))
+        return self._order_sweep(entries, self.sweep_sort)
 
     def publish_sweep(self, entries: tuple[SweepEntry, ...]) -> None:
-        self.sweep = entries
+        self.sweep = self._order_sweep(entries, self.sweep_sort)
         self._sweep_key = self.sweep_key()
         self._notify(("sweep",))
+
+    def set_sweep_sort(self, sort_key: str, regulation: str | None = None) -> None:
+        """Change the sort order or regulation for the opponent sweep and notify the UI immediately."""
+        changed = False
+        if sort_key != self.sweep_sort:
+            self.sweep_sort = sort_key
+            changed = True
+            if self._prefs is not None:
+                try:
+                    self._prefs.set(PREF_SWEEP_SORT, self.sweep_sort)
+                except Exception:
+                    pass
+        if regulation is not None and regulation != self.sweep_regulation:
+            self.sweep_regulation = regulation
+            changed = True
+            self._sweep_key = None
+            if self._prefs is not None:
+                try:
+                    self._prefs.set(PREF_SWEEP_REGULATION, self.sweep_regulation)
+                except Exception:
+                    pass
+            umap = self.get_usage_map(self.sweep_regulation)
+            updated_entries = []
+            for e in self.sweep:
+                cid_lower = e.canonical_id.lower()
+                species = self.catalogs.species_for(e.canonical_id)
+                base_lower = (species.base_species_id or "").lower() if species else cid_lower
+                usage = umap.get(cid_lower) or umap.get(base_lower, 0)
+                updated_entries.append(replace(e, usage_count=usage))
+            self.sweep = self._order_sweep(updated_entries, self.sweep_sort)
+            self._notify(("sweep",))
+            return
+
+        if changed or not self.sweep:
+            self.sweep = self._order_sweep(self.sweep, self.sweep_sort)
+            self._notify(("sweep",))
 
     # -- internals ---------------------------------------------------------------------------
 
@@ -694,3 +817,4 @@ class CalcStore:
 
 
 __all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]

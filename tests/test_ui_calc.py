@@ -582,6 +582,100 @@ class TestFormSwitcher(_Base):
         view.attacker.update_from()
         self.assertFalse(view.attacker._form.visible)
 
+    def test_sweep_sort_by_usage_default(self):
+        # Mock get_usage_map to return specific counts
+        self.store.get_usage_map = lambda regulation=None: {"incineroar": 100, "kingambit": 50, "charizard": 10}
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+
+        sweep = self.store.compute_sweep()
+        self.assertTrue(len(sweep) >= 2)
+        # Default sort is usage descending
+        self.assertEqual(self.store.sweep_sort, "usage")
+        # Incineroar (100) must appear before Kingambit (50) and Charizard-Mega-Y (0/10)
+        names = [e.name for e in sweep]
+        self.assertEqual(names[0], "Incineroar")
+        self.assertEqual(sweep[0].usage_count, 100)
+
+        # Re-sort by name
+        self.store.publish_sweep(sweep)
+        self.store.set_sweep_sort("name")
+        self.assertEqual([e.name for e in self.store.sweep], sorted(names, key=str.lower))
+
+        # Re-sort by speed
+        self.store.set_sweep_sort("speed")
+        speeds = [e.speed for e in self.store.sweep]
+        self.assertEqual(speeds, sorted(speeds, reverse=True))
+
+    def test_search_species_usage_ranking(self):
+        self.store.get_usage_map = lambda regulation=None: {"incineroar": 200, "charizard": 5}
+        # Searching "in" or "c" should prioritize higher tournament usage
+        results = self.store.search_species("in")
+        self.assertTrue(results)
+        self.assertEqual(results[0].canonical_id, "incineroar")
+
+    def test_sweep_panel_ui_sort_dropdown_and_card(self):
+        self.store.get_usage_map = lambda regulation=None: {"incineroar": 150}
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+        sweep = self.store.compute_sweep()
+        self.store.publish_sweep(sweep)
+
+        panel = self.store
+        ctx = AppContext(StubPage())
+        view = CalcView(ctx, store=self.store)
+        self.assertEqual(view.sweep._sort.value, "usage:latest")
+        self.assertTrue(any(opt.key == "usage:latest" for opt in view.sweep._sort.options))
+        self.assertTrue(any(opt.key == "name" for opt in view.sweep._sort.options))
+
+        view.sweep.render()
+        cards = [c for c in view.sweep._list.controls if hasattr(c, "tooltip")]
+        self.assertTrue(cards)
+        self.assertIn("150 tournament teams", cards[0].tooltip)
+
+
+class TestCalcStoreDbUsage(unittest.TestCase):
+    def setUp(self):
+        from datetime import datetime, timezone
+        from sqlmodel import Session, SQLModel, create_engine
+        from pokemon_champions_planning_tool.infrastructure.database.models import TournamentRecord, TournamentTeamMemberRecord, TournamentTeamRecord
+
+        self.engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(self.engine)
+        self.sf = lambda: Session(self.engine)
+        with self.sf() as s:
+            s.add(TournamentRecord(tournament_id="t1", name="Tourney 1", event_date=datetime(2026, 9, 1, tzinfo=timezone.utc), format_regulation="Regulation M-C", battle_format="doubles", game_platform="Pokémon Champions", standings_synced=True))
+            s.add(TournamentRecord(tournament_id="t2", name="Tourney 2", event_date=datetime(2026, 8, 1, tzinfo=timezone.utc), format_regulation="Regulation M-B", battle_format="doubles", game_platform="Pokémon Champions", standings_synced=True))
+            s.commit()
+            # 2 teams in M-C with Incineroar, 1 with Kingambit
+            tt1 = TournamentTeamRecord(tournament_id="t1", player_name="P1", placement=1, member_count=2, showdown_text="")
+            tt2 = TournamentTeamRecord(tournament_id="t1", player_name="P2", placement=2, member_count=1, showdown_text="")
+            s.add(tt1); s.add(tt2); s.commit()
+            s.add(TournamentTeamMemberRecord(tournament_team_id=tt1.tournament_team_id, slot_position=1, canonical_id="incineroar", species_name="Incineroar", base_canonical_id="incineroar"))
+            s.add(TournamentTeamMemberRecord(tournament_team_id=tt1.tournament_team_id, slot_position=2, canonical_id="kingambit", species_name="Kingambit", base_canonical_id="kingambit"))
+            s.add(TournamentTeamMemberRecord(tournament_team_id=tt2.tournament_team_id, slot_position=1, canonical_id="incineroar", species_name="Incineroar", base_canonical_id="incineroar"))
+            s.commit()
+
+        self.catalogs = catalogs()
+        self.store = CalcStore(self.catalogs, session_factory=self.sf)
+
+    def test_database_usage_map_and_latest_regulation(self):
+        self.assertEqual(self.store.latest_regulation(), "Regulation M-C")
+        regs = self.store.available_regulations()
+        self.assertIn("Regulation M-C", regs)
+        self.assertIn("Regulation M-B", regs)
+
+        umap = self.store.get_usage_map("Regulation M-C")
+        self.assertEqual(umap.get("incineroar"), 2)
+        self.assertEqual(umap.get("kingambit"), 1)
+
+        # compute_sweep should order incineroar before kingambit
+        self.store.load_species("left", "kingambit")
+        self.store.set_move("left", 0, "Iron Head")
+        sweep = self.store.compute_sweep()
+        self.assertEqual(sweep[0].canonical_id, "incineroar")
+        self.assertEqual(sweep[0].usage_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

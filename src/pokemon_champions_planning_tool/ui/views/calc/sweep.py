@@ -32,6 +32,8 @@ class SweepCard(ft.Container):
         e = entry
         yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
         theirs = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
+        theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
+        theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
         speed = ft.Text(f"Spe {e.speed} {'▼' if e.faster else '▲'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
                         tooltip="You move first" if e.faster else "They move first")
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
@@ -52,6 +54,7 @@ class SweepCard(ft.Container):
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.ink = True
         self.tooltip = "Load as defender"
+        self.tooltip = f"Load as defender · {e.usage_count} tournament teams" if e.usage_count > 0 else "Load as defender"
         self.on_click = lambda _e: on_pick(entry)
 
 
@@ -64,6 +67,15 @@ class SweepPanel(ft.Container):
         self.klass: str | None = None
         self._presets = ft.Switch(label="Tournament sets", value=store.sweep_presets, tooltip="Give each opponent its four most used moves from the stored rosters",
                                   on_change=lambda e: store.set_sweep_presets(bool(e.control.value)))
+        self._sort = ft.Dropdown(
+            label="Sort by",
+            dense=True,
+            text_size=12,
+            options=self._sort_options(),
+            value=self._current_sort_value(),
+            tooltip="Sort rival opponents",
+            on_select=lambda e: self._on_sort_changed(e.control.value),
+        )
         self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._set_query(e.control.value or ""))
         self._chips: dict[str | None, ft.Chip] = {}
         chips: list[ft.Control] = []
@@ -78,6 +90,7 @@ class SweepPanel(ft.Container):
         self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
             SectionHeader("Opponents", accent=accent, action=ft.IconButton(icon=ft.Icons.HELP_OUTLINE, icon_size=IconSize.SM, tooltip="\n".join(f"{dict(SWEEP_CLASSES)[k]}: {v}" for k, v in CLASS_HELP.items()))),
             self._presets, self._search, self._chip_row,
+            self._presets, self._sort, self._search, self._chip_row,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
             self._list,
         ])
@@ -85,6 +98,36 @@ class SweepPanel(ft.Container):
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
+
+    def _sort_options(self) -> list[ft.DropdownOption]:
+        latest = self.store.latest_regulation()
+        regs = self.store.available_regulations()
+        opts = [
+            ft.DropdownOption(key="usage:latest", text=f"Usage (Latest: {latest})"),
+        ]
+        for r in regs:
+            if r != latest:
+                opts.append(ft.DropdownOption(key=f"usage:{r}", text=f"Usage ({r})"))
+        opts.extend([
+            ft.DropdownOption(key="name", text="Name (A–Z)"),
+            ft.DropdownOption(key="speed", text="Speed (Fastest)"),
+            ft.DropdownOption(key="threat", text="Threat Level"),
+        ])
+        return opts
+
+    def _current_sort_value(self) -> str:
+        if self.store.sweep_sort == "usage":
+            return f"usage:{self.store.sweep_regulation}" if self.store.sweep_regulation != "latest" else "usage:latest"
+        return self.store.sweep_sort
+
+    def _on_sort_changed(self, value: str | None) -> None:
+        if not value:
+            return
+        if value.startswith("usage:"):
+            reg = value.split(":", 1)[1]
+            self.store.set_sweep_sort("usage", reg)
+        else:
+            self.store.set_sweep_sort(value)
 
     def _set_query(self, query: str) -> None:
         self.query = query
@@ -105,6 +148,9 @@ class SweepPanel(ft.Container):
     def render(self) -> None:
         entries = self.store.sweep
         self._presets.value = self.store.sweep_presets
+        cur_val = self._current_sort_value()
+        if self._sort.value != cur_val:
+            self._sort.value = cur_val
         counts = {k: 0 for k, _l in SWEEP_CLASSES}
         for e in entries:
             counts[e.klass] += 1

@@ -198,6 +198,7 @@ class SweepEntry:
     their_best: MoveResult | None         # their strongest move against you
     faster: bool                          # you move first
     preset: bool                          # their moves came from tournament rosters
+    usage_count: int = 0                  # tournament roster count in active regulation
 
 
 def hits_to_ko(result: MoveResult | None) -> int | None:

@@ -327,6 +327,17 @@ class TournamentService:
     def list_regulations(self) -> list[str]:
         return self.repo.list_regulations()
 
+    def get_latest_regulation(self, game_platform: str | None = None) -> str:
+        return self.repo.get_latest_regulation(game_platform)
+
+    def list_regulations_by_date(self, game_platform: str | None = None) -> list[str]:
+        return self.repo.list_regulations_by_date(game_platform)
+
+    def species_usage_by_regulation(
+        self, regulation: str | None = None, battle_format: str | None = "doubles"
+    ) -> dict[str, int]:
+        return self.repo.species_usage_by_regulation(regulation=regulation, battle_format=battle_format)
+
     def move_usage(self, canonical_id: str, *, battle_format: str | None = "doubles") -> dict[str, float]:
         """Share of stored rosters of this species (megas included) carrying each move,
         keyed by the move's Showdown id so it matches the catalogue regardless of spelling."""

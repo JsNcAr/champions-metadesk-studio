@@ -110,7 +110,15 @@ class PokemonCard(ft.Container):
 
     # -- model -> controls -----------------------------------------------------------------
 
-    def update_from(self, entry: BoxEntry, *, selected: bool, show_stats: bool, mega_capable: bool) -> None:
+    def update_from(
+        self,
+        entry: BoxEntry,
+        *,
+        selected: bool,
+        show_stats: bool,
+        mega_capable: bool,
+        usage_text: str | None = None,
+    ) -> None:
         pokemon = entry.pokemon
         self.entry_id = entry.box_entry_id
         self._selected = selected
@@ -137,6 +145,8 @@ class PokemonCard(ft.Container):
         caption = [f"#{pokemon.dex_number:03d}"] if pokemon.dex_number else []
         if form and form.lower() != "base":
             caption.append(form)
+        if usage_text:
+            caption.append(usage_text)
         self._form.value = " · ".join(caption)
         self._form.visible = bool(caption)
         self._types.controls = [TypeChip(t, size="sm") for t in pokemon.types]

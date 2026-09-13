@@ -11,7 +11,7 @@ from typing import Literal
 
 from ....domain.entities.box_entry import BoxEntry
 
-SortKey = Literal["name", "bst", "hp", "attack", "defense", "special_attack", "special_defense", "speed", "added"]
+SortKey = Literal["name", "bst", "hp", "attack", "defense", "special_attack", "special_defense", "speed", "added", "usage"]
 
 SORT_LABELS: dict[SortKey, str] = {
     "name": "Name",
@@ -23,6 +23,7 @@ SORT_LABELS: dict[SortKey, str] = {
     "special_defense": "Sp. Def",
     "speed": "Speed",
     "added": "Added",
+    "usage": "Tournament Usage",
 }
 
 BST_MIN, BST_MAX = 150, 800
@@ -41,6 +42,7 @@ class BoxFilters:
     tags: frozenset[str] = frozenset()
     sort: SortKey = "name"
     descending: bool = False
+    usage_regulation: str = "latest"
 
     def is_active(self) -> bool:
         return bool(self.active_labels())
@@ -52,6 +54,7 @@ class BoxFilters:
             "mega_capable_only": self.mega_capable_only, "show_planned": self.show_planned,
             "bst_range": list(self.bst_range), "stat_ranges": {k: list(v) for k, v in self.stat_ranges.items()},
             "tags": sorted(self.tags), "sort": self.sort, "descending": self.descending,
+            "usage_regulation": self.usage_regulation,
         }
 
     @classmethod
@@ -72,6 +75,7 @@ class BoxFilters:
                 tags=frozenset(str(t) for t in data.get("tags", [])),
                 sort=data.get("sort", "name") if data.get("sort", "name") in SORT_LABELS else "name",
                 descending=bool(data.get("descending", False)),
+                usage_regulation=str(data.get("usage_regulation", "latest")),
             )
         except (TypeError, ValueError, IndexError):
             return base
@@ -110,7 +114,7 @@ class BoxFilters:
 
     def cleared(self) -> "BoxFilters":
         """Reset everything except sort and the planned toggle (view preferences)."""
-        return BoxFilters(sort=self.sort, descending=self.descending, show_planned=self.show_planned)
+        return BoxFilters(sort=self.sort, descending=self.descending, show_planned=self.show_planned, usage_regulation=self.usage_regulation)
 
 
 def _short(stat: str) -> str:
@@ -154,17 +158,45 @@ def matches(entry: BoxEntry, f: BoxFilters, mega_species: frozenset[str] | set[s
     return True
 
 
-def apply_filters(entries: list[BoxEntry], f: BoxFilters, mega_species: frozenset[str] | set[str] = frozenset()) -> list[BoxEntry]:
-    return sort_entries([e for e in entries if matches(e, f, mega_species)], f.sort, f.descending)
+def apply_filters(
+    entries: list[BoxEntry],
+    f: BoxFilters,
+    mega_species: frozenset[str] | set[str] = frozenset(),
+    usage_map: dict[str, int] | None = None,
+) -> list[BoxEntry]:
+    return sort_entries(
+        [e for e in entries if matches(e, f, mega_species)],
+        f.sort,
+        f.descending,
+        usage_map=usage_map,
+    )
 
 
-def sort_entries(entries: list[BoxEntry], key: SortKey, descending: bool = False) -> list[BoxEntry]:
+def sort_entries(
+    entries: list[BoxEntry],
+    key: SortKey,
+    descending: bool = False,
+    usage_map: dict[str, int] | None = None,
+) -> list[BoxEntry]:
     if key == "name":
         keyfn = lambda e: e.pokemon.display_name.lower()  # noqa: E731
     elif key == "bst":
         keyfn = lambda e: e.pokemon.total  # noqa: E731
     elif key == "added":
         keyfn = lambda e: e.created_at  # noqa: E731
+    elif key == "usage":
+        from ....domain.pokemon_identity import base_canonical_id
+
+        umap = usage_map or {}
+
+        def get_usage(e: BoxEntry) -> int:
+            cid = e.pokemon.canonical_id.lower()
+            base_cid = (e.pokemon.species_name or "").lower() or base_canonical_id(cid)
+            return umap.get(cid) or umap.get(base_cid, 0)
+
+        # Stable tie-break: alphabetical display name A-Z
+        entries = sorted(entries, key=lambda e: e.pokemon.display_name.lower())
+        return sorted(entries, key=get_usage, reverse=descending)
     else:
         keyfn = lambda e: getattr(e.pokemon.stats, key, 0)  # noqa: E731
     return sorted(entries, key=keyfn, reverse=descending)

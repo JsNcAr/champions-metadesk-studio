@@ -60,6 +60,7 @@ class BoxView(ft.Row):
         self.toolbar.on_forget_view = lambda: self.ctx.page.run_task(self._forget_view)
         self.toolbar.set_saved_views(sorted(self._saved_views()))
         self.toolbar.set_columns(self.columns)
+        self.toolbar.set_available_regulations(self.store.available_regulations(), self.store.latest_regulation())
 
         # -- content ---------------------------------------------------------------------------
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
@@ -148,6 +149,7 @@ class BoxView(ft.Row):
         self._relayout()
         self.store.subscribe(self._on_store_change)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
+        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, self._on_battle_format_changed)
 
     # -- lifecycle -------------------------------------------------------------------------------
 
@@ -191,6 +193,19 @@ class BoxView(ft.Row):
             self._render_multi()
         self._update_self()
 
+    def _get_usage_map_if_needed(self) -> dict[str, int] | None:
+        return self.store.get_usage_map(self.store.filters.usage_regulation) if self.store.filters.sort == "usage" else None
+
+    def _entry_usage_text(self, entry: BoxEntry, usage_map: dict[str, int] | None) -> str | None:
+        if usage_map is None:
+            return None
+        p = entry.pokemon
+        cid = (p.canonical_id or "").lower()
+        base_cid = (getattr(p, "base_canonical_id", "") or "").lower()
+        sp = (p.species_name or "").lower()
+        cnt = usage_map.get(cid) or (usage_map.get(base_cid) if base_cid else None) or usage_map.get(sp) or 0
+        return f"{cnt:,} teams"
+
     def _render(self) -> None:
         self.store.catalogs = self.ctx.catalogs or self.store.catalogs
         visible = self.store.visible()
@@ -206,10 +221,12 @@ class BoxView(ft.Row):
         self._empty.visible = empty
         self._no_match.visible = no_match
 
+        usage_map = self._get_usage_map_if_needed()
+
         if self.view_mode == "table":
             self.grid.visible = False
             self.table.visible = not (empty or no_match)
-            self.table.update_from(visible, sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi)
+            self.table.update_from(visible, sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi, usage_map=usage_map)
         else:
             self.table.visible = False
             self.grid.visible = not (empty or no_match)
@@ -219,7 +236,8 @@ class BoxView(ft.Row):
                 if card is None:
                     card = PokemonCard(on_select=self._select, on_favorite=self._set_favorite, on_tag=self._filter_by_tag, on_check=self._check)
                     self._cards[entry.box_entry_id] = card
-                card.update_from(entry, selected=entry.box_entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry))
+                usage_text = self._entry_usage_text(entry, usage_map)
+                card.update_from(entry, selected=entry.box_entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry), usage_text=usage_text)
                 card.set_checked(entry.box_entry_id in self.store.multi, selection_mode=bool(self.store.multi))
                 controls.append(card)
             self.grid.controls = controls
@@ -237,15 +255,18 @@ class BoxView(ft.Row):
         for eid, card in self._cards.items():
             card.set_checked(eid in self.store.multi, selection_mode=n > 0)
         if self.view_mode == "table":
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi)
+            usage_map = self._get_usage_map_if_needed()
+            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi, usage_map=usage_map)
 
     def _render_entry(self, entry_id: UUID) -> None:
         entry = self.store.entry(entry_id)
         card = self._cards.get(entry_id)
+        usage_map = self._get_usage_map_if_needed()
         if entry is not None and card is not None:
-            card.update_from(entry, selected=entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry))
+            usage_text = self._entry_usage_text(entry, usage_map)
+            card.update_from(entry, selected=entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry), usage_text=usage_text)
         if self.view_mode == "table":
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id)
+            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, usage_map=usage_map)
         if entry_id == self.store.selected_id:
             self._render_detail()
 
@@ -253,7 +274,8 @@ class BoxView(ft.Row):
         for eid, card in self._cards.items():
             card.set_selected(eid == entry_id)
         if self.view_mode == "table":
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=entry_id)
+            usage_map = self._get_usage_map_if_needed()
+            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=entry_id, usage_map=usage_map)
         self._render_detail()
 
     def _render_detail(self) -> None:
@@ -284,7 +306,10 @@ class BoxView(ft.Row):
         self._update_self()
 
     def _on_table_sort(self, key: SortKey, ascending: bool) -> None:
-        self.toolbar._set(sort=key, descending=not ascending)
+        if key == "usage" and self.store.filters.sort != "usage":
+            self.toolbar._select_sort(key)
+        else:
+            self.toolbar._set(sort=key, descending=not ascending)
 
     def _filter_by_tag(self, tag: str) -> None:
         self.toolbar._set(tags=frozenset({tag.lower()}))
@@ -617,6 +642,12 @@ class BoxView(ft.Row):
             self.store.catalogs = self.ctx.catalogs or self.store.catalogs
             self._render()
             self._update_self()
+
+    def _on_battle_format_changed(self, _fmt: str) -> None:
+        self.store.invalidate_usage_cache()
+        self.toolbar.set_available_regulations(self.store.available_regulations(), self.store.latest_regulation())
+        self._render()
+        self._update_self()
 
     # -- helpers ----------------------------------------------------------------------------------------------
 

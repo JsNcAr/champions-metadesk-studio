@@ -32,6 +32,7 @@ _COLUMNS: list[tuple[str, SortKey | None, bool]] = [
 
 # Optional columns, chosen from the View menu: key -> (label, sort key, numeric)
 EXTRA_COLUMNS: dict[str, tuple[str, SortKey | None, bool]] = {
+    "usage": ("Usage", "usage", True),
     "abilities": ("Abilities", None, False),
     "dex": ("Dex #", None, True),
     "added": ("Added", "added", False),
@@ -53,6 +54,7 @@ class BoxTable(ft.Container):
         self._on_check = on_check
         self.extra: list[str] = []
         self._sort_keys: list[SortKey | None] = []
+        self._usage_map: dict[str, int] = {}
         self.table = ft.DataTable(
             columns=[],
             rows=[],
@@ -84,7 +86,17 @@ class BoxTable(ft.Container):
             for label, key, numeric in defs
         ]
 
-    def update_from(self, entries: list[BoxEntry], *, sort: SortKey, descending: bool, selected_id: UUID | None, checked: set[UUID] | None = None) -> None:
+    def update_from(
+        self,
+        entries: list[BoxEntry],
+        *,
+        sort: SortKey,
+        descending: bool,
+        selected_id: UUID | None,
+        checked: set[UUID] | None = None,
+        usage_map: dict[str, int] | None = None,
+    ) -> None:
+        self._usage_map = usage_map or {}
         checked = checked or set()
         if sort in self._sort_keys:
             self.table.sort_column_index = self._sort_keys.index(sort)
@@ -139,7 +151,18 @@ class BoxTable(ft.Container):
         p = entry.pokemon
         cells: list[ft.DataCell] = []
         for key in self.extra:
-            if key == "abilities":
+            if key == "usage":
+                cid = (p.canonical_id or "").lower()
+                base_cid = (getattr(p, "base_canonical_id", "") or "").lower()
+                sp_name = (p.species_name or "").lower()
+                count = (
+                    self._usage_map.get(cid)
+                    or (self._usage_map.get(base_cid) if base_cid else None)
+                    or self._usage_map.get(sp_name)
+                    or 0
+                )
+                cells.append(ft.DataCell(ft.Text(f"{count:,}" if count else "0", text_align=ft.TextAlign.RIGHT)))
+            elif key == "abilities":
                 names = [a.name.replace("-", " ").title() for a in p.abilities]
                 cells.append(ft.DataCell(ft.Text(", ".join(names), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)))
             elif key == "dex":

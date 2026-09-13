@@ -1387,6 +1387,76 @@ class TournamentRepository:
         )
         return [reg for reg, _n in self.session.exec(stmt).all() if reg]
 
+    def get_latest_regulation(self, game_platform: str | None = None) -> str:
+        """The most recent regulation label based on the newest tournament event date."""
+        from sqlalchemy import text as _text
+
+        extra = "AND game_platform = :platform" if game_platform else ""
+        params = {"platform": game_platform} if game_platform else {}
+        stmt = _text(
+            "SELECT format_regulation FROM tournaments "
+            f"WHERE format_regulation IS NOT NULL AND format_regulation != '' AND format_regulation != 'CUSTOM' {extra} "
+            "GROUP BY format_regulation ORDER BY MAX(event_date) DESC LIMIT 1"
+        ).bindparams(**params)
+        row = self.session.exec(stmt).first()
+        return str(row[0]) if row and row[0] else "Regulation M-C"
+
+    def list_regulations_by_date(self, game_platform: str | None = None) -> list[str]:
+        """Distinct regulation labels ordered chronologically from newest event date to oldest."""
+        from sqlalchemy import text as _text
+
+        extra = "AND game_platform = :platform" if game_platform else ""
+        params = {"platform": game_platform} if game_platform else {}
+        stmt = _text(
+            "SELECT format_regulation FROM tournaments "
+            f"WHERE format_regulation IS NOT NULL AND format_regulation != '' AND format_regulation != 'CUSTOM' {extra} "
+            "GROUP BY format_regulation ORDER BY MAX(event_date) DESC"
+        ).bindparams(**params)
+        rows = self.session.exec(stmt).all()
+        return [str(r[0]) for r in rows if r and r[0]]
+
+    def species_usage_by_regulation(
+        self, regulation: str | None = None, battle_format: str | None = "doubles"
+    ) -> dict[str, int]:
+        """{canonical_id / base_species_id: team_count} for the given regulation and battle format.
+
+        Returns distinct team counts per species. Mega forms fold into their base species
+        so that e.g. 'charizard' counts both Charizard and Mega Charizards, while also
+        recording form-specific keys.
+        """
+        from sqlalchemy import text as _text
+
+        extra = []
+        params: dict[str, Any] = {}
+        if regulation and regulation != "All":
+            extra.append("t.format_regulation = :reg")
+            params["reg"] = regulation
+        if battle_format and battle_format != "all":
+            extra.append("t.battle_format = :bformat")
+            params["bformat"] = battle_format
+        where_clause = f"WHERE {' AND '.join(extra)}" if extra else ""
+
+        stmt = _text(
+            "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, "
+            "       COUNT(DISTINCT tt.tournament_team_id) AS n "
+            "FROM tournament_team_members m "
+            "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id "
+            "JOIN tournaments t ON tt.tournament_id = t.tournament_id "
+            f"{where_clause} "
+            "GROUP BY base_cid, cid"
+        ).bindparams(**params)
+        rows = self.session.exec(stmt).all()
+        out: dict[str, int] = {}
+        for base_cid, cid, n in rows:
+            count = int(n or 0)
+            b_key = str(base_cid or "").lower()
+            c_key = str(cid or "").lower()
+            if b_key:
+                out[b_key] = out.get(b_key, 0) + count
+            if c_key and c_key != b_key:
+                out[c_key] = out.get(c_key, 0) + count
+        return out
+
     def is_seeded(self, seed_version: str) -> bool:
         meta = self.session.get(TournamentSeedMetaRecord, 1)
         return meta is not None and meta.seed_version == seed_version

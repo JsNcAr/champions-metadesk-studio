@@ -52,6 +52,10 @@ def _menu_chip(icon: str, label: ft.Text) -> ft.Container:
     )
 
 
+def _short_reg(reg: str) -> str:
+    return reg.replace("Regulation ", "Reg ")
+
+
 class BoxToolbar(ft.Column):
     def __init__(
         self,
@@ -115,10 +119,20 @@ class BoxToolbar(ft.Column):
         self.set_saved_views([])
         self._sort_label = ft.Text(SORT_LABELS["name"], theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
         self._sort_items = {
-            key: ft.PopupMenuItem(content=ft.Text(label), checked=(key == "name"), on_click=lambda _e, key=key: self._set(sort=key))
+            key: ft.PopupMenuItem(content=ft.Text(label), checked=(key == "name"), on_click=lambda _e, key=key: self._select_sort(key))
             for key, label in SORT_LABELS.items()
         }
         self._sort = ft.PopupMenuButton(content=_menu_chip(ft.Icons.SORT, self._sort_label), items=list(self._sort_items.values()), tooltip="Sort by")
+        self._available_regulations: list[str] = []
+        self._latest_regulation: str = "Regulation M-C"
+        self._reg_label = ft.Text("Latest", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE)
+        self._reg_menu = ft.PopupMenuButton(
+            content=_menu_chip(ft.Icons.CALENDAR_MONTH, self._reg_label),
+            items=[],
+            tooltip="Tournament regulation for usage ranking",
+            visible=False,
+        )
+        self.set_available_regulations([], "Regulation M-C")
         self._direction = ft.IconButton(
             icon=ft.Icons.ARROW_UPWARD,
             icon_size=20,
@@ -172,7 +186,7 @@ class BoxToolbar(ft.Column):
             spacing=Space.SM,
             tight=True,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._views_menu, self._sort, self._direction, self._view_mode, self._view_menu],
+            controls=[self._views_menu, self._sort, self._reg_menu, self._direction, self._view_mode, self._view_menu],
         )
         self.row = ft.Row(
             spacing=Space.LG,
@@ -364,6 +378,48 @@ class BoxToolbar(ft.Column):
         self._sync_controls()
         self._on_filters(self._filters)
 
+    def _select_sort(self, key: SortKey) -> None:
+        descending = True if key == "usage" and self._filters.sort != "usage" else self._filters.descending
+        self._set(sort=key, descending=descending)
+
+    def set_available_regulations(self, regulations: list[str], latest: str) -> None:
+        self._available_regulations = regulations or [latest]
+        self._latest_regulation = latest or "Regulation M-C"
+        items: list[ft.PopupMenuItem] = [
+            ft.PopupMenuItem(
+                content=ft.Text(f"Latest ({self._latest_regulation})"),
+                checked=(self._filters.usage_regulation == "latest"),
+                on_click=lambda _e: self._set(usage_regulation="latest"),
+            ),
+            ft.PopupMenuItem(),
+        ]
+        for reg in self._available_regulations:
+            items.append(
+                ft.PopupMenuItem(
+                    content=ft.Text(reg),
+                    checked=(self._filters.usage_regulation == reg),
+                    on_click=lambda _e, r=reg: self._set(usage_regulation=r),
+                )
+            )
+        items.append(
+            ft.PopupMenuItem(
+                content=ft.Text("All regulations"),
+                checked=(self._filters.usage_regulation == "All"),
+                on_click=lambda _e: self._set(usage_regulation="All"),
+            )
+        )
+        self._reg_menu.items = items
+        self._sync_regulation_label()
+
+    def _sync_regulation_label(self) -> None:
+        reg = self._filters.usage_regulation
+        if reg == "latest":
+            self._reg_label.value = f"Latest ({_short_reg(self._latest_regulation)})"
+        elif reg == "All":
+            self._reg_label.value = "All Regs"
+        else:
+            self._reg_label.value = _short_reg(reg)
+
     def _sync_controls(self) -> None:
         f = self._filters
         self.search.value = f.text
@@ -381,6 +437,17 @@ class BoxToolbar(ft.Column):
         self._tags_label.value = f"Tags · {len(f.tags)}" if f.tags else "Tags"
         for key, item in self._sort_items.items():
             item.checked = key == f.sort
+        self._reg_menu.visible = (f.sort == "usage")
+        self._sync_regulation_label()
+        for item in self._reg_menu.items:
+            if isinstance(item, ft.PopupMenuItem) and item.content and hasattr(item.content, "value"):
+                txt = item.content.value or ""
+                if f.usage_regulation == "latest":
+                    item.checked = txt.startswith("Latest")
+                elif f.usage_regulation == "All":
+                    item.checked = (txt == "All regulations")
+                else:
+                    item.checked = (txt == f.usage_regulation)
         self._direction.icon = ft.Icons.ARROW_DOWNWARD if f.descending else ft.Icons.ARROW_UPWARD
         self._direction.tooltip = "Descending — click for ascending" if f.descending else "Ascending — click for descending"
         chips: list[ft.Control] = [ActiveFilterChip(label, on_remove=lambda k=key: self.remove(k)) for key, label in f.active_labels()]

@@ -117,6 +117,7 @@ class BoxStore:
         self.selected_form_id: str | None = None
         self.multi: set[UUID] = set()
         self._listeners: list[Listener] = []
+        self._usage_cache: dict[tuple[str, str], dict[str, int]] = {}
 
     # -- subscription -------------------------------------------------------------------
 
@@ -145,8 +146,51 @@ class BoxStore:
             return None
         return next((e for e in self.entries if e.box_entry_id == box_entry_id), None)
 
+    def latest_regulation(self) -> str:
+        if self._sf is not None:
+            try:
+                with self._sf() as s:
+                    from ....infrastructure.database.repositories import TournamentRepository
+                    return TournamentRepository(s).get_latest_regulation()
+            except Exception:
+                pass
+        return "Regulation M-C"
+
+    def available_regulations(self) -> list[str]:
+        if self._sf is not None:
+            try:
+                with self._sf() as s:
+                    from ....infrastructure.database.repositories import TournamentRepository
+                    return TournamentRepository(s).list_regulations_by_date()
+            except Exception:
+                pass
+        return ["Regulation M-C", "Regulation M-B", "Regulation M-A"]
+
+    def get_usage_map(self, regulation: str = "latest") -> dict[str, int]:
+        """Cached {canonical_id: team_count} for the specified regulation."""
+        if self._sf is None:
+            return {}
+        try:
+            with self._sf() as s:
+                from ....infrastructure.database.repositories import TournamentRepository
+                repo = TournamentRepository(s)
+                bformat = repo.get_state("pref_battle_format") or "doubles"
+                reg = repo.get_latest_regulation() if regulation == "latest" else regulation
+                cache_key = (reg, bformat)
+                if cache_key in self._usage_cache:
+                    return self._usage_cache[cache_key]
+                umap = repo.species_usage_by_regulation(regulation=reg, battle_format=bformat)
+                self._usage_cache[cache_key] = umap
+                return umap
+        except Exception:
+            return {}
+
+    def invalidate_usage_cache(self) -> None:
+        self._usage_cache.clear()
+
     def visible(self) -> list[BoxEntry]:
-        return apply_filters(self.entries, self.filters, self.catalogs.mega_species)
+        umap = self.get_usage_map(self.filters.usage_regulation) if self.filters.sort == "usage" else None
+        return apply_filters(self.entries, self.filters, self.catalogs.mega_species, usage_map=umap)
 
     def counts(self) -> tuple[int, int]:
         """(visible, total owned) for the header chip."""

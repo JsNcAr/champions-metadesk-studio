@@ -239,6 +239,56 @@ class TestEventTierFilters(unittest.TestCase):
         self.assertEqual(MetaFilters(source="community").active(), [("source", "Community")])
         self.assertEqual(MetaFilters(source="official", tier="regional").without("source"), MetaFilters())
 
+    def test_placement_filters_and_active_chips(self):
+        from pokemon_champions_planning_tool.ui.views.meta.store import MetaFilters
+
+        f_default = MetaFilters()
+        self.assertEqual(f_default.placement, "8")
+        self.assertEqual(f_default.placement_limit, 8)
+        self.assertEqual(f_default.active(), [])
+
+        f_16 = MetaFilters(placement="16")
+        self.assertEqual(f_16.placement_limit, 16)
+        self.assertEqual(f_16.active(), [("placement", "Top 16")])
+
+        f_32 = MetaFilters(placement="32")
+        self.assertEqual(f_32.placement_limit, 32)
+        self.assertEqual(f_32.active(), [("placement", "Top 32")])
+
+        f_64 = MetaFilters(placement="64")
+        self.assertEqual(f_64.placement_limit, 64)
+        self.assertEqual(f_64.active(), [("placement", "Top 64")])
+
+        f_128 = MetaFilters(placement="128")
+        self.assertEqual(f_128.placement_limit, 128)
+        self.assertEqual(f_128.active(), [("placement", "Top 128")])
+
+        f_1 = MetaFilters(placement="1")
+        self.assertEqual(f_1.placement_limit, 1)
+        self.assertEqual(f_1.active(), [("placement", "Winner (1st)")])
+
+        f_all = MetaFilters(placement="all")
+        self.assertIsNone(f_all.placement_limit)
+        self.assertEqual(f_all.active(), [("placement", "All placements")])
+
+        self.assertEqual(f_16.without("placement").placement, "8")
+
+    def test_view_placement_dropdown_interaction(self):
+        from pokemon_champions_planning_tool.ui.views.meta.view import MetaView
+
+        page = StubPage()
+        ctx = AppContext(page)
+        ctx.run_in_background = lambda work, on_done=None, on_error=None, **kw: on_done(work()) if on_done else work()
+        view = MetaView(ctx, store=MetaStore(self.db.session))
+        view.ensure_loaded()
+        self.assertEqual(view._placement.value, "8")
+        view._apply(placement="16")
+        self.assertEqual(view._placement.value, "16")
+        self.assertEqual(view.store.filters.placement, "16")
+        view._remove_filter("placement")
+        self.assertEqual(view._placement.value, "8")
+        self.assertEqual(view.store.filters.placement, "8")
+
     def test_view_shows_tier_dropdown_only_for_official(self):
         from pokemon_champions_planning_tool.ui.views.meta.view import MetaView
 

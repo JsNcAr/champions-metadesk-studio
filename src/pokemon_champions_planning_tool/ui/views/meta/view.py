@@ -17,7 +17,6 @@ from ...tasks import Debouncer, grid_tile_aspect, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
-from .store import BOX_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
@@ -61,13 +60,13 @@ class MetaView(ft.Column):
             on_submit=lambda e: self._apply(query=e.control.value or ""),
         )
         self._debounced_search = Debouncer(ctx.page, _SEARCH_DEBOUNCE_MS, lambda q: self._apply(query=q))
-        self._placement = ft.SegmentedButton(
-            selected=[self.store.filters.placement],
-            allow_multiple_selection=False,
-            allow_empty_selection=False,
-            show_selected_icon=False,
-            segments=[ft.Segment(value=v, label=ft.Text(label)) for v, label in PLACEMENT_OPTIONS],
-            on_change=lambda e: self._apply(placement=next(iter(e.control.selected or ["8"]))),
+        self._placement = ft.Dropdown(
+            value=self.store.filters.placement,
+            options=[ft.DropdownOption(key=v, text=label) for v, label in PLACEMENT_OPTIONS],
+            width=165,
+            leading_icon=ft.Icons.LEADERBOARD_OUTLINED,
+            tooltip="Filter teams by tournament finish",
+            on_select=lambda e: self._apply(placement=e.control.value or "8"),
         )
         self._regulation = ft.Dropdown(
             value="All",
@@ -214,6 +213,7 @@ class MetaView(ft.Column):
         self.store.set_filters(new_filters)
         self._tier.visible = new_filters.source == "official"
         self._tier.value = new_filters.tier
+        self._placement.value = new_filters.placement
         self._box.value = new_filters.box
         self._battle_format.value = new_filters.battle_format
         self._battle_format.visible = new_filters.battle_format != "doubles"
@@ -240,7 +240,7 @@ class MetaView(ft.Column):
     def _sync_filter_controls(self) -> None:
         f = self.store.filters
         self._search.value = f.query
-        self._placement.selected = [f.placement]
+        self._placement.value = f.placement
         self._regulation.value = f.regulation
         self._recency.value = f.recency
         self._game.value = f.game

@@ -24,7 +24,16 @@ SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 PAGE_SIZE = 20
 
-PLACEMENT_OPTIONS: tuple[tuple[str, str], ...] = (("1", "Winner"), ("4", "Top 4"), ("8", "Top 8"), ("all", "All"))
+PLACEMENT_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Winner (1st)"),
+    ("4", "Top 4"),
+    ("8", "Top 8"),
+    ("16", "Top 16"),
+    ("32", "Top 32"),
+    ("64", "Top 64"),
+    ("128", "Top 128"),
+    ("all", "All placements"),
+)
 RECENCY_OPTIONS: tuple[tuple[str, str], ...] = (("90", "3 months"), ("365", "12 months"), ("all", "All time"))
 BOX_OPTIONS: tuple[tuple[str, str], ...] = (("any", "Any team"), ("0", "All in my box"), ("1", "≤ 1 missing"), ("2", "≤ 2 missing"), ("3", "≤ 3 missing"))
 SOURCE_OPTIONS: tuple[tuple[str, str], ...] = (("All", "All"), ("official", "Official"), ("community", "Community"))
@@ -100,7 +109,7 @@ class MetaFilters:
                         label = f"+ {val_title}" if parsed.excludes else f"“{t.value}”"
                         out.append((f"query_token:{t.raw_token}", label))
         if self.placement != default.placement:
-            out.append(("placement", "All placements" if self.placement == "all" else dict(PLACEMENT_OPTIONS)[self.placement]))
+            out.append(("placement", dict(PLACEMENT_OPTIONS).get(self.placement, self.placement)))
         if self.regulation != default.regulation:
             out.append(("regulation", self.regulation))
         if self.recency != default.recency:

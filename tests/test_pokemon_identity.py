@@ -5,6 +5,7 @@ from pokemon_champions_planning_tool.domain.pokemon_identity import (
     format_display_name,
     get_pokemon_sprite_url,
     get_showdown_sprite_slug,
+    normalize_format_regulation,
 )
 
 
@@ -136,3 +137,70 @@ class TestDefaultFormLabels(unittest.TestCase):
         self.assertEqual(row.display_name, "Basculegion (Male)")
         female = MetaMemberRow(slot=2, species_name="Basculegion ♀", canonical_id="basculegion-f", sprite_url="", is_legal=True)
         self.assertEqual(female.display_name, "Basculegion ♀")
+
+
+class TestNormalizeFormatRegulation(unittest.TestCase):
+    def test_title_overrides_stale_format_code(self):
+        # M-C in title overrides M-B format code
+        self.assertEqual(
+            normalize_format_regulation("M-B", "[Shiny Salamence to 1st] The Grim Challenge #8 M-C"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("M-B", "Cusca Champions Weekly M-C ⚡ #12 (PCVGC)"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("M-B", "CHAMPIONS REG. M-C |👑CROWN FIGHT Bo3 TOUR #85👑"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("M-B", "r/VGC Regulation M-C Kickoff Cup"),
+            "Regulation M-C",
+        )
+        # M-B in title overrides M-A format code
+        self.assertEqual(
+            normalize_format_regulation("M-A", "Friday Fight Night #60 Reg M-B Bo3"),
+            "Regulation M-B",
+        )
+        self.assertEqual(
+            normalize_format_regulation("M-A", "Extreme Speed #8 REG M-B"),
+            "Regulation M-B",
+        )
+
+    def test_unhyphenated_and_custom_variations(self):
+        self.assertEqual(
+            normalize_format_regulation("CUSTOM", "Circuito VGC #7 REG MC | Z2 Gaming"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("CUSTOM", "BPL MC KICKOFF TOURNAMENT"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("CUSTOM", "🍋Sitrus-Series🍋|Champions-MC|$50 to First|#75"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("CUSTOM", "Torneo KURAMI, REG M-C"),
+            "Regulation M-C",
+        )
+        self.assertEqual(
+            normalize_format_regulation("CUSTOM", "˗ˋˏ❤︎ˎˊ˗ Pomelo Late Night Tour (M-C)"),
+            "Regulation M-C",
+        )
+
+    def test_fallback_to_raw_format_code(self):
+        self.assertEqual(normalize_format_regulation("M-C"), "Regulation M-C")
+        self.assertEqual(normalize_format_regulation("M-B"), "Regulation M-B")
+        self.assertEqual(normalize_format_regulation("M-A"), "Regulation M-A")
+        self.assertEqual(
+            normalize_format_regulation("M-B", "PWC - Battle in the Colosseum #26"),
+            "Regulation M-B",
+        )
+        self.assertEqual(
+            normalize_format_regulation("SV Reg. Set F OTS", "Charlotte Regional"),
+            "Regulation F",
+        )
+        self.assertEqual(normalize_format_regulation("", ""), "Champions Season 1")
+

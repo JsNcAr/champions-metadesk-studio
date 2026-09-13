@@ -140,6 +140,7 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         _backfill_member_counts(conn)
         _backfill_default_form_labels(conn)
         _backfill_member_points(conn)
+        _remediate_tournament_regulations(conn)
 
     _DB_INITIALIZED.add(database_filename)
     return engine
@@ -353,6 +354,78 @@ def _backfill_event_tiers(conn) -> None:
     for tier, tournament_id in changes:
         conn.execute(text("UPDATE tournaments SET event_tier = :tier WHERE tournament_id = :id"), {"tier": tier, "id": tournament_id})
     conn.commit()
+
+
+def _remediate_tournament_regulations(conn) -> None:
+    """Remediate misclassified tournament regulations in the tournaments table.
+
+    Corrects tournaments where:
+    1. The tournament title explicitly indicates a Champions regulation (e.g. M-C, M-B, Reg MC, etc.)
+       that disagrees with the stored format_regulation.
+    2. Tournaments on or after 2026-09-09 whose rosters contain species exclusive to Regulation M-C
+       (e.g., Golisopod, Sirfetch'd, Toxtricity Low-Key, Wigglytuff, Grapploct, etc.).
+    """
+    from pokemon_champions_planning_tool.domain.pokemon_identity import (
+        REGULATION_MC_SPECIES,
+        _CHAMPIONS_REG_RE,
+    )
+
+    try:
+        rows = conn.execute(text("SELECT tournament_id, name, event_date, format_regulation, game_platform FROM tournaments")).fetchall()
+    except Exception:
+        return
+
+    if not rows:
+        return
+
+    corrections: dict[str, str] = {}
+    for tid, name, _dt, stored_fmt, gp in rows:
+        # Never touch Scarlet & Violet tournaments
+        if gp == "Scarlet & Violet":
+            continue
+        if name:
+            m = _CHAMPIONS_REG_RE.search(name)
+            if m:
+                letter = next(g for g in m.groups() if g).upper()
+                expected_fmt = f"Regulation M-{letter}"
+                if expected_fmt != stored_fmt:
+                    corrections[tid] = expected_fmt
+
+    # Check for Champions tournaments on or after 2026-09-09 with Regulation M-C species in their rosters
+    try:
+        mc_candidates = [
+            tid for tid, name, dt, stored_fmt, gp in rows
+            if gp != "Scarlet & Violet"
+            and stored_fmt != "Regulation M-C"
+            and tid not in corrections
+            and str(dt) >= "2026-09-09"
+            and not (name and _CHAMPIONS_REG_RE.search(name))
+        ]
+        if mc_candidates:
+            quoted_mc = ", ".join(f"'{s}'" for s in REGULATION_MC_SPECIES)
+            q_stmt = f"""
+                SELECT DISTINCT tt.tournament_id
+                FROM tournament_teams tt
+                JOIN tournament_team_members m ON tt.tournament_team_id = m.tournament_team_id
+                WHERE (m.canonical_id IN ({quoted_mc}) OR m.base_canonical_id IN ({quoted_mc}))
+            """
+            roster_mc_tids = {row[0] for row in conn.execute(text(q_stmt)).fetchall()}
+            for tid in mc_candidates:
+                if tid in roster_mc_tids:
+                    corrections[tid] = "Regulation M-C"
+    except Exception:
+        pass
+
+    if not corrections:
+        return
+
+    for tid, new_fmt in corrections.items():
+        conn.execute(
+            text("UPDATE tournaments SET format_regulation = :fmt WHERE tournament_id = :id"),
+            {"fmt": new_fmt, "id": tid},
+        )
+    conn.commit()
+
 
 
 @contextmanager

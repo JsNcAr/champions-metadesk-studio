@@ -208,27 +208,68 @@ def format_api_name(pokemon_name: str) -> str:
     return "-".join(words)
 
 
-def normalize_format_regulation(raw_format: str) -> str:
-    """Normalises diverse raw format labels into standard UI regulation names."""
-    if not raw_format:
-        return "Champions Season 1"
+_CHAMPIONS_REG_RE = re.compile(
+    r"(?:\b(?:REG(?:ULATION)?|CHAMPIONS|VGC)[\s.-]*)M-?([A-Za-z])\b|\bM-([A-Za-z])\b|\bM([B-Db-d])\b",
+    re.IGNORECASE,
+)
+_SV_REG_RE = re.compile(r"\bREG(?:ULATION)?[\s.]*(?:SET\s+)?([A-Ha-h])\b", re.IGNORECASE)
 
-    fmt = raw_format.strip()
-    fmt_upper = fmt.upper()
+# Species newly introduced / legal in Champions Regulation M-C
+REGULATION_MC_SPECIES: frozenset[str] = frozenset({
+    "arboliva", "baxcalibur", "cinderace", "farfetchd", "gogoat",
+    "golisopod", "grapploct", "indeedee", "inteleon", "mabosstiff",
+    "mr-mime", "pawmot", "perrserker", "persian", "pincurchin",
+    "rillaboom", "salamence", "sirfetchd", "squawkabilly", "swalot",
+    "thievul", "toxtricity", "toxtricity-low-key", "wigglytuff",
+})
 
-    if "M-B" in fmt_upper:
-        return "Regulation M-B"
-    if "M-A" in fmt_upper:
-        return "Regulation M-A"
-    if "M-C" in fmt_upper:
-        return "Regulation M-C"
 
-    # Match "Regulation Set H", "Regulation H", "Reg H", "REGH", etc.
-    for letter in ["H", "G", "F", "E", "D", "C", "B", "A"]:
-        if f"REGULATION {letter}" in fmt_upper or f"REGULATION SET {letter}" in fmt_upper or f"REG {letter}" in fmt_upper or f"REG{letter}" in fmt_upper or fmt_upper.endswith(f"REG{letter}"):
-            return f"Regulation {letter}"
+def normalize_format_regulation(raw_format: str, tournament_name: str | None = None) -> str:
+    """Normalises diverse raw format labels into standard UI regulation names.
 
-    return fmt
+    If tournament_name is provided, checks it first for explicit regulation mentions
+    (e.g., 'Reg M-C', '[M-C]', 'REG MC', 'Champions-MC'), which take precedence over
+    stale or defaulted platform format codes.
+    """
+    # 1. Check tournament name first for Champions M-X regulation
+    if tournament_name:
+        m = _CHAMPIONS_REG_RE.search(tournament_name)
+        if m:
+            letter = next(g for g in m.groups() if g).upper()
+            return f"Regulation M-{letter}"
+
+    # 2. Check raw_format for Champions M-X regulation
+    if raw_format:
+        m = _CHAMPIONS_REG_RE.search(raw_format)
+        if m:
+            letter = next(g for g in m.groups() if g).upper()
+            return f"Regulation M-{letter}"
+
+    # 3. Check tournament name for standard VGC Reg A-H
+    if tournament_name:
+        m = _SV_REG_RE.search(tournament_name)
+        if m:
+            return f"Regulation {m.group(1).upper()}"
+
+    # 4. Check raw_format for standard VGC Reg A-H
+    if raw_format:
+        m = _SV_REG_RE.search(raw_format)
+        if m:
+            return f"Regulation {m.group(1).upper()}"
+        fmt = raw_format.strip()
+        fmt_upper = fmt.upper()
+        for letter in ["H", "G", "F", "E", "D", "C", "B", "A"]:
+            if (
+                f"REGULATION {letter}" in fmt_upper
+                or f"REGULATION SET {letter}" in fmt_upper
+                or f"REG {letter}" in fmt_upper
+                or f"REG{letter}" in fmt_upper
+                or fmt_upper.endswith(f"REG{letter}")
+            ):
+                return f"Regulation {letter}"
+        return fmt
+
+    return "Champions Season 1"
 
 
 _MEGA_SUFFIX_RE = re.compile(r"-mega(-[xy])?$")

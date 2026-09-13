@@ -45,6 +45,7 @@ from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
     TOURNAMENT_USER_AGENT,
 )
+from ...domain.pokemon_identity import _CHAMPIONS_REG_RE
 
 # Standings requests per batch unless the rate budget runs out first.
 _MAX_STANDINGS_PER_SYNC = LIMITLESS_STANDINGS_PER_RUN
@@ -249,7 +250,15 @@ class LimitlessProvider:
                         keep_fetching = False
                         break
 
-                    if format_code in target_formats or any(tf in format_code for tf in target_formats):
+                    tourney_name = str(item.get("name", "Limitless Tournament"))
+                    is_champions = (
+                        format_code in target_formats
+                        or any(tf in format_code for tf in target_formats)
+                        or bool(_CHAMPIONS_REG_RE.search(tourney_name))
+                        or ("champions" in tourney_name.lower() and format_code == "CUSTOM")
+                    )
+
+                    if is_champions:
                         # Only Champions-format events count as "new": the feed also lists
                         # other VGC formats that are never stored, and they must not keep
                         # the paging going.
@@ -258,7 +267,7 @@ class LimitlessProvider:
                         tournaments.append(
                             LimitlessTournament(
                                 id=str(item.get("id", "")),
-                                name=str(item.get("name", "Limitless Tournament")),
+                                name=tourney_name,
                                 date=event_dt,
                                 format_code=format_code,
                                 player_count=_safe_int(item.get("players"), 0),

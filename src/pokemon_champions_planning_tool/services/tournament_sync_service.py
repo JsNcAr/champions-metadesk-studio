@@ -31,6 +31,12 @@ from ..config import (
 )
 from ..domain.event_tier import classify_event_tier
 from ..domain.pokemon_identity import base_canonical_id, format_api_name, normalize_format_regulation
+from ..domain.pokemon_identity import (
+    REGULATION_MC_SPECIES,
+    base_canonical_id,
+    format_api_name,
+    normalize_format_regulation,
+)
 from ..infrastructure.database.models import (
     TournamentRecord,
     TournamentTeamRecord,
@@ -277,6 +283,7 @@ def _sync_limitless(
             continue
 
         norm_format = normalize_format_regulation(t_dto.format_code)
+        norm_format = normalize_format_regulation(t_dto.format_code, tournament_name=t_dto.name)
         t_record = TournamentRecord(
             tournament_id=t_id,
             name=t_dto.name,
@@ -375,6 +382,15 @@ def _sync_limitless(
             entries.append((team_record, members))
 
         teams_added += repo.save_teams(entries)
+        if any(
+            (m.base_canonical_id in REGULATION_MC_SPECIES or m.canonical_id in REGULATION_MC_SPECIES)
+            for _, members in entries
+            for m in members
+        ):
+            tourney = repo.get_tournament(t_id)
+            if tourney and tourney.format_regulation != "Regulation M-C":
+                tourney.format_regulation = "Regulation M-C"
+                repo.upsert_tournament(tourney)
         _report(on_progress, "standings", f"Saved standings {index} of {len(standings_batch)}", done=index, total=len(standings_batch), teams=teams_added)
 
         # The request succeeded, so this tournament leaves the backlog even when the
@@ -430,7 +446,7 @@ def _register_official_event(repo: TournamentRepository, meta: dict, *, event_da
             tournament_id=f"vr-{meta['slug']}",
             name=meta["name"],
             event_date=date or datetime.now(timezone.utc),
-            format_regulation=normalize_format_regulation(meta.get("format", "Regulation M-A")),
+            format_regulation=normalize_format_regulation(meta.get("format", "Regulation M-A"), tournament_name=meta.get("name")),
             game_platform=meta.get("game", "Pokémon Champions"),
             organizer="Play! Pokémon Premier Events",
             location=meta.get("location", ""),
@@ -525,6 +541,7 @@ def _sync_victory_road(
         fetched_count += 1
 
         norm_format = normalize_format_regulation(ev.format_regulation)
+        norm_format = normalize_format_regulation(ev.format_regulation, tournament_name=record.name)
         t_record = TournamentRecord(
             tournament_id=t_id,
             name=record.name,

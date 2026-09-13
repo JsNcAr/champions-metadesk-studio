@@ -427,6 +427,59 @@ class CalcStore:
             self._apply_ability_field(changes["ability"], force=True)
         self._commit()
 
+    def switch_form(self, side: str, form_canonical_id: str) -> None:
+        """Switch a Pokémon between its base form and Mega Evolution in-place.
+
+        Preserves the Pokémon's points spread, nature, moves, stat stage boosts,
+        HP percentage, status, and source, while updating the species base stats,
+        typing, ability, and required Mega Stone.
+        """
+        p = self.state.side(side)
+        if not p.species or p.species == form_canonical_id:
+            return
+        target_species = self.catalogs.species_for(form_canonical_id)
+        if target_species is None:
+            return
+
+        changes: dict[str, Any] = {"species": target_species.canonical_id}
+        if target_species.is_mega:
+            if target_species.abilities:
+                changes["ability"] = target_species.abilities[0]
+            if target_species.required_item and p.item != target_species.required_item:
+                changes["item"] = target_species.required_item
+        else:
+            base_species = self.catalogs.species_for(target_species.base_species_id) or target_species
+            current_species = self.catalogs.species_for(p.species)
+            if current_species and current_species.is_mega and base_species.abilities:
+                if p.ability not in base_species.abilities:
+                    changes["ability"] = base_species.abilities[0]
+
+        self.set_pokemon(side, **changes)
+
+    def set_item(self, side: str, item_name: str | None) -> None:
+        """Set the held item on a Pokémon, automatically synchronizing Mega Evolution form."""
+        p = self.state.side(side)
+        clean_item = (item_name or "").strip() or None
+        if not p.species:
+            self.set_pokemon(side, item=clean_item)
+            return
+
+        mega_cid = self.catalogs.mega_for_item(p.species, clean_item)
+        if mega_cid and mega_cid != p.species:
+            self.switch_form(side, mega_cid)
+            self.set_pokemon(side, item=clean_item)
+            return
+
+        current_species = self.catalogs.species_for(p.species)
+        if current_species and current_species.is_mega:
+            if not clean_item or clean_item.strip().lower() != (current_species.required_item or "").strip().lower():
+                base_cid = current_species.base_species_id
+                self.switch_form(side, base_cid)
+                self.set_pokemon(side, item=clean_item)
+                return
+
+        self.set_pokemon(side, item=clean_item)
+
     def set_nature(self, side: str, nature: str | None) -> None:
         self.set_pokemon(side, nature=(nature or "hardy").lower())
 

@@ -206,6 +206,7 @@ class CalcView(ft.Column):
             page.pop_dialog()
             record = self.store.catalogs.item_for(item_id) if item_id else None
             self.store.set_pokemon(side, item=record.display_name if record else None)
+            self.store.set_item(side, record.display_name if record else None)
 
         page.show_dialog(ItemPickerDialog(
             catalogs=self.store.catalogs, species_name=species.name.split("-")[0].lower(), current_item_id=current.canonical_id if current else None,

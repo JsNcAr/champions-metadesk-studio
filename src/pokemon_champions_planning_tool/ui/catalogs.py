@@ -105,6 +105,50 @@ class Catalogs:
         key = (species_name or "").lower()
         return [m for m in self.megas if (m.species_name or "").lower() == key]
 
+    def form_choices_for(self, canonical_id: str | None) -> list[tuple[str, str]]:
+        """List of (canonical_id, label) for a species and its mega forms.
+
+        Returns empty list if the species has no mega evolutions.
+        If it has mega evolutions, the first entry is always the base form ('Base').
+        """
+        species = self.species_for(canonical_id)
+        if species is None:
+            return []
+        base_species = self.species_for(species.base_species_id) or species
+        megas = self.megas_for(base_species.name)
+        if not megas:
+            mega_species_list = [s for s in self.species_by_canonical.values() if s.base_species_id == base_species.canonical_id and s.is_mega]
+            if not mega_species_list:
+                return []
+            out = [(base_species.canonical_id, "Base")]
+            for s in mega_species_list:
+                lbl = s.name.replace(base_species.name, "").replace("-", " ").strip()
+                lbl = " ".join(lbl.split()) if lbl else "Mega"
+                out.append((s.canonical_id, lbl))
+            return out
+
+        out = [(base_species.canonical_id, "Base")]
+        for m in megas:
+            lbl = m.display_name.replace(base_species.name, "").replace("-", " ").strip()
+            lbl = " ".join(lbl.split()) if lbl else "Mega"
+            out.append((m.canonical_id, lbl))
+        return out
+
+    def mega_for_item(self, species_canonical_id: str | None, item_name: str | None) -> str | None:
+        """If item_name is a Mega Stone for this species (base or mega), return the mega form canonical id."""
+        if not species_canonical_id or not item_name:
+            return None
+        species = self.species_for(species_canonical_id)
+        if species is None:
+            return None
+        base_id = species.base_species_id
+        item_lower = item_name.strip().lower()
+        for s in self.species_by_canonical.values():
+            if s.base_species_id == base_id and s.is_mega and s.required_item:
+                if s.required_item.strip().lower() == item_lower:
+                    return s.canonical_id
+        return None
+
     @property
     def items_by_name(self) -> dict[str, ItemRecord]:
         return {r.display_name.lower(): r for r in self.items_by_id.values()}

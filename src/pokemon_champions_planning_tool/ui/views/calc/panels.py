@@ -61,6 +61,15 @@ class PokemonPanel(ft.Container):
         self._types = ft.Row(spacing=Space.XS, tight=True)
         self._mega = StatusChip("Mega", "warning")
         self._mega.visible = False
+        self._form = ft.SegmentedButton(
+            selected=["base"],
+            allow_multiple_selection=False,
+            allow_empty_selection=False,
+            show_selected_icon=False,
+            segments=[ft.Segment(value="base", label=ft.Text("Base"))],
+            visible=False,
+            on_change=lambda e: self._on_form_changed(next(iter(e.control.selected or []))),
+        )
         self._speed = StatusChip("Spe", "neutral")
         self._speed.visible = False
         self._ability = ft.Dropdown(dense=True, expand=True, text_size=13, enable_filter=True, options=[], on_select=lambda e: self._ability_changed(e.control.value))
@@ -73,7 +82,7 @@ class PokemonPanel(ft.Container):
 
         self._item_name = ft.Text("Held item…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._item_clear = ft.IconButton(icon=ft.Icons.CLOSE, icon_size=16, width=28, height=28, padding=0, tooltip="Remove item", visible=False,
-                                         on_click=lambda _e: self.store.set_pokemon(self.side, item=None))
+                                         on_click=lambda _e: self.store.set_item(self.side, None))
         self._item_field = ft.Container(
             content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT), self._item_name, self._item_clear,
@@ -118,6 +127,7 @@ class PokemonPanel(ft.Container):
                 self.sprite,
                 ft.Column(spacing=3, tight=True, expand=True, controls=[
                     ft.Row(spacing=Space.SM, tight=True, controls=[self._name, self._mega]),
+                    ft.Row(spacing=Space.SM, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._name, self._form]),
                     ft.Row(spacing=Space.XS, tight=True, controls=[self._types, self._speed]),
                     ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._ability, self._ability_on]),
                     self._caption, self._legality,
@@ -173,6 +183,10 @@ class PokemonPanel(ft.Container):
 
     # -- edits ---------------------------------------------------------------------------------
 
+    def _on_form_changed(self, form_id: str) -> None:
+        if not self._syncing and form_id:
+            self.store.switch_form(self.side, form_id)
+
     def _spread_changed(self, nature: str, points: dict[str, int]) -> None:
         if not self._syncing:
             self.store.set_pokemon(self.side, nature=nature, points=dict(points))
@@ -217,6 +231,7 @@ class PokemonPanel(ft.Container):
                 self._name.value = "Pick a species"
                 self._types.controls = []
                 self._mega.visible = self._speed.visible = self._legality.visible = self._ability_on.visible = False
+                self._form.visible = self._speed.visible = self._legality.visible = self._ability_on.visible = False
                 self._caption.value = "Type a name above, or pick one from your team or the box." if state.species is None else f"Unknown species: {state.species}"
                 self.sprite.set_src(None)
                 self.sprite.set_tooltip(None)
@@ -226,6 +241,15 @@ class PokemonPanel(ft.Container):
                 self._name.value = species.name
                 self._types.controls = [TypeChip(t, size="sm") for t in species.types_lower]
                 self._mega.visible = species.is_mega
+                form_choices = self.store.catalogs.form_choices_for(species.canonical_id)
+                if form_choices:
+                    self._form.visible = True
+                    self._form.segments = [ft.Segment(value=cid, label=ft.Text(lbl)) for cid, lbl in form_choices]
+                    self._form.selected = [species.canonical_id]
+                else:
+                    self._form.visible = False
+                    self._form.segments = [ft.Segment(value="base", label=ft.Text("Base"))]
+                    self._form.selected = ["base"]
                 order = self.store.speed_order()
                 faster = order == self.side
                 self._speed.visible = True

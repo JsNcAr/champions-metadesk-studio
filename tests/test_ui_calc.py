@@ -26,16 +26,17 @@ from pokemon_champions_planning_tool.ui.views.meta.row import TeamRow  # noqa: E
 from pokemon_champions_planning_tool.ui.views.team.slot_card import SlotCallbacks  # noqa: E402
 
 
-def species(canonical_id, name, types, stats, abilities, weight, is_mega=False):
+from pokemon_champions_planning_tool.infrastructure.database.models import ItemRecord, MegaEvolutionRecord  # noqa: E402
+
+
 def species(canonical_id, name, types, stats, abilities, weight, is_mega=False, required_item=None):
-    return SpeciesInfo(canonical_id=canonical_id, showdown_id=name.lower().replace("-", ""), name=name, dex_number=1, base_species_id=name.lower(), forme=None,
-                       types=types, base_stats=stats, abilities=abilities, weightkg=weight, gender="M", required_item=None, battle_only=None, is_mega=is_mega, is_legal=True)
+    return SpeciesInfo(canonical_id=canonical_id, showdown_id=name.lower().replace("-", ""), name=name, dex_number=1, base_species_id=name.lower().split("-")[0], forme=None,
                        types=types, base_stats=stats, abilities=abilities, weightkg=weight, gender="M", required_item=required_item, battle_only=None, is_mega=is_mega, is_legal=True)
 
 
 KINGAMBIT = species("kingambit", "Kingambit", ("Dark", "Steel"), {"hp": 100, "atk": 135, "def": 120, "spa": 60, "spd": 85, "spe": 50}, ("Defiant", "Supreme Overlord", "Pressure"), 120)
 INCINEROAR = species("incineroar", "Incineroar", ("Fire", "Dark"), {"hp": 95, "atk": 115, "def": 90, "spa": 80, "spd": 90, "spe": 60}, ("Blaze", "Intimidate"), 83)
-MEGA_Y = species("charizard-mega-y", "Charizard-Mega-Y", ("Fire", "Flying"), {"hp": 78, "atk": 104, "def": 78, "spa": 159, "spd": 115, "spe": 100}, ("Drought",), 100.5, True)
+CHARIZARD = species("charizard", "Charizard", ("Fire", "Flying"), {"hp": 78, "atk": 84, "def": 78, "spa": 109, "spd": 85, "spe": 100}, ("Blaze", "Solar Power"), 90.5)
 MEGA_Y = species("charizard-mega-y", "Charizard-Mega-Y", ("Fire", "Flying"), {"hp": 78, "atk": 104, "def": 78, "spa": 159, "spd": 115, "spe": 100}, ("Drought",), 100.5, True, required_item="Charizardite Y")
 MOVES = {
     "kowtowcleave": MoveInfo("kowtowcleave", "Kowtow Cleave", "dark", "physical", 85, 100, 10, 0, "normal", "", True, MoveMechanics(contact=True, slicing=True)),
@@ -44,6 +45,14 @@ MOVES = {
     "heatwave": MoveInfo("heatwave", "Heat Wave", "fire", "special", 95, 90, 10, 0, "allAdjacentFoes", "", True, MoveMechanics(wind=True, secondaries=True)),
     "protect": MoveInfo("protect", "Protect", "normal", "status", None, None, 10, 4, "self", "", True),
 }
+ITEMS = {
+    "charizardite-y": ItemRecord(canonical_id="charizardite-y", display_name="Charizardite Y", category="mega-stone", is_champions_legal=True, target_species="charizard", target_form="mega-y"),
+    "life-orb": ItemRecord(canonical_id="life-orb", display_name="Life Orb", category="held", is_champions_legal=True),
+}
+MEGAS = (
+    MegaEvolutionRecord(canonical_id="charizard-mega-y", species_name="Charizard", display_name="Mega Charizard Y", form_name="Mega Y",
+                        types=["Fire", "Flying"], hp=78, attack=104, defense=78, special_attack=159, special_defense=115, speed=100, ability="Drought"),
+)
 
 
 def catalogs() -> Catalogs:
@@ -51,6 +60,8 @@ def catalogs() -> Catalogs:
         moves_by_id=MOVES,
         learnsets={"kingambit": frozenset({"kowtowcleave", "ironhead", "protect"}), "incineroar": frozenset({"flareblitz", "protect"}), "charizard": frozenset({"heatwave", "protect"})},
         species_by_canonical={s.canonical_id: s for s in (KINGAMBIT, INCINEROAR, MEGA_Y)},
+        items_by_id=ITEMS,
+        megas=MEGAS,
     )
 
 
@@ -486,6 +497,90 @@ class TestTournamentPresets(_Base):
 
         # Incineroar has Flare Blitz and attacks Kingambit
         self.assertIn("Incineroar Flare Blitz", by["incineroar"].their_best.description)
+
+
+class TestFormSwitcher(_Base):
+    def setUp(self):
+        super().setUp()
+        self.store.catalogs.species_by_canonical["charizard"] = CHARIZARD
+
+    def test_form_choices_for(self):
+        choices = self.catalogs.form_choices_for("charizard")
+        self.assertEqual(choices, [("charizard", "Base"), ("charizard-mega-y", "Mega Y")])
+        choices_from_mega = self.catalogs.form_choices_for("charizard-mega-y")
+        self.assertEqual(choices_from_mega, [("charizard", "Base"), ("charizard-mega-y", "Mega Y")])
+        self.assertEqual(self.catalogs.form_choices_for("kingambit"), [])
+
+    def test_switch_form_preserves_custom_build(self):
+        self.store.load_species("left", "charizard")
+        self.store.set_nature("left", "timid")
+        self.store.set_points("left", {"special_attack": 32, "speed": 32, "hp": 2})
+        self.store.set_move("left", 0, "Heat Wave")
+        self.store.set_move("left", 1, "Protect")
+        self.store.set_boost("left", "special_attack", 1)
+        self.store.set_hp_pct("left", 75.0)
+        self.assertEqual(self.store.state.left.ability, "Blaze")
+
+        # Switch to Mega Y
+        self.store.switch_form("left", "charizard-mega-y")
+        left = self.store.state.left
+        self.assertEqual(left.species, "charizard-mega-y")
+        self.assertEqual(left.nature, "timid")
+        self.assertEqual(left.points, {"special_attack": 32, "speed": 32, "hp": 2})
+        self.assertEqual(left.moves[:2], ["Heat Wave", "Protect"])
+        self.assertEqual(left.boosts, {"special_attack": 1})
+        self.assertEqual(left.hp_pct, 75.0)
+        self.assertEqual(left.ability, "Drought")
+        self.assertEqual(self.store.state.field.weather, "Sun")
+        self.assertEqual(left.item, "Charizardite Y")
+
+        # Switch back to Base
+        self.store.switch_form("left", "charizard")
+        left = self.store.state.left
+        self.assertEqual(left.species, "charizard")
+        self.assertEqual(left.nature, "timid")
+        self.assertEqual(left.points, {"special_attack": 32, "speed": 32, "hp": 2})
+        self.assertEqual(left.moves[:2], ["Heat Wave", "Protect"])
+        self.assertEqual(left.boosts, {"special_attack": 1})
+        self.assertEqual(left.hp_pct, 75.0)
+        self.assertEqual(left.ability, "Blaze")
+        self.assertEqual(left.item, "Charizardite Y")
+
+    def test_set_item_auto_syncs_mega_form(self):
+        self.store.load_species("left", "charizard")
+        self.assertEqual(self.store.state.left.species, "charizard")
+
+        # Equipping Charizardite Y auto-evolves to Mega Y
+        self.store.set_item("left", "Charizardite Y")
+        self.assertEqual(self.store.state.left.species, "charizard-mega-y")
+        self.assertEqual(self.store.state.left.item, "Charizardite Y")
+        self.assertEqual(self.store.state.left.ability, "Drought")
+
+        # Equipping Life Orb auto-reverts to base Charizard
+        self.store.set_item("left", "Life Orb")
+        self.assertEqual(self.store.state.left.species, "charizard")
+        self.assertEqual(self.store.state.left.item, "Life Orb")
+        self.assertEqual(self.store.state.left.ability, "Blaze")
+
+        # Re-equipping Charizardite Y then clearing it (None) auto-reverts
+        self.store.set_item("left", "Charizardite Y")
+        self.assertEqual(self.store.state.left.species, "charizard-mega-y")
+        self.store.set_item("left", None)
+        self.assertEqual(self.store.state.left.species, "charizard")
+        self.assertIsNone(self.store.state.left.item)
+
+    def test_panel_segmented_button_ui(self):
+        ctx = AppContext(StubPage())
+        view = CalcView(ctx, store=self.store)
+        self.store.load_species("left", "charizard")
+        view.attacker.update_from()
+        self.assertTrue(view.attacker._form.visible)
+        self.assertEqual([s.value for s in view.attacker._form.segments], ["charizard", "charizard-mega-y"])
+        self.assertEqual(view.attacker._form.selected, ["charizard"])
+
+        self.store.load_species("left", "kingambit")
+        view.attacker.update_from()
+        self.assertFalse(view.attacker._form.visible)
 
 
 if __name__ == "__main__":

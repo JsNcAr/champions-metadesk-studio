@@ -52,6 +52,7 @@ class BoxView(ft.Row):
         self._add_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
+        self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, tooltip="Export the visible entries (or the selected ones) to CSV", on_click=lambda _e: self._export())
         self._import_button = ft.OutlinedButton(
             "Import",
             icon=ft.Icons.UPLOAD,
@@ -65,6 +66,7 @@ class BoxView(ft.Row):
             on_click=lambda _e: self._open_export_dialog(),
         )
         self._hidden_button = ft.TextButton("", icon=ft.Icons.FILTER_ALT_OFF, visible=False, tooltip="Some owned Pokémon are hidden by the current filters — click to clear them", on_click=lambda _e: self.toolbar.clear())
+        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._hidden_button, self._add_spinner, self._add_field, self._export_button])
         self.header = PageHeader(
             "Box",
             icon=ft.Icons.INVENTORY_2,

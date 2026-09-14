@@ -15,7 +15,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlmodel import Session
@@ -29,6 +30,16 @@ from ....infrastructure.csv.csv_operations import export_box_entries_to_csv
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import MegaEvolutionRecord
 from ....infrastructure.database.repositories import BoxRepository, MegaEvolutionRepository, TeamRepository
+from ....services.box_transfer_service import (
+    BoxImportReport,
+    ParsedBoxItem,
+    ParsedBoxResult,
+    apply_box_import,
+    export_box_to_csv_text,
+    export_box_to_json,
+    export_box_to_names,
+    parse_box_import_text,
+)
 from ....services.mega_evolution_service import sync_mega_evolutions_for_species
 from ....services.pokemon_import_service import add_pokemon_to_box, refresh_pokemon_record
 from ...catalogs import Catalogs
@@ -372,6 +383,35 @@ class BoxStore:
         owned = [e for e in source if not e.is_planned]
         export_box_entries_to_csv(owned)
         return len(owned)
+
+    def export_box(self, format_type: str = "json", entries: list[BoxEntry] | None = None) -> str:
+        """Serialize entries into JSON, plain text names, or CSV."""
+        source = self.entries if entries is None else entries
+        if format_type == "json":
+            return export_box_to_json(source)
+        elif format_type == "text":
+            return export_box_to_names(source, include_metadata=True)
+        elif format_type == "csv":
+            return export_box_to_csv_text(source)
+        raise ValueError(f"Unknown format: {format_type}")
+
+    def import_box(
+        self,
+        items: list[ParsedBoxItem],
+        strategy: Literal["merge", "replace"] = "merge",
+        as_planned: bool | None = None,
+    ) -> BoxImportReport:
+        """Apply parsed items to the database and reload."""
+        with self._sf() as s:
+            report = apply_box_import(s, items, strategy=strategy, as_planned=as_planned)
+        self.load()
+        return report
+
+    def save_export_file(self, content: str, filename: str) -> Path:
+        """Save text content to the local filesystem."""
+        path = Path(filename)
+        path.write_text(content, encoding="utf-8")
+        return path.resolve()
 
     # -- teams -----------------------------------------------------------------------------
 

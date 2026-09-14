@@ -21,6 +21,7 @@ from ...tasks import grid_tile_aspect, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Motion, OVERLAY_SHADOW, Palette, Radius, Space
 from .card import CARD_HEIGHT, CARD_HEIGHT_WITH_STATS, CARD_MAX_EXTENT, PokemonCard
 from .detail_panel import DetailPanel
+from .dialogs import BoxExportDialog, BoxImportDialog
 from .filters import BoxFilters, SortKey
 from .store import BoxStore
 from .table import EXTRA_COLUMNS, BoxTable
@@ -51,9 +52,26 @@ class BoxView(ft.Row):
         self._add_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
-        self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, tooltip="Export the visible entries (or the selected ones) to CSV", on_click=lambda _e: self._export())
+        self._import_button = ft.OutlinedButton(
+            "Import",
+            icon=ft.Icons.UPLOAD,
+            tooltip="Import Pokémon roster from JSON backup, names list, or CSV",
+            on_click=lambda _e: self._open_import_dialog(),
+        )
+        self._export_button = ft.OutlinedButton(
+            "Export",
+            icon=ft.Icons.DOWNLOAD,
+            tooltip="Export Pokémon roster to JSON backup, names list, or CSV",
+            on_click=lambda _e: self._open_export_dialog(),
+        )
         self._hidden_button = ft.TextButton("", icon=ft.Icons.FILTER_ALT_OFF, visible=False, tooltip="Some owned Pokémon are hidden by the current filters — click to clear them", on_click=lambda _e: self.toolbar.clear())
-        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._hidden_button, self._add_spinner, self._add_field, self._export_button])
+        self.header = PageHeader(
+            "Box",
+            icon=ft.Icons.INVENTORY_2,
+            accent=Accent.BOX,
+            count=0,
+            actions=[self._hidden_button, self._add_spinner, self._add_field, self._import_button, self._export_button],
+        )
 
         # -- toolbar ---------------------------------------------------------------------------
         self.toolbar = BoxToolbar(ctx.page, on_filters=self._on_filters, on_view_mode=self._set_view_mode, on_show_stats=self._set_show_stats, on_columns=self._set_columns)
@@ -516,6 +534,47 @@ class BoxView(ft.Row):
             self._update_self()
 
         self.ctx.run_in_background(lambda: self.store.add_by_name(name), on_done=done, on_error=failed, busy=[self._add_field], spinner=self._add_spinner)
+
+    def _get_export_entries(self) -> tuple[list[BoxEntry], str]:
+        """Return the entries to export and a human-readable scope label."""
+        visible = self.store.visible()
+        if self.store.multi:
+            chosen = [e for e in visible if e.box_entry_id in self.store.multi] or [
+                e for e in self.store.entries if e.box_entry_id in self.store.multi
+            ]
+            suffix = f" ({len(chosen)} selected)"
+            return chosen, suffix
+        if self.store.filters.active_labels():
+            suffix = f" ({len(visible)} filtered)"
+            return visible, suffix
+        return self.store.entries, ""
+
+    def _open_export_dialog(self) -> None:
+        entries, suffix = self._get_export_entries()
+        dialog = BoxExportDialog(self.ctx, self.store, entries=entries, title_suffix=suffix)
+        page = getattr(self.ctx, "page", None)
+        if page is not None and hasattr(page, "show_dialog"):
+            page.show_dialog(dialog)
+        elif page is not None:
+            page.dialog = dialog
+            dialog.open = True
+            page.update()
+
+    def _open_export(self) -> None:
+        self._open_export_dialog()
+
+    def _open_import_dialog(self, initial_text: str = "") -> None:
+        dialog = BoxImportDialog(self.ctx, self.store, initial_text=initial_text)
+        page = getattr(self.ctx, "page", None)
+        if page is not None and hasattr(page, "show_dialog"):
+            page.show_dialog(dialog)
+        elif page is not None:
+            page.dialog = dialog
+            dialog.open = True
+            page.update()
+
+    def _open_import(self, initial_text: str = "") -> None:
+        self._open_import_dialog(initial_text=initial_text)
 
     def _export(self) -> None:
         """Export the selection if there is one, otherwise the visible (filtered) entries."""

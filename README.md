@@ -11,7 +11,7 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **Packaging & Environment**: Poetry-based project in [pyproject.toml](pyproject.toml) (Python `>=3.13`)
 - **Primary Database**: `pokemon_champions.db` (SQLite managed via SQLModel)
 - **Transitional Data Exports**: `pokemon_team_stats.csv` automatically synchronized with box state
-- **Test Suite**: Automated unit and integration test suite (**441 passing tests**)
+- **Test Suite**: Automated unit and integration test suite (**454 passing tests**)
 
 ## Key Features
 
@@ -19,7 +19,11 @@ The project is fully functional as a modern **Flet Web/Desktop GUI** and interac
 - **PokéAPI Integration**: Add species by name with automatic normalization for Mega forms and regional variants.
 - **Advanced Filtering**: Filter by 17 type pills, ★ Favorites, ⚡ Mega-Capable status, and custom tag chips.
 - **Details Drawer**: Inspect base stats, types, abilities, notes, and tags in an interactive panel.
-- **CSV Snapshot Export**: Export box data to CSV for external spreadsheet analysis.
+- **Complete Box Import & Export**:
+  - **Lossless JSON Backup (`.json`)**: Full-fidelity transfers preserving custom tags, notes, favorite status (★), forms, and planned templates.
+  - **Names List (`.txt`)**: Quick plain-text lists (e.g. `Charizard #Starter ★`) for easy sharing via Discord or notes.
+  - **Spreadsheet (`.csv`)**: Full tabular exports with stats, forms, and metadata for Excel and Google Sheets.
+  - **Smart Import Dialog**: Real-time auto-detection of JSON, plain text, and CSV formats as you paste, with **Merge** (safe addition without data loss) and **Replace** (complete restore) strategies.
 
 ### ⚔️ 2. Team Builder & Competitive Spreads
 - **Multi-Team Squads**: Create, rename, switch, and delete competitive teams.
@@ -115,27 +119,44 @@ poetry run python -m unittest discover -s tests
 
 ---
 
-## 🛠️ Building Executables
+## 🛠️ Building Executables & GitHub Releases
 
-### 1. Cross-Compiling Windows Executable (`.exe`) via Docker (Linux Host)
+### 1. Automated Releases via GitHub Actions
+Releases are built automatically across all three desktop platforms (Windows, Linux, macOS) whenever a release tag (e.g. `v0.1.0`) is published or pushed:
 
-To build a standalone Windows binary from Linux without installing Wine locally:
+* 🪟 **Windows**: `champions-metadesk-windows-x64.zip` (standalone executable `champions-metadesk.exe`)
+* 🐧 **Linux**: `champions-metadesk-linux-x64.tar.gz` (standalone binary `champions-metadesk`)
+* 🍏 **macOS**: `champions-metadesk-macos.zip` (standalone `ChampionsMetaDeskStudio.app` bundle)
+
+To trigger a new multi-platform release:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+Or use the **Draft a new release** button in GitHub Releases.
+
+### 2. Local Packaging (`flet pack`)
+To build a standalone executable directly on your local machine using PyInstaller and Flet:
 
 ```bash
-./scripts/build_windows_docker.sh
+# On Linux:
+poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" \
+  --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" -y
+
+# On Windows (PowerShell):
+poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" `
+  --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" `
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
+
+# On macOS:
+poetry run flet pack run.py -n "ChampionsMetaDeskStudio" --product-name "Champions MetaDesk Studio" \
+  --bundle-id "com.champions.metadesk" \
+  --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" -y
 ```
 
-The output executable will be created at: `dist/ChampionsMetaDeskStudio.exe`.
-
-### 2. Native Build (Current Host OS)
-
-To build a binary for your current operating system (Linux, macOS, or Windows):
-
-```bash
-poetry run pyinstaller pokemon_champions.spec --noconfirm --clean
-```
-
-For complete packaging details, see [docs/building.md](docs/building.md).
+Output binaries are saved to the `dist/` directory. For full architecture and build options, see [docs/building.md](docs/building.md).
 
 ---
 

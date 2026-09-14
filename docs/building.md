@@ -1,66 +1,84 @@
 # Packaging and Building Executables
 
-This document describes how to package **Champions MetaDesk Studio** into standalone executables for native host environments (Linux / macOS / Windows) and cross-compile portable Windows `.exe` binaries from Linux using Docker and Wine.
+This document describes how to package **Champions MetaDesk Studio** into standalone executables across Windows, Linux, and macOS using GitHub Actions, local `flet pack`, or Docker.
 
 ---
 
-## 1. Native Build (Host OS)
+## 1. Automated Multi-Platform Releases (GitHub Actions)
 
-To build a single-file executable directly on your current host operating system (Linux, macOS, or Windows):
+The repository includes a GitHub Actions workflow at [`.github/workflows/release.yml`](../.github/workflows/release.yml) that builds standalone executables across all three major platforms whenever a Git version tag is published.
+
+### Matrix Build Configuration
+* **Windows** (`windows-latest`): Builds `champions-metadesk.exe` and packages it into `champions-metadesk-windows-x64.zip`.
+* **Linux** (`ubuntu-latest`): Builds the Linux standalone binary and packages it into `champions-metadesk-linux-x64.tar.gz`.
+* **macOS** (`macos-latest`): Builds the `ChampionsMetaDeskStudio.app` bundle and packages it into `champions-metadesk-macos.zip`.
+
+### Publishing a Release
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+Or draft a release via the GitHub Web UI. Once the workflow completes, all 3 archives are automatically attached as assets to the release.
+
+---
+
+## 2. Native Build on Current Host OS (`flet pack`)
+
+To build a standalone executable directly on your development machine:
 
 ### Prerequisites
 * Python `>=3.13,<3.16`
 * [Poetry](https://python-poetry.org/) package manager
 
-### Build Steps
+### Build Commands
 
-1. Install project dependencies (including development tools):
-   ```bash
-   poetry install
-   ```
+```bash
+# 1. Install dependencies
+poetry install
 
-2. Run PyInstaller using the project specification file:
-   ```bash
-   poetry run pyinstaller pokemon_champions.spec --noconfirm --clean
-   ```
+# 2. Build for your operating system:
 
-3. The generated executable will be placed in the `dist/` directory:
-   * **Linux**: `dist/ChampionsMetaDeskStudio`
-   * **Windows**: `dist/ChampionsMetaDeskStudio.exe`
-   * **macOS**: `dist/ChampionsMetaDeskStudio` (or `.app` bundle)
+# Linux:
+poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" \
+  --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" -y
+
+# Windows (PowerShell):
+poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" `
+  --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" `
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
+
+# macOS:
+poetry run flet pack run.py -n "ChampionsMetaDeskStudio" --product-name "Champions MetaDesk Studio" \
+  --bundle-id "com.champions.metadesk" \
+  --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
+  --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" -y
+```
+
+The resulting binary will be placed in the `dist/` directory.
 
 ---
 
-## 2. Cross-Compiling Windows Executables (`.exe`) via Docker
+## 3. Cross-Compiling Windows Executables (`.exe`) via Docker
 
-If you are developing on a Linux host system and need to build a native standalone Windows `.exe` binary, use the automated Docker + Wine pipeline provided in `scripts/build_windows_docker.sh`.
+If you are developing on a Linux host system and need to build a native standalone Windows `.exe` binary locally without a Windows machine:
 
 ### Prerequisites
-* [Docker Engine](https://docs.docker.com/engine/install/) or Docker Desktop installed and running on your host system.
+* [Docker Engine](https://docs.docker.com/engine/install/) or Docker Desktop running on your host system.
 
 ### Build Step
-
-Run the provided automation script from the root of the repository:
-
 ```bash
 ./scripts/build_windows_docker.sh
 ```
 
-### How the Docker Cross-Compilation Works
-
-The automated script builds a container image (`pcpt-windows-builder`) defined in `Dockerfile.windows`:
-
-1. **Environment Setup**: Uses Ubuntu 24.04 with headless Wine (`xvfb-run`), Python 3.13 Windows Embeddable runtime, and Linux Python.
-2. **Offline Dependency Wheel Resolution**: Due to Wine network socket constraints, the host Linux container pre-downloads all Windows-target `.whl` dependencies (including PyInstaller, SQLModel, Flet, requests, etc.) into `/tmp/wheels`.
-3. **Offline Installation**: Windows Python inside Wine installs all pre-downloaded wheels locally without requiring network sockets.
-4. **Binary Packaging**: PyInstaller compiles `pokemon_champions.spec` inside Wine into a single-file `ChampionsMetaDeskStudio.exe`.
-5. **Output Export**: The container automatically copies the compiled binary to `dist/ChampionsMetaDeskStudio.exe` on your host machine using mounted volume labeling (`:z` flag for SELinux compatibility).
+The container downloads all Windows-compatible wheels, installs them into a headless Wine Python runtime, runs PyInstaller, and extracts `dist/ChampionsMetaDeskStudio.exe`.
 
 ---
 
-## 3. Configuration & Database Behavior in Frozen Builds
+## 4. Configuration & Database Behavior in Frozen Builds
 
-When running the compiled executable:
+When running the standalone executable:
 
-* **Database Storage**: The executable reads `PCPT_DATABASE` environment variable if set. By default, it creates/uses `pokemon_champions.db` in the active working directory or user data folder.
-* **User Preferences**: Saved to `preferences.json` beside the database file.
+* **Database Storage**: The application connects to `pokemon_champions.db`. You can override the database path by setting the `PCPT_DATABASE` environment variable.
+* **User Preferences**: Configuration and UI settings are persisted to `preferences.json` beside the database file.
+* **Seed Data**: Tournaments and reference damage calculation assets are unpacked from the bundled archive automatically on first launch.

@@ -11,7 +11,7 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
-from ...theme import IconSize, Palette, Radius, Space
+from ...theme import IconSize, Palette, Radius, Space, alpha
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
 
@@ -22,6 +22,20 @@ CLASS_HELP = {
     "neutral": "an even race",
     "mitigated": "you win the race",
     "crushed": "you KO in one hit and they cannot KO you first",
+}
+CLASS_BG = {
+    "threat": alpha(Palette.ERROR, 0.18),
+    "wall": alpha(Palette.WARNING, 0.18),
+    "neutral": Palette.SURFACE_2,
+    "mitigated": alpha(Palette.SECONDARY, 0.15),
+    "crushed": alpha(Palette.SUCCESS, 0.18),
+}
+CLASS_BORDER = {
+    "threat": ft.Border.all(1, alpha(Palette.ERROR, 0.40)),
+    "wall": ft.Border.all(1, alpha(Palette.WARNING, 0.40)),
+    "neutral": ft.Border.all(1, Palette.OUTLINE_VARIANT),
+    "mitigated": ft.Border.all(1, alpha(Palette.SECONDARY, 0.35)),
+    "crushed": ft.Border.all(1, alpha(Palette.SUCCESS, 0.40)),
 }
 _INITIAL_LIMIT = 40
 _PAGE_SIZE = 40
@@ -50,8 +64,8 @@ class SweepCard(ft.Container):
         ])
         self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
         self.border_radius = Radius.SM
-        self.bgcolor = Palette.SURFACE_2
-        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
+        self.bgcolor = CLASS_BG.get(e.klass, Palette.SURFACE_2)
+        self.border = CLASS_BORDER.get(e.klass, ft.Border.all(1, Palette.OUTLINE_VARIANT))
         self.ink = True
         self.tooltip = f"Load as defender · {e.usage_count} tournament teams" if e.usage_count > 0 else "Load as defender"
         self.on_click = lambda _e: on_pick(entry)

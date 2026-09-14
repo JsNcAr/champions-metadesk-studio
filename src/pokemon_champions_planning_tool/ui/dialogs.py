@@ -70,7 +70,6 @@ async def confirm(
     future: asyncio.Future[bool] = loop.create_future()
 
     def close(result: bool) -> None:
-        page.pop_dialog()
         if not future.done():
             future.set_result(result)
         page.pop_dialog()
@@ -120,13 +119,11 @@ async def prompt_text(
             field.error = error
             field.update()
             return
-        page.pop_dialog()
         if not future.done():
             future.set_result(text)
         page.pop_dialog()
 
     def cancel(_e: ft.ControlEvent | None = None) -> None:
-        page.pop_dialog()
         if not future.done():
             future.set_result(None)
         page.pop_dialog()

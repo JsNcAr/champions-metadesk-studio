@@ -232,6 +232,8 @@ class TestShellEscape(unittest.TestCase):
         self.assertEqual(seen, [], "the view did not see the key while a dialog was open")
         shell._on_key(esc)
         self.assertEqual(seen, ["Escape"], "with no dialog open, Escape reaches the view")
+
+
 class TestDialogs(unittest.IsolatedAsyncioTestCase):
     async def test_confirm_resolves_true_on_confirm_click(self):
         from _ui_stubs import StubPage

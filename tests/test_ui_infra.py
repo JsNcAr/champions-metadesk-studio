@@ -232,6 +232,49 @@ class TestShellEscape(unittest.TestCase):
         self.assertEqual(seen, [], "the view did not see the key while a dialog was open")
         shell._on_key(esc)
         self.assertEqual(seen, ["Escape"], "with no dialog open, Escape reaches the view")
+class TestDialogs(unittest.IsolatedAsyncioTestCase):
+    async def test_confirm_resolves_true_on_confirm_click(self):
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.dialogs import confirm
+
+        page = StubPage()
+        task = asyncio.create_task(confirm(page, "Delete item?", "Are you sure?"))
+        await asyncio.sleep(0.01)
+
+        self.assertEqual(len(page.dialogs), 1)
+        dialog = page.dialogs[0]
+        # actions[1] is the confirm FilledButton
+        dialog.actions[1].on_click(None)
+        result = await task
+        self.assertTrue(result)
+
+    async def test_confirm_resolves_false_on_cancel_click(self):
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.dialogs import confirm
+
+        page = StubPage()
+        task = asyncio.create_task(confirm(page, "Delete item?", "Are you sure?"))
+        await asyncio.sleep(0.01)
+
+        dialog = page.dialogs[0]
+        # actions[0] is the cancel TextButton
+        dialog.actions[0].on_click(None)
+        result = await task
+        self.assertFalse(result)
+
+    async def test_prompt_text_resolves_text_on_submit(self):
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.dialogs import prompt_text
+
+        page = StubPage()
+        task = asyncio.create_task(prompt_text(page, "Tag item", "Tag", value="sweeper"))
+        await asyncio.sleep(0.01)
+
+        dialog = page.dialogs[0]
+        # actions[1] is the submit FilledButton
+        dialog.actions[1].on_click(None)
+        result = await task
+        self.assertEqual(result, "sweeper")
 
 
 if __name__ == "__main__":

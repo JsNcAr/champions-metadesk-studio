@@ -73,6 +73,7 @@ async def confirm(
         page.pop_dialog()
         if not future.done():
             future.set_result(result)
+        page.pop_dialog()
 
     def dismissed(_e: ft.ControlEvent) -> None:
         if not future.done():
@@ -122,11 +123,13 @@ async def prompt_text(
         page.pop_dialog()
         if not future.done():
             future.set_result(text)
+        page.pop_dialog()
 
     def cancel(_e: ft.ControlEvent | None = None) -> None:
         page.pop_dialog()
         if not future.done():
             future.set_result(None)
+        page.pop_dialog()
 
     def dismissed(_e: ft.ControlEvent) -> None:
         if not future.done():

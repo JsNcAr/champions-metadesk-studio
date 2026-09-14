@@ -53,6 +53,8 @@ class StubPage(SimpleNamespace):
         dlg = self.dialogs.pop() if self.dialogs else None
         if dlg is not None:
             dlg.open = False
+            if hasattr(dlg, "on_dismiss") and callable(dlg.on_dismiss):
+                dlg.on_dismiss(None)
         return dlg
 
     def update(self, *_):

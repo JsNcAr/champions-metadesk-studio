@@ -94,12 +94,14 @@ class TestUiBoxImportExport(unittest.TestCase):
 
         # Switch to text
         dialog._on_format_changed("text")
+        serialise(dialog)
         self.assertEqual(dialog.current_format, "text")
         self.assertIn("Charizard", dialog._text.value)
         self.assertIn("Incineroar", dialog._text.value)
 
         # Switch to CSV
         dialog._on_format_changed("csv")
+        serialise(dialog)
         self.assertEqual(dialog.current_format, "csv")
         self.assertIn("Pokémon,Form,Tags", dialog._text.value)
         self.assertIn("Charizard", dialog._text.value)

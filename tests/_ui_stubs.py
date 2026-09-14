@@ -109,9 +109,12 @@ def serialise(control: ft.Control) -> int:
     first for the shapes that only fail inside Flutter.
     """
     check_layout(control)
+    import msgpack
     from flet.controls.base_control import BaseControl
     from flet.controls.object_patch import ObjectPatch
+    from flet.messaging.flet_socket_server import configure_encode_object_for_msgpack
 
     patch, added, _removed = ObjectPatch.from_diff(None, control, control_cls=BaseControl)
-    patch.to_message()
+    msg = patch.to_message()
+    msgpack.packb(["patch", msg], default=configure_encode_object_for_msgpack(BaseControl))
     return len(added)

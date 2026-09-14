@@ -43,14 +43,15 @@ class BoxExportDialog(ft.AlertDialog):
 
         # Segmented format selector
         self._format_picker = ft.SegmentedButton(
-            selected={self.current_format},
+            selected=[self.current_format],
             allow_multiple_selection=False,
+            allow_empty_selection=False,
             segments=[
                 ft.Segment(value="json", label=ft.Text("JSON Backup"), tooltip="Full fidelity: includes tags, notes, favorites, forms"),
                 ft.Segment(value="text", label=ft.Text("Names List"), tooltip="Plain text list of species names"),
                 ft.Segment(value="csv", label=ft.Text("CSV"), tooltip="Spreadsheet format with metadata and stats"),
             ],
-            on_change=lambda e: self._on_format_changed(list(e.control.selected)[0] if e.control.selected else "json"),
+            on_change=lambda e: self._on_format_changed(next(iter(e.control.selected or ["json"]))),
         )
 
         self._text = ft.TextField(
@@ -111,6 +112,7 @@ class BoxExportDialog(ft.AlertDialog):
 
     def _on_format_changed(self, new_format: str) -> None:
         self.current_format = new_format
+        self._format_picker.selected = [new_format]
         self._banner.hide()
         self._update_text()
         if is_mounted(self):

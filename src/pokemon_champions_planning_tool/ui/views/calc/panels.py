@@ -9,6 +9,7 @@ import flet as ft
 
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.pokemon_identity import get_pokemon_sprite_url
+from ....services.sprite_cache_service import resolve_sprite_src
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
@@ -160,7 +161,7 @@ class PokemonPanel(ft.Container):
         self._suggestions.controls = [
             ft.Chip(
                 label=ft.Text(s.name),
-                leading=ft.Image(src=get_pokemon_sprite_url(s.canonical_id), width=22, height=22, fit=ft.BoxFit.CONTAIN,
+                leading=ft.Image(src=resolve_sprite_src(get_pokemon_sprite_url(s.canonical_id)), width=22, height=22, fit=ft.BoxFit.CONTAIN,
                                  error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Palette.ON_SURFACE_VARIANT)),
                 show_checkmark=False, border_side=ft.BorderSide(1, Palette.PRIMARY) if i == 0 else None, tooltip="Enter picks this one" if i == 0 else None,
                 on_click=lambda _e, cid=s.canonical_id: self._pick(cid),

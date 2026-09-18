@@ -143,6 +143,10 @@ class AppShell(ft.Row):
     def current(self) -> str | None:
         return self._current
 
+    def get_view(self, key: str) -> ft.Control | None:
+        entry = self._entries.get(key)
+        return entry.instance() if entry else None
+
     def navigate(self, key: str) -> None:
         entry = self._entries[key]
         self.host.content = entry.instance()

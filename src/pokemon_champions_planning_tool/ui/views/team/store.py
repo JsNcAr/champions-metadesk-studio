@@ -13,7 +13,7 @@ their own session, rebuild only the affected slot, and notify:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from typing import Any
@@ -465,6 +465,41 @@ class TeamStore:
             partners = TournamentService(s).get_top_partners(slot.entry.pokemon.canonical_id, limit=limit)
         self._partner_cache[key] = partners
         return partners
+
+    def partners_for_positions(
+        self, positions: Sequence[int], limit: int = 3
+    ) -> dict[int, list[PartnerRecommendation]]:
+        """Batch-load tournament teammates for multiple slot positions in a single DB session."""
+        results: dict[int, list[PartnerRecommendation]] = {}
+        to_fetch: list[tuple[int, str, tuple[str, int]]] = []
+
+        for p in positions:
+            slot = self.slot(p)
+            if slot.entry is None:
+                results[p] = []
+                continue
+            key = (base_canonical_id(slot.entry.pokemon.canonical_id), limit)
+            cached = self._partner_cache.get(key)
+            if cached is not None:
+                results[p] = cached
+            else:
+                to_fetch.append((p, slot.entry.pokemon.canonical_id, key))
+
+        if not to_fetch:
+            return results
+
+        with self._sf() as s:
+            svc = TournamentService(s)
+            for p, cid, key in to_fetch:
+                cached = self._partner_cache.get(key)
+                if cached is not None:
+                    results[p] = cached
+                else:
+                    partners = svc.get_top_partners(cid, limit=limit)
+                    self._partner_cache[key] = partners
+                    results[p] = partners
+
+        return results
 
     def invalidate_partners(self) -> None:
         """New tournament data landed: recompute recommendations on the next request."""

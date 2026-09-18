@@ -204,10 +204,11 @@ class BoxStore:
         umap = self.get_usage_map(self.filters.usage_regulation) if self.filters.sort == "usage" else None
         return apply_filters(self.entries, self.filters, self.catalogs.mega_species, usage_map=umap)
 
-    def counts(self) -> tuple[int, int]:
+    def counts(self, visible_entries: list[BoxEntry] | None = None) -> tuple[int, int]:
         """(visible, total owned) for the header chip."""
         owned = sum(1 for e in self.entries if not e.is_planned)
-        return len(self.visible()), owned
+        vis_count = len(visible_entries) if visible_entries is not None else len(self.visible())
+        return vis_count, owned
 
     def all_tags(self) -> list[str]:
         seen: dict[str, str] = {}

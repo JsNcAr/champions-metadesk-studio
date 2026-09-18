@@ -71,6 +71,9 @@ class TestPartnerCacheAndStartupGate(_Db):
         entry = BoxEntry(pokemon=Pokemon(canonical_id="charizard-mega-y", display_name="Mega Charizard Y", species_name="charizard", types=["fire", "flying"], stats=PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)))
         slot.entry, slot.member = entry, TeamMember(box_entry_id=entry.box_entry_id, slot_position=1)
         self.assertEqual(store.partners(1, limit=3), ["cached"], "mega form shares the base species' cache entry")
+        batch = store.partners_for_positions([1, 2], limit=3)
+        self.assertEqual(batch[1], ["cached"])
+        self.assertEqual(batch[2], [])
         store.invalidate_partners()
         self.assertEqual(store._partner_cache, {})
 

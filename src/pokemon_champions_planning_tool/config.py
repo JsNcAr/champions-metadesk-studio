@@ -12,6 +12,10 @@ DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", "pokemon_champions.d
 DEFAULT_PREFERENCES_FILENAME = os.environ.get(
     "PCPT_PREFERENCES", str(Path(DEFAULT_DATABASE_FILENAME).parent / "preferences.json")
 )
+DEFAULT_ASSETS_DIR = os.environ.get("PCPT_ASSETS_DIR", "assets")
+DEFAULT_SPRITE_CACHE_DIR = os.environ.get(
+    "PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites")
+)
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
 POKEAPI_TIMEOUT_SECONDS = 5
 

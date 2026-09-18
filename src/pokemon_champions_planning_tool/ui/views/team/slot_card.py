@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import flet as ft
 
 from ....domain.type_chart import TYPES
+from ....services.sprite_cache_service import resolve_sprite_src
 from ....services.tournament_service import PartnerRecommendation
 from ...components import Sprite, StatusChip
 from ...components.banner import InlineBanner
@@ -279,7 +280,7 @@ class SlotCard(ft.Container):
         if slot.item is not None:
             self._item_name.value = slot.item.display_name
             self._item_name.color = Palette.ON_SURFACE
-            self._item_sprite.src = slot.item.sprite_url or ""
+            self._item_sprite.src = resolve_sprite_src(slot.item.sprite_url) or ""
             self._item_sprite.visible = bool(slot.item.sprite_url)
             self._item_icon.visible = not slot.item.sprite_url
             self._item_clear.visible = True

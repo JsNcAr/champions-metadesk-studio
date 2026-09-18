@@ -155,6 +155,7 @@ class MetaSynergyService:
         # lower(species_name) comparison forced a scan of every roster row.
         stmt = select(TournamentTeamMemberRecord.tournament_team_id).where(
             (TournamentTeamMemberRecord.canonical_id == clean_target)
+            | (TournamentTeamMemberRecord.base_canonical_id == clean_target)
             | (TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{clean_target}-*"))
         )
 
@@ -227,9 +228,9 @@ class MetaSynergyService:
             .where(
                 TournamentTeamMemberRecord.tournament_team_id.in_(target_teams),
                 TournamentTeamMemberRecord.canonical_id != clean_target,
+                TournamentTeamMemberRecord.base_canonical_id != clean_target,
                 # …nor the target's own forms: a Mega Charizard is not Charizard's partner.
                 ~TournamentTeamMemberRecord.canonical_id.op("GLOB")(f"{clean_target}-*"),
-                func.lower(TournamentTeamMemberRecord.species_name) != clean_target,
             )
             .group_by(TournamentTeamMemberRecord.canonical_id)
             .having(co_occurrence >= min_co_occurrence)

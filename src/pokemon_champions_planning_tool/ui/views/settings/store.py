@@ -51,6 +51,8 @@ class SettingsStatus:
     moves_synced_at: datetime | None = None
     placeholder_in_box: int = 0      # box entries whose Pokémon has no PokéAPI data
     placeholder_records: int = 0     # placeholder records in the table (any, referenced or not)
+    cached_sprites: int = 0
+    cached_sprites_bytes: int = 0
 
 
 class SettingsStore:
@@ -72,6 +74,8 @@ class SettingsStore:
             tournaments_synced_at = s.exec(
                 select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
             ).one()
+        from ....services.sprite_cache_service import sprite_cache
+        cached_sprites, cached_sprites_bytes = sprite_cache.cache_stats()
         return SettingsStatus(
             mega_count=int(mega_count or 0),
             megas_checked_at=megas_checked_at,
@@ -85,9 +89,26 @@ class SettingsStore:
             moves_synced_at=move_meta.last_synced_at if move_meta and move_meta.move_count else None,
             placeholder_in_box=placeholder_in_box,
             placeholder_records=placeholder_records,
+            cached_sprites=cached_sprites,
+            cached_sprites_bytes=cached_sprites_bytes,
         )
 
     # -- sync operations (run on a worker thread) ---------------------------------------
+
+    def sync_sprites(self) -> dict[str, Any]:
+        from ....infrastructure.database.models import TournamentTeamMemberRecord
+        from ....services.sprite_cache_service import sprite_cache
+        with self._sf() as s:
+            repo = BoxRepository(s)
+            entries = repo.list_all()
+            box_cids = [e.pokemon.canonical_id for e in entries if e.pokemon]
+            tourney_cids = list(s.exec(
+                select(TournamentTeamMemberRecord.canonical_id).distinct().limit(300)
+            ).all())
+        targets = list(dict.fromkeys(box_cids + tourney_cids))
+        enqueued = sprite_cache.prefetch(targets)
+        count, total_bytes = sprite_cache.cache_stats()
+        return {"targets": len(targets), "enqueued": enqueued, "cached": count, "bytes": total_bytes}
 
     def sync_megas(self) -> dict[str, Any]:
         with self._sf() as s:

@@ -1514,7 +1514,7 @@ class TournamentRepository:
 
         stmt = _text(
             "SELECT m.base_canonical_id AS base_cid, m.canonical_id AS cid, "
-            "       COUNT(DISTINCT tt.tournament_team_id) AS n "
+            "       COUNT(*) AS n "
             "FROM tournament_team_members m "
             "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id "
             "JOIN tournaments t ON tt.tournament_id = t.tournament_id "

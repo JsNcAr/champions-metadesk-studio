@@ -30,7 +30,7 @@ class PokemonRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "pokemon_records"
 
-    canonical_id: str = Field(primary_key=True, index=True)
+    canonical_id: str = Field(primary_key=True)
     display_name: str
     species_name: str | None = None
     form_name: str = Field(default="Base")
@@ -111,7 +111,7 @@ class BoxEntryRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "box_entries"
 
-    box_entry_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    box_entry_id: UUID = Field(default_factory=uuid4, primary_key=True)
     # unique=True removed — uniqueness is enforced at the repository layer for
     # non-planned entries only (a Pokémon can have one real + one planned entry).
     pokemon_canonical_id: str = Field(
@@ -154,7 +154,7 @@ class TeamRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "teams"
 
-    team_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    team_id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
     description: str = ""
     created_at: datetime = Field(default_factory=_utc_now)
@@ -194,7 +194,7 @@ class TeamMemberRecord(SQLModel, table=True):
     __tablename__: ClassVar[str] = "team_members"
     __table_args__ = (UniqueConstraint("team_id", "slot_position", name="uq_team_slot"),)
 
-    team_member_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    team_member_id: UUID = Field(default_factory=uuid4, primary_key=True)
     team_id: UUID = Field(foreign_key="teams.team_id", index=True)
     box_entry_id: UUID = Field(foreign_key="box_entries.box_entry_id", index=True)
     slot_position: int = Field(index=True)
@@ -266,7 +266,7 @@ class MegaEvolutionRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "mega_evolutions"
 
-    canonical_id: str = Field(primary_key=True, index=True)
+    canonical_id: str = Field(primary_key=True)
     species_name: str = Field(index=True)
     display_name: str
     form_name: str = Field(default="Mega")
@@ -287,7 +287,7 @@ class MegaCheckedSpeciesRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "mega_checked_species"
 
-    species_name: str = Field(primary_key=True, index=True)
+    species_name: str = Field(primary_key=True)
     checked_at: datetime = Field(default_factory=_utc_now)
 
 
@@ -342,7 +342,7 @@ class ItemRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "item_records"
 
-    canonical_id: str = Field(primary_key=True, index=True)
+    canonical_id: str = Field(primary_key=True)
     display_name: str
     category: str = Field(default="other", index=True)
     is_champions_legal: bool = Field(default=True, index=True)
@@ -395,7 +395,7 @@ class TournamentRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "tournaments"
 
-    tournament_id: str = Field(primary_key=True, index=True)
+    tournament_id: str = Field(primary_key=True)
     name: str = Field(index=True)
     event_date: datetime = Field(default_factory=_utc_now, index=True)
     format_regulation: str = Field(index=True)
@@ -414,7 +414,7 @@ class TournamentRecord(SQLModel, table=True):
     # "doubles" (default VGC) or "singles"
     battle_format: str = Field(
         default="doubles",
-        sa_column=Column(String, nullable=False, server_default="doubles", index=True),
+        sa_column=Column(String, nullable=False, server_default="doubles"),
     )
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
@@ -425,7 +425,7 @@ class TournamentTeamRecord(SQLModel, table=True):
 
     __tablename__: ClassVar[str] = "tournament_teams"
 
-    tournament_team_id: UUID = Field(default_factory=uuid4, primary_key=True, index=True)
+    tournament_team_id: UUID = Field(default_factory=uuid4, primary_key=True)
     tournament_id: str = Field(foreign_key="tournaments.tournament_id", index=True)
     player_name: str = Field(index=True)
     placement: int = Field(index=True)

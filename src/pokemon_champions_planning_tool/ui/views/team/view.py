@@ -179,12 +179,35 @@ class TeamView(ft.Column):
         self.summary.update_from(self.store.slots, summary, focused=self.focused)
 
     def _load_partners(self, position: int | None = None) -> None:
-        positions = [position] if position else [s.position for s in self.store.slots if s.filled]
-        for p in positions:
-            if not self.store.slot(p).filled:
-                self.cards[p - 1].set_partners([])
-                continue
-            self.ctx.run_in_background(lambda p=p: self.store.partners(p), on_done=lambda partners, p=p: self.cards[p - 1].set_partners(partners), on_error=lambda _exc: None)
+        if position is not None:
+            if not self.store.slot(position).filled:
+                self.cards[position - 1].set_partners([])
+                return
+            self.ctx.run_in_background(
+                lambda p=position: self.store.partners(p),
+                on_done=lambda partners, p=position: self.cards[p - 1].set_partners(partners),
+                on_error=lambda _exc: None,
+            )
+            return
+
+        for s in self.store.slots:
+            if not s.filled:
+                self.cards[s.position - 1].set_partners([])
+
+        filled = [s.position for s in self.store.slots if s.filled]
+        if not filled:
+            return
+
+        def _apply_batch(results: dict[int, list]):
+            for p, partners in results.items():
+                if 1 <= p <= len(self.cards):
+                    self.cards[p - 1].set_partners(partners)
+
+        self.ctx.run_in_background(
+            lambda: self.store.partners_for_positions(filled),
+            on_done=_apply_batch,
+            on_error=lambda _exc: None,
+        )
 
     # -- team actions ------------------------------------------------------------------------------------
 

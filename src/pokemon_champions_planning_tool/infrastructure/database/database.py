@@ -111,7 +111,18 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
         "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
         # tournaments — battle format ("doubles" | "singles")
         "ALTER TABLE tournaments ADD COLUMN battle_format VARCHAR NOT NULL DEFAULT 'doubles';",
-        "CREATE INDEX IF NOT EXISTS ix_tournaments_battle_format ON tournaments (battle_format);",
+        # Drop redundant duplicate primary key and low-cardinality indexes
+        "DROP INDEX IF EXISTS ix_tournaments_battle_format;",
+        "DROP INDEX IF EXISTS ix_tournament_teams_tournament_team_id;",
+        "DROP INDEX IF EXISTS ix_tournament_team_members_slot_position;",
+        "DROP INDEX IF EXISTS ix_tournaments_tournament_id;",
+        "DROP INDEX IF EXISTS ix_pokemon_records_canonical_id;",
+        "DROP INDEX IF EXISTS ix_box_entries_box_entry_id;",
+        "DROP INDEX IF EXISTS ix_teams_team_id;",
+        "DROP INDEX IF EXISTS ix_team_members_team_member_id;",
+        "DROP INDEX IF EXISTS ix_champions_species_canonical_id;",
+        "DROP INDEX IF EXISTS ix_mega_checked_species_species_name;",
+        "DROP INDEX IF EXISTS ix_item_records_canonical_id;",
         # box_entries — drop unique index on pokemon_canonical_id if present
         "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
         "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",

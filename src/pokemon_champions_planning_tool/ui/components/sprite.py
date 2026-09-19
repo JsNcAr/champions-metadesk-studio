@@ -12,7 +12,6 @@ from typing import Literal
 import flet as ft
 
 from ..theme import Palette, Radius, alpha, type_color
-from ...services.sprite_cache_service import resolve_sprite_src
 
 Ring = Literal["none", "type", "mega", "planned", "selected", "error", "missing"]
 
@@ -30,20 +29,19 @@ class Sprite(ft.Container):
     ) -> None:
         super().__init__()
         self._size = size
-        resolved = resolve_sprite_src(src)
         # An empty ``src`` makes Flutter render "A valid src value must be specified" in red,
         # so the image is hidden and the fallback icon shown whenever there is no URL.
         self._image = ft.Image(
-            src=resolved or "",
+            src=src or "",
             width=int(size * 0.85),
             height=int(size * 0.85),
             fit=ft.BoxFit.CONTAIN,
-            visible=bool(resolved),
+            visible=bool(src),
             error_content=ft.Icon(
                 ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED
             ),
         )
-        self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not resolved)
+        self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not src)
         # The badge sits over the ring's bottom-right edge; a rim in the surface colour
         # separates it from the ring, and the stack must not clip it at the circle.
         self._badge = ft.Container(
@@ -100,10 +98,9 @@ class Sprite(ft.Container):
         self.set_badge_number(badge_number)
 
     def set_src(self, src: str | None) -> None:
-        resolved = resolve_sprite_src(src)
-        self._image.src = resolved or ""
-        self._image.visible = bool(resolved)
-        self._fallback.visible = not resolved
+        self._image.src = src or ""
+        self._image.visible = bool(src)
+        self._fallback.visible = not src
 
     def set_tooltip(self, tooltip: str | None) -> None:
         self.tooltip = tooltip

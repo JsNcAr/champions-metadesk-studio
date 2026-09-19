@@ -148,15 +148,17 @@ class AppShell(ft.Row):
         return entry.instance() if entry else None
 
     def navigate(self, key: str) -> None:
+        if self._current == key:
+            return
         entry = self._entries[key]
         self.host.content = entry.instance()
         self.rail.selected_index = self._order.index(key) if key in self._order else None
         self._current = key
         self._apply_width(self.page_size()[0])
         self._forward_size(entry.control)
+        self._update_if_mounted()
         if entry.on_activate is not None:
             entry.on_activate()
-        self._update_if_mounted()
 
     def open_settings(self) -> None:
         if self._open_settings is not None:

@@ -186,10 +186,18 @@ class SettingsView(ft.Column):
 
     def refresh(self) -> None:
         """Reload the counts. Called on activation and after any sync."""
-        status = self.store.status()
-        self.apply_status(status)
-        if self._is_mounted():
-            self.update()
+        def on_done(status: SettingsStatus) -> None:
+            self.apply_status(status)
+            if self._is_mounted():
+                self.update()
+
+        if self._is_mounted() and hasattr(self.ctx, "run_in_background"):
+            self.ctx.run_in_background(self.store.status, on_done=on_done, on_error=lambda _e: None)
+        else:
+            status = self.store.status()
+            self.apply_status(status)
+            if self._is_mounted():
+                self.update()
 
     def apply_status(self, status: SettingsStatus) -> None:
         self.row_megas.set_status(_status_line(plural(status.mega_count, "form"), status.megas_checked_at, status.mega_count))

@@ -7,7 +7,6 @@ from collections.abc import Callable
 import flet as ft
 
 from .....infrastructure.database.models import ItemRecord
-from .....services.sprite_cache_service import resolve_sprite_src
 from ....catalogs import Catalogs
 from ....components import EmptyState, StatusChip
 from ....components.inputs import SEARCH_FIELD_STYLE
@@ -142,7 +141,7 @@ class ItemPickerDialog(ft.AlertDialog):
             chip._label.color = STAT_COLORS.get(stat, Palette.ON_SURFACE_VARIANT)
             badges.append(chip)
         leading = (
-            ft.Image(src=resolve_sprite_src(item.sprite_url), width=32, height=32, fit=ft.BoxFit.CONTAIN, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.DISABLED))
+            ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.DISABLED))
             if item.sprite_url else ft.Icon(ft.Icons.BOLT if item.target_species else ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.ON_SURFACE_VARIANT)
         )
         return ft.Container(

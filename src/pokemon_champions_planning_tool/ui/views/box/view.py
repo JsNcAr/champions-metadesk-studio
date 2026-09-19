@@ -12,7 +12,6 @@ from ....domain.pokemon_identity import (
     get_pokemon_sprite_url,
     qualified_name,
 )
-from ....services.sprite_cache_service import resolve_sprite_src
 from ... import events
 from ...components import EmptyState, PageHeader, SplitPane
 from ...components.banner import InlineBanner
@@ -474,7 +473,7 @@ class BoxView(ft.Row):
             ft.Chip(
                 label=ft.Text(qualified_name(r.display_name, getattr(r, "canonical_id", None) or r.species_name)),
                 leading=ft.Image(
-                    src=resolve_sprite_src(get_pokemon_sprite_url(getattr(r, "canonical_id", None) or r.species_name or r.display_name)), width=22, height=22, fit=ft.BoxFit.CONTAIN,
+                    src=get_pokemon_sprite_url(getattr(r, "canonical_id", None) or r.species_name or r.display_name), width=22, height=22, fit=ft.BoxFit.CONTAIN,
                     error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Palette.ON_SURFACE_VARIANT),
                 ),
                 show_checkmark=False,

@@ -52,6 +52,9 @@ from sqlalchemy import text
 _DB_INITIALIZED: set[str] = set()
 
 
+CURRENT_SCHEMA_VERSION = 11
+
+
 def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
     """Create all SQLModel tables if they do not already exist. Safe to call multiple times."""
     global _DB_INITIALIZED
@@ -63,100 +66,109 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
     engine = get_engine(database_filename)
     SQLModel.metadata.create_all(engine)
 
-    # Lightweight schema migrations — each ALTER TABLE is wrapped in its own
-    # try/except so a pre-existing column never aborts the others.
-    migrations = [
-        # team_members — original migration (form field)
-        "ALTER TABLE team_members ADD COLUMN selected_form VARCHAR DEFAULT 'base';",
-        # team_members — competitive spread fields (Phase 0.B)
-        "ALTER TABLE team_members ADD COLUMN evs JSON NOT NULL DEFAULT '{}';",
-        "ALTER TABLE team_members ADD COLUMN ivs JSON NOT NULL DEFAULT '{}';",
-        "ALTER TABLE team_members ADD COLUMN nature VARCHAR;",
-        "ALTER TABLE team_members ADD COLUMN level INTEGER NOT NULL DEFAULT 50;",
-        # box_entries — ghost/planned entry support (Phase 0.A)
-        "ALTER TABLE box_entries ADD COLUMN is_planned BOOLEAN NOT NULL DEFAULT 0;",
-        # tournaments — game platform / system filter (Feature 7)
-        "ALTER TABLE tournaments ADD COLUMN game_platform VARCHAR DEFAULT 'Scarlet & Violet';",
-        # tournaments — source URL for official / community events
-        "ALTER TABLE tournaments ADD COLUMN source_url VARCHAR;",
-        # tournament_teams — source tag ("seed" | "limitless" | "victory_road")
-        "ALTER TABLE tournament_teams ADD COLUMN sync_source VARCHAR DEFAULT 'seed';",
-        # tournaments — standings backlog flag; unsynced rows are retried each run
-        "ALTER TABLE tournaments ADD COLUMN standings_synced BOOLEAN NOT NULL DEFAULT 0;",
-        "CREATE INDEX IF NOT EXISTS ix_tournaments_standings_synced ON tournaments (standings_synced);",
-        # tournament_teams — age division ("masters" only, as of the division-aware sync)
-        "ALTER TABLE tournament_teams ADD COLUMN division VARCHAR NOT NULL DEFAULT 'masters';",
-        "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
-        # team_members — Terastallization type per slot
-        "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
-        # team_members — Champions stat points (replaces the mainline EV/IV spread)
-        "ALTER TABLE team_members ADD COLUMN points JSON NOT NULL DEFAULT '{}';",
-        # moves — damage-formula fields; move_catalog_meta — schema version forcing a re-sync
-        "ALTER TABLE moves ADD COLUMN mechanics JSON NOT NULL DEFAULT '{}';",
-        "ALTER TABLE move_catalog_meta ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;",
-        # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
-        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
-        # pokemon_records — explicit placeholder flag (records written without PokéAPI data)
-        "ALTER TABLE pokemon_records ADD COLUMN is_placeholder BOOLEAN NOT NULL DEFAULT 0;",
-        "UPDATE pokemon_records SET is_placeholder = 1 WHERE types = '[]' AND hp + attack + defense + special_attack + special_defense + speed = 0;",
-        # tournament_teams — roster size (Box filter: size minus owned members)
-        "ALTER TABLE tournament_teams ADD COLUMN member_count INTEGER NOT NULL DEFAULT 0;",
-        # tournament_team_members — mega-stripped species id for box matching
-        "ALTER TABLE tournament_team_members ADD COLUMN base_canonical_id VARCHAR NOT NULL DEFAULT '';",
-        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_base_canonical_id ON tournament_team_members (base_canonical_id);",
-        # tournament_team_members — moves per roster slot (usage ranking in the move picker)
-        "ALTER TABLE tournament_team_members ADD COLUMN moves JSON NOT NULL DEFAULT '[]';",
-        # tournaments — official tier (worlds/international/regional/special) or community
-        "ALTER TABLE tournaments ADD COLUMN event_tier VARCHAR NOT NULL DEFAULT 'community';",
-        "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
-        # tournaments — battle format ("doubles" | "singles")
-        "ALTER TABLE tournaments ADD COLUMN battle_format VARCHAR NOT NULL DEFAULT 'doubles';",
-        # Drop redundant duplicate primary key and low-cardinality indexes
-        "DROP INDEX IF EXISTS ix_tournaments_battle_format;",
-        "DROP INDEX IF EXISTS ix_tournament_teams_tournament_team_id;",
-        "DROP INDEX IF EXISTS ix_tournament_team_members_slot_position;",
-        "DROP INDEX IF EXISTS ix_tournaments_tournament_id;",
-        "DROP INDEX IF EXISTS ix_pokemon_records_canonical_id;",
-        "DROP INDEX IF EXISTS ix_box_entries_box_entry_id;",
-        "DROP INDEX IF EXISTS ix_teams_team_id;",
-        "DROP INDEX IF EXISTS ix_team_members_team_member_id;",
-        "DROP INDEX IF EXISTS ix_champions_species_canonical_id;",
-        "DROP INDEX IF EXISTS ix_mega_checked_species_species_name;",
-        "DROP INDEX IF EXISTS ix_item_records_canonical_id;",
-        # box_entries — drop unique index on pokemon_canonical_id if present
-        "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
-        "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
-        # mega_evolutions — abilities JSON column
-        "ALTER TABLE mega_evolutions ADD COLUMN abilities JSON NOT NULL DEFAULT '[]';",
-        # mega_evolutions — ability string column
-        "ALTER TABLE mega_evolutions ADD COLUMN ability VARCHAR NOT NULL DEFAULT '';",
-        # tournament_team_members — nature, item, ability columns
-        "ALTER TABLE tournament_team_members ADD COLUMN nature VARCHAR;",
-        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_nature ON tournament_team_members (nature);",
-        "ALTER TABLE tournament_team_members ADD COLUMN item VARCHAR;",
-        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_item ON tournament_team_members (item);",
-        "ALTER TABLE tournament_team_members ADD COLUMN ability VARCHAR;",
-        "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_ability ON tournament_team_members (ability);",
-    ]
-
-
+    # Lightweight schema migrations — only run when user_version is behind CURRENT_SCHEMA_VERSION.
     with engine.connect() as conn:
-        for sql in migrations:
+        version = 0
+        try:
+            version = int(conn.execute(text("PRAGMA user_version;")).scalar() or 0)
+        except Exception:
+            pass
+
+        if version < CURRENT_SCHEMA_VERSION:
+            migrations = [
+                # team_members — original migration (form field)
+                "ALTER TABLE team_members ADD COLUMN selected_form VARCHAR DEFAULT 'base';",
+                # team_members — competitive spread fields (Phase 0.B)
+                "ALTER TABLE team_members ADD COLUMN evs JSON NOT NULL DEFAULT '{}';",
+                "ALTER TABLE team_members ADD COLUMN ivs JSON NOT NULL DEFAULT '{}';",
+                "ALTER TABLE team_members ADD COLUMN nature VARCHAR;",
+                "ALTER TABLE team_members ADD COLUMN level INTEGER NOT NULL DEFAULT 50;",
+                # box_entries — ghost/planned entry support (Phase 0.A)
+                "ALTER TABLE box_entries ADD COLUMN is_planned BOOLEAN NOT NULL DEFAULT 0;",
+                # tournaments — game platform / system filter (Feature 7)
+                "ALTER TABLE tournaments ADD COLUMN game_platform VARCHAR DEFAULT 'Scarlet & Violet';",
+                # tournaments — source URL for official / community events
+                "ALTER TABLE tournaments ADD COLUMN source_url VARCHAR;",
+                # tournament_teams — source tag ("seed" | "limitless" | "victory_road")
+                "ALTER TABLE tournament_teams ADD COLUMN sync_source VARCHAR DEFAULT 'seed';",
+                # tournaments — standings backlog flag; unsynced rows are retried each run
+                "ALTER TABLE tournaments ADD COLUMN standings_synced BOOLEAN NOT NULL DEFAULT 0;",
+                "CREATE INDEX IF NOT EXISTS ix_tournaments_standings_synced ON tournaments (standings_synced);",
+                # tournament_teams — age division ("masters" only, as of the division-aware sync)
+                "ALTER TABLE tournament_teams ADD COLUMN division VARCHAR NOT NULL DEFAULT 'masters';",
+                "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
+                # team_members — Terastallization type per slot
+                "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+                # team_members — Champions stat points (replaces the mainline EV/IV spread)
+                "ALTER TABLE team_members ADD COLUMN points JSON NOT NULL DEFAULT '{}';",
+                # moves — damage-formula fields; move_catalog_meta — schema version forcing a re-sync
+                "ALTER TABLE moves ADD COLUMN mechanics JSON NOT NULL DEFAULT '{}';",
+                "ALTER TABLE move_catalog_meta ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;",
+                # tournament_team_members — covering index for co-occurrence (partners) and per-team lookups
+                "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_team_species ON tournament_team_members (tournament_team_id, canonical_id);",
+                # pokemon_records — explicit placeholder flag (records written without PokéAPI data)
+                "ALTER TABLE pokemon_records ADD COLUMN is_placeholder BOOLEAN NOT NULL DEFAULT 0;",
+                "UPDATE pokemon_records SET is_placeholder = 1 WHERE types = '[]' AND hp + attack + defense + special_attack + special_defense + speed = 0;",
+                # tournament_teams — roster size (Box filter: size minus owned members)
+                "ALTER TABLE tournament_teams ADD COLUMN member_count INTEGER NOT NULL DEFAULT 0;",
+                # tournament_team_members — mega-stripped species id for box matching
+                "ALTER TABLE tournament_team_members ADD COLUMN base_canonical_id VARCHAR NOT NULL DEFAULT '';",
+                "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_base_canonical_id ON tournament_team_members (base_canonical_id);",
+                # tournament_team_members — moves per roster slot (usage ranking in the move picker)
+                "ALTER TABLE tournament_team_members ADD COLUMN moves JSON NOT NULL DEFAULT '[]';",
+                # tournaments — official tier (worlds/international/regional/special) or community
+                "ALTER TABLE tournaments ADD COLUMN event_tier VARCHAR NOT NULL DEFAULT 'community';",
+                "CREATE INDEX IF NOT EXISTS ix_tournaments_event_tier ON tournaments (event_tier);",
+                # tournaments — battle format ("doubles" | "singles")
+                "ALTER TABLE tournaments ADD COLUMN battle_format VARCHAR NOT NULL DEFAULT 'doubles';",
+                # Drop redundant duplicate primary key and low-cardinality indexes
+                "DROP INDEX IF EXISTS ix_tournaments_battle_format;",
+                "DROP INDEX IF EXISTS ix_tournament_teams_tournament_team_id;",
+                "DROP INDEX IF EXISTS ix_tournament_team_members_slot_position;",
+                "DROP INDEX IF EXISTS ix_tournaments_tournament_id;",
+                "DROP INDEX IF EXISTS ix_pokemon_records_canonical_id;",
+                "DROP INDEX IF EXISTS ix_box_entries_box_entry_id;",
+                "DROP INDEX IF EXISTS ix_teams_team_id;",
+                "DROP INDEX IF EXISTS ix_team_members_team_member_id;",
+                "DROP INDEX IF EXISTS ix_champions_species_canonical_id;",
+                "DROP INDEX IF EXISTS ix_mega_checked_species_species_name;",
+                "DROP INDEX IF EXISTS ix_item_records_canonical_id;",
+                # box_entries — drop unique index on pokemon_canonical_id if present
+                "DROP INDEX IF EXISTS ix_box_entries_pokemon_canonical_id;",
+                "CREATE INDEX IF NOT EXISTS ix_box_entries_pokemon_canonical_id ON box_entries (pokemon_canonical_id);",
+                # mega_evolutions — abilities JSON column
+                "ALTER TABLE mega_evolutions ADD COLUMN abilities JSON NOT NULL DEFAULT '[]';",
+                # mega_evolutions — ability string column
+                "ALTER TABLE mega_evolutions ADD COLUMN ability VARCHAR NOT NULL DEFAULT '';",
+                # tournament_team_members — nature, item, ability columns
+                "ALTER TABLE tournament_team_members ADD COLUMN nature VARCHAR;",
+                "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_nature ON tournament_team_members (nature);",
+                "ALTER TABLE tournament_team_members ADD COLUMN item VARCHAR;",
+                "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_item ON tournament_team_members (item);",
+                "ALTER TABLE tournament_team_members ADD COLUMN ability VARCHAR;",
+                "CREATE INDEX IF NOT EXISTS ix_tournament_team_members_ability ON tournament_team_members (ability);",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                except Exception:
+                    pass  # Column already exists — safe to ignore
+            _backfill_event_tiers(conn)
+            _backfill_member_moves(conn)
+            _backfill_member_natures(conn)
+            _backfill_member_base_ids(conn)
+            _backfill_member_counts(conn)
+            _backfill_default_form_labels(conn)
+            _backfill_member_points(conn)
+            _remediate_tournament_regulations(conn)
+            _remediate_tournament_battle_formats(conn)
+            _migrate_canonical_aliases(conn)
             try:
-                conn.execute(text(sql))
+                conn.execute(text(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION};"))
                 conn.commit()
             except Exception:
-                pass  # Column already exists — safe to ignore
-        _backfill_event_tiers(conn)
-        _backfill_member_moves(conn)
-        _backfill_member_natures(conn)
-        _backfill_member_base_ids(conn)
-        _backfill_member_counts(conn)
-        _backfill_default_form_labels(conn)
-        _backfill_member_points(conn)
-        _remediate_tournament_regulations(conn)
-        _remediate_tournament_battle_formats(conn)
-        _migrate_canonical_aliases(conn)
+                pass
 
     _DB_INITIALIZED.add(database_filename)
     return engine

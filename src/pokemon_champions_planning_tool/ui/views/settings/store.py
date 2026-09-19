@@ -16,6 +16,7 @@ from sqlmodel import Session, func, select
 
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import (
+    BoxEntryRecord,
     ItemCatalogMetaRecord,
     ItemRecord,
     MegaCheckedSpeciesRecord,
@@ -27,7 +28,6 @@ from ....infrastructure.database.models import (
 )
 from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
-from ....infrastructure.database.repositories import BoxRepository
 from ....infrastructure.database.repositories import BoxRepository, TournamentRepository
 from ....services.move_catalog_service import sync_move_catalog
 from ....services.species_catalog_service import sync_species_catalog
@@ -70,7 +70,15 @@ class SettingsStore:
             team_count = s.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
             move_meta = s.get(MoveCatalogMetaRecord, 1)
             placeholder_records = int(s.exec(select(func.count()).select_from(PokemonRecord).where(PokemonRecord.is_placeholder == True)).one() or 0)  # noqa: E712
-            placeholder_in_box = sum(1 for e in BoxRepository(s).list_entries(include_planned=True) if e.pokemon.is_stub)
+            placeholder_in_box = int(
+                s.exec(
+                    select(func.count(BoxEntryRecord.box_entry_id))
+                    .select_from(BoxEntryRecord)
+                    .join(PokemonRecord, BoxEntryRecord.pokemon_canonical_id == PokemonRecord.canonical_id)
+                    .where(PokemonRecord.is_placeholder == True)  # noqa: E712
+                ).one()
+                or 0
+            )
             tournaments_synced_at = s.exec(
                 select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
             ).one()

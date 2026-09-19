@@ -185,10 +185,7 @@ class MetaView(ft.Column):
 
     def ensure_loaded(self) -> None:
         """Load on first visit or after invalidation; otherwise reuse the built rows."""
-        before = self.store.box_species
-        if self.store.refresh_box() != before:
-            self.store.invalidate()
-        if self.store.needs_load:
+        if not self.store.loaded or self.store.needs_load:
             self._reload()
 
     def _refresh_header(self) -> None:

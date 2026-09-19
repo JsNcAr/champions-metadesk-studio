@@ -51,14 +51,6 @@ def run():
             refresh_stub_pokemon(session)
         except Exception as exc:  # noqa: BLE001 - repair is best-effort
             print(f"⚠️ Box data repair skipped: {exc}")
-        try:
-            from pokemon_champions_planning_tool.infrastructure.database.repositories import BoxRepository
-            from pokemon_champions_planning_tool.services.sprite_cache_service import sprite_cache
-            box_entries = BoxRepository(session).list_all()
-            if box_entries:
-                sprite_cache.prefetch([e.pokemon.canonical_id for e in box_entries if e.pokemon])
-        except Exception:
-            pass
 
     if "--cli" in sys.argv:
         TerminalShell().run()

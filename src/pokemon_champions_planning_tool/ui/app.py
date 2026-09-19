@@ -90,5 +90,16 @@ def main(page: ft.Page) -> None:
     shell.navigate("box")
     page.add(shell)
 
+    async def _prewarm_views() -> None:
+        import asyncio
+        await asyncio.sleep(0.1)
+        for k in ("team", "meta", "calc", "settings"):
+            try:
+                shell.get_view(k)
+            except Exception:
+                pass
+
+    page.run_task(_prewarm_views)
+
     if STARTUP_SYNC_ENABLED:
         _start_background_sync(ctx)

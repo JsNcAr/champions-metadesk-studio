@@ -9,9 +9,12 @@ for subsequent views.
 
 from __future__ import annotations
 
+import atexit
 import os
 import threading
+import weakref
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures.thread import _worker
 from pathlib import Path
 from typing import Sequence
 from urllib.parse import urlparse
@@ -20,6 +23,34 @@ import requests
 
 from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, TOURNAMENT_USER_AGENT
 from ..domain.pokemon_identity import get_pokemon_sprite_url, get_showdown_sprite_slug
+
+
+class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
+    """ThreadPoolExecutor whose workers are daemon threads so app exit is instant."""
+
+    def _adjust_thread_count(self) -> None:
+        if self._idle_semaphore.acquire(timeout=0):
+            return
+
+        def weakref_cb(_, q=self._work_queue):
+            q.put(None)
+
+        num_threads = len(self._threads)
+        if num_threads < self._max_workers:
+            thread_name = f"{self._thread_name_prefix or self}_{num_threads}"
+            t = threading.Thread(
+                name=thread_name,
+                target=_worker,
+                args=(
+                    weakref.ref(self, weakref_cb),
+                    self._work_queue,
+                    self._initializer,
+                    self._initargs,
+                ),
+                daemon=True,
+            )
+            t.start()
+            self._threads.add(t)
 
 
 class SpriteCacheService:
@@ -35,8 +66,16 @@ class SpriteCacheService:
         self._lock = threading.Lock()
         self._in_flight: set[str] = set()
         self._known_local: set[str] = set()
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="sprite-cache")
+        self._executor = _DaemonThreadPoolExecutor(max_workers=2, thread_name_prefix="sprite-cache")
+        atexit.register(self.shutdown)
         self._scan_existing()
+
+    def shutdown(self) -> None:
+        """Immediately release executor resources and cancel queued futures."""
+        try:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
 
     def _scan_existing(self) -> None:
         """Populates in-memory lookup set from existing files on disk."""

@@ -31,7 +31,7 @@ from ....infrastructure.database.repositories import BoxRepository, TournamentRe
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
 from ....services.tournament_service import TournamentBuild, TournamentService
 from ...catalogs import Catalogs
-from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, move_options_for
+from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, move_options_for
 from .state import (
     BOOST_STATS,
     SIDES,
@@ -171,15 +171,19 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
             if hi == 0:
                 out.append(MoveResult(index, name, result.move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error="No effect", bp=result.move_bp, effectiveness=eff))
                 continue
-            try:
-                description = result.desc()
-            except DescError:
-                description = ""
             if fast:
+                # The sweep shows a percentage range and a threat class, nothing else.
+                # ``desc()`` computes the KO chance internally, so building it here undid
+                # the saving of skipping ``ko_chance()`` below — it was about half the sweep.
+                description = ""
                 ko_text = ""
                 recoil = None
                 recovery = None
             else:
+                try:
+                    description = result.desc()
+                except DescError:
+                    description = ""
                 try:
                     ko_text = result.ko_chance().text
                 except DescError:
@@ -442,6 +446,11 @@ class CalcStore:
                     self._preset_builds = {}
         return self._preset_builds
 
+    @property
+    def presets_ready(self) -> bool:
+        """True when ``preset_builds`` would answer without aggregating the roster table."""
+        return self._preset_builds is not None
+
     def preset_moves(self) -> dict[str, list[str]]:
         """Top-4 roster moves per species from the tournament data (cached for the session)."""
         builds = self.preset_builds()
@@ -500,11 +509,24 @@ class CalcStore:
         self._usage_cache.clear()
         self._sweep_key = None
 
+    def refresh_catalogs(self, catalogs: Catalogs) -> None:
+        """Swap in a reloaded catalogue and recompute against it.
+
+        A first launch opens before the Showdown data has arrived, so the species, moves
+        and items the calculator needs can land while the view is already on screen.
+        """
+        self.catalogs = catalogs
+        self._cache.clear()
+        self._sweep_key = None
+        self.invalidate_presets()
+        self._recompute(persist=False)
+
     def invalidate_presets(self) -> None:
         """Clear cached tournament builds and moves so they reload on next lookup."""
         self._preset_builds = None
         self._preset_moves = None
         self.invalidate_usage_cache()
+        invalidate_move_usage()
 
     # -- mutations ---------------------------------------------------------------------------
 

@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from functools import lru_cache
 import re
 """Canonical Pokemon naming helpers."""
 
@@ -187,6 +188,7 @@ _FALLBACK_SPRITE_URL = (
 _SHOWDOWN_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/gen5"
 
 
+@lru_cache(maxsize=4096)
 def get_showdown_sprite_slug(pokemon_name_or_id: str) -> str:
     """Converts a species/form identifier into a Showdown sprite slug.
 
@@ -210,6 +212,7 @@ def get_showdown_sprite_slug(pokemon_name_or_id: str) -> str:
     return f"{species}-{form.replace('-', '')}"
 
 
+@lru_cache(maxsize=4096)
 def get_pokemon_sprite_url(pokemon_name_or_id: str) -> str:
     """Returns a robust high-reliability sprite URL for any species or form identifier."""
     if not pokemon_name_or_id:
@@ -222,6 +225,7 @@ def get_pokemon_sprite_url(pokemon_name_or_id: str) -> str:
     return f"{_SHOWDOWN_SPRITE_BASE}/{slug}.png"
 
 
+@lru_cache(maxsize=4096)
 def format_api_name(pokemon_name: str) -> str:
     """
     Translates human-readable names into PokéAPI's internal URL format.
@@ -363,6 +367,7 @@ _MEGA_SUFFIX_RE = re.compile(r"-mega(-[xy])?$")
 _BATTLE_ONLY_SUFFIXES = ("-gmax", "-primal", "-eternamax")
 
 
+@lru_cache(maxsize=4096)
 def base_canonical_id(canonical_id: str | None) -> str:
     """Strip Mega and similar battle-only form suffixes: "charizard-mega-y" -> "charizard".
 

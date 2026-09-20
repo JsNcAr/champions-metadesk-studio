@@ -130,6 +130,10 @@ class BoxStore:
         self.multi: set[UUID] = set()
         self._listeners: list[Listener] = []
         self._usage_cache: dict[tuple[str, str], dict[str, int]] = {}
+        # Resolved (regulation, battle format) per requested regulation. Resolving it
+        # needs two queries, and the grid asks for the usage map several times per render.
+        self._usage_key_cache: dict[str, tuple[str, str]] = {}
+        self._by_id: dict[UUID, BoxEntry] = {}
 
     # -- subscription -------------------------------------------------------------------
 
@@ -146,17 +150,17 @@ class BoxStore:
     def load(self) -> list[BoxEntry]:
         with self._sf() as s:
             self.entries = BoxRepository(s).list_entries(include_planned=True)
+        self._by_id = {e.box_entry_id: e for e in self.entries}
         if self.selected_id is not None and self.entry(self.selected_id) is None:
             self.selected_id = None
-        present = {e.box_entry_id for e in self.entries}
-        self.multi &= present
+        self.multi &= self._by_id.keys()
         self._notify(("all",))
         return self.entries
 
     def entry(self, box_entry_id: UUID | None) -> BoxEntry | None:
         if box_entry_id is None:
             return None
-        return next((e for e in self.entries if e.box_entry_id == box_entry_id), None)
+        return self._by_id.get(box_entry_id)
 
     def latest_regulation(self) -> str:
         if self._sf is not None:
@@ -182,23 +186,36 @@ class BoxStore:
         """Cached {canonical_id: team_count} for the specified regulation."""
         if self._sf is None:
             return {}
+        cache_key = self._usage_key_cache.get(regulation)
+        if cache_key is not None:
+            cached = self._usage_cache.get(cache_key)
+            if cached is not None:
+                return cached
         try:
             with self._sf() as s:
                 from ....infrastructure.database.repositories import TournamentRepository
                 repo = TournamentRepository(s)
-                bformat = repo.get_state("pref_battle_format") or "doubles"
-                reg = repo.get_latest_regulation() if regulation == "latest" else regulation
-                cache_key = (reg, bformat)
+                if cache_key is None:
+                    bformat = repo.get_state("pref_battle_format") or "doubles"
+                    reg = repo.get_latest_regulation() if regulation == "latest" else regulation
+                    cache_key = (reg, bformat)
+                    self._usage_key_cache[regulation] = cache_key
                 if cache_key in self._usage_cache:
                     return self._usage_cache[cache_key]
-                umap = repo.species_usage_by_regulation(regulation=reg, battle_format=bformat)
+                umap = repo.species_usage_by_regulation(regulation=cache_key[0], battle_format=cache_key[1])
                 self._usage_cache[cache_key] = umap
                 return umap
         except Exception:
             return {}
 
+    def usage_map_cached(self, regulation: str = "latest") -> bool:
+        """True when ``get_usage_map`` would answer without touching the database."""
+        key = self._usage_key_cache.get(regulation)
+        return key is not None and key in self._usage_cache
+
     def invalidate_usage_cache(self) -> None:
         self._usage_cache.clear()
+        self._usage_key_cache.clear()
 
     def visible(self) -> list[BoxEntry]:
         umap = self.get_usage_map(self.filters.usage_regulation) if self.filters.sort == "usage" else None

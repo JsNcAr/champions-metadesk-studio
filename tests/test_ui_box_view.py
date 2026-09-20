@@ -203,3 +203,40 @@ class TestBoxBulkAndRanges(_BoxViewCase):
         self.view.toolbar._toggle_drawer("stats", True)
         self.assertTrue(self.view.toolbar.drawer.visible)
         serialise(self.view)
+
+
+class TestBoxLoadingFeedback(_BoxViewCase):
+    """The roster never blocks the window without saying so."""
+
+    def test_skeleton_shows_until_the_first_render(self):
+        self.assertTrue(self.view._loading.visible, "a fresh view shows the skeleton, not an empty panel")
+        self.assertFalse(self.view.grid.visible)
+        self.view.ensure_loaded()
+        self.assertFalse(self.view._loading.visible)
+        self.assertTrue(self.view.grid.visible)
+
+    def test_usage_sort_fetches_off_the_render_and_ends_sorted(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        self.assertFalse(self.view.store.usage_map_cached("latest"), "not read until something asks for it")
+        self.view._on_filters(replace(self.view.store.filters, sort="usage"))
+        # The stub page runs the worker inline, so by now the fetch has been and gone.
+        self.assertTrue(self.view.store.usage_map_cached("latest"))
+        self.assertFalse(self.view._usage_loading)
+        self.assertFalse(self.view._loading.visible, "the skeleton gives way once the counts are in")
+        self.assertTrue(self.view.grid.visible)
+        self.assertEqual(len(self.view.grid.controls), 2)
+
+    def test_usage_sort_shows_the_skeleton_while_the_counts_are_outstanding(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        # Pin the view in the state it holds while the worker is still running.
+        self.view._usage_loading = True
+        self.view.store.set_filters(replace(self.view.store.filters, sort="usage"))
+        self.view._render()
+        self.assertTrue(self.view._loading.visible)
+        self.assertFalse(self.view.grid.visible)
+        self.assertFalse(self.view._empty.visible)
+        self.assertFalse(self.view._no_match.visible)

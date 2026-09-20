@@ -270,7 +270,9 @@ class TeamView(ft.Column):
             if self._loaded:
                 self._load_partners()
             return
-        if kind in ("items", "megas", "moves"):
+        # "species" and "champions" feed the same slot cards: base stats and forms come
+        # from the species catalogue, legality from the Champions Pokédex.
+        if kind in ("items", "megas", "moves", "species", "champions"):
             self.store.catalogs = self.ctx.catalogs or self.store.catalogs
             self._reload_if_loaded()
 

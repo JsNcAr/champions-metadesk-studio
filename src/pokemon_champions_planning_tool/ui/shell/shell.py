@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 import flet as ft
 
+from ..components.banner import InlineBanner
 from ..context import AppContext
 from ..events import NAVIGATE
 from ..tasks import is_mounted
@@ -89,10 +90,14 @@ class AppShell(ft.Row):
             on_change=self._on_rail_change,
         )
         self.host = ft.Container(expand=True, padding=Space.PAGE_PADDING)
+        # Spans every view: app-wide state such as the first-run catalogue download, which
+        # no single view owns. Takes no space while hidden.
+        self.status = InlineBanner(visible=False)
+        self.status.margin = ft.Margin.only(left=Space.PAGE_PADDING, right=Space.PAGE_PADDING, top=Space.MD)
         self.controls = [
             self.rail,
             ft.VerticalDivider(width=1, thickness=1, color=Palette.OUTLINE_VARIANT),
-            self.host,
+            ft.Column(expand=True, spacing=0, controls=[self.status, self.host]),
         ]
 
         ctx.bus.on(NAVIGATE, self.navigate)
@@ -133,6 +138,15 @@ class AppShell(ft.Row):
             self.rail.destinations.append(
                 ft.NavigationRailDestination(icon=icon, selected_icon=selected_icon, label=label)
             )
+
+    def set_status(self, message: str, kind: str = "info", **kwargs) -> None:
+        """Show the app-wide banner above the content."""
+        self.status.show(message, kind, **kwargs)  # type: ignore[arg-type]
+        self._update_if_mounted()
+
+    def clear_status(self) -> None:
+        self.status.hide()
+        self._update_if_mounted()
 
     def register_settings(self, open_settings: Callable[[], None]) -> None:
         self._open_settings = open_settings

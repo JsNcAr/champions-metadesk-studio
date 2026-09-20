@@ -45,7 +45,11 @@ from ....services.showdown_service import (
 from ....domain.moves import base_canonical_id
 from ....services.tournament_service import PartnerRecommendation, TournamentService
 from ...catalogs import Catalogs
-from ...move_options import MoveOptions, move_options_for  # noqa: F401 - MoveOptions re-exported for the picker
+from ...move_options import (  # noqa: F401 - MoveOptions re-exported for the picker
+    MoveOptions,
+    invalidate_move_usage,
+    move_options_for,
+)
 from .summary import EMPTY_SUMMARY, SlotModel, SlotMove, TeamSummary, summarize, validate_slot
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -504,6 +508,7 @@ class TeamStore:
     def invalidate_partners(self) -> None:
         """New tournament data landed: recompute recommendations on the next request."""
         self._partner_cache.clear()
+        invalidate_move_usage()
 
     # -- import / export ------------------------------------------------------------------------------
 

@@ -496,8 +496,11 @@ class TestTournamentPresets(_Base):
         self.assertTrue(by["incineroar"].preset)
         self.assertIsNotNone(by["incineroar"].their_best)
 
-        # Incineroar has Flare Blitz and attacks Kingambit
-        self.assertIn("Incineroar Flare Blitz", by["incineroar"].their_best.description)
+        # Incineroar attacks Kingambit with Flare Blitz, the move from its tournament build.
+        # (The sweep runs in "fast" mode and does not build Smogon descriptions — it shows
+        # the move name and the damage range, so that is what this pins.)
+        self.assertEqual(by["incineroar"].their_best.name, "Flare Blitz")
+        self.assertGreater(by["incineroar"].their_best.max_pct, 0)
 
 
 class TestFormSwitcher(_Base):
@@ -743,3 +746,49 @@ if __name__ == "__main__":
     unittest.main()
 
 
+
+
+class TestCatalogueArrivesLate(_Base):
+    """A first launch opens before the Showdown data has downloaded."""
+
+    def test_presets_ready_reports_whether_a_lookup_would_aggregate(self):
+        self.assertFalse(self.store.presets_ready, "nothing read yet")
+        self.store._preset_builds = {}
+        self.assertTrue(self.store.presets_ready)
+        self.store.invalidate_presets()
+        self.assertFalse(self.store.presets_ready, "a sync sends it back to the database")
+
+    def test_refresh_catalogs_swaps_the_data_and_recomputes(self):
+        empty = Catalogs()
+        store = CalcStore(empty, session_factory=None, prefs=self.prefs)
+        store.load()
+        self.assertFalse(store.catalogs.has_species)
+        self.assertEqual(store.search_species("char"), [])
+
+        store._preset_builds = {"x": None}
+        store.refresh_catalogs(self.catalogs)
+        self.assertTrue(store.catalogs.has_species)
+        # Ranking is the store's own business; what matters is that the search has data.
+        self.assertEqual([s.name for s in store.search_species("char")], ["Charizard-Mega-Y"])
+        self.assertFalse(store.presets_ready, "presets were built against the old catalogue")
+
+    def test_view_picks_up_a_catalogue_that_lands_while_it_is_open(self):
+        page = StubPage()
+        ctx = AppContext(page, catalogs=Catalogs())
+        view = CalcView(ctx, CalcStore(ctx.catalogs, session_factory=None, prefs=self.prefs))
+        view.ensure_loaded()
+        self.assertIn("not synced", view.header._caption.value)
+
+        ctx.catalogs = self.catalogs
+        ctx.bus.emit(events.CATALOGS_RELOADED, "species")
+        self.assertTrue(view.store.catalogs.has_species)
+        self.assertEqual(view.header._caption.value, "", "the warning clears once the data is there")
+
+    def test_an_unrelated_reload_is_ignored(self):
+        page = StubPage()
+        ctx = AppContext(page, catalogs=Catalogs())
+        view = CalcView(ctx, CalcStore(ctx.catalogs, session_factory=None, prefs=self.prefs))
+        view.ensure_loaded()
+        ctx.catalogs = self.catalogs
+        ctx.bus.emit(events.CATALOGS_RELOADED, "tournaments")
+        self.assertFalse(view.store.catalogs.has_species, "tournament data is not a catalogue swap")

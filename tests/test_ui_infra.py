@@ -281,3 +281,33 @@ class TestDialogs(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestShellStatusBanner(unittest.TestCase):
+    """The app-wide banner the first-run catalogue download reports through."""
+
+    def _shell(self):
+        page = StubPage()
+        shell = AppShell(AppContext(page))
+        shell.register_view("v", label="V", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO, control=ft.Text("v"))
+        return shell
+
+    def test_hidden_until_something_sets_it(self):
+        shell = self._shell()
+        self.assertFalse(shell.status.visible, "no banner on a normal launch")
+
+    def test_set_and_clear(self):
+        shell = self._shell()
+        shell.set_status("Setting up — downloading the Pokédex", "info")
+        self.assertTrue(shell.status.visible)
+        self.assertIn("downloading", shell.status._text.value)
+        shell.clear_status()
+        self.assertFalse(shell.status.visible)
+
+    def test_offers_an_action(self):
+        shell = self._shell()
+        opened = []
+        shell.set_status("Could not download", "warning", action_label="Settings", on_action=lambda: opened.append(1))
+        self.assertTrue(shell.status._action.visible)
+        shell.status._on_action()
+        self.assertEqual(opened, [1])

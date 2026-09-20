@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from sqlmodel import Session
 
@@ -58,14 +59,32 @@ class Catalogs:
         key = resolve_species_key(canonical_id, self.species_by_canonical)
         return self.species_by_canonical.get(key) if key else None
 
+    @cached_property
+    def _search_pool(self) -> tuple[tuple[str, SpeciesInfo], ...]:
+        """(lowercased calculator name, species) for every catalogue entry, built once."""
+        return tuple(
+            (s.name.lower(), s)
+            for s in sorted(self.species_by_canonical.values(), key=lambda s: (len(s.name), s.name))
+        )
+
     def search_species(self, query: str, limit: int = 8, *, legal_only: bool = True) -> list[SpeciesInfo]:
         """Prefix matches first, then contains, on the calculator names; megas included."""
         q = query.strip().lower()
         if len(q) < 2:
             return []
-        pool = [s for s in self.species_by_canonical.values() if s.is_legal or not legal_only]
-        starts = sorted((s for s in pool if s.name.lower().startswith(q)), key=lambda s: (len(s.name), s.name))
-        contains = sorted((s for s in pool if not s.name.lower().startswith(q) and q in s.name.lower()), key=lambda s: (len(s.name), s.name))
+        # The pool is pre-sorted, so the two passes keep their (length, name) order without
+        # re-sorting the whole catalogue on every keystroke.
+        starts: list[SpeciesInfo] = []
+        contains: list[SpeciesInfo] = []
+        for lowered, s in self._search_pool:
+            if not (s.is_legal or not legal_only):
+                continue
+            if lowered.startswith(q):
+                starts.append(s)
+                if len(starts) >= limit:
+                    return starts[:limit]
+            elif len(contains) < limit and q in lowered:
+                contains.append(s)
         return (starts + contains)[:limit]
 
     # -- moves --------------------------------------------------------------------------------
@@ -81,6 +100,11 @@ class Catalogs:
     def legal_move_ids(self, canonical_id: str | None) -> frozenset[str] | None:
         key = self.learnset_key(canonical_id)
         return self.learnsets.get(key) if key else None
+
+    @cached_property
+    def legal_moves_sorted(self) -> tuple[MoveInfo, ...]:
+        """Every Champions-legal move, ordered by name — the picker's base list."""
+        return tuple(sorted((m for m in self.moves_by_id.values() if m.is_legal), key=lambda m: m.name.lower()))
 
     def move_by_name(self, name: str | None) -> MoveInfo | None:
         return self.moves_by_id.get(move_key(name))
@@ -99,21 +123,46 @@ class Catalogs:
 
     # -- derived lookups ----------------------------------------------------------------
 
-    @property
+    @cached_property
     def champions_names(self) -> list[str]:
         return [r.display_name for r in self.champions]
 
-    @property
+    @cached_property
     def champions_species_names(self) -> set[str]:
         return {r.species_name.lower() for r in self.champions if r.species_name}
 
-    @property
+    @cached_property
     def mega_species(self) -> frozenset[str]:
         return frozenset(m.species_name.lower() for m in self.megas if m.species_name)
 
+    @cached_property
+    def _megas_by_species(self) -> dict[str, list[MegaEvolutionRecord]]:
+        index: dict[str, list[MegaEvolutionRecord]] = {}
+        for m in self.megas:
+            index.setdefault((m.species_name or "").lower(), []).append(m)
+        return index
+
     def megas_for(self, species_name: str | None) -> list[MegaEvolutionRecord]:
-        key = (species_name or "").lower()
-        return [m for m in self.megas if (m.species_name or "").lower() == key]
+        return list(self._megas_by_species.get((species_name or "").lower(), ()))
+
+    @cached_property
+    def _mega_forms_by_base(self) -> dict[str, list[SpeciesInfo]]:
+        """Base species id -> its Mega entries in the species catalogue."""
+        index: dict[str, list[SpeciesInfo]] = {}
+        for s in self.species_by_canonical.values():
+            if s.is_mega:
+                index.setdefault(s.base_species_id, []).append(s)
+        return index
+
+    @cached_property
+    def _mega_form_by_stone(self) -> dict[tuple[str, str], str]:
+        """(base species id, lowercased stone name) -> the mega form that stone unlocks."""
+        index: dict[tuple[str, str], str] = {}
+        for base_id, forms in self._mega_forms_by_base.items():
+            for s in forms:
+                if s.required_item:
+                    index.setdefault((base_id, s.required_item.strip().lower()), s.canonical_id)
+        return index
 
     def form_choices_for(self, canonical_id: str | None) -> list[tuple[str, str]]:
         """List of (canonical_id, label) for a species and its mega forms.
@@ -127,7 +176,7 @@ class Catalogs:
         base_species = self.species_for(species.base_species_id) or species
         megas = self.megas_for(base_species.name)
         if not megas:
-            mega_species_list = [s for s in self.species_by_canonical.values() if s.base_species_id == base_species.canonical_id and s.is_mega]
+            mega_species_list = self._mega_forms_by_base.get(base_species.canonical_id, [])
             if not mega_species_list:
                 return []
             out = [(base_species.canonical_id, "Base")]
@@ -151,15 +200,9 @@ class Catalogs:
         species = self.species_for(species_canonical_id)
         if species is None:
             return None
-        base_id = species.base_species_id
-        item_lower = item_name.strip().lower()
-        for s in self.species_by_canonical.values():
-            if s.base_species_id == base_id and s.is_mega and s.required_item:
-                if s.required_item.strip().lower() == item_lower:
-                    return s.canonical_id
-        return None
+        return self._mega_form_by_stone.get((species.base_species_id, item_name.strip().lower()))
 
-    @property
+    @cached_property
     def items_by_name(self) -> dict[str, ItemRecord]:
         return {r.display_name.lower(): r for r in self.items_by_id.values()}
 
@@ -169,14 +212,13 @@ class Catalogs:
             return None
         return self.items_by_id.get(reference) or self.items_by_name.get(reference.lower())
 
-    def suggest_species(self, query: str, limit: int = 8) -> list[SpeciesSuggestion]:
-        q = query.strip().lower()
-        if len(q) < 2:
-            return []
-        q_clean = q.replace("♀", " female").replace("♂", " male").replace("(", " ").replace(")", " ")
-        q_clean = " ".join(q_clean.split())
+    @cached_property
+    def _suggestion_index(self) -> tuple[tuple[SpeciesSuggestion, frozenset[str]], ...]:
+        """Every suggestable species with its searchable name variants, built once.
 
-        # Collect base species from self.champions
+        The list and the per-entry variants used to be rebuilt on every keystroke, and the
+        "contains" pass then did an O(n²) ``not in`` over the prefix hits.
+        """
         suggestions: list[SpeciesSuggestion] = []
         seen_ids: set[str] = set()
 
@@ -186,7 +228,7 @@ class Catalogs:
                 seen_ids.add(cid)
                 suggestions.append(SpeciesSuggestion(display_name=r.display_name, species_name=cid, canonical_id=cid))
 
-        # Collect legal non-mega, non-battle-only forms from self.species_by_canonical
+        # Legal non-mega, non-battle-only forms from the species catalogue.
         for s in self.species_by_canonical.values():
             if not s.is_legal or s.is_mega or s.battle_only:
                 continue
@@ -204,30 +246,38 @@ class Catalogs:
             seen_ids.add(cid)
             suggestions.append(SpeciesSuggestion(display_name=disp, species_name=cid, canonical_id=cid))
 
-        def _get_variants(s: SpeciesSuggestion) -> set[str]:
+        index: list[tuple[SpeciesSuggestion, frozenset[str]]] = []
+        for suggestion in suggestions:
             raw_names = [
-                s.display_name.lower(),
-                s.species_name.lower(),
-                s.canonical_id.lower(),
-                qualified_name(s.display_name, s.canonical_id).lower(),
+                suggestion.display_name.lower(),
+                suggestion.species_name.lower(),
+                suggestion.canonical_id.lower(),
+                qualified_name(suggestion.display_name, suggestion.canonical_id).lower(),
             ]
             variants = set(raw_names)
             for n in raw_names:
                 cleaned = " ".join(n.replace("(", " ").replace(")", " ").replace("-", " ").split())
                 variants.add(cleaned)
                 variants.add(cleaned.replace(" ", "-"))
-            return variants
+            index.append((suggestion, frozenset(variants)))
+        return tuple(index)
 
-        def matches_prefix(s: SpeciesSuggestion) -> bool:
-            variants = _get_variants(s)
-            return any(v.startswith(q) or (q_clean and v.startswith(q_clean)) for v in variants)
+    def suggest_species(self, query: str, limit: int = 8) -> list[SpeciesSuggestion]:
+        q = query.strip().lower()
+        if len(q) < 2:
+            return []
+        q_clean = q.replace("\u2640", " female").replace("\u2642", " male").replace("(", " ").replace(")", " ")
+        q_clean = " ".join(q_clean.split())
 
-        def matches_contains(s: SpeciesSuggestion) -> bool:
-            variants = _get_variants(s)
-            return any(q in v or (q_clean and q_clean in v) for v in variants)
-
-        starts = [s for s in suggestions if matches_prefix(s)]
-        contains = [s for s in suggestions if s not in starts and matches_contains(s)]
+        starts: list[SpeciesSuggestion] = []
+        contains: list[SpeciesSuggestion] = []
+        for suggestion, variants in self._suggestion_index:
+            if any(v.startswith(q) or (q_clean and v.startswith(q_clean)) for v in variants):
+                starts.append(suggestion)
+                if len(starts) >= limit:
+                    return starts[:limit]
+            elif len(contains) < limit and any(q in v or (q_clean and q_clean in v) for v in variants):
+                contains.append(suggestion)
         return (starts + contains)[:limit]
 
     # -- loading ------------------------------------------------------------------------

@@ -345,10 +345,7 @@ class MetaView(ft.Column):
         self._collapse_button.visible = self.view_mode == "rows"
         self._more_button.visible = not self.store.exhausted
         self._more_button.content = f"Show more · {self.store.loaded:,} of {self.store.total:,}"
-        unit = "event" if self.view_mode == "cards" or self.collapsed else "team"
-        shown = len(self._groups) if unit == "event" else self.store.loaded
-        order = "Closest to your box first" if self.store.filters.max_missing is not None else "Newest events first"
-        self._order_caption.value = f"{order} · {shown:,} {unit}{'s' if shown != 1 else ''} shown · {plural(self.store.total, 'team')} match"
+        self._render_caption_only()
 
     # -- grouping, layout and the event dialog ------------------------------------------------
 

@@ -38,6 +38,13 @@ def get_engine(database_filename: str = DEFAULT_DATABASE_FILENAME):
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.execute("PRAGMA busy_timeout=30000")
+            # 64 MiB of page cache instead of the 2 MiB default. A year of tournament
+            # data is a few hundred MB and the meta/usage queries walk the roster index
+            # repeatedly, so the default cache re-read the same pages from disk on every
+            # filter change (measured 15–25 % on the box filter, partners and move usage).
+            # It is a ceiling, not an allocation: a connection that only runs small
+            # lookups never grows to it.
+            cursor.execute("PRAGMA cache_size=-65536")
         except Exception:  # noqa: BLE001 - e.g. an in-memory database
             pass
         finally:

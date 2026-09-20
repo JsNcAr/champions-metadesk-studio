@@ -552,7 +552,17 @@ class ChampionsCatalogRepository:
         return sorted(records, key=lambda r: r.entry_number)
 
     def list_species_names(self) -> list[str]:
-        return [r.species_name for r in self.list_all()]
+        """Catalogue species names in entry order — one column, no ORM objects.
+
+        Every Meta page load asks for these to judge legality, so building and expunging
+        two hundred records for the name alone was not worth it.
+        """
+        return [
+            name
+            for (name,) in self.session.connection().exec_driver_sql(
+                "SELECT species_name FROM champions_species ORDER BY entry_number"
+            )
+        ]
 
     def sync_species_entries(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
         """Saves any species entries from PokéAPI that are missing from the local catalog."""
@@ -768,6 +778,24 @@ class MoveRepository:
     def get_meta(self) -> MoveCatalogMetaRecord | None:
         return self.session.get(MoveCatalogMetaRecord, 1)
 
+    # The catalogue readers below go through the driver cursor rather than the ORM: the
+    # rows are turned into immutable value objects straight away and never written back,
+    # so identity-mapping and expunging ~1 k moves and ~16 k learnset pairs at every
+    # launch was pure overhead (roughly half the catalogue load time).
+
+    MOVE_COLUMNS = (
+        "move_id", "name", "type", "category", "power", "accuracy", "pp", "priority",
+        "target", "short_desc", "is_legal", "mechanics",
+    )
+
+    def move_rows(self) -> list[tuple]:
+        """Raw move rows in ``MOVE_COLUMNS`` order; ``mechanics`` is still JSON text."""
+        return list(
+            self.session.connection().exec_driver_sql(
+                f"SELECT {', '.join(self.MOVE_COLUMNS)} FROM moves"
+            )
+        )
+
     def list_moves(self) -> list[MoveRecord]:
         records = list(self.session.exec(select(MoveRecord)).all())
         for r in records:
@@ -776,7 +804,9 @@ class MoveRepository:
 
     def list_learnsets(self) -> dict[str, list[str]]:
         out: dict[str, list[str]] = {}
-        for species_key, move_id in self.session.exec(select(LearnsetRecord.species_key, LearnsetRecord.move_id)).all():
+        for species_key, move_id in self.session.connection().exec_driver_sql(
+            "SELECT species_key, move_id FROM learnsets"
+        ):
             out.setdefault(species_key, []).append(move_id)
         return out
 
@@ -825,6 +855,25 @@ class SpeciesRepository:
         for r in records:
             self.session.expunge(r)
         return records
+
+    COLUMNS = (
+        "showdown_id", "canonical_id", "name", "dex_number", "base_species_id", "forme",
+        "types", "hp", "attack", "defense", "special_attack", "special_defense", "speed",
+        "abilities", "hidden_ability", "weightkg", "gender", "required_item",
+        "battle_only", "is_mega", "is_legal",
+    )
+
+    def rows(self) -> list[tuple]:
+        """Raw catalogue rows in ``COLUMNS`` order; the JSON columns are still text.
+
+        See the note on ``MoveRepository``: the UI catalogue turns these straight into
+        frozen values, so the ORM round-trip only costs time at launch.
+        """
+        return list(
+            self.session.connection().exec_driver_sql(
+                f"SELECT {', '.join(self.COLUMNS)} FROM species_catalog"
+            )
+        )
 
     def replace_all(self, records: list[SpeciesRecord]) -> tuple[int, int]:
         """Swap the whole catalogue (~1.5k rows) in one transaction; returns (count, legal)."""
@@ -999,34 +1048,32 @@ class TournamentRepository:
         return records
 
     def delete_teams_for_tournament(self, tournament_id: str) -> int:
-        """Delete a tournament's teams and their members. Returns rows removed.
+        """Delete a tournament's teams and their members. Returns teams removed.
 
         Re-ingesting an event replaces its teams rather than appending to them, so a
         forced re-sync cannot duplicate rosters.
-        """
-        teams = list(
-            self.session.exec(
-                select(TournamentTeamRecord).where(
-                    TournamentTeamRecord.tournament_id == tournament_id
-                )
-            ).all()
-        )
-        if not teams:
-            return 0
 
-        team_ids = [t.tournament_team_id for t in teams]
-        members = self.session.exec(
-            select(TournamentTeamMemberRecord).where(
-                TournamentTeamMemberRecord.tournament_team_id.in_(team_ids)
-            )
-        ).all()
-        for member in members:
-            self.session.delete(member)
-        for team in teams:
-            self.session.delete(team)
+        Two statements rather than loading every roster row as an ORM object and deleting
+        it one at a time: a large event is a few hundred rows, the sync does this per
+        event, and the write lock is held while the UI reads the same file.
+        """
+        connection = self.session.connection()
+        connection.exec_driver_sql(
+            "DELETE FROM tournament_team_members WHERE tournament_team_id IN "
+            "(SELECT tournament_team_id FROM tournament_teams WHERE tournament_id = ?)",
+            (tournament_id,),
+        )
+        removed = connection.exec_driver_sql(
+            "DELETE FROM tournament_teams WHERE tournament_id = ?", (tournament_id,)
+        ).rowcount
+        if not removed:
+            # Nothing matched, so nothing to undo — and no rollback, which would discard
+            # whatever else the caller has pending in this session.
+            return 0
         self.invalidate_preset_builds_cache(commit=False)
+        # Commit expires the session's instances, so nothing keeps a deleted row alive.
         self.session.commit()
-        return len(teams)
+        return int(removed)
 
     def list_tournaments(self) -> list[TournamentRecord]:
         return list(self.session.exec(select(TournamentRecord).order_by(TournamentRecord.event_date.desc())).all())
@@ -1126,27 +1173,30 @@ class TournamentRepository:
 
         if max_missing is not None:
             # "At most N of the roster is missing from the box": roster size minus the
-            # members whose base species is owned. Both aggregates group the indexed
-            # members table once; an empty box matches nothing.
+            # members whose base species is owned. An empty box matches nothing.
             owned = sorted(expand_canonical_aliases(owned_species or ()))
             if not owned:
                 return stmt.where(False)
-            # Only rows whose base species is owned are touched (indexed); the roster size
-            # is stored on the team, so nothing groups the whole members table.
+            # Counted per candidate team, not as one grouped pass over every roster row:
+            # the other filters (placement, recency, format) have already narrowed the
+            # teams, and each count reads only that team's six rows through
+            # ix_tournament_team_members_team_species. Grouping the whole members table
+            # first cost ~1 s on a year of data regardless of how few teams survived.
             hits = (
-                select(TournamentTeamMemberRecord.tournament_team_id.label("team_id"), func.count().label("hits"))
-                .where(TournamentTeamMemberRecord.base_canonical_id.in_(owned))
-                .group_by(TournamentTeamMemberRecord.tournament_team_id)
-                .subquery("roster_hits")
+                select(func.count())
+                .select_from(TournamentTeamMemberRecord)
+                .where(
+                    TournamentTeamMemberRecord.tournament_team_id
+                    == TournamentTeamRecord.tournament_team_id,
+                    TournamentTeamMemberRecord.base_canonical_id.in_(owned),
+                )
+                .correlate(TournamentTeamRecord)
+                .scalar_subquery()
             )
-            missing = TournamentTeamRecord.member_count - func.coalesce(hits.c.hits, 0)
+            missing = TournamentTeamRecord.member_count - hits
             # Closest to the box first; search_teams appends date/placement/id after this,
             # so paging keeps a total order.
-            stmt = (
-                stmt.outerjoin(hits, hits.c.team_id == TournamentTeamRecord.tournament_team_id)
-                .where(missing <= max_missing)
-                .order_by(missing.asc())
-            )
+            stmt = stmt.where(missing <= max_missing).order_by(missing.asc())
 
         if regulation_filter and regulation_filter != "All":
             stmt = stmt.where(TournamentRecord.format_regulation == regulation_filter)
@@ -1334,15 +1384,31 @@ class TournamentRepository:
         from sqlalchemy import text as _text
 
         base = canonical_id.lower()
-        clause = "m.canonical_id = :cid OR m.canonical_id LIKE :mega" if include_megas else "m.canonical_id = :cid"
+        params: dict[str, Any] = {"cid": base}
+        if include_megas:
+            # A range rather than LIKE ':base-mega%': identical rows (ids are lowercase),
+            # but SQLite can answer it from ix_tournament_team_members_canonical_id
+            # instead of scanning every roster row. "megb" is "mega" with the last letter
+            # bumped, so the range is exactly the "<base>-mega…" prefix.
+            clause = "m.canonical_id = :cid OR (m.canonical_id >= :mega_lo AND m.canonical_id < :mega_hi)"
+            params["mega_lo"] = f"{base}-mega"
+            params["mega_hi"] = f"{base}-megb"
+        else:
+            clause = "m.canonical_id = :cid"
+        joins = ""
         extra = ""
-        params: dict[str, Any] = {"cid": base, "mega": f"{base}-mega%"}
         if battle_format and battle_format != "all":
-            extra = "AND m.tournament_team_id NOT IN (SELECT tt.tournament_team_id FROM tournament_teams tt JOIN tournaments tr ON tt.tournament_id = tr.tournament_id WHERE tr.battle_format != :bformat) "
+            # A positive join on the matched rows only. The old NOT IN (…) anti-join
+            # materialised every team of the other formats before the species filter ran.
+            joins = (
+                "JOIN tournament_teams tt ON tt.tournament_team_id = m.tournament_team_id "
+                "JOIN tournaments tr ON tr.tournament_id = tt.tournament_id "
+            )
+            extra = "AND tr.battle_format = :bformat "
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
-                "SELECT j.value AS move, COUNT(*) AS n FROM tournament_team_members m, json_each(m.moves) j "
+                f"SELECT j.value AS move, COUNT(*) AS n FROM tournament_team_members m {joins}, json_each(m.moves) j "
                 f"WHERE ({clause}) {extra}GROUP BY j.value ORDER BY n DESC, move ASC"
             ).bindparams(**params)
         ).all()
@@ -1353,17 +1419,22 @@ class TournamentRepository:
         in one query (megas fold into their base species)."""
         from sqlalchemy import text as _text
 
-        joins = ""
         where = ""
         params: dict[str, Any] = {}
         if battle_format and battle_format != "all":
-            joins = "JOIN tournament_teams tt ON m.tournament_team_id = tt.tournament_team_id JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
-            where = "AND tr.battle_format = :bformat "
+            # The format-matching teams are collected once and probed, instead of looking
+            # the team and its tournament up again for each of the ~400 k roster rows.
+            where = (
+                "AND m.tournament_team_id IN ("
+                "SELECT tt.tournament_team_id FROM tournament_teams tt "
+                "JOIN tournaments tr ON tt.tournament_id = tr.tournament_id "
+                "WHERE tr.battle_format = :bformat) "
+            )
             params["bformat"] = battle_format
         rows = self.session.exec(
             _text(
-                "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n FROM tournament_team_members m "
-                f"{joins}, json_each(m.moves) j "
+                "SELECT m.base_canonical_id AS cid, j.value AS move, COUNT(*) AS n "
+                "FROM tournament_team_members m, json_each(m.moves) j "
                 f"WHERE m.base_canonical_id != '' {where}GROUP BY cid, j.value ORDER BY cid, n DESC, move ASC"
             ).bindparams(**params)
         ).all()

@@ -28,6 +28,31 @@ class MoveOptions:
 
 EMPTY_MOVE_OPTIONS = MoveOptions((), (), {}, False)
 
+# Roster usage per base species. The query reads every roster row of that species, which
+# costs tens of milliseconds on a year of data, and the answer only changes when
+# tournament data does — so it is kept until ``invalidate_move_usage()`` says otherwise.
+_usage_cache: dict[str, dict[str, float]] = {}
+
+
+def invalidate_move_usage() -> None:
+    """New tournament data landed: re-read usage on the next request."""
+    _usage_cache.clear()
+
+
+def _usage_for(base_id: str, session_factory: SessionFactory | None) -> dict[str, float]:
+    if session_factory is None:
+        return {}
+    cached = _usage_cache.get(base_id)
+    if cached is not None:
+        return cached
+    try:
+        with session_factory() as s:
+            usage = TournamentService(s).move_usage(base_id)
+    except Exception:  # noqa: BLE001 - usage is a ranking hint, never required
+        return {}
+    _usage_cache[base_id] = usage
+    return usage
+
 
 def move_options_for(catalogs: Catalogs, canonical_id: str | None, session_factory: SessionFactory | None) -> MoveOptions:
     """Legal moves for a species (base form for megas), every other Champions move, and how
@@ -36,18 +61,11 @@ def move_options_for(catalogs: Catalogs, canonical_id: str | None, session_facto
         return EMPTY_MOVE_OPTIONS
     legal_ids = catalogs.legal_move_ids(canonical_id)
     known = legal_ids is not None
-    by_name = lambda m: m.name.lower()  # noqa: E731
-    catalogue = [m for m in catalogs.moves_by_id.values() if m.is_legal]
+    # Pre-sorted once per catalogue: the picker only has to split it in two.
+    catalogue = catalogs.legal_moves_sorted
     if known:
-        legal = sorted((m for m in catalogue if m.move_id in legal_ids), key=by_name)
-        others = sorted((m for m in catalogue if m.move_id not in legal_ids), key=by_name)
+        legal = tuple(m for m in catalogue if m.move_id in legal_ids)
+        others = tuple(m for m in catalogue if m.move_id not in legal_ids)
     else:
-        legal, others = sorted(catalogue, key=by_name), []
-    usage: dict[str, float] = {}
-    if session_factory is not None:
-        try:
-            with session_factory() as s:
-                usage = TournamentService(s).move_usage(base_canonical_id(canonical_id))
-        except Exception:  # noqa: BLE001 - usage is a ranking hint, never required
-            usage = {}
-    return MoveOptions(tuple(legal), tuple(others), usage, known)
+        legal, others = catalogue, ()
+    return MoveOptions(legal, others, _usage_for(base_canonical_id(canonical_id), session_factory), known)

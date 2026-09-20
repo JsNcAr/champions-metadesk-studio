@@ -13,7 +13,7 @@ from ....domain.pokemon_identity import (
     qualified_name,
 )
 from ... import events
-from ...components import EmptyState, PageHeader, SplitPane
+from ...components import EmptyState, PageHeader, SplitPane, skeleton_rows
 from ...components.banner import InlineBanner
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...context import AppContext
@@ -52,7 +52,6 @@ class BoxView(ft.Row):
         self._add_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
         self._add_banner = InlineBanner(visible=False)
-        self._export_button = ft.OutlinedButton("Export CSV", icon=ft.Icons.DOWNLOAD, tooltip="Export the visible entries (or the selected ones) to CSV", on_click=lambda _e: self._export())
         self._import_button = ft.OutlinedButton(
             "Import",
             icon=ft.Icons.UPLOAD,
@@ -66,7 +65,6 @@ class BoxView(ft.Row):
             on_click=lambda _e: self._open_export_dialog(),
         )
         self._hidden_button = ft.TextButton("", icon=ft.Icons.FILTER_ALT_OFF, visible=False, tooltip="Some owned Pokémon are hidden by the current filters — click to clear them", on_click=lambda _e: self.toolbar.clear())
-        self.header = PageHeader("Box", icon=ft.Icons.INVENTORY_2, accent=Accent.BOX, count=0, actions=[self._hidden_button, self._add_spinner, self._add_field, self._export_button])
         self.header = PageHeader(
             "Box",
             icon=ft.Icons.INVENTORY_2,
@@ -96,6 +94,11 @@ class BoxView(ft.Row):
         self._empty.visible = False
         self._no_match = EmptyState(ft.Icons.SEARCH_OFF, "No Pokémon match", "Try fewer filters or a different search.", action_label="Clear filters", on_action=self.toolbar.clear)
         self._no_match.visible = False
+        # Shown until the first render replaces it: building a card per entry takes a
+        # noticeable moment on a full box, and an empty panel reads as a hung window.
+        self._loading = skeleton_rows(6)
+        self.grid.visible = False
+        self._usage_loading = False
         # -- bulk selection bar (floats over the content) -------------------------------------
         self._bulk_count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
         self._bulk_team_menu = ft.PopupMenuButton(
@@ -141,7 +144,7 @@ class BoxView(ft.Row):
                 expand=True,
                 alignment=ft.Alignment.BOTTOM_CENTER,
                 controls=[
-                    ft.Column(expand=True, spacing=0, controls=[self.grid, self.table, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty, self._no_match])]),
+                    ft.Column(expand=True, spacing=0, controls=[self._loading, self.grid, self.table, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty, self._no_match])]),
                     self.bulk_bar,
                 ],
             ),
@@ -178,7 +181,16 @@ class BoxView(ft.Row):
     # -- lifecycle -------------------------------------------------------------------------------
 
     def ensure_loaded(self) -> None:
-        if not self.store.entries:
+        if self.store.entries:
+            return
+
+        async def _load() -> None:
+            self.store.load()
+
+        # One tick later, so the skeleton reaches the screen before the roster is built.
+        try:
+            self.ctx.page.run_task(_load)
+        except Exception:  # noqa: BLE001 - no page loop yet: load inline
             self.store.load()
 
     def handle_key(self, e) -> bool:
@@ -218,7 +230,46 @@ class BoxView(ft.Row):
         self._update_self()
 
     def _get_usage_map_if_needed(self) -> dict[str, int] | None:
-        return self.store.get_usage_map(self.store.filters.usage_regulation) if self.store.filters.sort == "usage" else None
+        """The usage counts for the current sort, or None — never a blocking query.
+
+        Counting a regulation's tournament usage is a scan of every roster row, so the
+        first "sort by usage" would freeze the grid mid-click. Instead the roster shows a
+        skeleton (see ``_usage_loading``) while a worker fetches it, and the render that
+        follows has the answer in hand.
+        """
+        if self.store.filters.sort != "usage":
+            return None
+        regulation = self.store.filters.usage_regulation
+        if self.store.usage_map_cached(regulation):
+            return self.store.get_usage_map(regulation)
+        self._load_usage_map(regulation)
+        # A worker that finished inline (no page loop) has already filled the cache, and
+        # this render can use it instead of falling back to an unsorted grid.
+        if self.store.usage_map_cached(regulation):
+            return self.store.get_usage_map(regulation)
+        return None
+
+    def _load_usage_map(self, regulation: str) -> None:
+        if self._usage_loading:
+            return
+        self._usage_loading = True
+
+        def done(_umap) -> None:
+            self._usage_loading = False
+            self._render()
+            self._update_self()
+
+        def failed(_exc: BaseException) -> None:
+            self._usage_loading = False
+            self.ctx.toast("Couldn't read tournament usage; showing the roster unsorted", "warning")
+            self._render()
+            self._update_self()
+
+        try:
+            self.ctx.run_in_background(lambda: self.store.get_usage_map(regulation), on_done=done, on_error=failed)
+        except Exception:  # noqa: BLE001 - no page loop (tests): fetch inline
+            self._usage_loading = False
+            self.store.get_usage_map(regulation)
 
     def _entry_usage_text(self, entry: BoxEntry, usage_map: dict[str, int] | None) -> str | None:
         if usage_map is None:
@@ -232,6 +283,17 @@ class BoxView(ft.Row):
 
     def _render(self) -> None:
         self.store.catalogs = self.ctx.catalogs or self.store.catalogs
+        usage_map = self._get_usage_map_if_needed()
+        if self._usage_loading:
+            # Sorting by usage without the counts would show the wrong order for a moment
+            # and then reshuffle; the skeleton says "counting" instead.
+            self._loading.visible = True
+            self.grid.visible = False
+            self.table.visible = False
+            self._empty.visible = False
+            self._no_match.visible = False
+            return
+        self._loading.visible = False
         visible = self.store.visible()
         shown, owned = self.store.counts(visible)
         self.header.set_count(owned if shown == owned else f"{shown} of {owned}")
@@ -244,8 +306,6 @@ class BoxView(ft.Row):
         no_match = bool(self.store.entries) and not visible
         self._empty.visible = empty
         self._no_match.visible = no_match
-
-        usage_map = self._get_usage_map_if_needed()
 
         if self.view_mode == "table":
             self.grid.visible = False
@@ -267,10 +327,14 @@ class BoxView(ft.Row):
             self.grid.controls = controls
             for stale in set(self._cards) - {e.box_entry_id for e in self.store.entries}:
                 self._cards.pop(stale, None)
-        self._render_multi()
+        # The table and the card check state were just written from ``visible``; only the
+        # bulk bar still needs updating, so the selection pass does not filter and sort
+        # the roster a second time.
+        self._render_multi_state()
         self._render_detail()
 
-    def _render_multi(self) -> None:
+    def _render_multi_state(self) -> None:
+        """Bulk bar and per-card check marks — everything but the table refresh."""
         n = len(self.store.multi)
         self.bulk_bar.visible = n > 0
         self._bulk_count.value = f"{n} selected"
@@ -278,6 +342,9 @@ class BoxView(ft.Row):
             self._bulk_team_menu.items = self._team_menu_items(lambda team_id: self._bulk_add_to_team(team_id))
         for eid, card in self._cards.items():
             card.set_checked(eid in self.store.multi, selection_mode=n > 0)
+
+    def _render_multi(self) -> None:
+        self._render_multi_state()
         if self.view_mode == "table":
             usage_map = self._get_usage_map_if_needed()
             self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi, usage_map=usage_map)
@@ -713,7 +780,9 @@ class BoxView(ft.Row):
     # -- events ---------------------------------------------------------------------------------------------
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
-        if kind == "megas":
+        # "species" and "champions" matter too: a first launch draws the roster before the
+        # catalogues have downloaded, and the mega badge and form data come from them.
+        if kind in ("megas", "species", "champions"):
             self.store.catalogs = self.ctx.catalogs or self.store.catalogs
             self._render()
             self._update_self()

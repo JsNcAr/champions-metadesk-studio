@@ -11,6 +11,7 @@ from typing import Literal
 
 import flet as ft
 
+from ...services.sprite_cache_service import resolve_sprite_src
 from ..theme import Palette, Radius, alpha, type_color
 
 Ring = Literal["none", "type", "mega", "planned", "selected", "error", "missing"]
@@ -29,19 +30,22 @@ class Sprite(ft.Container):
     ) -> None:
         super().__init__()
         self._size = size
+        # The local copy when one was on disk at launch, else the CDN URL. Resolving never
+        # downloads; the app prefetches in the background (see app._start_sprite_prefetch).
+        resolved = resolve_sprite_src(src)
         # An empty ``src`` makes Flutter render "A valid src value must be specified" in red,
         # so the image is hidden and the fallback icon shown whenever there is no URL.
         self._image = ft.Image(
-            src=src or "",
+            src=resolved or "",
             width=int(size * 0.85),
             height=int(size * 0.85),
             fit=ft.BoxFit.CONTAIN,
-            visible=bool(src),
+            visible=bool(resolved),
             error_content=ft.Icon(
                 ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED
             ),
         )
-        self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not src)
+        self._fallback = ft.Icon(ft.Icons.CATCHING_POKEMON, size=int(size * 0.55), color=Palette.DISABLED, visible=not resolved)
         # The two overlays are built on demand and appended to the stack. Most sprites
         # never show either — only mega/planned rings get a badge and only the team
         # summary numbers its rings — and together they were a quarter of the cost of a
@@ -117,9 +121,10 @@ class Sprite(ft.Container):
         return self._number
 
     def set_src(self, src: str | None) -> None:
-        self._image.src = src or ""
-        self._image.visible = bool(src)
-        self._fallback.visible = not src
+        resolved = resolve_sprite_src(src)
+        self._image.src = resolved or ""
+        self._image.visible = bool(resolved)
+        self._fallback.visible = not resolved
 
     def set_tooltip(self, tooltip: str | None) -> None:
         self.tooltip = tooltip

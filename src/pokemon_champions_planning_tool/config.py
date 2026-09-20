@@ -12,9 +12,14 @@ DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", "pokemon_champions.d
 DEFAULT_PREFERENCES_FILENAME = os.environ.get(
     "PCPT_PREFERENCES", str(Path(DEFAULT_DATABASE_FILENAME).parent / "preferences.json")
 )
-DEFAULT_ASSETS_DIR = os.environ.get("PCPT_ASSETS_DIR", "assets")
-DEFAULT_SPRITE_CACHE_DIR = os.environ.get(
-    "PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites")
+# Absolute on purpose. Flet resolves a *relative* assets_dir against the directory of
+# sys.argv[0], not the working directory, so "assets" became
+# src/pokemon_champions_planning_tool/assets — a path that does not exist, which makes
+# Flet serve no assets at all. The sprite cache meanwhile wrote to ./assets/sprites, so
+# nothing it downloaded was ever reachable. Resolving here keeps the two in step.
+DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", "assets")).resolve())
+DEFAULT_SPRITE_CACHE_DIR = str(
+    Path(os.environ.get("PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites"))).resolve()
 )
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
 POKEAPI_TIMEOUT_SECONDS = 5

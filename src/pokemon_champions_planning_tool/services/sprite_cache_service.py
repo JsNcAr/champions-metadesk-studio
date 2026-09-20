@@ -66,9 +66,15 @@ class SpriteCacheService:
         self._lock = threading.Lock()
         self._in_flight: set[str] = set()
         self._known_local: set[str] = set()
+        # Filenames already on disk when the app started. Only these are served from
+        # ``/sprites/``: a file downloaded mid-session is already on screen from the CDN,
+        # so switching its src would gain nothing, and whether every Flet runtime picks up
+        # a file that appeared after launch is not something this project can verify.
+        self._present_at_start: frozenset[str] = frozenset()
         self._executor = _DaemonThreadPoolExecutor(max_workers=2, thread_name_prefix="sprite-cache")
         atexit.register(self.shutdown)
         self._scan_existing()
+        self._present_at_start = frozenset(self._known_local)
 
     def shutdown(self) -> None:
         """Immediately release executor resources and cancel queued futures."""
@@ -116,6 +122,10 @@ class SpriteCacheService:
         name = Path(path).name
         return name or None
 
+    def is_servable(self, filename: str) -> bool:
+        """Was this file on disk before the app started, and so safe to serve locally?"""
+        return filename in self._present_at_start
+
     def is_cached(self, filename: str) -> bool:
         """Checks whether the file is cached locally."""
         if filename in self._known_local:
@@ -157,11 +167,12 @@ class SpriteCacheService:
         if not filename:
             return src
 
-        if self.is_cached(filename):
+        if self.is_servable(filename):
             return self.get_local_src(filename)
 
-        # Cache miss: return remote URL for instant display, trigger background download
-        if background_download:
+        # Not served locally this session: show the CDN copy now and cache it for the next
+        # launch, when ``_present_at_start`` will contain it.
+        if background_download and not self.is_cached(filename):
             self.enqueue_download(src, filename)
 
         return src
@@ -259,5 +270,10 @@ sprite_cache = SpriteCacheService()
 
 
 def resolve_sprite_src(src: str | None) -> str | None:
-    """Convenience helper to resolve sprite URL or local cached path."""
-    return sprite_cache.resolve_sprite_src(src)
+    """Local cached path when there is one, else the remote URL. Never downloads.
+
+    Building a control must not reach the network: the UI calls this for every sprite it
+    draws, including under test. Filling the cache is a deliberate act — see ``prefetch``,
+    which the app runs in the background once the window is up.
+    """
+    return sprite_cache.resolve_sprite_src(src, background_download=False)

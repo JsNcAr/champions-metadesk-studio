@@ -82,6 +82,29 @@ def _start_catalogue_refresh(ctx: AppContext, shell: AppShell) -> None:
     ctx.run_in_background(work, on_done=done, on_error=failed)
 
 
+def _start_sprite_prefetch(ctx: AppContext) -> None:
+    """Cache the roster's sprites for the next launch, quietly.
+
+    Sprites are served from ``/sprites/`` only once they were on disk at startup, so this
+    is what makes the second launch instant. It also matters for correctness on the web
+    build, where Flet sets ``Cross-Origin-Embedder-Policy: require-corp`` and the Showdown
+    CDN sends no CORP/CORS headers, so a cross-origin sprite cannot load at all.
+    """
+
+    def work() -> int:
+        from ..infrastructure.database.repositories import BoxRepository
+        from ..services.sprite_cache_service import sprite_cache
+
+        with get_session() as session:
+            species = [e.pokemon.canonical_id for e in BoxRepository(session).list_entries(include_planned=True)]
+        return sprite_cache.prefetch(species)
+
+    def failed(exc: BaseException) -> None:
+        print(f"⚠️ Sprite prefetch skipped: {exc}")
+
+    ctx.run_in_background(work, on_done=lambda _n: None, on_error=failed)
+
+
 def _start_background_sync(ctx: AppContext) -> None:
     """Sync tournament data once per process without blocking the UI."""
 
@@ -156,4 +179,5 @@ def main(page: ft.Page) -> None:
 
     if STARTUP_SYNC_ENABLED:
         _start_catalogue_refresh(ctx, shell)
+        _start_sprite_prefetch(ctx)
         _start_background_sync(ctx)

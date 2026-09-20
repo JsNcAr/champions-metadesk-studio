@@ -1,5 +1,7 @@
 import sys
-from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR
+from pathlib import Path
+
+from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR
 from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database, get_session
 from pokemon_champions_planning_tool.services.champions_catalog_service import sync_champions_catalog_on_startup
 from pokemon_champions_planning_tool.services.items_catalog_service import sync_items_catalog
@@ -111,6 +113,10 @@ def run():
 
     import flet as ft
     from pokemon_champions_planning_tool.ui.app import main as gui_main
+
+    # Flet drops assets_dir when the directory is missing, and then serves nothing from
+    # it — including the sprite cache. Create it before handing the path over.
+    Path(DEFAULT_SPRITE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
     view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
     ft.run(gui_main, view=view_mode, port=8550, assets_dir=DEFAULT_ASSETS_DIR)

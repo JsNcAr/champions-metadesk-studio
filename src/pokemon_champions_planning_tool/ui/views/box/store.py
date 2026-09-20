@@ -437,7 +437,8 @@ class BoxStore:
     def list_teams(self) -> list[TeamOption]:
         with self._sf() as s:
             repo = TeamRepository(s)
-            return [TeamOption(r.team_id, r.name, len(repo.list_members(r.team_id))) for r in repo.list_all()]
+            counts = repo.member_counts()
+            return [TeamOption(r.team_id, r.name, counts.get(r.team_id, 0)) for r in repo.list_all()]
 
     def create_team(self, name: str) -> UUID:
         clean = name.strip()

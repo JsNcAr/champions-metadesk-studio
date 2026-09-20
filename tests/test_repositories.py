@@ -195,6 +195,48 @@ class TestRepositories(unittest.TestCase):
         self.assertIsNone(team_repo.get(team_record.team_id))
 
 
+class TestTeamMemberCounts(unittest.TestCase):
+    """One grouped query behind the team pickers, which redraw on every card click."""
+
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        box_repo = BoxRepository(self.session)
+        self.repo = TeamRepository(self.session)
+        stats = PokemonStats(hp=35, attack=55, defense=40, sp_atk=50, sp_def=50, speed=90)
+        self.entries = [
+            box_repo.upsert_box_entry(BoxEntry(pokemon=Pokemon(canonical_id=cid, display_name=cid.title(), species_name=cid, stats=stats)))
+            for cid in ("pikachu", "raichu", "pichu")
+        ]
+
+    def tearDown(self):
+        self.session.close()
+
+    def test_counts_every_team_including_the_empty_ones(self):
+        full = self.repo.create(Team(name="Full"))
+        one = self.repo.create(Team(name="One"))
+        empty = self.repo.create(Team(name="Empty"))
+        for slot, entry in enumerate(self.entries, start=1):
+            self.repo.upsert_member(full.team_id, TeamMember(box_entry_id=entry.box_entry_id, slot_position=slot))
+        self.repo.upsert_member(one.team_id, TeamMember(box_entry_id=self.entries[0].box_entry_id, slot_position=1))
+
+        counts = self.repo.member_counts()
+        self.assertEqual(counts.get(full.team_id), 3)
+        self.assertEqual(counts.get(one.team_id), 1)
+        self.assertNotIn(empty.team_id, counts, "an empty team has no rows to group")
+        self.assertEqual(counts.get(empty.team_id, 0), 0, "callers read it with a default")
+
+    def test_agrees_with_counting_each_team_separately(self):
+        teams = [self.repo.create(Team(name=f"T{i}")) for i in range(3)]
+        for i, team in enumerate(teams):
+            for slot, entry in enumerate(self.entries[: i + 1], start=1):
+                self.repo.upsert_member(team.team_id, TeamMember(box_entry_id=entry.box_entry_id, slot_position=slot))
+        counts = self.repo.member_counts()
+        for team in teams:
+            self.assertEqual(counts.get(team.team_id, 0), len(self.repo.list_members(team.team_id)))
+
+
 class TestTeamSlotSwapAndTera(unittest.TestCase):
     """swap_slots must respect uq_team_slot, and tera_type must round-trip."""
 

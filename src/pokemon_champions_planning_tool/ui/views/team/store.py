@@ -133,7 +133,7 @@ class TeamStore:
             box_repo = BoxRepository(s)
             mega_repo = MegaEvolutionRepository(s)
             records = team_repo.list_all()
-            counts = {r.team_id: len(team_repo.list_members(r.team_id)) for r in records}
+            counts = team_repo.member_counts()
             self.teams = [TeamRow(r.team_id, r.name, counts.get(r.team_id, 0)) for r in records]
 
             wanted = team_id or self.active_team_id

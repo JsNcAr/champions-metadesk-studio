@@ -522,6 +522,15 @@ class TeamRepository:
             self.session.commit()
         return len(records)
 
+    def member_counts(self) -> dict[UUID, int]:
+        """{team id: filled slots} for every team in one grouped query.
+
+        The team pickers ask for this whenever they are drawn — the Box redraws its
+        "Add to team" menu on every card click — so it must not be a query per team.
+        """
+        stmt = select(TeamMemberRecord.team_id, func.count()).group_by(TeamMemberRecord.team_id)
+        return {team_id: int(n or 0) for team_id, n in self.session.exec(stmt).all()}
+
     def list_members(self, team_id: UUID) -> list[TeamMemberRecord]:
         records = list(self.session.exec(select(TeamMemberRecord).where(TeamMemberRecord.team_id == team_id)))
         return sorted(records, key=lambda record: record.slot_position)

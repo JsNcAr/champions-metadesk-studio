@@ -28,6 +28,11 @@ from .table import EXTRA_COLUMNS, BoxTable
 from .toolbar import BoxToolbar
 
 _MAX_SUGGESTIONS = 6
+# A card (or table row) per entry is the bulk of the Box's first paint, so the roster is
+# drawn a chunk at a time: roughly a screenful now, the rest on following ticks. Only the
+# first fill is chunked — later renders reuse the controls and cost nothing.
+_FIRST_CHUNK = 40
+_NEXT_CHUNK = 40
 
 
 class BoxView(ft.Row):
@@ -99,6 +104,7 @@ class BoxView(ft.Row):
         self._loading = skeleton_rows(6)
         self.grid.visible = False
         self._usage_loading = False
+        self._render_limit: int | None = _FIRST_CHUNK
         # -- bulk selection bar (floats over the content) -------------------------------------
         self._bulk_count = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
         self._bulk_team_menu = ft.PopupMenuButton(
@@ -294,16 +300,19 @@ class BoxView(ft.Row):
             self._no_match.visible = False
             return
         self._loading.visible = False
-        visible = self.store.visible()
-        shown, owned = self.store.counts(visible)
+        # Counts, the hidden tally and the empty states describe the whole match, not the
+        # chunk drawn so far, so they are right from the first tick.
+        all_visible = self.store.visible()
+        visible, more_to_draw = self._slice_for_render(all_visible)
+        shown, owned = self.store.counts(all_visible)
         self.header.set_count(owned if shown == owned else f"{shown} of {owned}")
-        hidden = owned - sum(1 for e in visible if not e.is_planned)
+        hidden = owned - sum(1 for e in all_visible if not e.is_planned)
         self._hidden_button.content = f"{hidden} hidden by filters"
         self._hidden_button.visible = hidden > 0
         self.toolbar.set_available_tags(self.store.all_tags())
 
         empty = not self.store.entries
-        no_match = bool(self.store.entries) and not visible
+        no_match = bool(self.store.entries) and not all_visible
         self._empty.visible = empty
         self._no_match.visible = no_match
 
@@ -331,7 +340,38 @@ class BoxView(ft.Row):
         # bulk bar still needs updating, so the selection pass does not filter and sort
         # the roster a second time.
         self._render_multi_state()
-        self._render_detail()
+        if more_to_draw:
+            # The detail panel costs three queries and does not change between chunks;
+            # the pass that finishes the roster draws it.
+            self._draw_more()
+        else:
+            self._render_detail()
+
+    def _slice_for_render(self, visible: list[BoxEntry]) -> tuple[list[BoxEntry], bool]:
+        """(entries to draw now, whether more are waiting) for the chunked first fill."""
+        limit = self._render_limit
+        if limit is None or len(visible) <= limit:
+            self._render_limit = None   # the roster is fully drawn; later renders are whole
+            return visible, False
+        return visible[:limit], True
+
+    def _visible_for_render(self) -> list[BoxEntry]:
+        """The entries the table may draw right now (see ``_slice_for_render``)."""
+        return self._slice_for_render(self.store.visible())[0]
+
+    def _draw_more(self) -> None:
+        """Draw the next chunk on the following tick, so the window stays responsive."""
+        self._render_limit = (self._render_limit or 0) + _NEXT_CHUNK
+
+        async def _next() -> None:
+            self._render()
+            self._update_self()
+
+        try:
+            self.ctx.page.run_task(_next)
+        except Exception:  # noqa: BLE001 - no page loop (tests): finish it here
+            self._render_limit = None
+            self._render()
 
     def _render_multi_state(self) -> None:
         """Bulk bar and per-card check marks — everything but the table refresh."""
@@ -347,7 +387,7 @@ class BoxView(ft.Row):
         self._render_multi_state()
         if self.view_mode == "table":
             usage_map = self._get_usage_map_if_needed()
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi, usage_map=usage_map)
+            self.table.update_from(self._visible_for_render(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, checked=self.store.multi, usage_map=usage_map)
 
     def _render_entry(self, entry_id: UUID) -> None:
         entry = self.store.entry(entry_id)
@@ -357,7 +397,7 @@ class BoxView(ft.Row):
             usage_text = self._entry_usage_text(entry, usage_map)
             card.update_from(entry, selected=entry_id == self.store.selected_id, show_stats=self.show_stats, mega_capable=self.store.is_mega_capable(entry), usage_text=usage_text)
         if self.view_mode == "table":
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, usage_map=usage_map)
+            self.table.update_from(self._visible_for_render(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=self.store.selected_id, usage_map=usage_map)
         if entry_id == self.store.selected_id:
             self._render_detail()
 
@@ -366,7 +406,7 @@ class BoxView(ft.Row):
             card.set_selected(eid == entry_id)
         if self.view_mode == "table":
             usage_map = self._get_usage_map_if_needed()
-            self.table.update_from(self.store.visible(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=entry_id, usage_map=usage_map)
+            self.table.update_from(self._visible_for_render(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=entry_id, usage_map=usage_map)
         self._render_detail()
 
     def _render_detail(self) -> None:

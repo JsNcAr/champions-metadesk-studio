@@ -240,3 +240,37 @@ class TestBoxLoadingFeedback(_BoxViewCase):
         self.assertFalse(self.view.grid.visible)
         self.assertFalse(self.view._empty.visible)
         self.assertFalse(self.view._no_match.visible)
+
+
+class TestChunkedFirstFill(_BoxViewCase):
+    """The roster is drawn a chunk at a time so the window never blocks on a full box."""
+
+    def test_first_pass_draws_a_chunk_but_counts_the_whole_match(self):
+        self.view.ensure_loaded()
+        # Redraw from scratch with a chunk of one, and a page that never runs the follow-up.
+        self.view._cards.clear()
+        self.view.grid.controls = []
+        self.view._render_limit = 1
+        self.page.run_task = lambda *a, **k: None
+        self.view._render()
+
+        self.assertEqual(len(self.view.grid.controls), 1, "only the first chunk is drawn")
+        self.assertEqual(self.view.header._count.content.value, "2", "the count is of the whole match")
+        self.assertFalse(self.view._no_match.visible, "a partial draw is not 'no matches'")
+        self.assertTrue(self.view.grid.visible)
+
+    def test_following_chunks_finish_the_roster(self):
+        self.view._render_limit = 1
+        self.view.ensure_loaded()   # StubPage runs the queued chunks straight through
+        self.assertEqual(len(self.view.grid.controls), 2)
+        self.assertIsNone(self.view._render_limit, "chunking is only for the first fill")
+
+    def test_once_drawn_later_renders_are_whole(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        self.assertIsNone(self.view._render_limit)
+        self.view._on_filters(replace(self.view.store.filters, text="rilla"))
+        self.assertEqual(len(self.view.grid.controls), 1)
+        self.view._on_filters(replace(self.view.store.filters, text=""))
+        self.assertEqual(len(self.view.grid.controls), 2, "not re-chunked")

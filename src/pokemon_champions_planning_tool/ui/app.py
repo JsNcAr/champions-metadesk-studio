@@ -138,13 +138,19 @@ def main(page: ft.Page) -> None:
     shell.navigate("box")
 
     async def _prewarm_views() -> None:
+        """Build the other views while the app is idle, so switching to them is instant.
+
+        Yields between each: built back to back they blocked the loop for a quarter of a
+        second right when the Box is still drawing and the user may already be clicking.
+        """
         import asyncio
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.25)
         for k in ("team", "meta", "calc", "settings"):
             try:
                 shell.get_view(k)
             except Exception:
                 pass
+            await asyncio.sleep(0)
 
     page.run_task(_prewarm_views)
 

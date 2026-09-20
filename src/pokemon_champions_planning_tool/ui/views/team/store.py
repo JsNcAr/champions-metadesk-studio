@@ -97,7 +97,7 @@ class TeamStore:
             record = team_repo.get(team_id)
             name = record.name if record else ""
             members = team_repo.get_members(team_id)
-            entries = {e.box_entry_id: e for e in BoxRepository(s).list_entries(include_planned=True)}
+            entries = BoxRepository(s).list_entries_by_ids(m.box_entry_id for m in members)
             mega_repo = MegaEvolutionRepository(s)
             megas_by_species: dict[str, list] = {}
             for m in members:
@@ -143,7 +143,7 @@ class TeamStore:
             self.active_team_name = next((t.name for t in self.teams if t.team_id == wanted), "")
 
             members = team_repo.get_members(wanted) if wanted else []
-            entries = {e.box_entry_id: e for e in box_repo.list_entries(include_planned=True)}
+            entries = box_repo.list_entries_by_ids(m.box_entry_id for m in members)
             megas_by_species: dict[str, list] = {}
             for m in members:
                 entry = entries.get(m.box_entry_id)

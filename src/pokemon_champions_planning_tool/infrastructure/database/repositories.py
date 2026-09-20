@@ -253,6 +253,26 @@ class BoxRepository:
         rows = sorted(self.session.exec(stmt).all(), key=lambda pair: pair[0].created_at)
         return [record.to_domain(pokemon.to_domain()) for record, pokemon in rows]
 
+    def list_entries_by_ids(self, box_entry_ids: Iterable[UUID]) -> dict[UUID, BoxEntry]:
+        """Hydrate just these entries, keyed by id, in one query.
+
+        A team has at most six slots; reading and validating the whole box to look them
+        up cost the same whether the box held six Pokémon or six hundred. Planned entries
+        are included — a slot may hold one.
+        """
+        ids = list(dict.fromkeys(box_entry_ids))
+        if not ids:
+            return {}
+        stmt = (
+            select(BoxEntryRecord, PokemonRecord)
+            .join(PokemonRecord, BoxEntryRecord.pokemon_canonical_id == PokemonRecord.canonical_id)
+            .where(BoxEntryRecord.box_entry_id.in_(ids))
+        )
+        return {
+            record.box_entry_id: record.to_domain(pokemon.to_domain())
+            for record, pokemon in self.session.exec(stmt).all()
+        }
+
     def update_many(
         self,
         box_entry_ids: Iterable[UUID],

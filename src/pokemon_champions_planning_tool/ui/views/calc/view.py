@@ -1,4 +1,6 @@
-"""Calc view: team/box rail | field strip over the two Pokémon panels | opponent sweep."""
+"""Calc view: the matchup summary under the header, then team/box rail | field strip over the
+two Pokémon panels | opponent sweep. On wide windows each of the three columns scrolls on its
+own, so the rail and the opponents stay in view; narrow windows stack them in one scroll."""
 
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ from .panels import PokemonPanel
 from .rail import CalcRail
 from .state import CalcRequest, SweepEntry
 from .store import CalcStore
+from .summary import MatchupBar
 from .sweep import SweepPanel
 
 RAIL_WIDTH = 224
@@ -25,7 +28,7 @@ CAPTION = "Champions damage · both directions"
 
 class CalcView(ft.Column):
     def __init__(self, ctx: AppContext, store: CalcStore | None = None) -> None:
-        super().__init__(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO)
+        super().__init__(spacing=Space.MD, expand=True)
         self.ctx = ctx
         self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
         self._narrow = False
@@ -39,12 +42,15 @@ class CalcView(ft.Column):
         self.rail.width = RAIL_WIDTH
         self.sweep = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=self._pick_opponent)
         self.sweep.width = SWEEP_WIDTH
+        self.summary = MatchupBar(store=self.store)
 
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
-        self._centre = ft.Column(spacing=Space.MD, tight=True, expand=True, controls=[self.field, self._pokemon_row])
+        self._centre = ft.Column(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.field, self._pokemon_row])
         self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.rail, self._centre, self.sweep])
-        self._stack = ft.Column(spacing=Space.MD, tight=True, controls=[])
-        self._host = ft.Container(content=self._wide)
+        self._stack = ft.Column(spacing=Space.MD, scroll=ft.ScrollMode.AUTO, controls=[])
+        self._host = ft.Container(content=self._wide, expand=True)
+        self.rail.set_scrolling(True)
+        self.sweep.set_scrolling(True)
         self.header = PageHeader(
             "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
@@ -52,7 +58,7 @@ class CalcView(ft.Column):
                 ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, tooltip="Clear both Pokémon and the field", on_click=lambda _e: self._reset()),
             ],
         )
-        self.controls = [self.header, self._host]
+        self.controls = [self.header, self.summary, self._host]
 
         self.store.subscribe(self._on_store)
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
@@ -94,6 +100,7 @@ class CalcView(ft.Column):
         if event[0] == "state":
             self.field.update_from()
         elif event[0] == "results":
+            self.summary.update_from()
             self.attacker.update_from()
             self.defender.update_from()
             self.rail.refresh_team()
@@ -212,6 +219,9 @@ class CalcView(ft.Column):
             self._wide.controls = []
             self._stack.controls = []
             self._centre.controls = []
+            # Inside the stack's single scroll the side columns must not scroll themselves.
+            self.rail.set_scrolling(not narrow)
+            self.sweep.set_scrolling(not narrow)
             if narrow:
                 self._stack.controls = [self.field, self._pokemon_row, self.rail, self.sweep]
                 self._host.content = self._stack
@@ -224,6 +234,11 @@ class CalcView(ft.Column):
         if not narrow:
             self.rail.width = 190 if compact else RAIL_WIDTH
             self.sweep.width = 270 if compact else SWEEP_WIDTH
+        # Between the side columns a compact window leaves each panel under 300px, which
+        # squeezes the HP slider and the ability to nothing: stack them there instead (the
+        # summary bar keeps the head-to-head in view).
+        panel_col = {"xs": 12} if compact and not narrow else {"xs": 12, "lg": 6}
+        self.attacker.col = self.defender.col = panel_col
         try:
             if self.page is not None:
                 self._host.update()

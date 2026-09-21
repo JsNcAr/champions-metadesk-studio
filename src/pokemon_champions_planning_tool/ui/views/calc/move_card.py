@@ -59,7 +59,7 @@ class MoveCard(ft.Container):
         self._on_copy = on_copy
         muted = Palette.ON_SURFACE_VARIANT
         self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self._category = ft.Icon(ft.Icons.HELP_OUTLINE, size=IconSize.SM, color=muted, visible=False)
+        self._category = ft.Icon(ft.Icons.ADD, size=IconSize.SM, color=Palette.DISABLED)
         self._bp = StatusChip("", "neutral")
         self._bp.visible = False
         self._eff = StatusChip("", "neutral")
@@ -75,17 +75,20 @@ class MoveCard(ft.Container):
         self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=IconSize.SM, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index))
         self._details = ft.Column(spacing=Space.SM, tight=True, visible=False, controls=[])
         self._name.expand = True
+        # The second line (BP, effectiveness, damage, KO) only exists for a filled slot, so an
+        # empty slot is a single slim "+ Move 1…" row.
+        self._info = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, visible=False, controls=[
+            ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True, controls=[self._bp, self._eff, self._effect]),
+            ft.Column(spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.END, controls=[self._pct, self._ko]),
+        ])
         body = ft.Column(spacing=4, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
             ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._category, self._name, self._activate, self._crit, self._edit]),
-            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-                ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True, controls=[self._bp, self._eff, self._effect]),
-                ft.Column(spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.END, controls=[self._pct, self._ko]),
-            ]),
+            self._info,
             self._bar,
             self._details,
         ])
         self.content = body
-        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.SM)
+        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
         self.border_radius = Radius.SM
         self.bgcolor = Palette.SURFACE_3
         self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
@@ -108,7 +111,8 @@ class MoveCard(ft.Container):
         if not name:
             self._name.value = f"Move {self.index + 1}…"
             self._name.color = Palette.DISABLED
-            self._category.visible = self._bp.visible = self._eff.visible = self._effect.visible = self._bar.visible = self._activate.visible = self._crit.visible = False
+            self._category.icon, self._category.color = ft.Icons.ADD, Palette.DISABLED
+            self._info.visible = self._bp.visible = self._eff.visible = self._effect.visible = self._bar.visible = self._activate.visible = self._crit.visible = False
             self._pct.value = self._ko.value = ""
             self.bgcolor = Palette.SURFACE_3
             self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
@@ -119,8 +123,8 @@ class MoveCard(ft.Container):
         colour = type_color(type_name.lower()) if type_name and type_name != "???" else Palette.OUTLINE
         self._name.value = name
         self._name.color = Palette.ON_SURFACE
+        self._info.visible = True
         self._category.icon = CATEGORY_ICONS.get(category.lower(), ft.Icons.HELP_OUTLINE)
-        self._category.visible = True
         self._category.color = colour
         self.bgcolor = alpha(colour, 0.16)
         self._set_border(colour, alpha(colour, 0.45))

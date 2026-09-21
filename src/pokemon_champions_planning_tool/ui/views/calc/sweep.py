@@ -102,7 +102,7 @@ class SweepPanel(ft.Container):
         self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
-        self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
+        self.content = ft.Column(spacing=Space.SM, controls=[
             SectionHeader("Opponents", accent=accent, action=ft.IconButton(icon=ft.Icons.HELP_OUTLINE, icon_size=IconSize.SM, tooltip="\n".join(f"{dict(SWEEP_CLASSES)[k]}: {v}" for k, v in CLASS_HELP.items()))),
             self._presets, self._sort, self._search, self._chip_row,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
@@ -112,6 +112,13 @@ class SweepPanel(ft.Container):
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
+
+    def set_scrolling(self, scrolling: bool) -> None:
+        """In the wide layout the list scrolls under the fixed controls; stacked, it grows."""
+        self._list.scroll = ft.ScrollMode.AUTO if scrolling else None
+        self._list.expand = scrolling
+        self._list.tight = not scrolling
+        self.content.tight = not scrolling
 
     def _sort_options(self) -> list[ft.DropdownOption]:
         latest = self.store.latest_regulation()

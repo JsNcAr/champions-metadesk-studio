@@ -1,5 +1,6 @@
-"""Attacker / defender panels: identity with ability and speed, item, HP, the spread (radar +
-editor), stat stages, status, and the four move cards that carry the results."""
+"""Attacker / defender panels: identity with ability and speed, item, HP, then the four move
+cards that carry the results, and below them the collapsible spread (radar + editor) and
+"Stages & status" sections. Results come first; the tuning is one click away."""
 
 from __future__ import annotations
 
@@ -43,6 +44,14 @@ class StageControl(ft.Column):
     def set(self, stage: int) -> None:
         self.value.value = f"{stage:+d}" if stage else "0"
         self.value.color = Palette.SUCCESS if stage > 0 else Palette.ERROR if stage < 0 else Palette.ON_SURFACE
+
+
+def _modifiers_summary(state) -> str:
+    """"+2 Atk · −1 Spe · Burned", so a collapsed section never hides an active modifier."""
+    bits = [f"{value:+d} {STAT_LABELS[stat]}".replace("-", "−") for stat, value in state.boosts.items() if value]
+    if state.status != "none":
+        bits.append(dict(STATUSES).get(state.status, state.status))
+    return " · ".join(bits)
 
 
 class PokemonPanel(ft.Container):
@@ -104,8 +113,10 @@ class PokemonPanel(ft.Container):
         self.editor = SpreadEditor(base_stats=_ZERO, nature="hardy", points={}, on_change=self._spread_changed, compact=True)
         self._spread_body = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                                       controls=[ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self.radar]), self.editor])
-        self._spread_open = True
-        self._spread_toggle = ft.IconButton(icon=ft.Icons.EXPAND_LESS, icon_size=IconSize.SM, tooltip="Collapse", on_click=lambda _e: self._toggle_spread())
+        self._spread_open = store.section_open("spread", True)
+        self._spread_body.visible = self._spread_open
+        self._spread_toggle = ft.IconButton(icon=ft.Icons.EXPAND_LESS if self._spread_open else ft.Icons.EXPAND_MORE, icon_size=IconSize.SM,
+                                            tooltip="Collapse" if self._spread_open else "Expand", on_click=lambda _e: self._toggle_spread())
 
         self._stages: dict[str, StageControl] = {stat: StageControl(stat, self._bump) for stat in BOOST_STATS}
         self._status_chips: dict[str, ft.Chip] = {}
@@ -116,6 +127,18 @@ class PokemonPanel(ft.Container):
             status_controls.append(chip)
         self._allies = ft.Dropdown(label="Allies fainted", dense=True, width=150, text_size=13, value="0", tooltip="Supreme Overlord",
                                    options=[ft.DropdownOption(key=str(n), text=str(n)) for n in range(6)], on_select=lambda e: self.store.set_pokemon(self.side, allies_fainted=int(e.control.value or 0)))
+        self._mods_body = ft.Column(spacing=Space.SM, tight=True, controls=[
+            ft.Row(spacing=Space.SM, wrap=True, alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=list(self._stages.values())),
+            ft.Row(spacing=Space.XS, run_spacing=Space.XS, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[*status_controls, self._allies]),
+        ])
+
+        self._mods_open = store.section_open("mods", False)
+        self._mods_toggle = ft.IconButton(icon=ft.Icons.EXPAND_LESS if self._mods_open else ft.Icons.EXPAND_MORE, icon_size=IconSize.SM,
+                                          tooltip="Collapse" if self._mods_open else "Expand", on_click=lambda _e: self._toggle_mods())
+        self._mods_header = SectionHeader("Stages & status", accent=Palette.OUTLINE, action=self._mods_toggle)
+        self._fill = ft.TextButton("Fill with top moves", icon=ft.Icons.AUTO_FIX_HIGH, visible=False,
+                                   tooltip="Most used in tournaments, or the hardest hitters when there is no usage data",
+                                   on_click=lambda _e: self.store.fill_top_moves(self.side))
 
         self.cards: list[MoveCard] = [
             MoveCard(i, on_pick=lambda i: self._on_pick_move(self.side, i), on_crit=lambda i: self.store.toggle_crit(self.side, i),
@@ -142,15 +165,12 @@ class PokemonPanel(ft.Container):
             ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 ft.Text("HP", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=STAT_COLORS["hp"], width=24), self._hp_slider, self._hp_abs, self._hp_label,
             ]),
-            ft.Row(alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-                ft.Text("SPREAD", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT), self._spread_toggle,
-            ]),
-            self._spread_body,
-            ft.Text("STAT STAGES", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
-            ft.Row(spacing=Space.SM, wrap=True, alignment=ft.MainAxisAlignment.SPACE_BETWEEN, controls=list(self._stages.values())),
-            ft.Row(spacing=Space.XS, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[*status_controls, self._allies]),
-            ft.Text("MOVES", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
+            SectionHeader("Moves", accent=Palette.OUTLINE, action=self._fill),
             *self.cards,
+            SectionHeader("Spread", accent=Palette.OUTLINE, action=self._spread_toggle),
+            self._spread_body,
+            self._mods_header,
+            self._mods_body,
         ])
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
@@ -238,6 +258,16 @@ class PokemonPanel(ft.Container):
         self._spread_open = not self._spread_open
         self._spread_body.visible = self._spread_open
         self._spread_toggle.icon = ft.Icons.EXPAND_LESS if self._spread_open else ft.Icons.EXPAND_MORE
+        self._spread_toggle.tooltip = "Collapse" if self._spread_open else "Expand"
+        self.store.set_section_open("spread", self._spread_open)
+        self._safe_update(self)
+
+    def _toggle_mods(self) -> None:
+        self._mods_open = not self._mods_open
+        self._mods_body.visible = self._mods_open
+        self._mods_toggle.icon = ft.Icons.EXPAND_LESS if self._mods_open else ft.Icons.EXPAND_MORE
+        self._mods_toggle.tooltip = "Collapse" if self._mods_open else "Expand"
+        self.store.set_section_open("mods", self._mods_open)
         self._safe_update(self)
 
     # -- rendering -----------------------------------------------------------------------------
@@ -307,6 +337,9 @@ class PokemonPanel(ft.Container):
             self._hp_label.value = f"/ {max_hp} ({state.hp_pct:.0f}%)" if max_hp else ""
             for stat, control in self._stages.items():
                 control.set(state.boosts.get(stat, 0))
+            self._mods_body.visible = self._mods_open
+            self._mods_header.set_status(_modifiers_summary(state), color=Palette.WARNING if (state.boosts or state.status != "none") else None)
+            self._fill.visible = species is not None and not any(state.moves)
             for key, chip in self._status_chips.items():
                 set_toggle(chip, state.status == key)
             self._allies.value = str(state.allies_fainted)

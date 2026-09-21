@@ -260,6 +260,47 @@ class TestCalcView(_Base):
         panel._hp_typed("abc")
         self.assertEqual(panel._hp_abs.value, current)
 
+    def test_summary_bar_shows_both_directions_and_speed(self):
+        self.assertTrue(self.view.summary._hint.visible, "nothing to compare yet")
+        self._load_pair()
+        bar = self.view.summary
+        self.assertFalse(bar._hint.visible)
+        self.assertEqual(bar._left._title.value, "Kingambit → Incineroar")
+        self.assertIn(bar._left._move.value, ("Kowtow Cleave", "Iron Head"))
+        self.assertIn("%", bar._left._pct.value)
+        self.assertEqual(bar._right._move.value, "Flare Blitz")
+        self.assertIn("Incineroar moves first", bar._speed.value)
+        self.view.field.tiles["trick_room"].on_click(None)
+        self.assertIn("Kingambit moves first (Trick Room)", bar._speed.value)
+
+    def test_moves_come_before_the_spread_and_modifiers_are_summarised(self):
+        self._load_pair()
+        panel = self.view.attacker
+        controls = panel.content.controls
+        self.assertLess(controls.index(panel.cards[0]), controls.index(panel._spread_body), "results first")
+        self.assertLess(controls.index(panel._spread_body), controls.index(panel._mods_body))
+        self.assertFalse(panel._mods_body.visible, "stages & status start collapsed")
+        self.store.set_boost("left", "attack", 2)
+        self.store.set_pokemon("left", status="brn")
+        self.assertEqual(panel._mods_header._status.value, "+2 Atk · Burned", "a collapsed section still shows what is active")
+        panel._toggle_mods()
+        self.assertTrue(panel._mods_body.visible)
+        self.assertTrue(self.store.section_open("mods", False), "remembered")
+
+    def test_fill_with_top_moves(self):
+        self.store.load_species("left", "kingambit")
+        self.store.load_species("right", "incineroar")
+        panel = self.view.attacker
+        self.assertTrue(panel._fill.visible, "no moves yet")
+        filled = self.store.fill_top_moves("left")
+        self.assertGreater(filled, 0)
+        moves = [m for m in self.store.state.left.moves if m]
+        self.assertTrue(moves)
+        self.assertNotIn("Protect", moves, "without usage data only damaging moves are suggested")
+        self.assertFalse(panel._fill.visible)
+        self.assertEqual(sorted(moves), ["Iron Head", "Kowtow Cleave"])
+        self.assertEqual(self.store.fill_top_moves("left"), 0, "nothing damaging left to add")
+
     def test_status_chips_brighten_when_selected(self):
         self._load_pair()
         self.store.set_pokemon("left", status="brn")
@@ -397,10 +438,19 @@ class TestCalcView(_Base):
         self.view.handle_resize(1000, 700)
         self.assertIs(self.view._host.content, self.view._stack)
         self.assertIsNone(self.view.rail.width)
+        self.assertIsNone(self.view.rail.content.scroll, "inside the stack's scroll the rail must not scroll itself")
+        self.assertFalse(self.view.sweep._list.expand)
         serialise(self.view)
+        self.view.handle_resize(1180, 820)
+        self.assertEqual(self.view.attacker.col, {"xs": 12}, "compact: the panels stack")
         self.view.handle_resize(1440, 900)
         self.assertIs(self.view._host.content, self.view._wide)
         self.assertEqual(self.view.sweep.width, 300)
+        self.assertEqual(self.view.attacker.col, {"xs": 12, "lg": 6})
+        self.assertIsNotNone(self.view.rail.content.scroll, "wide: each column scrolls on its own")
+        self.assertTrue(self.view.sweep._list.expand)
+        self.assertIsNotNone(self.view._centre.scroll)
+        self.assertIsNone(self.view.scroll, "the page itself no longer scrolls")
         serialise(self.view)
         self._load_pair()
         self.assertTrue(self.view.handle_key(SimpleNamespace(key="S", ctrl=True, shift=True, alt=False, meta=False)))

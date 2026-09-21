@@ -61,6 +61,10 @@ class CalcRail(ft.Container):
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
 
+    def set_scrolling(self, scrolling: bool) -> None:
+        """Scroll on its own (a column of the wide layout) or grow with its content (stacked)."""
+        self.content.scroll = ft.ScrollMode.AUTO if scrolling else None
+
     def refresh(self) -> None:
         """Called each time the calculator is shown.
 

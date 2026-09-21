@@ -55,6 +55,7 @@ PREF_STATE = "calc.state"
 PREF_PRESETS = "calc.sweep_presets"
 PREF_SWEEP_SORT = "calc.sweep_sort"
 PREF_SWEEP_REGULATION = "calc.sweep_regulation"
+PREF_SECTIONS = "calc.sections"
 
 # Status moves the "Activate" toggle knows: stat stages on the user, field or side conditions,
 # or a status on the opponent. Values are applied on activation and reverted on deactivation.
@@ -409,6 +410,55 @@ class CalcStore:
         field = engine_field(self.state.field, attacker_is_left=(side == "left"))
         results = run_side(attacker, self.state.side(other), field, self.catalogs, self._calc, a_species, d_species)
         return results[0] if results else None
+
+    def fill_top_moves(self, side: str, *, candidates: int = 24) -> int:
+        """Fill the empty move slots with likely picks; returns how many were filled.
+
+        Tournament usage for the species decides when there is any. Otherwise the damaging
+        moves are ranked by what they do to the other side (by power when there is no other
+        side yet); only the ``candidates`` strongest by power are run through the engine.
+        """
+        p = self.state.side(side)
+        empty = [i for i, name in enumerate(p.moves) if not name]
+        if not empty or self.species(side) is None:
+            return 0
+        options = self.move_options(side)
+        taken = {name.lower() for name in p.moves if name}
+        pool = [m for m in options.legal if m.is_legal and m.name.lower() not in taken]
+        used = sorted((m for m in pool if options.usage.get(m.move_id, 0) > 0), key=lambda m: -options.usage[m.move_id])
+        if used:
+            picks = [m.name for m in used]
+        else:
+            damaging = sorted((m for m in pool if (m.category or "").lower() != "status" and m.power),
+                              key=lambda m: -(m.power or 0) * (m.accuracy or 100))[:candidates]
+
+            def score(m) -> float:
+                result = self.damage_preview(side, m.name)
+                return result.max_pct if result is not None and result.ok else (m.power or 0) / 1000
+            picks = [m.name for m in sorted(damaging, key=score, reverse=True)]
+        moves = list(p.moves)
+        filled = 0
+        for index, name in zip(empty, picks):
+            moves[index] = name
+            filled += 1
+        if filled:
+            self.set_pokemon(side, moves=moves)
+        return filled
+
+    def section_open(self, name: str, default: bool = True) -> bool:
+        sections = self._prefs.get(PREF_SECTIONS, {}) if self._prefs is not None else {}
+        return bool(sections.get(name, default)) if isinstance(sections, dict) else default
+
+    def set_section_open(self, name: str, value: bool) -> None:
+        if self._prefs is None:
+            return
+        sections = self._prefs.get(PREF_SECTIONS, {})
+        sections = dict(sections) if isinstance(sections, dict) else {}
+        sections[name] = bool(value)
+        try:
+            self._prefs.set(PREF_SECTIONS, sections)
+        except Exception:  # noqa: BLE001 - a layout preference is a convenience
+            pass
 
     def points_left(self, side: str) -> int:
         return MAX_POINTS_TOTAL - points_total(self.state.side(side).points)
@@ -941,4 +991,4 @@ class CalcStore:
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_SECTIONS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]

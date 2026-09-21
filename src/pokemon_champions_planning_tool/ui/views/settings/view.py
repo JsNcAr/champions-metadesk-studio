@@ -8,7 +8,7 @@ from typing import Any
 
 import flet as ft
 
-from ....config import DEFAULT_CSV_FILENAME, DEFAULT_DATABASE_FILENAME
+from ....config import DEFAULT_CSV_FILENAME, DEFAULT_DATABASE_FILENAME, DISCLAIMER
 from ... import events
 from ...components import KeyValueList, PageHeader, Panel, SectionHeader
 from ...context import AppContext
@@ -303,6 +303,8 @@ class SettingsView(ft.Column):
             ("Database", str(Path(DEFAULT_DATABASE_FILENAME).resolve())),
             ("CSV export", str(Path(DEFAULT_CSV_FILENAME).resolve())),
             ("Data sources", sources),
+            ("License", ft.TextButton("MIT · third-party notices", url="https://github.com/JsNcAr/champions-metadesk-studio/blob/main/NOTICE.md")),
+            ("Disclaimer", ft.Text(DISCLAIMER, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)),
         ]
 
 

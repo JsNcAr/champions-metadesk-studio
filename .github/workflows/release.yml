@@ -110,8 +110,9 @@ jobs:
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
             -y
+          cp LICENSE NOTICE.md dist/
           cd dist
-          tar -czf champions-metadesk-linux-x64.tar.gz champions-metadesk
+          tar -czf champions-metadesk-linux-x64.tar.gz champions-metadesk LICENSE NOTICE.md
           cd ..
 
       # --- Build Windows ---
@@ -120,7 +121,7 @@ jobs:
         shell: pwsh
         run: |
           poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
-          Compress-Archive -Path dist\champions-metadesk.exe -DestinationPath dist\champions-metadesk-windows-x64.zip
+          Compress-Archive -Path dist\champions-metadesk.exe, LICENSE, NOTICE.md -DestinationPath dist\champions-metadesk-windows-x64.zip
 
       # --- Build macOS ---
       - name: Build app bundle (macOS)
@@ -134,8 +135,9 @@ jobs:
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
             -y
+          cp LICENSE NOTICE.md dist/
           cd dist
-          zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app
+          zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app LICENSE NOTICE.md
           cd ..
 
       - name: Upload build artifact

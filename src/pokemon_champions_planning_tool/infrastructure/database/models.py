@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Column, JSON, String, Text, UniqueConstraint
 
 from sqlmodel import Field, SQLModel
 
@@ -16,6 +16,9 @@ from ...domain.entities.pokemon_ability import PokemonAbility
 from ...domain.entities.pokemon_form import PokemonForm
 from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.pokemon_stats import PokemonStats
+
+if TYPE_CHECKING:
+    from ...domain.entities.item import Item
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.stat_calc import points_from_evs
@@ -356,7 +359,7 @@ class ItemRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
-    def to_domain(self) -> "Item":
+    def to_domain(self) -> Item:
         from ...domain.entities.item import Item
         return Item(
             canonical_id=self.canonical_id,

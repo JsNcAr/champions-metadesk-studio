@@ -109,7 +109,6 @@ class SlotModel:
         if self.entry is None:
             return []
         p = self.entry.pokemon
-        base_abilities = tuple(a.name.replace("-", " ").title() for a in p.abilities)
         base = FormChoice("base", p.form_name or "Base", p.sprite_url, tuple(p.types), p.stats, False, None)
         return [base] + [
             FormChoice(

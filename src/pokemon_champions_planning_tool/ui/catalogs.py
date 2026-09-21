@@ -27,7 +27,7 @@ from ..domain.species import SpeciesInfo, resolve_species_key
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
-from ..domain.pokemon_identity import format_api_name, format_display_name, qualified_name
+from ..domain.pokemon_identity import format_display_name, qualified_name
 
 
 @dataclass(frozen=True)

@@ -27,14 +27,13 @@ from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champion
 from ....domain.type_chart import defensive_multiplier
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
-from ....infrastructure.database.repositories import BoxRepository, TournamentRepository
+from ....infrastructure.database.repositories import TournamentRepository
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
 from ....services.tournament_service import TournamentBuild, TournamentService
 from ...catalogs import Catalogs
 from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, move_options_for
 from .state import (
     BOOST_STATS,
-    SIDES,
     CalcRequest,
     CalcResults,
     CalcState,

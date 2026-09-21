@@ -12,7 +12,7 @@ from ...components import SectionHeader, Sprite
 from ...components.banner import InlineBanner
 from ...components.pokemon import BstPill, SidePanel, StatBlock, TypeChip
 from ...tasks import is_mounted
-from ...theme import Accent, IconSize, Palette, Radius, Space
+from ...theme import Accent, IconSize, Palette, Space
 from .store import BoxDetail
 
 _BUCKET_LABELS: dict[float, str] = {4.0: "4×", 2.0: "2×", 1.0: "1×", 0.5: "½×", 0.25: "¼×", 0.0: "0×"}

@@ -16,7 +16,6 @@ import re
 import requests
 
 from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
-from ...domain.entities.item import Item
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
 
@@ -258,6 +257,8 @@ __all__ = [
     "VictoryRoadNetworkError",
     "VictoryRoadParseError",
     "VREventResult",
+    "VRCalendarEvent",
+    "parse_season_calendar",
     "VRStandingRef",
 ]
 

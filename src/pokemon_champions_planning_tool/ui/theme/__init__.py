@@ -31,6 +31,7 @@ from .tokens import (
 )
 
 __all__ = [
+    "Accent",
     "DEFAULT_WINDOW_HEIGHT",
     "DEFAULT_WINDOW_WIDTH",
     "FONT_FAMILY",

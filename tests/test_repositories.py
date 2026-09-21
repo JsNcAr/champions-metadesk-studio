@@ -28,6 +28,7 @@ class TestRepositories(unittest.TestCase):
         from pokemon_champions_planning_tool.infrastructure.database import models  # noqa: F401
         
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
 
     def tearDown(self):
@@ -201,6 +202,7 @@ class TestListEntriesByIds(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = BoxRepository(self.session)
         stats = PokemonStats(hp=35, attack=55, defense=40, sp_atk=50, sp_def=50, speed=90)
@@ -254,6 +256,7 @@ class TestTeamMemberCounts(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         box_repo = BoxRepository(self.session)
         self.repo = TeamRepository(self.session)
@@ -300,6 +303,7 @@ class TestTeamSlotSwapAndTera(unittest.TestCase):
         from pokemon_champions_planning_tool.infrastructure.database import models  # noqa: F401
 
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.box = BoxRepository(self.session)
         self.teams = TeamRepository(self.session)

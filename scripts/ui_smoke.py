@@ -156,7 +156,7 @@ def main() -> int:
     db.DEFAULT_DATABASE_FILENAME = db_path.name  # the module bound the name at import
     db.get_session.__defaults__ = (db_path.name,)
     db.initialize_database.__defaults__ = (db_path.name,)
-    db.get_engine.__wrapped__.__defaults__ = (db_path.name,)
+    db.get_engine.__defaults__ = (db_path.name,)
 
     from pokemon_champions_planning_tool.ui import app as app_module
 

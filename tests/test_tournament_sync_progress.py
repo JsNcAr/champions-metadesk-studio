@@ -45,6 +45,7 @@ class _DbCase(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         patch.object(sync_mod.time, "sleep").start()
         self.addCleanup(patch.stopall)
@@ -129,16 +130,14 @@ class TestSqlitePragmas(unittest.TestCase):
     def test_engine_uses_wal_and_busy_timeout(self):
         tmp = tempfile.mkdtemp()
         path = str(Path(tmp) / "pragmas.db")
-        database.get_engine.cache_clear()
-        database._DB_INITIALIZED.discard(path)
+        database.reset_engines()
         try:
             database.initialize_database(path)
             conn = sqlite3.connect(path)
             self.assertEqual(conn.execute("PRAGMA journal_mode").fetchone()[0].lower(), "wal")
             conn.close()
         finally:
-            database.get_engine.cache_clear()
-            database._DB_INITIALIZED.discard(path)
+            database.reset_engines()
 
 
 class TestIndicators(unittest.TestCase):
@@ -149,7 +148,9 @@ class TestIndicators(unittest.TestCase):
 
         page = StubPage()
         ctx = AppContext(page)
-        meta = MetaView(ctx, MetaStore(lambda: Session(create_engine("sqlite:///:memory:"))))
+        engine = create_engine("sqlite:///:memory:")
+        self.addCleanup(engine.dispose)
+        meta = MetaView(ctx, MetaStore(lambda: Session(engine)))
         settings = SettingsView(ctx)
         ctx.bus.emit(events.SYNC_PROGRESS, SyncProgress("standings", "Fetching standings 3 of 40", done=2, total=40, teams_added=120))
         self.assertTrue(meta.sync_indicator.visible)

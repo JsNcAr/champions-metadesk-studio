@@ -46,6 +46,7 @@ class TestPreferences(unittest.TestCase):
         page = StubPage()
         ctx = AppContext(page, prefs=Preferences(self.path))
         engine = create_engine("sqlite:///:memory:")
+        self.addCleanup(engine.dispose)
         from sqlmodel import SQLModel
 
         SQLModel.metadata.create_all(engine)

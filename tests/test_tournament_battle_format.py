@@ -21,6 +21,7 @@ class TestTournamentBattleFormat(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = TournamentRepository(self.session)
 

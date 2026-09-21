@@ -19,6 +19,7 @@ class TestMegaEvolutionBackend(unittest.TestCase):
 
         from pokemon_champions_planning_tool.infrastructure.database import models  # noqa: F401
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
 
     def tearDown(self):

@@ -111,6 +111,7 @@ class _DbCase(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         patch.object(sync_mod, "_PASTE_DELAY_S", 0).start()
         patch.object(sync_mod.time, "sleep").start()

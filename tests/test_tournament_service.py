@@ -19,6 +19,7 @@ class TestTournamentService(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.svc = TournamentService(self.session)
 
@@ -77,6 +78,7 @@ class TestMetaSynergyService(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = TournamentRepository(self.session)
         self.repo.upsert_tournament(
@@ -179,6 +181,7 @@ class TestTournamentSearchOrdering(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = TournamentRepository(self.session)
 
@@ -244,6 +247,7 @@ class TestSearchPagination(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = TournamentRepository(self.session)
         self.repo.upsert_tournament(

@@ -131,7 +131,9 @@ def build_theme() -> ft.Theme:
             check_color=Palette.ON_PRIMARY_CONTAINER,
             shape=ft.StadiumBorder(),
             border_side=ft.BorderSide(1, Palette.OUTLINE),
-            label_text_style=label,
+            # Without an explicit colour the label falls back to near-black, which on
+            # these dark chips looked disabled.
+            label_text_style=_style(FontSize.LABEL, 16, ft.FontWeight.W_500, Palette.ON_SURFACE_VARIANT),
             show_checkmark=True,
         ),
         snackbar_theme=ft.SnackBarTheme(

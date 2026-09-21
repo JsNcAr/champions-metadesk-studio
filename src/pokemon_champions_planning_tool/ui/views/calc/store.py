@@ -694,8 +694,16 @@ class CalcStore:
         self.state = CalcState(left=self.state.right, right=self.state.left, field=replace(f, left=f.right, right=f.left))
         self._commit()
 
-    def reset(self) -> None:
+    def reset(self) -> CalcState:
+        """Clear both Pokémon and the field; returns the previous state for Undo."""
+        previous = self.state
         self.state = CalcState()
+        self._commit()
+        return previous
+
+    def restore(self, state: CalcState) -> None:
+        """Put back a state returned by ``reset`` (or ``clear_conditions``)."""
+        self.state = state
         self._commit()
 
     def set_sweep_presets(self, value: bool) -> None:

@@ -219,6 +219,54 @@ class TestCalcView(_Base):
         self.assertTrue(self.view.handle_key(SimpleNamespace(key="Escape", ctrl=False, shift=False, alt=False, meta=False)))
         self.assertFalse(cards[0].expanded)
 
+
+    def test_species_search_says_when_nothing_matches(self):
+        panel = self.view.attacker
+        panel._suggest("zzzz")
+        self.assertTrue(panel._no_match.visible)
+        self.assertIn("zzzz", panel._no_match.value)
+        panel.search.value = "zzzz"
+        panel._submit("zzzz")
+        self.assertEqual(panel.search.value, "zzzz", "Enter with no match keeps the text")
+        panel._suggest("king")
+        self.assertFalse(panel._no_match.visible)
+        self.assertEqual(panel._suggestions.controls[0].label.color, "#F1F5F9", "suggestions are readable")
+
+    def test_reset_can_be_undone(self):
+        self._load_pair()
+        before = self.store.state
+        self.view._reset()
+        self.assertEqual(self.store.state, CalcState())
+        snack = self.page.dialogs[-1]
+        self.assertEqual(snack.action, "Undo")
+        snack.on_action(None)
+        self.assertEqual(self.store.state, before)
+
+    def test_ability_controls_only_where_the_engine_uses_them(self):
+        self._load_pair()
+        self.assertFalse(self.view.attacker._ability_on.visible, "Defiant has no on/off state in the engine")
+        self.assertFalse(self.view.defender._ability_on.visible, "nor does Blaze")
+        self.store.set_pokemon("right", ability="Intimidate")
+        self.assertTrue(self.view.defender._ability_on.visible, "Intimidate does")
+        self.assertFalse(self.view.attacker._allies.visible, "fainted allies only matter for Supreme Overlord")
+        self.store.set_pokemon("left", ability="Supreme Overlord")
+        self.assertTrue(self.view.attacker._allies.visible)
+
+    def test_hp_field_restores_a_non_number(self):
+        self._load_pair()
+        panel = self.view.attacker
+        current = panel._hp_abs.value
+        panel._hp_abs.value = "abc"
+        panel._hp_typed("abc")
+        self.assertEqual(panel._hp_abs.value, current)
+
+    def test_status_chips_brighten_when_selected(self):
+        self._load_pair()
+        self.store.set_pokemon("left", status="brn")
+        chips = self.view.attacker._status_chips
+        self.assertTrue(chips["brn"].selected)
+        self.assertNotEqual(chips["brn"].label.color, chips["none"].label.color)
+
     def test_status_move_activation_applies_boosts_and_field(self):
         self._load_pair()
         before = self.store.results.left_vs_right[0].max_pct
@@ -783,7 +831,7 @@ class TestCatalogueArrivesLate(_Base):
         ctx.catalogs = self.catalogs
         ctx.bus.emit(events.CATALOGS_RELOADED, "species")
         self.assertTrue(view.store.catalogs.has_species)
-        self.assertEqual(view.header._caption.value, "", "the warning clears once the data is there")
+        self.assertEqual(view.header._caption.value, "Champions damage · both directions", "the warning gives way to the usual caption")
 
     def test_an_unrelated_reload_is_ignored(self):
         page = StubPage()

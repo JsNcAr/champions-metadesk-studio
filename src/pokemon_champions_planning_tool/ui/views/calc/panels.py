@@ -9,15 +9,17 @@ import flet as ft
 
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.pokemon_identity import get_pokemon_sprite_url
+from ....services.sprite_cache_service import resolve_sprite_src
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
 from ...components.spread_editor import SpreadEditor
 from ...theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
+from .chips import set_toggle, toggle_chip
 from .move_card import MoveCard
 from .radar import RadarChart
-from .state import BOOST_STATS, STATUSES
+from .state import BOOST_STATS, STATUSES, TOGGLE_ABILITIES
 from .store import CalcStore, move_effect
 
 _ZERO = PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)
@@ -32,9 +34,9 @@ class StageControl(ft.Column):
         self.controls = [
             ft.Text(STAT_LABELS[stat], theme_style=ft.TextThemeStyle.LABEL_SMALL, color=STAT_COLORS[stat]),
             ft.Row(spacing=0, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-                ft.IconButton(icon=ft.Icons.REMOVE, icon_size=14, width=24, height=24, padding=0, on_click=lambda _e: on_bump(stat, -1)),
+                ft.IconButton(icon=ft.Icons.REMOVE, icon_size=14, width=24, height=24, padding=0, tooltip=f"Lower {STAT_LABELS[stat]}", on_click=lambda _e: on_bump(stat, -1)),
                 self.value,
-                ft.IconButton(icon=ft.Icons.ADD, icon_size=14, width=24, height=24, padding=0, on_click=lambda _e: on_bump(stat, +1)),
+                ft.IconButton(icon=ft.Icons.ADD, icon_size=14, width=24, height=24, padding=0, tooltip=f"Raise {STAT_LABELS[stat]}", on_click=lambda _e: on_bump(stat, +1)),
             ]),
         ]
 
@@ -56,6 +58,7 @@ class PokemonPanel(ft.Container):
         self.search = ft.TextField(hint_text="Species…", prefix_icon=ft.Icons.SEARCH, dense=True, **SEARCH_FIELD_STYLE,
                                    on_change=lambda e: self._suggest(e.control.value or ""), on_submit=lambda e: self._submit(e.control.value or ""))
         self._suggestions = ft.Row(spacing=Space.XS, wrap=True, visible=False)
+        self._no_match = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False)
         self.sprite = Sprite(size=64)
         self._name = ft.Text("Pick a species", theme_style=ft.TextThemeStyle.TITLE_MEDIUM, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._types = ft.Row(spacing=Space.XS, tight=True)
@@ -74,7 +77,7 @@ class PokemonPanel(ft.Container):
         self._speed.visible = False
         self._ability = ft.Dropdown(dense=True, expand=True, text_size=13, enable_filter=True, options=[], on_select=lambda e: self._ability_changed(e.control.value))
         self._ability_on = ft.Chip(label=ft.Text("Activate"), selected=False, show_checkmark=True, visible=False,
-                                   tooltip="Ability already triggered: Intimidate applied, Flash Fire lit, Electromorphosis charged, Unburden…",
+                                   tooltip="Ability already triggered: Intimidate applied, Flash Fire lit, Electromorphosis charged, Unburden active…",
                                    on_select=lambda e: self._ability_on_changed(bool(e.control.selected)))
         self._caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         self._legality = StatusChip("Not in Champions", "warning", icon=ft.Icons.WARNING_AMBER_ROUNDED)
@@ -93,7 +96,8 @@ class PokemonPanel(ft.Container):
         )
         self._hp_slider = ft.Slider(min=0, max=100, divisions=100, value=100, expand=True, active_color=STAT_COLORS["hp"],
                                     on_change_end=lambda e: self.store.set_hp_pct(self.side, float(e.control.value)))
-        self._hp_abs = ft.TextField(value="", width=64, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER, on_submit=lambda e: self._hp_typed(e.control.value or ""))
+        self._hp_abs = ft.TextField(value="", width=64, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER,
+                                    on_submit=lambda e: self._hp_typed(e.control.value or ""), on_blur=lambda e: self._hp_typed(e.control.value or ""))
         self._hp_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE, width=96, text_align=ft.TextAlign.RIGHT)
 
         self.radar = RadarChart(size=140, colour=accent)
@@ -107,7 +111,7 @@ class PokemonPanel(ft.Container):
         self._status_chips: dict[str, ft.Chip] = {}
         status_controls: list[ft.Control] = []
         for key, label in STATUSES:
-            chip = ft.Chip(label=ft.Text(label), selected=key == "none", show_checkmark=False, on_select=lambda _e, key=key: self._status_changed(key))
+            chip = toggle_chip(label, lambda key=key: self._status_changed(key), selected=key == "none")
             self._status_chips[key] = chip
             status_controls.append(chip)
         self._allies = ft.Dropdown(label="Allies fainted", dense=True, width=150, text_size=13, value="0", tooltip="Supreme Overlord",
@@ -123,6 +127,7 @@ class PokemonPanel(ft.Container):
             SectionHeader(title, accent=accent),
             self.search,
             self._suggestions,
+            self._no_match,
             ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 self.sprite,
                 ft.Column(spacing=3, tight=True, expand=True, controls=[
@@ -157,10 +162,11 @@ class PokemonPanel(ft.Container):
 
     def _suggest(self, query: str) -> None:
         matches = self.store.search_species(query)
+        self._show_no_match(query if query.strip() and not matches else None)
         self._suggestions.controls = [
             ft.Chip(
-                label=ft.Text(s.name),
-                leading=ft.Image(src=get_pokemon_sprite_url(s.canonical_id), width=22, height=22, fit=ft.BoxFit.CONTAIN,
+                label=ft.Text(s.name, color=Palette.ON_SURFACE),
+                leading=ft.Image(src=resolve_sprite_src(get_pokemon_sprite_url(s.canonical_id)), width=22, height=22, fit=ft.BoxFit.CONTAIN,
                                  error_content=ft.Icon(ft.Icons.CATCHING_POKEMON, size=16, color=Palette.ON_SURFACE_VARIANT)),
                 show_checkmark=False, border_side=ft.BorderSide(1, Palette.PRIMARY) if i == 0 else None, tooltip="Enter picks this one" if i == 0 else None,
                 on_click=lambda _e, cid=s.canonical_id: self._pick(cid),
@@ -174,9 +180,20 @@ class PokemonPanel(ft.Container):
         matches = self.store.search_species(query)
         if matches:
             self._pick(matches[0].canonical_id)
+        elif query.strip():
+            self._show_no_match(query)   # keep the text so it can be corrected
+
+    def _show_no_match(self, query: str | None) -> None:
+        visible = query is not None
+        if visible == self._no_match.visible and (not visible or self._no_match.value.endswith(f"‘{query.strip()}’")):
+            return
+        self._no_match.visible = visible
+        self._no_match.value = f"No Pokémon matches ‘{query.strip()}’" if visible else ""
+        self._safe_update(self._no_match)
 
     def _pick(self, canonical_id: str) -> None:
         self.search.value = ""
+        self._show_no_match(None)
         self._suggestions.controls = []
         self._suggestions.visible = False
         self.store.load_species(self.side, canonical_id, preset=self.side == "right" and self.store.sweep_presets)
@@ -208,9 +225,14 @@ class PokemonPanel(ft.Container):
 
     def _hp_typed(self, text: str) -> None:
         try:
-            self.store.set_hp_abs(self.side, int(text))
+            hp = int(text)
         except ValueError:
-            pass
+            max_hp = self.store.max_hp(self.side)
+            self._hp_abs.value = str(self.store.cur_hp(self.side)) if max_hp else ""   # not a number: put it back
+            self._safe_update(self._hp_abs)
+            return
+        if hp != self.store.cur_hp(self.side):
+            self.store.set_hp_abs(self.side, hp)
 
     def _toggle_spread(self) -> None:
         self._spread_open = not self._spread_open
@@ -230,8 +252,7 @@ class PokemonPanel(ft.Container):
             if species is None:
                 self._name.value = "Pick a species"
                 self._types.controls = []
-                self._mega.visible = self._speed.visible = self._legality.visible = self._ability_on.visible = False
-                self._form.visible = self._speed.visible = self._legality.visible = self._ability_on.visible = False
+                self._mega.visible = self._form.visible = self._speed.visible = self._legality.visible = self._ability_on.visible = False
                 self._caption.value = "Type a name above, or pick one from your team or the box." if state.species is None else f"Unknown species: {state.species}"
                 self.sprite.set_src(None)
                 self.sprite.set_tooltip(None)
@@ -268,12 +289,15 @@ class PokemonPanel(ft.Container):
                 self.editor.set_base_stats(species.stats)
                 self.editor.set_values(state.nature, state.points)
                 self.radar.set_stats(stats)
-                self._ability_on.visible = True
                 self._ability_on.selected = state.ability_on
                 self._ability_on.label = ft.Text("Active" if state.ability_on else "Activate")
             options = self.store.ability_options(self.side)
             self._ability.options = [ft.DropdownOption(key=a, text=a) for a in options]
             self._ability.value = state.ability if state.ability in options else (options[0] if options else None)
+            # Only abilities the engine can switch on get the chip, and only Supreme Overlord
+            # reads fainted allies (a value already set stays visible so it can be cleared).
+            ability = self._ability.value if species is not None else None
+            self._ability_on.visible = ability in TOGGLE_ABILITIES or (species is not None and state.ability_on)
             self._item_name.value = state.item or "Held item…"
             self._item_name.color = Palette.ON_SURFACE if state.item else Palette.ON_SURFACE_VARIANT
             self._item_clear.visible = bool(state.item)
@@ -284,8 +308,9 @@ class PokemonPanel(ft.Container):
             for stat, control in self._stages.items():
                 control.set(state.boosts.get(stat, 0))
             for key, chip in self._status_chips.items():
-                chip.selected = state.status == key
+                set_toggle(chip, state.status == key)
             self._allies.value = str(state.allies_fainted)
+            self._allies.visible = ability == "Supreme Overlord" or state.allies_fainted > 0
             results = self.store.results.left_vs_right if self.side == "left" else self.store.results.right_vs_left
             by_index = {r.index: r for r in results}
             for index, card in enumerate(self.cards):

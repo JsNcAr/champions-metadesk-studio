@@ -18,6 +18,11 @@ STATUSES: tuple[tuple[str, str], ...] = (("none", "Healthy"), ("brn", "Burned"),
 WEATHERS: tuple[tuple[str, str], ...] = (("Sun", "Sun"), ("Rain", "Rain"), ("Sand", "Sand"), ("Snow", "Snow"))
 TERRAINS: tuple[tuple[str, str], ...] = (("Electric", "Electric Terrain"), ("Grassy", "Grassy Terrain"), ("Psychic", "Psychic Terrain"), ("Misty", "Misty Terrain"))
 BOOST_STATS: tuple[str, ...] = ("attack", "defense", "special_attack", "special_defense", "speed")
+# Abilities whose on/off state the damage engine reads (``ability_on`` in domain/damage).
+# Only these get the panel's "Activate" chip.
+TOGGLE_ABILITIES: frozenset[str] = frozenset({
+    "Analytic", "Electromorphosis", "Flash Fire", "Intimidate", "Minus", "Plus", "Slow Start", "Unburden",
+})
 SIDES: tuple[str, str] = ("left", "right")
 
 
@@ -281,7 +286,7 @@ def pokemon_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, s
 
 
 __all__ = [
-    "BOOST_STATS", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "TERRAINS", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
+    "BOOST_STATS", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "TERRAINS", "TOGGLE_ABILITIES", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
     "FieldState", "MoveResult", "PokemonState", "SideConditions", "SweepEntry", "classify", "hits_to_ko", "pokemon_from_parsed", "pokemon_from_slot",
     "pokemon_from_species_id",
 ]

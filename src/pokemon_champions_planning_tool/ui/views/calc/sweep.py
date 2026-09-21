@@ -48,7 +48,8 @@ class SweepCard(ft.Container):
         yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
         theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
         theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
-        speed = ft.Text(f"Spe {e.speed} {'▼' if e.faster else '▲'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
+        # Same convention as the panels' speed chip: ▲ = you move first.
+        speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
                         tooltip="You move first" if e.faster else "They move first")
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             Sprite(get_pokemon_sprite_url(e.canonical_id), size=36),

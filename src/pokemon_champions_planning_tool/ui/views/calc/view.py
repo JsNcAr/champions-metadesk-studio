@@ -20,6 +20,7 @@ from .sweep import SweepPanel
 
 RAIL_WIDTH = 224
 SWEEP_WIDTH = 300
+CAPTION = "Champions damage · both directions"
 
 
 class CalcView(ft.Column):
@@ -45,10 +46,10 @@ class CalcView(ft.Column):
         self._stack = ft.Column(spacing=Space.MD, tight=True, controls=[])
         self._host = ft.Container(content=self._wide)
         self.header = PageHeader(
-            "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption="Champions damage · both directions",
+            "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
                 ft.IconButton(icon=ft.Icons.SWAP_HORIZ, tooltip="Swap attacker and defender (Ctrl+Shift+S)", on_click=lambda _e: self.store.swap_sides()),
-                ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, on_click=lambda _e: self.store.reset()),
+                ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, tooltip="Clear both Pokémon and the field", on_click=lambda _e: self._reset()),
             ],
         )
         self.controls = [self.header, self._host]
@@ -105,9 +106,13 @@ class CalcView(ft.Column):
     def _sync_species_banner(self) -> None:
         # Cleared as well as set: the catalogue can arrive while this view is open.
         self.header.set_caption(
-            "" if self.store.catalogs.has_species
+            CAPTION if self.store.catalogs.has_species
             else "Species data not synced yet — Settings › Moves, learnsets & species"
         )
+
+    def _reset(self) -> None:
+        previous = self.store.reset()
+        self.ctx.toast("Calculator reset", "info", action="Undo", on_action=lambda: self.store.restore(previous))
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
         if kind not in ("items", "megas", "moves", "species", "champions"):
@@ -272,7 +277,6 @@ class CalcView(ft.Column):
         def pick(item_id: str | None) -> None:
             page.pop_dialog()
             record = self.store.catalogs.item_for(item_id) if item_id else None
-            self.store.set_pokemon(side, item=record.display_name if record else None)
             self.store.set_item(side, record.display_name if record else None)
 
         page.show_dialog(ItemPickerDialog(

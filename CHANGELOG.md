@@ -10,6 +10,13 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Your team, rated against the rival.** Put a Pokémon in the Calc's Defender panel and each
+  member of your active team is coloured by how it fares against it, using the opponents
+  list's colours: Crushed (green), Mitigated (blue), Neutral, Wall (amber), Threat (red).
+  Hover a member for its best move each way and who moves first. The colours follow the
+  field (weather, screens, Trick Room…) and your team edits.
+
 ## [0.2.3] - 2026-09-21
 
 ### Added

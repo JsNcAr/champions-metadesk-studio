@@ -94,6 +94,9 @@ class CalcRail(ft.Container):
         super().__init__()
         self.store = store
         self._team_title = SectionHeader("Team", accent=accent)
+        # Its own line: beside the team name it was cut short in the narrow rail.
+        self._rating_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False,
+                                       max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._team = ft.Column(spacing=Space.XS, tight=True, controls=[])
         self._box_filter = ft.TextField(hint_text="Filter box…", dense=True, prefix_icon=ft.Icons.FILTER_LIST, **SEARCH_FIELD_STYLE, on_change=lambda e: self.refresh_box(e.control.value or ""))
         self._box = ft.Column(spacing=Space.XS, tight=True, controls=[])
@@ -104,7 +107,7 @@ class CalcRail(ft.Container):
         self._box_limit = _BOX_LIMIT
         self._box_query = ""
         self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
-            self._team_title, self._team,
+            self._team_title, self._rating_caption, self._team,
             SectionHeader("Box", accent=accent), self._box_filter, self._box,
         ])
         self.bgcolor = Palette.SURFACE_2
@@ -163,8 +166,10 @@ class CalcRail(ft.Container):
             if card.set_rating(ratings.get(slot_key), rival_name):
                 self._safe_update(card)
         rated = bool(ratings) and bool(rival_name)
-        self._team_title.set_status(f"vs {rival_name}" if rated else None, tooltip=RATING_LEGEND if rated else None)
-        self._safe_update(self._team_title)
+        self._rating_caption.value = f"Coloured against {rival_name}" if rated else ""
+        self._rating_caption.tooltip = RATING_LEGEND if rated else None
+        self._rating_caption.visible = rated
+        self._safe_update(self._rating_caption)
 
     def refresh_box(self, query: str = "") -> None:
         if self._box_entries is None:

@@ -1103,13 +1103,13 @@ class TestTeamRatingsInTheRail(_Base):
         self.assertIn("vs Kingambit: Crushed", mega.tooltip)
         self.assertIn("You: Heat Wave", mega.tooltip)
         self.assertIn("Them: Iron Head", mega.tooltip)
-        self.assertEqual(self.view.rail._team_title._status.value, "vs Kingambit")
-        self.assertIn("Crushed:", self.view.rail._team_title._status.tooltip, "the header explains the colours")
+        self.assertEqual(self.view.rail._rating_caption.value, "Coloured against Kingambit")
+        self.assertIn("Crushed:", self.view.rail._rating_caption.tooltip, "the caption explains the colours")
         serialise(self.view)
 
         self.store.load_pokemon("right", PokemonState())
         self.assertIsNone(self._card(2).rating, "defender cleared: colours go")
-        self.assertFalse(self.view.rail._team_title._status.visible)
+        self.assertFalse(self.view.rail._rating_caption.visible)
 
     def test_the_loaded_attacker_keeps_its_highlight(self):
         self.store.load_species("right", "kingambit")

@@ -76,16 +76,22 @@ def build_color_scheme() -> ft.ColorScheme:
 
 def build_text_theme() -> ft.TextTheme:
     """The type scale: title-lg 22/600 · title 17/600 · body-lg 15/500 · body 13/400 ·
-    label 12/500 · caption 11/400 · overline 11/600 (uppercase is applied by components)."""
+    label 12/500 · caption 11/400 · overline 11/600 (uppercase is applied by components).
+
+    Every style that Flutter uses for text without its own colour gets ON_SURFACE: left
+    unset, Flutter fell back to near-black on the dark surfaces, so dropdown values,
+    typed text in fields and any uncoloured Text were barely visible.
+    """
     w400, w500, w600 = ft.FontWeight.W_400, ft.FontWeight.W_500, ft.FontWeight.W_600
+    on = Palette.ON_SURFACE
     return ft.TextTheme(
-        display_small=_style(28, 34, w600),
-        headline_small=_style(FontSize.TITLE_LG, 28, w600),
-        title_large=_style(FontSize.TITLE_LG, 28, w600),
-        title_medium=_style(FontSize.TITLE, 24, w600),
-        title_small=_style(FontSize.BODY_LG, 22, w600),
-        body_large=_style(FontSize.BODY_LG, 22, w500),
-        body_medium=_style(FontSize.BODY, 20, w400),
+        display_small=_style(28, 34, w600, on),
+        headline_small=_style(FontSize.TITLE_LG, 28, w600, on),
+        title_large=_style(FontSize.TITLE_LG, 28, w600, on),
+        title_medium=_style(FontSize.TITLE, 24, w600, on),
+        title_small=_style(FontSize.BODY_LG, 22, w600, on),
+        body_large=_style(FontSize.BODY_LG, 22, w500, on),
+        body_medium=_style(FontSize.BODY, 20, w400, on),
         body_small=_style(FontSize.CAPTION, 14, w400, Palette.ON_SURFACE_VARIANT),
         label_large=_style(FontSize.LABEL, 16, w500),
         label_medium=_style(FontSize.LABEL, 16, w500),

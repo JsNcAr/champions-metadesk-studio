@@ -62,3 +62,16 @@ class TestNoHexLiteralsOutsideTheme(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestThemeTextIsReadable(unittest.TestCase):
+    def test_every_text_style_and_chip_label_has_a_colour(self):
+        # A style without a colour falls back to near-black on the app's dark surfaces:
+        # dropdown values, typed text and chip labels were barely visible that way.
+        from pokemon_champions_planning_tool.ui.theme.build import build_text_theme, build_theme
+
+        theme = build_text_theme()
+        for name in ("display_small", "headline_small", "title_large", "title_medium", "title_small",
+                     "body_large", "body_medium", "body_small", "label_small"):
+            self.assertIsNotNone(getattr(theme, name).color, name)
+        self.assertIsNotNone(build_theme().chip_theme.label_text_style.color, "chip labels")

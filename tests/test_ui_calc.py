@@ -147,6 +147,22 @@ class TestCalcStore(_Base):
         self.store.reset()
         self.assertEqual(self.store.state, CalcState())
 
+    def test_a_burst_of_edits_saves_once_when_deferred(self):
+        writes = []
+        real_set = self.prefs.set
+        self.prefs.set = lambda key, value: (writes.append(key), real_set(key, value))
+        scheduled = []
+        self.store.defer_save = lambda: scheduled.append(1)
+        self.store.load_species("left", "kingambit")
+        for n in range(5):
+            self.store.set_points("left", {"attack": n})
+        self.assertNotIn(PREF_STATE, writes, "nothing written while edits keep coming")
+        self.assertGreaterEqual(len(scheduled), 5)
+        self.store.save_state()
+        self.store.save_state()
+        self.assertEqual(writes.count(PREF_STATE), 1, "one write for the burst")
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["points"], {"attack": 4})
+
     def test_builders_from_slot_and_paste(self):
         from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
 
@@ -300,6 +316,37 @@ class TestCalcView(_Base):
         self.assertFalse(panel._fill.visible)
         self.assertEqual(sorted(moves), ["Iron Head", "Kowtow Cleave"])
         self.assertEqual(self.store.fill_top_moves("left"), 0, "nothing damaging left to add")
+
+    def test_only_what_changed_is_redrawn(self):
+        self._load_pair()
+        panel = self.view.attacker
+        type_chip = panel._types.controls[0]
+        refreshed = []
+        self.view.rail.refresh_team = lambda: refreshed.append(1)
+        self.store.toggle_crit("left", 0)
+        self.assertIs(panel._types.controls[0], type_chip, "a crit toggle leaves the identity block alone")
+        self.assertTrue(self.store.state.left.crit[0])
+        self.assertTrue(panel.cards[0]._crit.selected, "but the card shows it")
+        self.assertEqual(refreshed, [], "and the rail is not rebuilt")
+        self.store.load_species("left", "incineroar")
+        self.assertEqual(refreshed, [1], "a different attacker moves the rail highlight")
+
+    def test_mounted_view_defers_saving_and_the_sweep(self):
+        self.view.did_mount()   # what Flet calls once the view is on a live page
+        self.addCleanup(self.view.will_unmount)
+        self._load_pair()       # StubPage runs each delayed call to completion
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
+        self.assertFalse(self.store.sweep_stale())
+
+    def test_sweep_ignores_what_it_does_not_read(self):
+        self._load_pair()
+        key = self.store.sweep_key()
+        self.store.set_pokemon("left", source="Box")
+        self.assertEqual(self.store.sweep_key(), key, "where the attacker came from does not matter")
+        self.store.set_pokemon("left", active=[False, False, True, False])
+        self.assertEqual(self.store.sweep_key(), key, "an applied effect is already in the boosts")
+        self.store.set_boost("left", "attack", 1)
+        self.assertNotEqual(self.store.sweep_key(), key)
 
     def test_status_chips_brighten_when_selected(self):
         self._load_pair()

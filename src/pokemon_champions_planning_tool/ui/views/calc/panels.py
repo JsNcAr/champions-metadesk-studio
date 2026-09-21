@@ -5,6 +5,7 @@ cards that carry the results, and below them the collapsible spread (radar + edi
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 import flet as ft
 
@@ -16,6 +17,7 @@ from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
 from ...components.spread_editor import SpreadEditor
+from ...tasks import Debouncer, is_mounted
 from ...theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
 from .chips import set_toggle, toggle_chip
 from .move_card import MoveCard
@@ -63,6 +65,8 @@ class PokemonPanel(ft.Container):
         self._on_pick_move = on_pick_move
         self._on_pick_item = on_pick_item
         self._syncing = False
+        self._head: tuple | None = None          # what the non-card part was last drawn from
+        self._spread_later: Debouncer | None = None
 
         self.search = ft.TextField(hint_text="Species…", prefix_icon=ft.Icons.SEARCH, dense=True, **SEARCH_FIELD_STYLE,
                                    on_change=lambda e: self._suggest(e.control.value or ""), on_submit=lambda e: self._submit(e.control.value or ""))
@@ -225,8 +229,20 @@ class PokemonPanel(ft.Container):
             self.store.switch_form(self.side, form_id)
 
     def _spread_changed(self, nature: str, points: dict[str, int]) -> None:
-        if not self._syncing:
+        """Show the edit at once; recompute once the slider or typing pauses.
+
+        Each slider tick used to recompute both directions, save the preferences, redraw
+        both panels and restart the opponents sweep.
+        """
+        if self._syncing:
+            return
+        if not is_mounted(self):
             self.store.set_pokemon(self.side, nature=nature, points=dict(points))
+            return
+        self._safe_update(self.editor)
+        if self._spread_later is None:
+            self._spread_later = Debouncer(self.page, 150, lambda v: self.store.set_pokemon(self.side, nature=v[0], points=v[1]))
+        self._spread_later((nature, dict(points)))
 
     def _bump(self, stat: str, delta: int) -> None:
         self.store.bump_boost(self.side, stat, delta)
@@ -273,9 +289,16 @@ class PokemonPanel(ft.Container):
     # -- rendering -----------------------------------------------------------------------------
 
     def update_from(self) -> None:
+        state = self.store.state.side(self.side)
+        # Everything outside the move cards depends on this. When only moves, crits, applied
+        # effects or the results changed, just the affected cards are redrawn.
+        head = (replace(state, moves=[], crit=[], active=[]), any(state.moves), self.store.speed_order(), self.store.speed(self.side), id(self.store.catalogs))
+        if head == self._head:
+            self._update_cards(state, redraw=True)
+            return
+        self._head = head
         self._syncing = True
         try:
-            state = self.store.state.side(self.side)
             species = self.store.species(self.side)
             stats = self.store.stats(self.side)
             other = "right" if self.side == "left" else "left"
@@ -344,15 +367,20 @@ class PokemonPanel(ft.Container):
                 set_toggle(chip, state.status == key)
             self._allies.value = str(state.allies_fainted)
             self._allies.visible = ability == "Supreme Overlord" or state.allies_fainted > 0
-            results = self.store.results.left_vs_right if self.side == "left" else self.store.results.right_vs_left
-            by_index = {r.index: r for r in results}
-            for index, card in enumerate(self.cards):
-                name = state.moves[index]
-                info = self.store.catalogs.move_by_name(name) if name else None
-                card.update_from(name, info, by_index.get(index), active=bool(state.active[index]), effect=move_effect(name), crit=bool(state.crit[index]))
+            self._update_cards(state, redraw=False)
         finally:
             self._syncing = False
         self._safe_update(self)
+
+    def _update_cards(self, state, *, redraw: bool) -> None:
+        results = self.store.results.left_vs_right if self.side == "left" else self.store.results.right_vs_left
+        by_index = {r.index: r for r in results}
+        for index, card in enumerate(self.cards):
+            name = state.moves[index]
+            info = self.store.catalogs.move_by_name(name) if name else None
+            changed = card.update_from(name, info, by_index.get(index), active=bool(state.active[index]), effect=move_effect(name), crit=bool(state.crit[index]))
+            if redraw and changed:
+                self._safe_update(card)
 
     def collapse_cards(self) -> bool:
         changed = False

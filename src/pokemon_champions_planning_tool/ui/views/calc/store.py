@@ -237,6 +237,11 @@ class CalcStore:
         self._cache: OrderedDict[str, CalcResults] = OrderedDict()
         self._listeners: list[Listener] = []
         self.loaded = False
+        # Saving the state writes preferences.json. The view sets this to a debounced call to
+        # ``save_state`` so a burst of edits (a slider drag) writes once; without it (tests,
+        # scripts) every commit saves at once.
+        self.defer_save: Callable[[], None] | None = None
+        self._unsaved = False
 
     # -- subscriptions -----------------------------------------------------------------------
 
@@ -796,9 +801,15 @@ class CalcStore:
 
     # -- opponent sweep ----------------------------------------------------------------------
 
+    # PokemonState fields the sweep never reads: where the attacker came from, the notes on
+    # its assumptions, and which status-move effects are applied (their result is already in
+    # the boosts and the field). Changing only these must not re-run every opponent.
+    _SWEEP_IGNORES = ("source", "assumptions", "active")
+
     def sweep_key(self) -> str:
         d = self.state.to_dict()
-        return "|".join((str(d["left"]), str(d["field"]), str(self.sweep_presets), str(self.sweep_regulation)))
+        left = {k: v for k, v in d["left"].items() if k not in self._SWEEP_IGNORES}
+        return "|".join((str(left), str(d["field"]), str(self.sweep_presets), str(self.sweep_regulation)))
 
     def sweep_stale(self) -> bool:
         return self._sweep_key != self.sweep_key()
@@ -968,6 +979,16 @@ class CalcStore:
 
     # -- internals ---------------------------------------------------------------------------
 
+    def save_state(self) -> None:
+        """Write the calculation to the preferences if it changed since the last save."""
+        if not self._unsaved or self._prefs is None:
+            return
+        self._unsaved = False
+        try:
+            self._prefs.set(PREF_STATE, self.state.to_dict())
+        except Exception:  # noqa: BLE001 - persistence is a convenience
+            pass
+
     def _commit(self) -> None:
         self._recompute(persist=True)
 
@@ -983,10 +1004,11 @@ class CalcStore:
             self._cache.move_to_end(key)
         self.results = cached
         if persist and self._prefs is not None:
-            try:
-                self._prefs.set(PREF_STATE, self.state.to_dict())
-            except Exception:  # noqa: BLE001 - persistence is a convenience
-                pass
+            self._unsaved = True
+            if self.defer_save is not None:
+                self.defer_save()
+            else:
+                self.save_state()
         self._notify(("state",))
         self._notify(("results",))
 

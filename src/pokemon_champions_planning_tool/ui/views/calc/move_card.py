@@ -56,6 +56,7 @@ class MoveCard(ft.Container):
         self.index = index
         self.result: MoveResult | None = None
         self.expanded = False
+        self._drawn: tuple | None = None
         self._on_copy = on_copy
         muted = Palette.ON_SURFACE_VARIANT
         self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
@@ -105,7 +106,16 @@ class MoveCard(ft.Container):
         elif self._name.color == Palette.DISABLED:
             on_pick(self.index)
 
-    def update_from(self, name: str | None, info, result: MoveResult | None, *, active: bool, effect: str | None, crit: bool) -> None:
+    def update_from(self, name: str | None, info, result: MoveResult | None, *, active: bool, effect: str | None, crit: bool) -> bool:
+        """Draw this slot; returns False (and touches nothing) when it already shows this."""
+        key = (name, info, result, active, effect, crit)
+        if key == self._drawn:
+            return False
+        self._drawn = key
+        self._apply(name, info, result, active=active, effect=effect, crit=crit)
+        return True
+
+    def _apply(self, name: str | None, info, result: MoveResult | None, *, active: bool, effect: str | None, crit: bool) -> None:
         self.result = result
         muted = Palette.ON_SURFACE_VARIANT
         if not name:

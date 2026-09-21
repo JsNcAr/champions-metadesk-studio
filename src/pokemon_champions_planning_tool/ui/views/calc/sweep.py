@@ -11,6 +11,7 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
+from ...tasks import Debouncer, is_mounted
 from ...theme import IconSize, Palette, Radius, Space, alpha
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
@@ -91,7 +92,8 @@ class SweepPanel(ft.Container):
             tooltip="Sort rival opponents",
             on_select=lambda e: self._on_sort_changed(e.control.value),
         )
-        self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._set_query(e.control.value or ""))
+        self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._query_typed(e.control.value or ""))
+        self._query_later: Debouncer | None = None
         self._chips: dict[str | None, ft.Chip] = {}
         chips: list[ft.Control] = []
         for key, label in ((None, "All"), *SWEEP_CLASSES):
@@ -150,6 +152,15 @@ class SweepPanel(ft.Container):
             self.store.set_sweep_sort("usage", reg)
         else:
             self.store.set_sweep_sort(value)
+
+    def _query_typed(self, query: str) -> None:
+        """Filter once typing pauses: each render rebuilds up to a page of cards."""
+        if not is_mounted(self):
+            self._set_query(query)
+            return
+        if self._query_later is None:
+            self._query_later = Debouncer(self.page, 150, self._set_query)
+        self._query_later(query)
 
     def _set_query(self, query: str) -> None:
         self.query = query

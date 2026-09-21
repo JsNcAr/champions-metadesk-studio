@@ -9,7 +9,7 @@ import flet as ft
 from ... import events
 from ...components import PageHeader
 from ...context import AppContext
-from ...tasks import is_mounted
+from ...tasks import Debouncer, is_mounted
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
@@ -21,6 +21,8 @@ from .store import CalcStore
 from .summary import MatchupBar
 from .sweep import SweepPanel
 
+SAVE_DELAY_MS = 500    # a burst of edits (a slider drag) writes preferences.json once
+SWEEP_DELAY_MS = 300   # the opponents sweep starts once the edits pause
 RAIL_WIDTH = 224
 SWEEP_WIDTH = 300
 CAPTION = "Champions damage · both directions"
@@ -34,6 +36,8 @@ class CalcView(ft.Column):
         self._narrow = False
         self._sweep_running = False
         self._presets_warming = False
+        self._rail_key: tuple | None = None
+        self._sweep_later: Debouncer | None = None
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
@@ -70,6 +74,18 @@ class CalcView(ft.Column):
 
     # -- lifecycle -----------------------------------------------------------------------------
 
+    def did_mount(self) -> None:
+        # Only on a live page: the delays need its loop (and tests want edits applied at once).
+        page = self.ctx.page
+        save_later = Debouncer(page, SAVE_DELAY_MS, lambda _v: self.store.save_state(), quiet_event=False)
+        self.store.defer_save = lambda: save_later(None)
+        self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
+
+    def will_unmount(self) -> None:
+        self.store.save_state()
+        self.store.defer_save = None
+        self._sweep_later = None
+
     def ensure_loaded(self) -> None:
         if not self.store.loaded:
             self.store.load()
@@ -103,7 +119,11 @@ class CalcView(ft.Column):
             self.summary.update_from()
             self.attacker.update_from()
             self.defender.update_from()
-            self.rail.refresh_team()
+            # The rail only marks which team member is loaded; TEAMS_CHANGED covers the rest.
+            left = self.store.state.left
+            if (left.species, left.source) != self._rail_key:
+                self._rail_key = (left.species, left.source)
+                self.rail.refresh_team()
             self._sync_species_banner()
             self._maybe_sweep()
         elif event[0] == "sweep":
@@ -152,7 +172,16 @@ class CalcView(ft.Column):
     # -- opponent sweep ------------------------------------------------------------------------
 
     def _maybe_sweep(self) -> None:
-        """Recompute the sweep in the background when the attacker or the field changed."""
+        """Recompute the sweep in the background when the attacker or the field changed,
+        once edits pause for ``SWEEP_DELAY_MS`` on a live page."""
+        if self._sweep_running or not self.store.sweep_stale():
+            return
+        if self._sweep_later is not None:
+            self._sweep_later(None)
+        else:
+            self._start_sweep()
+
+    def _start_sweep(self) -> None:
         if self._sweep_running or not self.store.sweep_stale():
             return
         if self.store.species("left") is None or not any(self.store.state.left.moves):

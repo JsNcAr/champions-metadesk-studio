@@ -1,0 +1,57 @@
+name: CI
+
+# Every push to main and every pull request: the test suite (failing on leaked database
+# connections), a lint for real errors, and the whole-UI serialisation smoke test.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests, lint and UI smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Lint (pyflakes errors and loop-variable closures)
+        uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.16.8"
+          args: check --select F,B023 src scripts run.py
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.in-project true
+
+      - name: Cache the virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.13-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: poetry run python -W error::ResourceWarning -m unittest discover -s tests
+
+      - name: UI smoke test
+        run: |
+          export PCPT_DATABASE="$RUNNER_TEMP/smoke.db"
+          poetry run python -c "import sys; sys.path.insert(0, 'src'); from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database; initialize_database()"
+          poetry run python scripts/ui_smoke.py --db "$RUNNER_TEMP/smoke.db"

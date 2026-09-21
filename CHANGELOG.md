@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-21
+
 ### Added
 - The project is now open source under the MIT License.
 - Settings → About shows the license and a trademark disclaimer: this is an unofficial fan

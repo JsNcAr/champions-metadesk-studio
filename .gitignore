@@ -226,3 +226,6 @@ scripts/damage_fixtures/node_modules/
 # Sprite cache assets
 assets/sprites/*
 !assets/sprites/.gitkeep
+
+# Demo database and sprites built by scripts/make_demo_db.py
+/demo/

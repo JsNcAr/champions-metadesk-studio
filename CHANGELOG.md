@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-21
+
 ### Fixed
 - Importing a box file onto Pokémon you already have kept their tags and favourites
   but dropped the notes, while reporting them as updated.

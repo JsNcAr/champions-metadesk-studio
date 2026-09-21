@@ -110,11 +110,30 @@ def run_in_background(
     page.run_thread(_worker)
 
 
+def skip_auto_update() -> None:
+    """Tell Flet not to auto-update after the event handler that is running now.
+
+    Flet re-diffs the nearest isolated ancestor after any handler that did not call
+    ``update()``. Use this in handlers that changed nothing. ``disable_auto_update``
+    alone mutates whatever ``UpdateBehavior`` is current, and outside an event that is
+    Flet's process-wide default; resetting first gives this context its own copy.
+    """
+    ft.context.reset_auto_update()
+    ft.context.disable_auto_update()
+
+
 class Debouncer(Generic[T]):
     """Collapse a burst of calls into one, ``delay_ms`` after the last.
 
     Used for text filters so a query runs once per pause rather than once per
     keystroke. ``fn`` runs on the UI loop with the most recent value.
+
+    Calling it also switches off Flet's auto-update for the event that made the call.
+    Otherwise, after every keystroke handler that did not call ``update()`` itself,
+    Flet re-diffs the nearest isolated ancestor (a whole view: ~0.4 s for a full Box),
+    and those diffs queue up ahead of the debounced result. The keystroke has nothing
+    to send, since the text already sits in the client's field; ``fn`` updates what it
+    changes explicitly.
     """
 
     def __init__(self, page: ft.Page, delay_ms: int, fn: Callable[[T], None]) -> None:
@@ -124,6 +143,7 @@ class Debouncer(Generic[T]):
         self._generation = 0
 
     def __call__(self, value: T) -> None:
+        skip_auto_update()
         self._generation += 1
         generation = self._generation
 

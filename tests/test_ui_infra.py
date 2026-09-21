@@ -43,6 +43,22 @@ def _key(key: str, *, ctrl: bool) -> SimpleNamespace:
     return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=False)
 
 
+def _in_event_context(fn):
+    """Run ``fn`` the way Flet runs a handler: in its own context, auto-update reset.
+
+    Returns whether Flet would still auto-update after it.
+    """
+    import contextvars
+
+    def run():
+        ft.context.reset_auto_update()
+        ft.context.enable_auto_update()   # every Flet event starts with it on
+        fn()
+        return ft.context.auto_update_enabled()
+
+    return contextvars.copy_context().run(run)
+
+
 class TestEventBus(unittest.TestCase):
     def test_emit_delivers_payload_in_order_and_unsubscribes(self):
         bus = EventBus()
@@ -124,6 +140,14 @@ class TestDebouncer(unittest.TestCase):
         loop.run_until_complete(scenario())
         loop.close()
         self.assertEqual(fired, ["abc"])
+
+    def test_a_keystroke_skips_flets_auto_update(self):
+        # Otherwise each keystroke re-diffs the whole view (~0.4 s on a full Box) and
+        # those diffs queue ahead of the filtered result.
+        page = SimpleNamespace(run_task=lambda fn, *a: fn(*a).close())
+        debounce = Debouncer(page, 20, lambda _v: None)
+        self.assertTrue(_in_event_context(lambda: None), "control: a plain handler auto-updates")
+        self.assertFalse(_in_event_context(lambda: debounce("a")))
 
 
 class TestAppShell(unittest.TestCase):
@@ -233,6 +257,23 @@ class TestShellEscape(unittest.TestCase):
         shell._on_key(esc)
         self.assertEqual(seen, ["Escape"], "with no dialog open, Escape reaches the view")
 
+    def test_an_unhandled_key_skips_flets_auto_update(self):
+        from types import SimpleNamespace
+
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.context import AppContext
+        from pokemon_champions_planning_tool.ui.shell import AppShell
+
+        shell = AppShell(AppContext(StubPage()))
+        handled = {"x": False}
+        shell.register_view("v", label="V", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
+                            control=type("V", (ft.Column,), {"handle_key": lambda self, e: handled["x"]})())
+        shell.navigate("v")
+        key = SimpleNamespace(key="a", ctrl=False, shift=False, alt=False, meta=False)
+        self.assertFalse(_in_event_context(lambda: shell._on_key(key)), "plain typing sends nothing")
+        handled["x"] = True
+        self.assertTrue(_in_event_context(lambda: shell._on_key(key)), "a handled key keeps the default")
+
 
 class TestDialogs(unittest.IsolatedAsyncioTestCase):
     async def test_confirm_resolves_true_on_confirm_click(self):
@@ -317,8 +358,9 @@ class TestShellDeck(unittest.TestCase):
     """Views are layered, not swapped: the first is a base layer, the rest overlays.
 
     Swapping the host's content detached views (a return trip re-sent the whole tree),
-    and any update containing a view makes Flet walk all of it — so the stack's child
-    list must never change after registration, and the base must never be touched.
+    and any update containing a view makes Flet walk all of it — so views are isolated,
+    the stack's child list never changes after registration, and hidden overlays stay
+    built but transparent, click-through and disabled (disabled keeps keyboard focus out).
     """
 
     def _shell(self):
@@ -327,13 +369,15 @@ class TestShellDeck(unittest.TestCase):
         activations = []
         for key in ("base", "one", "two"):
             shell.register_view(key, label=key, icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
-                                control=ft.Text(key), on_activate=lambda key=key: activations.append(key))
+                                control=ft.TextField(label=key), on_activate=lambda key=key: activations.append(key))
         shell.register_view("lazy", label="lazy", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
-                            factory=lambda: ft.Text("lazy"))
+                            factory=lambda: ft.TextField(label="lazy"))
         return shell, activations
 
-    def _visible(self, shell):
-        return sorted(k for k, slot in shell._slots.items() if slot.visible)
+    @staticmethod
+    def _shown(shell):
+        return sorted(k for k, s in shell._slots.items()
+                      if s.visible and s.opacity == 1.0 and not s.ignore_interactions and not s.disabled)
 
     def test_every_view_has_a_slot_from_registration_and_the_deck_never_changes(self):
         shell, _ = self._shell()
@@ -344,49 +388,72 @@ class TestShellDeck(unittest.TestCase):
         shell.preload("two")
         self.assertEqual(shell.deck.controls, slots, "same slot objects, same order")
 
-    def test_the_base_is_shown_once_and_never_hidden(self):
+    def test_views_are_isolated_so_slot_updates_do_not_walk_them(self):
+        shell, _ = self._shell()
+        shell.navigate("base")
+        shell.navigate("lazy")
+        for key in ("base", "one", "two", "lazy"):
+            self.assertTrue(shell._entries[key].control.is_isolated(), key)
+
+    def test_only_the_current_view_is_interactive(self):
+        shell, _ = self._shell()
+        shell.navigate("base")
+        self.assertEqual(self._shown(shell), ["base"])
+        shell.navigate("two")                     # above the base
+        self.assertEqual(self._shown(shell), ["two"])
+        shell.navigate("one")                     # arriving *below* the overlay on screen
+        self.assertEqual(self._shown(shell), ["one"])
+        shell.navigate("two")                     # and above again
+        self.assertEqual(self._shown(shell), ["two"])
+        shell.navigate("base")
+        self.assertEqual(self._shown(shell), ["base"])
+        self.assertEqual(shell.current_control.label, "base")
+
+    def test_a_hidden_overlay_stays_built_but_cannot_be_reached(self):
+        """Stays mounted (showing it again is a property change, not a rebuild), while
+        clicks pass through it and disabled keeps keyboard focus out."""
+        shell, _ = self._shell()
+        shell.navigate("base")
+        shell.navigate("one")
+        shell.navigate("base")
+        one = shell._slots["one"]
+        self.assertTrue(one.visible, "kept built on the client")
+        self.assertEqual((one.opacity, one.ignore_interactions, one.disabled), (0.0, True, True))
+
+    def test_the_base_is_disabled_while_covered_and_enabled_when_shown(self):
+        """The base stays under every overlay; without this, Tab reached its fields."""
         shell, _ = self._shell()
         shell.navigate("base")
         base = shell._slots["base"]
-        self.assertTrue(base.visible)
-        self.assertEqual(base.opacity, 1.0)
+        self.assertFalse(base.disabled)
         shell.navigate("one")
-        shell.navigate("two")
-        self.assertTrue(base.visible, "overlays cover the base; they never hide it")
-
-    def test_only_the_current_overlay_remains_above_the_base(self):
-        shell, _ = self._shell()
+        self.assertTrue(base.disabled)
+        self.assertEqual(base.opacity, 1.0, "still painted under the overlay")
         shell.navigate("base")
-        shell.navigate("two")                     # above the base
-        self.assertEqual(self._visible(shell), ["base", "two"])
-        self.assertEqual(shell._slots["two"].opacity, 1.0)
-        shell.navigate("one")                     # arriving *below* the overlay on screen
-        self.assertEqual(self._visible(shell), ["base", "one"])
-        self.assertEqual(shell._slots["one"].opacity, 1.0)
-        shell.navigate("two")                     # and above again
-        self.assertEqual(self._visible(shell), ["base", "two"])
-        shell.navigate("base")
-        self.assertEqual(self._visible(shell), ["base"])
-        self.assertEqual(shell.current_control.value, "base")
+        self.assertFalse(base.disabled)
 
     def test_preload_mounts_hidden_and_can_activate(self):
         shell, activations = self._shell()
         shell.navigate("base")
         shell.preload("lazy")
-        self.assertEqual(shell._slots["lazy"].content.value, "lazy", "built into its slot")
-        self.assertFalse(shell._slots["lazy"].visible, "but not shown")
+        lazy = shell._slots["lazy"]
+        self.assertEqual(lazy.content.label, "lazy", "built into its slot")
+        self.assertEqual((lazy.opacity, lazy.ignore_interactions, lazy.disabled), (0.0, True, True), "but hidden")
         shell.preload("one", activate=True)
         self.assertIn("one", activations)
         self.assertEqual(shell.current, "base")
 
-    def test_a_retirement_that_arrives_after_a_return_is_ignored(self):
-        """Fading out is deferred; if the user comes straight back, the view must stay."""
+    def test_a_deferred_hide_that_arrives_after_a_return_is_ignored(self):
+        """Hiding completes after the fade; if the user came straight back, it must not."""
         shell, _ = self._shell()
         shell.navigate("base")
         shell.navigate("one")
-        shell._current = "one"
-        shell._retire("one")
-        self.assertTrue(shell._slots["one"].visible)
+        shell._settle("one")                      # a late settle for the view now current
+        self.assertEqual(self._shown(shell), ["one"])
+        shell._cover_base()
+        shell.navigate("base")
+        shell._cover_base()                       # a late cover after returning to the base
+        self.assertFalse(shell._slots["base"].disabled)
 
 
 class TestShellColdBuild(unittest.TestCase):

@@ -17,7 +17,7 @@ import flet as ft
 from ..components.banner import InlineBanner
 from ..context import AppContext
 from ..events import NAVIGATE
-from ..tasks import is_mounted
+from ..tasks import is_mounted, skip_auto_update
 from ..theme import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Motion, Palette, Radius, Space
 
 ViewFactory = Callable[[], ft.Control]
@@ -44,6 +44,9 @@ class _ViewEntry:
 # widget is born fully opaque and there is nothing to animate. A frame or so of delay lets
 # it be built at 0 — a raise arriving mid-build simply waits for the build to finish.
 _FADE_START_S = 0.06
+# The crossfade between views. Short on purpose: the click has already been answered
+# (rail moved) and the view is built, so the fade only smooths the cut, never delays it.
+_FADE_MS = Motion.FAST_MS
 
 # Keys reachable with Ctrl+<digit>, in rail order.
 _DIGIT_KEYS = ("1", "2", "3", "4", "5", "6", "7", "8", "9")
@@ -102,11 +105,16 @@ class AppShell(ft.Row):
         # Swapping the host's content detached the old view, so returning to it re-sent its
         # whole control tree (about 1 MB for a full Box) and the client rebuilt it. And any
         # update that *contains* a view makes Flet walk every node of it — ~370 ms for a
-        # 250-card Box even when nothing in it changed. So: every view has a slot made at
-        # registration (the stack's child list never changes after mount), the first view
-        # is a base layer that navigation never touches, and the others are opaque
-        # overlays that fade in and out above it. A switch updates only the small slots
-        # involved, and the fade is a real crossfade.
+        # 250-card Box even when nothing in it changed. So:
+        #   * every view has a slot made at registration (the stack's child list never
+        #     changes after mount, which would walk every slot);
+        #   * views are *isolated*: updating a slot compares the slot, not the view inside
+        #     it, so hiding, fading or disabling a view costs the same for every view;
+        #   * the first view is a base layer; the others are opaque overlays above it;
+        #   * a hidden overlay stays built — transparent, click-through and disabled, so
+        #     keyboard focus cannot Tab into it — and showing it is a property change on
+        #     a live widget rather than the client building the view again. The base is
+        #     disabled the same way while an overlay covers it.
         self.deck = ft.Stack(expand=True, controls=[])
         self._slots: dict[str, ft.Container] = {}
         self.host = ft.Container(expand=True, padding=Space.PAGE_PADDING, content=self.deck)
@@ -158,10 +166,12 @@ class AppShell(ft.Row):
             control=control,
         )
         self._entries[key] = entry
+        if control is not None:
+            control._isolated = True
         slot = ft.Container(
             content=control, left=0, top=0, right=0, bottom=0,
             visible=False, opacity=0.0, bgcolor=Palette.BG,
-            animate_opacity=ft.Animation(Motion.NORMAL_MS, Motion.CURVE),
+            animate_opacity=ft.Animation(_FADE_MS, Motion.CURVE),
         )
         self._slots[key] = slot
         self.deck.controls.append(slot)
@@ -231,17 +241,27 @@ class AppShell(ft.Row):
         """The view's slot, with the view built and placed in it. True when just placed."""
         slot = self._slots[entry.key]
         if slot.content is None:
-            slot.content = entry.instance()
+            view = entry.instance()
+            view._isolated = True   # slot updates must not walk the view (see ``deck``)
+            slot.content = view
             return slot, True
         return slot, False
+
+    @staticmethod
+    def _fade_ms(slot: ft.Container, ms: int) -> None:
+        slot.animate_opacity = ft.Animation(ms, Motion.CURVE)
+
+    @staticmethod
+    def _set_hidden(slot: ft.Container) -> None:
+        slot.opacity, slot.ignore_interactions, slot.disabled = 0.0, True, True
 
     def preload(self, key: str, *, activate: bool = False) -> None:
         """Build a view and mount it hidden, so its first visit sends nothing new.
 
         Meant for idle time: mounting is when a view's control tree goes to the client,
-        and only this view's slot is updated to do it. ``activate`` also runs the view's
-        on-activate hook — for these views an idempotent load — so the data is in place
-        before the first visit instead of being fetched on the click.
+        and the client builds it then too — hidden overlays stay built. ``activate`` also
+        runs the view's on-activate hook — for these views an idempotent load — so the
+        data is in place before the first visit instead of being fetched on the click.
         """
         entry = self._entries.get(key)
         if entry is None:
@@ -249,6 +269,9 @@ class AppShell(ft.Row):
         slot, placed = self._fill(entry)
         if placed:
             self._forward_size(entry.control)
+            if key != self._base_key():
+                slot.visible = True
+                self._set_hidden(slot)
             self._update(slot)
         if activate and entry.on_activate is not None:
             entry.on_activate()
@@ -282,31 +305,46 @@ class AppShell(ft.Row):
         base = self._base_key()
         old = self._slots.get(previous) if previous and previous != entry.key else None
         keys = list(self._slots)
-        fade = Motion.NORMAL_MS / 1000
-
+        fade = _FADE_MS / 1000
         # Whichever of the two views is higher in the stack animates: an arriving view
         # above fades in over the old one; an arriving view below appears under it while
         # the old one fades away. Either way it is a crossfade, and the base (first slot)
-        # sits under everything and is never updated by a switch.
+        # sits under everything.
         arriving_above = entry.key != base and (
             old is None or previous == base or keys.index(entry.key) > keys.index(previous)
         )
+
+        slot.visible = True
+        slot.ignore_interactions = False
+        slot.disabled = False
         if entry.key == base:
-            if not slot.visible:          # first time only: the base is never hidden again
-                slot.visible, slot.opacity = True, 1.0
-                self._update(slot)
-        elif arriving_above:
-            slot.visible, slot.opacity = True, 0.0
+            slot.opacity = 1.0
+            self._update(slot)
+        elif placed:
+            # Just created on the client (not preloaded): it must be built at 0 first, or
+            # it is born opaque and there is nothing to animate.
+            self._fade_ms(slot, _FADE_MS)
+            slot.opacity = 0.0
             self._update(slot)
             self._later(_FADE_START_S, lambda: self._raise(entry.key))
-        else:
-            slot.visible, slot.opacity = True, 1.0
+        elif arriving_above:
+            self._fade_ms(slot, _FADE_MS)
+            slot.opacity = 1.0
             self._update(slot)
+        else:
+            self._fade_ms(slot, 0)       # under the view on screen: no need to animate
+            slot.opacity = 1.0
+            self._update(slot)
+
         if old is not None and previous != base:
+            old.ignore_interactions = True
             if not arriving_above:
+                self._fade_ms(old, _FADE_MS)   # it is on top: it leaves by fading
                 old.opacity = 0.0
-                self._update(old)
-            self._later(fade, lambda key=previous: self._retire(key))
+            self._update(old)
+            self._later(fade, lambda key=previous: self._settle(key))
+        if base is not None and entry.key != base:
+            self._later(fade, self._cover_base)
 
         if entry.on_activate is not None:
             entry.on_activate()
@@ -317,13 +355,26 @@ class AppShell(ft.Row):
             slot.opacity = 1.0
             self._update(slot)
 
-    def _retire(self, key: str) -> None:
-        """Take a faded-out overlay out of layout and hit-testing, unless it came back."""
+    def _settle(self, key: str) -> None:
+        """Finish hiding an overlay once the switch has played out, unless it came back.
+
+        Disabling waits until now so the view does not flash disabled styling mid-fade.
+        """
         if self._current == key or key == self._base_key():
             return
         slot = self._slots[key]
-        if slot.visible:
-            slot.visible, slot.opacity = False, 0.0
+        self._fade_ms(slot, 0)
+        self._set_hidden(slot)
+        self._update(slot)
+
+    def _cover_base(self) -> None:
+        """Take the base out of focus traversal while an overlay covers it."""
+        base = self._base_key()
+        if base is None or self._current == base:
+            return
+        slot = self._slots[base]
+        if not slot.disabled:
+            slot.disabled = True
             self._update(slot)
 
     def open_settings(self) -> None:
@@ -358,8 +409,10 @@ class AppShell(ft.Row):
         # Anything else goes to the current view if it declares handle_key(event) -> bool.
         entry = self._entries.get(self._current) if self._current else None
         handler = getattr(entry.control, "handle_key", None) if entry and entry.control is not None else None
-        if callable(handler):
-            handler(e)
+        if not (callable(handler) and handler(e)):
+            # Page key events fire for every keystroke, typing included. When nothing
+            # handled the key nothing changed, so skip Flet's automatic update after it.
+            skip_auto_update()
 
     # -- window size -----------------------------------------------------------------------
 
@@ -391,10 +444,13 @@ class AppShell(ft.Row):
         width, _height = self.page_size()
         self._apply_width(width)
         # Every built view gets the size, so a hidden one is already right when shown.
+        # Views are isolated, so a page update no longer carries changes inside them:
+        # each view that took the new size is updated itself.
+        self._update_if_mounted()
         for entry in self._entries.values():
             if entry.control is not None:
                 self._forward_size(entry.control)
-        self._update_if_mounted()
+                self._update(entry.control)
 
     def _close_top_dialog(self) -> bool:
         """Modal dialogs ignore Escape on their own; close the topmost open one here."""

@@ -10,6 +10,13 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Fixed
+- Importing a box file onto Pokémon you already have kept their tags and favourites
+  but dropped the notes, while reporting them as updated.
+- Calc showed the species name twice in both the attacker and defender panels.
+- Settings reported "1 sprite cached (0 KB)" before any sprite was downloaded, and
+  clearing the sprite cache deleted more than the sprites.
+
 ## [0.2.0] - 2026-09-21
 
 Faster everywhere, and sprites finally work in the browser build.

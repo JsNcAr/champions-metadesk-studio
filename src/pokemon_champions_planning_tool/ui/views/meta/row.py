@@ -19,7 +19,7 @@ from ....services.showdown_service import parse_showdown_text
 from ....services.tournament_service import MetaTeamRow
 from ...components import PlacementBadge, Sprite, StatusChip
 from ...format import absolute_time, plural
-from ...tasks import is_mounted
+from ...tasks import is_mounted, open_url
 from ...theme import IconSize, Motion, Palette, Radius, Space, alpha
 
 
@@ -100,7 +100,7 @@ class EventHeader(ft.Container):
                     icon=ft.Icons.OPEN_IN_NEW,
                     icon_size=IconSize.SM,
                     tooltip="Open event results",
-                    on_click=lambda e, url=row.source_url: e.control.page.launch_url(url),
+                    on_click=lambda e, url=row.source_url: open_url(e.control.page, url),
                 )
             )
         self.content = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
@@ -228,7 +228,7 @@ class EventDialog(ft.AlertDialog):
             ft.Text(" · ".join(meta), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True),
         ]
         if first.source_url:
-            header_controls.append(ft.TextButton("Open results", icon=ft.Icons.OPEN_IN_NEW, on_click=lambda e, url=first.source_url: e.control.page.launch_url(url)))
+            header_controls.append(ft.TextButton("Open results", icon=ft.Icons.OPEN_IN_NEW, on_click=lambda e, url=first.source_url: open_url(e.control.page, url)))
         self.title = ft.Text(first.tournament_name, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
         self.content = ft.Container(
             width=960,
@@ -282,7 +282,7 @@ class TeamRow(ft.Container):
 
         actions: list[ft.Control] = []
         if row.pokepast_url:
-            actions.append(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_size=IconSize.MD, tooltip="Open Poképaste", on_click=lambda e, url=row.pokepast_url: e.control.page.launch_url(url)))
+            actions.append(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_size=IconSize.MD, tooltip="Open Poképaste", on_click=lambda e, url=row.pokepast_url: open_url(e.control.page, url)))
         if on_calc is not None and row.members:
             actions.append(ft.PopupMenuButton(
                 icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs…",

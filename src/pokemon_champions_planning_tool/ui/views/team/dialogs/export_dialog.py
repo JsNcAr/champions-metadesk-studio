@@ -6,7 +6,7 @@ import flet as ft
 
 from ....components.banner import InlineBanner
 from ....context import AppContext
-from ....tasks import is_mounted
+from ....tasks import is_mounted, open_url
 from ....theme import Palette, Space
 from ..store import TeamStore
 
@@ -71,7 +71,7 @@ class ExportDialog(ft.AlertDialog):
             self.url = result.pokepast_url
             self._banner.show(f"Published: {result.pokepast_url}", "success")
             self._link.visible = bool(result.pokepast_url)
-            self._link.on_click = lambda _e: self.ctx.page.launch_url(result.pokepast_url)
+            self._link.on_click = lambda _e: open_url(self.ctx.page, result.pokepast_url)
             self._copy_link.visible = bool(result.pokepast_url)
             self._copy_link.on_click = lambda _e: (self.ctx.copy_to_clipboard(result.pokepast_url), self.ctx.toast("Link copied", "success"))
             self._publish.content = "Published"

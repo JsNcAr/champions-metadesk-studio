@@ -110,6 +110,24 @@ def run_in_background(
     page.run_thread(_worker)
 
 
+def open_url(page: ft.Page, url: str) -> None:
+    """Open ``url`` in the browser (a new tab on the web build), from a sync handler.
+
+    In Flet 0.85 ``page.launch_url`` is a deprecated coroutine. Called like the old
+    synchronous API it only created a coroutine nobody awaited, so links did nothing.
+    Its ``@deprecated`` wrapper also hides the coroutine from ``page.run_task``, which
+    rejects it. So this goes through the ``UrlLauncher`` service in a coroutine of its own.
+    ``run_task`` makes ``page`` current, and the service registers itself with it.
+    """
+    if not url:
+        return
+
+    async def _open() -> None:
+        await ft.UrlLauncher().launch_url(url)
+
+    page.run_task(_open)
+
+
 def skip_auto_update() -> None:
     """Tell Flet not to auto-update after the event handler that is running now.
 

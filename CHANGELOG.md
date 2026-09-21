@@ -10,6 +10,12 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Fixed
+- The Teams **Export** button did nothing: its menu (Copy Showdown text, Show export /
+  publish…) never opened. The Box detail panel's **Add to team** menu had the same problem.
+- Links that open a website did nothing: the Meta event results and Poképaste links, and
+  the Poképaste link shown after publishing a team.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

@@ -543,3 +543,28 @@ class TestShutdownHooks(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             ctx.run_shutdown_hooks()
         self.assertEqual(calls, [1])
+
+
+class TestOpenUrl(unittest.TestCase):
+    def test_hands_run_task_a_real_coroutine_function(self):
+        # Flet's run_task raises "handler must be a coroutine function" otherwise, which is
+        # what happened with page.launch_url (a deprecated, wrapped coroutine).
+        import inspect
+
+        from pokemon_champions_planning_tool.ui.tasks import open_url
+
+        handed = []
+        page = SimpleNamespace(run_task=lambda handler, *args: handed.append(handler))
+        open_url(page, "https://limitlesstcg.com/tournaments/123")
+        self.assertEqual(len(handed), 1)
+        self.assertTrue(inspect.iscoroutinefunction(handed[0]))
+        open_url(page, "")
+        self.assertEqual(len(handed), 1, "no URL, nothing scheduled")
+
+    def test_no_view_calls_the_deprecated_page_launch_url(self):
+        import re
+        from pathlib import Path
+
+        src = Path(__file__).resolve().parents[1] / "src" / "pokemon_champions_planning_tool" / "ui"
+        offenders = [str(p.relative_to(src)) for p in src.rglob("*.py") if re.search(r"page\.launch_url\(", p.read_text())]
+        self.assertEqual(offenders, [], "use tasks.open_url: page.launch_url is an un-awaited coroutine in Flet 0.85")

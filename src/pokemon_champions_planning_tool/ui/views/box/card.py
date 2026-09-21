@@ -208,6 +208,10 @@ class PokemonCard(ft.Container):
         self.opacity = 0.85 if entry.is_planned else 1.0
         self._apply_frame(hovering=False)
 
+    @property
+    def selected(self) -> bool:
+        return self._selected
+
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
         self._apply_frame(hovering=False)

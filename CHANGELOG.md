@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-21
+
 ### Fixed
 - The Teams **Export** button did nothing: its menu (Copy Showdown text, Show export /
   publish…) never opened. The Box detail panel's **Add to team** menu had the same problem.

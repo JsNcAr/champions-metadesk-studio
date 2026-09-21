@@ -2,9 +2,8 @@
 
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
 from pokemon_champions_planning_tool.infrastructure.database.models import (
     ChampionsSpeciesRecord,

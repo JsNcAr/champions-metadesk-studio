@@ -4,6 +4,12 @@ import os
 from pathlib import Path
 
 APP_NAME = "Champions MetaDesk Studio"
+# Shown in Settings › About; the README and NOTICE.md carry the same text.
+DISCLAIMER = (
+    "Champions MetaDesk Studio is an unofficial fan-made tool. It is not affiliated with, "
+    "endorsed or sponsored by Nintendo, Game Freak, Creatures Inc. or The Pokémon Company. "
+    "Pokémon and Pokémon character names are trademarks of their respective owners."
+)
 DEFAULT_CSV_FILENAME = "pokemon_team_stats.csv"
 # Where the SQLite file lives. Relative paths resolve against the working directory.
 # Override with PCPT_DATABASE=/path/to/file.db; preferences.json sits beside it unless

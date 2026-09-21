@@ -5,9 +5,8 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import flet as ft
 from sqlmodel import Session, SQLModel, create_engine
 
 from _ui_stubs import StubPage, serialise
@@ -16,7 +15,6 @@ from pokemon_champions_planning_tool.domain.entities.pokemon import Pokemon
 from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
 from pokemon_champions_planning_tool.infrastructure.database.models import ChampionsSpeciesRecord
 from pokemon_champions_planning_tool.infrastructure.database.repositories import BoxRepository
-from pokemon_champions_planning_tool.ui import events
 from pokemon_champions_planning_tool.ui.catalogs import Catalogs
 from pokemon_champions_planning_tool.ui.context import AppContext
 from pokemon_champions_planning_tool.ui.views.box import BoxStore, BoxView

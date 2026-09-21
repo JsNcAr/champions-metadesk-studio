@@ -188,3 +188,16 @@ class TestSettingsView(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAbout(unittest.TestCase):
+    def test_about_names_the_license_and_the_trademark_disclaimer(self):
+        from pokemon_champions_planning_tool.config import DISCLAIMER
+
+        rows = dict(SettingsView._about_rows())
+        self.assertIn("MIT", rows["License"].content)
+        self.assertEqual(rows["Disclaimer"].value, DISCLAIMER)
+        for owner in ("Nintendo", "Game Freak", "Creatures Inc.", "The Pokémon Company"):
+            self.assertIn(owner, DISCLAIMER)
+        notice = (Path(__file__).resolve().parents[1] / "NOTICE.md").read_text()
+        self.assertIn(DISCLAIMER.split(". ")[1], notice.replace("\n", " "), "NOTICE.md carries the same disclaimer")

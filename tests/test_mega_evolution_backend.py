@@ -5,9 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from sqlmodel import SQLModel, Session, create_engine
-from pokemon_champions_planning_tool.infrastructure.database.models import MegaEvolutionRecord, ChampionsSpeciesRecord
-from pokemon_champions_planning_tool.infrastructure.database.repositories import MegaEvolutionRepository, ChampionsCatalogRepository
-from pokemon_champions_planning_tool.services.mega_evolution_service import sync_mega_evolutions_for_species, sync_all_champions_megas_on_startup
+from pokemon_champions_planning_tool.infrastructure.database.models import MegaEvolutionRecord
+from pokemon_champions_planning_tool.infrastructure.database.repositories import MegaEvolutionRepository
+from pokemon_champions_planning_tool.services.mega_evolution_service import sync_mega_evolutions_for_species
 
 
 class TestMegaEvolutionBackend(unittest.TestCase):

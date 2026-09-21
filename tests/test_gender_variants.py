@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from pokemon_champions_planning_tool.domain.pokemon_identity import (
     expand_canonical_aliases,

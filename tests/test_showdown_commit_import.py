@@ -91,7 +91,6 @@ class TestCommitTeamImport(unittest.TestCase):
         self.assertEqual(members[0].box_entry_id, existing.box_entry_id)
 
     def test_seven_slots_cap_to_six(self):
-        block = "Pikachu\n- Thunderbolt\n\n"
         parsed = parse_showdown_text("".join(f"Mon{i}\n- Tackle\n\n" for i in range(7)))
         self.assertGreaterEqual(len(parsed.slots), 7)
         result = commit_team_import(self.session, parsed, use_planned=True)

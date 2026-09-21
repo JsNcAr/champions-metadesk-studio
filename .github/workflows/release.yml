@@ -25,10 +25,10 @@ jobs:
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -78,10 +78,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -110,8 +110,9 @@ jobs:
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
             -y
+          cp LICENSE NOTICE.md dist/
           cd dist
-          tar -czf champions-metadesk-linux-x64.tar.gz champions-metadesk
+          tar -czf champions-metadesk-linux-x64.tar.gz champions-metadesk LICENSE NOTICE.md
           cd ..
 
       # --- Build Windows ---
@@ -120,7 +121,7 @@ jobs:
         shell: pwsh
         run: |
           poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
-          Compress-Archive -Path dist\champions-metadesk.exe -DestinationPath dist\champions-metadesk-windows-x64.zip
+          Compress-Archive -Path dist\champions-metadesk.exe, LICENSE, NOTICE.md -DestinationPath dist\champions-metadesk-windows-x64.zip
 
       # --- Build macOS ---
       - name: Build app bundle (macOS)
@@ -134,12 +135,13 @@ jobs:
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
             -y
+          cp LICENSE NOTICE.md dist/
           cd dist
-          zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app
+          zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app LICENSE NOTICE.md
           cd ..
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.asset_path }}
@@ -156,10 +158,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -168,7 +170,7 @@ jobs:
         run: python3 scripts/release.py notes "${{ needs.verify.outputs.version }}" > release-notes.md
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Champions MetaDesk Studio ${{ github.ref_name }}
           body_path: release-notes.md

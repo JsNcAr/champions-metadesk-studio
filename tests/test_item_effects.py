@@ -5,7 +5,6 @@ import unittest
 from pokemon_champions_planning_tool.domain.entities.item import Item
 from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
 from pokemon_champions_planning_tool.services.item_effect_service import (
-    ValidationResult,
     compute_effective_stats,
     validate_item_assignment,
 )

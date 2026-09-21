@@ -1,5 +1,16 @@
 # Third-party notices
 
+Champions MetaDesk Studio is licensed under the MIT License (see [LICENSE](LICENSE)). It
+includes or is derived from the third-party work below.
+
+## Trademarks
+
+Champions MetaDesk Studio is an unofficial fan-made tool. It is not affiliated with, endorsed
+or sponsored by Nintendo, Game Freak, Creatures Inc. or The Pokémon Company. Pokémon and
+Pokémon character names are trademarks of their respective owners. No Pokémon sprites or
+artwork are distributed with this project: sprites are loaded at runtime from Pokémon Showdown
+and cached on the user's machine.
+
 ## Smogon damage calculator
 
 `src/pokemon_champions_planning_tool/domain/damage/` is a Python port of the Pokémon Champions
@@ -31,5 +42,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Data sources
+
 Move, learnset, species and item data come from Pokémon Showdown
 (https://github.com/smogon/pokemon-showdown, MIT) and PokéAPI (https://pokeapi.co, BSD 3-Clause).
+
+Tournament results and team lists are read from the public Limitless API
+(https://play.limitlesstcg.com), Victory Road (https://victoryroad.pro), Pokepast
+(https://pokepast.es) and VRPaste. They belong to their publishers and players; the app only
+stores what each user syncs to their own machine. `src/pokemon_champions_planning_tool/data/
+seed_tournaments.json` is a small sample of such public results.

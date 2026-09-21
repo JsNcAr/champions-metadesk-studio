@@ -19,9 +19,16 @@ for the headings and style.
 - The downloadable Windows, macOS and Linux archives include the license and third-party
   notices.
 
+### Performance
+- Selecting a Pokémon in a full Box is instant: it used to redraw the whole Box (about a
+  second with 250 entries), and now redraws only the two cards and the detail panel.
+
 ### Fixed
 - Dropdown values (the team selector, abilities, every Meta filter), text typed into fields
   and some labels were nearly black on the dark background.
+- The damage calculator could forget the last change made just before closing the app.
+- Z Mega Evolutions show as "Mega Garchomp Z" rather than "Garchomp-Mega-Z" in the Box.
+- Opponent names in the Calc opponents list were cut off at medium window widths.
 
 ## [0.2.2] - 2026-09-21
 

@@ -338,6 +338,17 @@ class TestCalcView(_Base):
         self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
         self.assertFalse(self.store.sweep_stale())
 
+    def test_a_pending_save_is_flushed_when_the_session_ends(self):
+        self.view.did_mount()
+        self.addCleanup(self.view.will_unmount)
+        self.store.defer_save = lambda: None   # the delayed save has not fired yet
+        self.store.load_species("left", "kingambit")
+        self.assertIsNone(self.prefs.get(PREF_STATE), "nothing written yet")
+        self.ctx.on_shutdown(self.store.save_state)   # registering twice keeps one hook
+        self.assertEqual(len(self.ctx._shutdown_hooks), 1)
+        self.ctx.run_shutdown_hooks()                # window closed / tab gone
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
+
     def test_sweep_ignores_what_it_does_not_read(self):
         self._load_pair()
         key = self.store.sweep_key()
@@ -472,11 +483,13 @@ class TestCalcView(_Base):
         self.assertEqual(len(self.view.sweep._list.controls), 1)
         self.view.sweep._set_query("")
         self.view.sweep._set_class("wall")
-        self.assertTrue(all(c.content.controls[2]._label.value == "Wall" for c in self.view.sweep._list.controls if hasattr(c, "content") and isinstance(c.content, ft.Row)))
+        walls = [c for c in self.view.sweep._list.controls if hasattr(c, "klass_chip")]
+        self.assertTrue(walls)
+        self.assertTrue(all(c.klass_chip._label.value == "Wall" for c in walls))
         self.view.sweep._set_class(None)
         card = self.view.sweep._list.controls[0]
         card.on_click(None)
-        self.assertEqual(self.store.state.right.species, card.content.controls[0].tooltip or self.store.state.right.species)
+        self.assertEqual(self.store.state.right.species, card.sprite.tooltip or self.store.state.right.species)
         self.assertTrue(self.store.state.right.source.startswith("Opponents"))
         self.assertEqual(self.view.rail._team.controls[0].value, "No team yet — build one in Teams.")
         serialise(self.view)

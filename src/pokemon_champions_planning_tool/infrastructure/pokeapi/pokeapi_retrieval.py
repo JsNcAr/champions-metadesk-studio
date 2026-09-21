@@ -196,7 +196,7 @@ def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
             canonical_id=mega_api_name,
             species_name=species_name,
             display_name=display_name,
-            form_name="Mega X" if mega_api_name.endswith("-mega-x") else "Mega Y" if mega_api_name.endswith("-mega-y") else "Mega",
+            form_name=next((label for suffix, label in (("-mega-x", "Mega X"), ("-mega-y", "Mega Y"), ("-mega-z", "Mega Z")) if mega_api_name.endswith(suffix)), "Mega"),
             types=[t["type"]["name"] for t in data.get("types", [])],
             sprite_url=data.get("sprites", {}).get("front_default"),
             hp=stats.get("hp", 0),

@@ -264,7 +264,7 @@ class SlotCard(ft.Container):
 
         choices = slot.form_choices()
         self._form.visible = len(choices) > 1
-        self._form.segments = [ft.Segment(value=c.form_id, label=ft.Text(c.label if not c.is_mega else c.label.replace(pokemon.display_name, "").strip() or c.label)) for c in choices]
+        self._form.segments = [ft.Segment(value=c.form_id, label=ft.Text(c.label if not c.is_mega else " ".join(c.label.replace(pokemon.display_name, "").split()) or c.label)) for c in choices]
         self._form.selected = [form.form_id]
 
         abilities = slot.ability_options

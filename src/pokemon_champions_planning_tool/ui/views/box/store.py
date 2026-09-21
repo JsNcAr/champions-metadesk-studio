@@ -26,6 +26,7 @@ from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.team import Team
 from ....domain.entities.team_member import TeamMember
 from ....domain.entities.pokemon_stats import PokemonStats
+from ....domain.pokemon_identity import format_display_name
 from ....domain.type_chart import bucket_profile, defensive_profile
 from ....infrastructure.csv.csv_operations import export_box_entries_to_csv
 from ....infrastructure.database.database import get_session
@@ -74,7 +75,7 @@ class FormOption:
             resolved_ability = raw[0] if raw else None
         return cls(
             form_id=mega.canonical_id,
-            label=mega.display_name,
+            label=format_display_name(mega.canonical_id) if "-mega" in mega.canonical_id else mega.display_name,
             sprite_url=mega.sprite_url,
             types=tuple(mega.types or ()),
             stats=PokemonStats(

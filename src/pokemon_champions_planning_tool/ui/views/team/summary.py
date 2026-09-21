@@ -13,6 +13,7 @@ from typing import Literal
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.moves import MoveInfo
+from ....domain.pokemon_identity import format_display_name
 from ....domain.entities.team_member import TeamMember
 from ....domain.stat_calc import MAX_POINTS_TOTAL, champions_stats, format_points, points_total, validate_points
 from ....domain.type_chart import TYPES, best_offensive_multiplier, team_defensive_matrix, team_offensive_matrix, team_offensive_summary, team_weakness_summary, uncovered_types
@@ -113,7 +114,7 @@ class SlotModel:
         return [base] + [
             FormChoice(
                 m.canonical_id,
-                m.display_name,
+                format_display_name(m.canonical_id) if "-mega" in m.canonical_id else m.display_name,
                 m.sprite_url or p.sprite_url,
                 tuple(m.types or ()),
                 PokemonStats(hp=m.hp, attack=m.attack, defense=m.defense, sp_atk=m.special_attack, sp_def=m.special_defense, speed=m.speed),

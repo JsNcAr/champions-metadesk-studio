@@ -512,3 +512,34 @@ class TestShellColdBuild(unittest.TestCase):
         self._drain()
         self.assertEqual(self.built, ["other"], "the abandoned view is not built")
         self.assertEqual(self.shell.current, "other")
+
+
+class TestShutdownHooks(unittest.TestCase):
+    def test_every_way_a_session_ends_flushes_the_hooks(self):
+        from unittest import mock
+
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui import app as app_module
+
+        page = StubPage()
+        ctx = AppContext(page)
+        calls = []
+        ctx.on_shutdown(lambda: calls.append(1))
+        with mock.patch("atexit.register") as register:
+            app_module._install_shutdown_hooks(page, ctx)
+        for handler in (page.on_disconnect, page.on_close, page.on_app_lifecycle_state_change):
+            handler(None)
+        register.assert_called_once_with(ctx.run_shutdown_hooks)
+        self.assertEqual(len(calls), 3)
+
+    def test_a_failing_hook_does_not_stop_the_others(self):
+        import contextlib
+        import io
+
+        ctx = AppContext(StubPage())
+        calls = []
+        ctx.on_shutdown(lambda: 1 / 0)
+        ctx.on_shutdown(lambda: calls.append(1))
+        with contextlib.redirect_stdout(io.StringIO()):
+            ctx.run_shutdown_hooks()
+        self.assertEqual(calls, [1])

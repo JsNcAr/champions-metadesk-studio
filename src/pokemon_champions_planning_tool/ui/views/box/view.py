@@ -230,7 +230,16 @@ class BoxView(ft.Row):
         elif kind == "entry":
             self._render_entry(change[1])
         elif kind == "selection":
-            self._render_selection(change[1])
+            panel_was_open = self.detail.visible
+            changed = self._render_selection(change[1])
+            if self.view_mode != "table" and panel_was_open and self.detail.visible:
+                # Moving the selection with the panel already open changes two card
+                # frames and the panel's content, not the layout. Redrawing the whole
+                # view here walked every card (~0.4 s on a full box).
+                for card in changed:
+                    self._safe_update(card)
+                self._safe_update(self.detail)
+                return
         elif kind == "multi":
             self._render_multi()
         self._update_self()
@@ -401,13 +410,18 @@ class BoxView(ft.Row):
         if entry_id == self.store.selected_id:
             self._render_detail()
 
-    def _render_selection(self, entry_id: UUID | None) -> None:
+    def _render_selection(self, entry_id: UUID | None) -> list[PokemonCard]:
+        """Mark the selected card and redraw the detail; returns the cards that changed."""
+        changed = []
         for eid, card in self._cards.items():
+            if card.selected != (eid == entry_id):
+                changed.append(card)
             card.set_selected(eid == entry_id)
         if self.view_mode == "table":
             usage_map = self._get_usage_map_if_needed()
             self.table.update_from(self._visible_for_render(), sort=self.store.filters.sort, descending=self.store.filters.descending, selected_id=entry_id, usage_map=usage_map)
         self._render_detail()
+        return changed
 
     def _render_detail(self) -> None:
         selected = self.store.selected_id

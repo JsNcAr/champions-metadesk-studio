@@ -91,6 +91,21 @@ class TestBoxView(_BoxViewCase):
         self.view.handle_key(type("K", (), {"key": "Escape", "ctrl": False})())
         self.assertFalse(self.view.detail.visible)
 
+    def test_moving_the_selection_redraws_two_cards_not_the_box(self):
+        self.view.ensure_loaded()
+        full = []
+        self.view._update_self = lambda: full.append(1)
+        first, second = list(self.view._cards)[:2]
+        self.view._select(first)
+        self.assertEqual(full, [1], "opening the panel changes the layout: full redraw")
+        self.view._select(second)
+        self.assertEqual(full, [1], "with the panel open, only the two cards and the panel change")
+        self.assertTrue(self.view._cards[second].selected)
+        self.assertFalse(self.view._cards[first].selected)
+        self.assertEqual(self.view.detail._title.value, self.view.store.entry(second).pokemon.display_name)
+        self.view._select(None)
+        self.assertEqual(full, [1, 1], "closing the panel changes the layout again")
+
     def test_filter_and_table_mode(self):
         self.view.ensure_loaded()
         self.view.toolbar._set(text="rilla")

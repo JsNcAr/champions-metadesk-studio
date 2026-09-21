@@ -13,6 +13,8 @@ def format_display_name(api_name):
         return f"Mega {api_name.removesuffix('-mega-x').title()} X"
     if api_name.endswith("-mega-y"):
         return f"Mega {api_name.removesuffix('-mega-y').title()} Y"
+    if api_name.endswith("-mega-z"):   # Champions' Z Megas (Garchomp, Absol…)
+        return f"Mega {api_name.removesuffix('-mega-z').title()} Z"
     if api_name.endswith("-mega"):
         return f"Mega {api_name.removesuffix('-mega').title()}"
 

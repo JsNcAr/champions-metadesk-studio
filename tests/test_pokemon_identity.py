@@ -282,3 +282,22 @@ class TestClassifyBattleFormat(unittest.TestCase):
         )
 
 
+
+
+class TestMegaZNames(unittest.TestCase):
+    """Champions adds Z Megas (Garchomp, Absol). They used to show as "Garchomp-Mega-Z"."""
+
+    def test_z_megas_read_like_the_other_megas(self):
+        from pokemon_champions_planning_tool.domain.pokemon_identity import format_display_name
+
+        self.assertEqual(format_display_name("garchomp-mega-z"), "Mega Garchomp Z")
+        self.assertEqual(format_display_name("absol-mega-z"), "Mega Absol Z")
+        self.assertEqual(format_display_name("garchomp-mega"), "Mega Garchomp")
+
+    def test_a_record_cached_with_the_old_name_still_shows_the_new_one(self):
+        from pokemon_champions_planning_tool.infrastructure.database.models import MegaEvolutionRecord
+        from pokemon_champions_planning_tool.ui.views.box.store import FormOption
+
+        cached = MegaEvolutionRecord(canonical_id="garchomp-mega-z", species_name="garchomp", display_name="Garchomp-Mega-Z",
+                                     types=["dragon"], hp=108, attack=130, defense=95, special_attack=80, special_defense=85, speed=102)
+        self.assertEqual(FormOption.from_mega(cached).label, "Mega Garchomp Z")

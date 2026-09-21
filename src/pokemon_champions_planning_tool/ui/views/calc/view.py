@@ -34,7 +34,7 @@ class CalcView(ft.Column):
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
-        self.field = FieldStrip(store=self.store, on_swap=self.store.swap_sides)
+        self.field = FieldStrip(store=self.store, on_clear=self._clear_conditions)
         self.rail = CalcRail(store=self.store, accent=Accent.CALC)
         self.rail.width = RAIL_WIDTH
         self.sweep = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=self._pick_opponent)
@@ -109,6 +109,10 @@ class CalcView(ft.Column):
             CAPTION if self.store.catalogs.has_species
             else "Species data not synced yet — Settings › Moves, learnsets & species"
         )
+
+    def _clear_conditions(self) -> None:
+        previous = self.store.clear_conditions()
+        self.ctx.toast("Conditions cleared", "info", action="Undo", on_action=lambda: self.store.restore(previous))
 
     def _reset(self) -> None:
         previous = self.store.reset()

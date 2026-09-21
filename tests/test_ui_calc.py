@@ -311,6 +311,45 @@ class TestCalcView(_Base):
         self.assertGreater(self.store.speed("left"), 102)
         serialise(self.view)
 
+    def test_singles_hides_and_drops_doubles_only_conditions(self):
+        self._load_pair()
+        self.store.set_side_conditions("left", helping_hand=True, friend_guard=True, reflect=True)
+        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
+        self.view.field.tiles["singles"].on_click(None)
+        left = self.store.state.field.left
+        self.assertEqual((left.helping_hand, left.friend_guard, left.reflect), (False, False, True), "only the doubles-only ones go")
+        self.assertFalse(self.view.field.side_chips[("left", "helping_hand")].visible)
+        self.assertFalse(self.view.field.side_chips[("right", "friend_guard")].visible)
+        self.assertTrue(self.view.field.side_chips[("left", "reflect")].visible)
+        self.view.field.tiles["doubles"].on_click(None)
+        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
+
+    def test_clear_resets_conditions_and_modifiers_but_keeps_the_pokemon(self):
+        self._load_pair()
+        self.assertTrue(self.view.field._clear.disabled, "nothing to clear yet")
+        self.store.set_field(weather="Rain", terrain="Grassy", trick_room=True, game_type="singles")
+        self.store.set_side_conditions("right", reflect=True, spikes=2)
+        self.store.set_boost("left", "attack", 2)
+        self.store.set_pokemon("right", status="brn", ability="Intimidate", ability_on=True)
+        self.store.toggle_move_effect("left", 2)   # Swords Dance: +2 Atk, marked active
+        self.store.set_hp_pct("right", 40)
+        self.assertFalse(self.view.field._clear.disabled)
+        before = self.store.state
+
+        self.view._clear_conditions()
+        s = self.store.state
+        self.assertEqual(s.field.weather, "none")
+        self.assertEqual((s.field.terrain, s.field.trick_room, s.field.right.reflect, s.field.right.spikes), ("none", False, False, 0))
+        self.assertEqual(s.field.game_type, "singles", "the format is not a condition")
+        self.assertEqual((s.left.boosts, s.right.status, s.right.ability_on, s.left.active), ({}, "none", False, [False] * 4))
+        self.assertEqual((s.left.species, s.right.species, s.left.moves, s.right.ability, s.right.hp_pct), ("kingambit", "incineroar", before.left.moves, "Intimidate", 40))
+        self.assertTrue(self.view.field._clear.disabled)
+
+        snack = self.page.dialogs[-1]
+        self.assertEqual(snack.action, "Undo")
+        snack.on_action(None)
+        self.assertEqual(self.store.state, before)
+
     def test_panel_search_and_edits_go_through_the_store(self):
         self.view.attacker._suggest("king")
         self.assertEqual([c.label.value for c in self.view.attacker._suggestions.controls], ["Kingambit"])

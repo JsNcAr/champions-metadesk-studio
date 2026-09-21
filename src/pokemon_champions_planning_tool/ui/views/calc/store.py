@@ -34,6 +34,7 @@ from ...catalogs import Catalogs
 from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, move_options_for
 from .state import (
     BOOST_STATS,
+    DOUBLES_ONLY,
     CalcRequest,
     CalcResults,
     CalcState,
@@ -668,7 +669,13 @@ class CalcStore:
         return True
 
     def set_field(self, **changes: Any) -> None:
-        self.state = replace(self.state, field=replace(self.state.field, **changes))
+        field = replace(self.state.field, **changes)
+        if field.game_type == "singles":
+            # Doubles-only conditions are hidden in Singles; drop them so they can't
+            # still change the damage while invisible.
+            off = {key: False for key in DOUBLES_ONLY}
+            field = replace(field, left=replace(field.left, **off), right=replace(field.right, **off))
+        self.state = replace(self.state, field=field)
         self._commit()
 
     def toggle_field(self, key: str, value: Any = True) -> None:
@@ -700,6 +707,27 @@ class CalcStore:
         self.state = CalcState()
         self._commit()
         return previous
+
+    def clear_conditions(self) -> CalcState:
+        """Reset the field and every stat modifier; keep both Pokémon as they are.
+
+        Clears weather, terrain, rooms, speed control and side conditions (the format
+        stays), and on both sides: stat stages, status, activated abilities and the
+        applied status-move effects. Species, moves, spreads, items and HP are kept.
+        Returns the previous state for Undo.
+        """
+        previous = self.state
+        cleared = {side: replace(self.state.side(side), boosts={}, status="none", ability_on=False, active=[False, False, False, False])
+                   for side in ("left", "right")}
+        self.state = CalcState(left=cleared["left"], right=cleared["right"], field=FieldState(game_type=self.state.field.game_type))
+        self._commit()
+        return previous
+
+    def has_conditions(self) -> bool:
+        """True when ``clear_conditions`` would change anything."""
+        if self.state.field != FieldState(game_type=self.state.field.game_type):
+            return True
+        return any(p.boosts or p.status != "none" or p.ability_on or any(p.active) for p in (self.state.left, self.state.right))
 
     def restore(self, state: CalcState) -> None:
         """Put back a state returned by ``reset`` (or ``clear_conditions``)."""

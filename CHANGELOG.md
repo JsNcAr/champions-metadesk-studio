@@ -19,6 +19,10 @@ for the headings and style.
 - The downloadable Windows, macOS and Linux archives include the license and third-party
   notices.
 
+### Fixed
+- Dropdown values (the team selector, abilities, every Meta filter), text typed into fields
+  and some labels were nearly black on the dark background.
+
 ## [0.2.2] - 2026-09-21
 
 A calculator that answers first: the matchup is always in view, and the field takes a

@@ -108,8 +108,9 @@ class SettingsStore:
         from ....services.sprite_cache_service import sprite_cache
         with self._sf() as s:
             repo = BoxRepository(s)
-            entries = repo.list_all()
-            box_cids = [e.pokemon.canonical_id for e in entries if e.pokemon]
+            # list_all returns raw records (pokemon_canonical_id, no hydrated .pokemon),
+            # which is all a prefetch needs — planned entries included, they are drawn too.
+            box_cids = [r.pokemon_canonical_id for r in repo.list_all(include_planned=True) if r.pokemon_canonical_id]
             tourney_cids = list(s.exec(
                 select(TournamentTeamMemberRecord.canonical_id).distinct().limit(300)
             ).all())

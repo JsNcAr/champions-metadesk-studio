@@ -39,6 +39,7 @@ The GUI is validated without requiring an interactive display:
 
 - **Headless Component & View Tests (`tests/test_ui_*.py`)**: Using `_ui_stubs.py` (`StubPage`), views and dialogs are tested for event handling, control generation, and store interactions.
 - **Whole-App Serialization Smoke Test (`scripts/ui_smoke.py`)**: Builds the shell and all five views against an actual SQLite database, verifying Flet control tree serialization and database relational integrity.
+- **Performance and interaction checks against the running app**: `StubPage.update()` is a no-op, so unit tests show neither what an update costs nor what the client does with it. For rendering, focus and latency changes, run the web build (`--web`, port 8550) against a database at realistic scale and drive it with headless Chromium (Playwright). Time click-to-pixel-change and typing-to-result, and log patch sizes by wrapping Flet's `Session` patch builder. Check that nothing else holds port 8550 first, or the probe measures a stale server. Headless software rendering adds about 0.5 s to every visible change, so compare before/after runs on the same machine rather than reading absolute numbers.
 
 ## Priority Test Cases
 
@@ -58,7 +59,7 @@ The project uses Python's standard `unittest` library for automated test executi
 ```bash
 poetry run python -m unittest discover -s tests
 ```
-The test suite executes **357 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
+The test suite executes **509 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
 
 ### Running Headless UI Smoke Test
 ```bash

@@ -190,5 +190,7 @@ Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials:
 | `PCPT_DATABASE` | `pokemon_champions.db` (working directory) | Path of the SQLite database file. |
 | `PCPT_PREFERENCES` | `preferences.json` beside the database | Path of the view-preferences file. |
 | `PCPT_VR_MAX_PLACEMENT` | `64` | Placements ingested per official event from Victory Road (Regionals publish hundreds of sheets). |
+| `PCPT_ASSETS_DIR` | `assets` (working directory) | Directory Flet serves static assets from; resolved to an absolute path. |
+| `PCPT_SPRITE_CACHE_DIR` | `sprites` inside the assets directory | Where downloaded sprites are cached. Keep it inside the assets directory, or they are not served. |
 
 Example: `PCPT_DATABASE=~/pokemon/champions.db poetry run python -m pokemon_champions_planning_tool.main`

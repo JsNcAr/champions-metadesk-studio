@@ -108,13 +108,32 @@
 - **Docker + Wine Windows cross-compilation (`scripts/build_windows_docker.sh`, `Dockerfile.windows`)**: automated container pipeline building native Windows `.exe` binaries from Linux hosts without local Wine setup, using offline wheel pre-resolution to circumvent Wine network socket constraints.
 - **Dedicated build guide (`docs/building.md`)**: instructions and best practices for host native builds and cross-compilation outputs.
 
+## Phase 12: Performance & Responsiveness [COMPLETED — 2026-09-21]
+Measured on a year-scale synthetic database (1,200 tournaments, 66,000 teams, a
+250-entry box) and against the running web app in headless Chromium.
+- **Startup**: the window opens without waiting on the network (first launch used to
+  block ~20 s on catalogue downloads) and reports "Setting up" in a shell banner.
+  Migrations are skipped once the schema is current, and the sprite cache no longer
+  delays shutdown.
+- **Queries**: index-friendly rewrites of the Meta box filter (2.0 s → 214 ms), move usage,
+  teammate synergy and team member counts; a team loads its six slots without reading
+  the whole box; smaller indexes and a larger page cache.
+- **Box**: first fill drawn in chunks behind a skeleton; cards and table rows cached and
+  memoised; card frames no longer re-sent on every update; filter results ~0.35 s after
+  the last key instead of ~2.4 s.
+- **Menu switching**: views layered in one stack and kept built, crossfading in 150 ms.
+  A switch costs 1–5 ms of UI-loop time instead of 380–490 ms, and returning to a view
+  never re-sends it. Views are prewarmed while idle. Hidden views no longer take clicks
+  or keyboard focus.
+- **Sprites**: the offline sprite cache is actually served (the assets path resolved
+  nowhere before); the web build shows sprites at all.
+- **Fixes**: "Sync sprites" in Settings failed on any non-empty box; official events
+  whose team lists Victory Road posts late are retried for 45 days instead of closed
+  after 14 (see [integrations.md](integrations.md)).
+
 ## Remaining Backlog
 - **RK9 team lists for official events** — *pending.* Official events currently appear in
   Meta only once Victory Road posts its results table, days after the event; RK9 has every
   team list right away. Fall back to RK9 when Victory Road has none. Details and open
   questions in [integrations.md](integrations.md#pending-rk9-team-lists-for-official-events).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.
-
-Done since this list was written: offline sprite caching — sprites on disk at launch are
-served from `/sprites/` (the web build cannot load CDN sprites at all under its
-cross-origin policy), and the roster is prefetched in the background for the next launch.

@@ -173,3 +173,24 @@ class TestSpriteControlUsesTheCache(unittest.TestCase):
         self.assertEqual(blank._image.src, "")
         self.assertFalse(blank._image.visible)
         self.assertTrue(blank._fallback.visible)
+
+
+class TestPrepareSpriteCacheDir(unittest.TestCase):
+    def test_creates_the_directory(self):
+        import tempfile
+
+        from pokemon_champions_planning_tool.main import prepare_sprite_cache_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "assets" / "sprites"
+            self.assertTrue(prepare_sprite_cache_dir(target))
+            self.assertTrue(target.is_dir())
+
+    def test_an_unwritable_location_does_not_stop_the_app(self):
+        # A macOS .app opened from Finder runs in the read-only "/".
+        from unittest import mock
+
+        from pokemon_champions_planning_tool.main import prepare_sprite_cache_dir
+
+        with mock.patch.object(Path, "mkdir", side_effect=PermissionError(13, "Read-only file system")):
+            self.assertFalse(prepare_sprite_cache_dir("/assets/sprites"))

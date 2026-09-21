@@ -100,6 +100,23 @@ def refresh_catalogues(session) -> set[str]:
     return changed
 
 
+def prepare_sprite_cache_dir(path: str | Path = DEFAULT_SPRITE_CACHE_DIR) -> bool:
+    """Create the sprite cache directory; False if it cannot be created.
+
+    Flet drops assets_dir when the directory is missing, and then serves nothing from
+    it, the sprite cache included, so it must exist before ``ft.run``. The path is
+    relative to the working directory by default, which a packaged app does not choose:
+    a macOS .app opened from Finder starts in the read-only ``/``. That must not stop
+    the app from opening. Without the directory, sprites simply load from the CDN.
+    """
+    try:
+        Path(path).mkdir(parents=True, exist_ok=True)
+        return True
+    except OSError as exc:
+        print(f"⚠️ Sprite cache disabled: cannot create {path} ({exc}).")
+        return False
+
+
 def run():
     # Initialize DB schema once before anything else (DDL, migrations)
     initialize_database()
@@ -114,9 +131,7 @@ def run():
     import flet as ft
     from pokemon_champions_planning_tool.ui.app import main as gui_main
 
-    # Flet drops assets_dir when the directory is missing, and then serves nothing from
-    # it — including the sprite cache. Create it before handing the path over.
-    Path(DEFAULT_SPRITE_CACHE_DIR).mkdir(parents=True, exist_ok=True)
+    prepare_sprite_cache_dir()
 
     view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
     ft.run(gui_main, view=view_mode, port=8550, assets_dir=DEFAULT_ASSETS_DIR)

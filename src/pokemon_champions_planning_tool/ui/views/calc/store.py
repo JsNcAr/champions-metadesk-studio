@@ -34,6 +34,7 @@ from ...catalogs import Catalogs
 from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, move_options_for
 from .state import (
     BOOST_STATS,
+    DOUBLES_ONLY,
     CalcRequest,
     CalcResults,
     CalcState,
@@ -54,6 +55,7 @@ PREF_STATE = "calc.state"
 PREF_PRESETS = "calc.sweep_presets"
 PREF_SWEEP_SORT = "calc.sweep_sort"
 PREF_SWEEP_REGULATION = "calc.sweep_regulation"
+PREF_SECTIONS = "calc.sections"
 
 # Status moves the "Activate" toggle knows: stat stages on the user, field or side conditions,
 # or a status on the opponent. Values are applied on activation and reverted on deactivation.
@@ -235,6 +237,11 @@ class CalcStore:
         self._cache: OrderedDict[str, CalcResults] = OrderedDict()
         self._listeners: list[Listener] = []
         self.loaded = False
+        # Saving the state writes preferences.json. The view sets this to a debounced call to
+        # ``save_state`` so a burst of edits (a slider drag) writes once; without it (tests,
+        # scripts) every commit saves at once.
+        self.defer_save: Callable[[], None] | None = None
+        self._unsaved = False
 
     # -- subscriptions -----------------------------------------------------------------------
 
@@ -408,6 +415,55 @@ class CalcStore:
         field = engine_field(self.state.field, attacker_is_left=(side == "left"))
         results = run_side(attacker, self.state.side(other), field, self.catalogs, self._calc, a_species, d_species)
         return results[0] if results else None
+
+    def fill_top_moves(self, side: str, *, candidates: int = 24) -> int:
+        """Fill the empty move slots with likely picks; returns how many were filled.
+
+        Tournament usage for the species decides when there is any. Otherwise the damaging
+        moves are ranked by what they do to the other side (by power when there is no other
+        side yet); only the ``candidates`` strongest by power are run through the engine.
+        """
+        p = self.state.side(side)
+        empty = [i for i, name in enumerate(p.moves) if not name]
+        if not empty or self.species(side) is None:
+            return 0
+        options = self.move_options(side)
+        taken = {name.lower() for name in p.moves if name}
+        pool = [m for m in options.legal if m.is_legal and m.name.lower() not in taken]
+        used = sorted((m for m in pool if options.usage.get(m.move_id, 0) > 0), key=lambda m: -options.usage[m.move_id])
+        if used:
+            picks = [m.name for m in used]
+        else:
+            damaging = sorted((m for m in pool if (m.category or "").lower() != "status" and m.power),
+                              key=lambda m: -(m.power or 0) * (m.accuracy or 100))[:candidates]
+
+            def score(m) -> float:
+                result = self.damage_preview(side, m.name)
+                return result.max_pct if result is not None and result.ok else (m.power or 0) / 1000
+            picks = [m.name for m in sorted(damaging, key=score, reverse=True)]
+        moves = list(p.moves)
+        filled = 0
+        for index, name in zip(empty, picks):
+            moves[index] = name
+            filled += 1
+        if filled:
+            self.set_pokemon(side, moves=moves)
+        return filled
+
+    def section_open(self, name: str, default: bool = True) -> bool:
+        sections = self._prefs.get(PREF_SECTIONS, {}) if self._prefs is not None else {}
+        return bool(sections.get(name, default)) if isinstance(sections, dict) else default
+
+    def set_section_open(self, name: str, value: bool) -> None:
+        if self._prefs is None:
+            return
+        sections = self._prefs.get(PREF_SECTIONS, {})
+        sections = dict(sections) if isinstance(sections, dict) else {}
+        sections[name] = bool(value)
+        try:
+            self._prefs.set(PREF_SECTIONS, sections)
+        except Exception:  # noqa: BLE001 - a layout preference is a convenience
+            pass
 
     def points_left(self, side: str) -> int:
         return MAX_POINTS_TOTAL - points_total(self.state.side(side).points)
@@ -668,7 +724,13 @@ class CalcStore:
         return True
 
     def set_field(self, **changes: Any) -> None:
-        self.state = replace(self.state, field=replace(self.state.field, **changes))
+        field = replace(self.state.field, **changes)
+        if field.game_type == "singles":
+            # Doubles-only conditions are hidden in Singles; drop them so they can't
+            # still change the damage while invisible.
+            off = {key: False for key in DOUBLES_ONLY}
+            field = replace(field, left=replace(field.left, **off), right=replace(field.right, **off))
+        self.state = replace(self.state, field=field)
         self._commit()
 
     def toggle_field(self, key: str, value: Any = True) -> None:
@@ -694,8 +756,37 @@ class CalcStore:
         self.state = CalcState(left=self.state.right, right=self.state.left, field=replace(f, left=f.right, right=f.left))
         self._commit()
 
-    def reset(self) -> None:
+    def reset(self) -> CalcState:
+        """Clear both Pokémon and the field; returns the previous state for Undo."""
+        previous = self.state
         self.state = CalcState()
+        self._commit()
+        return previous
+
+    def clear_conditions(self) -> CalcState:
+        """Reset the field and every stat modifier; keep both Pokémon as they are.
+
+        Clears weather, terrain, rooms, speed control and side conditions (the format
+        stays), and on both sides: stat stages, status, activated abilities and the
+        applied status-move effects. Species, moves, spreads, items and HP are kept.
+        Returns the previous state for Undo.
+        """
+        previous = self.state
+        cleared = {side: replace(self.state.side(side), boosts={}, status="none", ability_on=False, active=[False, False, False, False])
+                   for side in ("left", "right")}
+        self.state = CalcState(left=cleared["left"], right=cleared["right"], field=FieldState(game_type=self.state.field.game_type))
+        self._commit()
+        return previous
+
+    def has_conditions(self) -> bool:
+        """True when ``clear_conditions`` would change anything."""
+        if self.state.field != FieldState(game_type=self.state.field.game_type):
+            return True
+        return any(p.boosts or p.status != "none" or p.ability_on or any(p.active) for p in (self.state.left, self.state.right))
+
+    def restore(self, state: CalcState) -> None:
+        """Put back a state returned by ``reset`` (or ``clear_conditions``)."""
+        self.state = state
         self._commit()
 
     def set_sweep_presets(self, value: bool) -> None:
@@ -710,9 +801,15 @@ class CalcStore:
 
     # -- opponent sweep ----------------------------------------------------------------------
 
+    # PokemonState fields the sweep never reads: where the attacker came from, the notes on
+    # its assumptions, and which status-move effects are applied (their result is already in
+    # the boosts and the field). Changing only these must not re-run every opponent.
+    _SWEEP_IGNORES = ("source", "assumptions", "active")
+
     def sweep_key(self) -> str:
         d = self.state.to_dict()
-        return "|".join((str(d["left"]), str(d["field"]), str(self.sweep_presets), str(self.sweep_regulation)))
+        left = {k: v for k, v in d["left"].items() if k not in self._SWEEP_IGNORES}
+        return "|".join((str(left), str(d["field"]), str(self.sweep_presets), str(self.sweep_regulation)))
 
     def sweep_stale(self) -> bool:
         return self._sweep_key != self.sweep_key()
@@ -882,6 +979,16 @@ class CalcStore:
 
     # -- internals ---------------------------------------------------------------------------
 
+    def save_state(self) -> None:
+        """Write the calculation to the preferences if it changed since the last save."""
+        if not self._unsaved or self._prefs is None:
+            return
+        self._unsaved = False
+        try:
+            self._prefs.set(PREF_STATE, self.state.to_dict())
+        except Exception:  # noqa: BLE001 - persistence is a convenience
+            pass
+
     def _commit(self) -> None:
         self._recompute(persist=True)
 
@@ -897,12 +1004,13 @@ class CalcStore:
             self._cache.move_to_end(key)
         self.results = cached
         if persist and self._prefs is not None:
-            try:
-                self._prefs.set(PREF_STATE, self.state.to_dict())
-            except Exception:  # noqa: BLE001 - persistence is a convenience
-                pass
+            self._unsaved = True
+            if self.defer_save is not None:
+                self.defer_save()
+            else:
+                self.save_state()
         self._notify(("state",))
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_SECTIONS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]

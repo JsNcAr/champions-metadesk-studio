@@ -136,14 +136,18 @@ class Debouncer(Generic[T]):
     changes explicitly.
     """
 
-    def __init__(self, page: ft.Page, delay_ms: int, fn: Callable[[T], None]) -> None:
+    def __init__(self, page: ft.Page, delay_ms: int, fn: Callable[[T], None], *, quiet_event: bool = True) -> None:
+        """``quiet_event=False`` when the caller is not a no-op keystroke: the event that
+        schedules the call may have changed other controls and still needs its refresh."""
         self._page = page
         self._delay = delay_ms / 1000.0
         self._fn = fn
+        self._quiet_event = quiet_event
         self._generation = 0
 
     def __call__(self, value: T) -> None:
-        skip_auto_update()
+        if self._quiet_event:
+            skip_auto_update()
         self._generation += 1
         generation = self._generation
 

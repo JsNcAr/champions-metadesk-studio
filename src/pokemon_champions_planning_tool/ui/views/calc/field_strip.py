@@ -1,5 +1,9 @@
-"""Field strip: one-click tiles for game type, speed control, weather, terrain and rooms, plus a
-row of per-side effect chips (screens, Helping Hand, hazards, Leech Seed…)."""
+"""Field strip: one-click tiles for game type, weather, terrain and the field (Trick Room,
+Gravity, rooms), each side's conditions (Tailwind, screens, Helping Hand, hazards…), and Clear.
+
+Always expanded but dense: every group's label sits beside its tiles, tiles are only as wide
+as their label, and the two sides' conditions share one row as two columns of small tiles.
+"""
 
 from __future__ import annotations
 
@@ -8,22 +12,25 @@ from collections.abc import Callable
 import flet as ft
 
 from ...theme import TERRAIN_COLORS, WEATHER_COLORS, Palette, Radius, Space, alpha
-from .state import SIDE_CONDITION_LABELS, TERRAINS, WEATHERS
+from .state import DOUBLES_ONLY, SIDE_CONDITION_LABELS, TERRAINS, WEATHERS
 from .store import CalcStore
 
 WEATHER_COLOURS = WEATHER_COLORS
 TERRAIN_COLOURS = TERRAIN_COLORS
 
+CLEAR_TOOLTIP = "Reset weather, terrain, rooms, speed control, side conditions, stat stages, statuses and activated abilities"
+
 
 class Tile(ft.Container):
-    def __init__(self, label: str, colour: str, on_click: Callable[[], None], *, width: int | None = None, tooltip: str | None = None) -> None:
+    def __init__(self, label: str, colour: str, on_click: Callable[[], None], *, tooltip: str | None = None, small: bool = True) -> None:
         super().__init__()
         self._colour = colour
-        self._label = ft.Text(label, theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER, max_lines=1)
+        self._label = ft.Text(label, theme_style=ft.TextThemeStyle.LABEL_SMALL if small else ft.TextThemeStyle.LABEL_MEDIUM,
+                              color=Palette.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER, max_lines=1)
+        self.label = self._label
         self.content = self._label
-        self.padding = ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.SM)
+        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS) if small else ft.Padding.symmetric(horizontal=Space.SM + 2, vertical=Space.XS + 2)
         self.border_radius = Radius.SM
-        self.width = width or 110
         self.ink = True
         self.tooltip = tooltip
         self.on_click = lambda _e: on_click()
@@ -37,59 +44,64 @@ class Tile(ft.Container):
         self._label.weight = ft.FontWeight.W_700 if active else ft.FontWeight.W_500
 
 
-def _group(title: str, tiles: list[ft.Control]) -> ft.Column:
-    return ft.Column(spacing=Space.XS, tight=True, controls=[
-        ft.Text(title.upper(), theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
-        ft.Row(spacing=Space.XS, tight=True, wrap=True, controls=tiles),
-    ])
+def _label(text: str, width: int | None = None) -> ft.Text:
+    return ft.Text(text.upper(), theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=width)
+
+
+def _group(title: str, tiles: list[ft.Control]) -> ft.Row:
+    """``TITLE [tile][tile]…`` kept together on one line; groups wrap as whole units."""
+    return ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[_label(title), *tiles])
 
 
 class FieldStrip(ft.Container):
-    def __init__(self, *, store: CalcStore, on_swap: Callable[[], None]) -> None:
+    def __init__(self, *, store: CalcStore, on_clear: Callable[[], None]) -> None:
         super().__init__()
         self.store = store
         self._syncing = False
         s = store
         self.tiles: dict[str, Tile] = {
-            "singles": Tile("Singles", Palette.SECONDARY, lambda: s.set_field(game_type="singles"), width=90),
-            "doubles": Tile("Doubles", Palette.SECONDARY, lambda: s.set_field(game_type="doubles"), width=90),
-            "tailwind_left": Tile("Your Tailwind", Palette.SUCCESS, lambda: s.toggle_side("left", "tailwind"), width=122, tooltip="Attacker's side"),
-            "trick_room": Tile("Trick Room", Palette.TERTIARY, lambda: s.toggle_field("trick_room"), width=104, tooltip="Reverses the speed order shown; the formula itself only cares about it for Payback and Analytic"),
-            "tailwind_right": Tile("Their Tailwind", Palette.SUCCESS, lambda: s.toggle_side("right", "tailwind"), width=122, tooltip="Defender's side"),
-            "gravity": Tile("Gravity", Palette.TERTIARY, lambda: s.toggle_field("gravity"), width=90),
-            "magic_room": Tile("Magic Room", Palette.TERTIARY, lambda: s.toggle_field("magic_room"), width=116),
-            "wonder_room": Tile("Wonder Room", Palette.TERTIARY, lambda: s.toggle_field("wonder_room"), width=124),
+            "singles": Tile("Singles", Palette.SECONDARY, lambda: s.set_field(game_type="singles")),
+            "doubles": Tile("Doubles", Palette.SECONDARY, lambda: s.set_field(game_type="doubles")),
+            "tailwind_left": Tile("Tailwind", Palette.SUCCESS, lambda: s.toggle_side("left", "tailwind"), tooltip="Doubles your side's Speed"),
+            "trick_room": Tile("Trick Room", Palette.TERTIARY, lambda: s.toggle_field("trick_room"), tooltip="Reverses the speed order shown; the formula itself only cares about it for Payback and Analytic"),
+            "tailwind_right": Tile("Tailwind", Palette.SUCCESS, lambda: s.toggle_side("right", "tailwind"), tooltip="Doubles their side's Speed"),
+            "gravity": Tile("Gravity", Palette.TERTIARY, lambda: s.toggle_field("gravity")),
+            "magic_room": Tile("Magic Room", Palette.TERTIARY, lambda: s.toggle_field("magic_room")),
+            "wonder_room": Tile("Wonder Room", Palette.TERTIARY, lambda: s.toggle_field("wonder_room")),
         }
         for key, label in WEATHERS:
-            self.tiles[f"weather:{key}"] = Tile(label, WEATHER_COLOURS[key], lambda key=key: s.toggle_field("weather", key), width=84)
+            self.tiles[f"weather:{key}"] = Tile(label, WEATHER_COLOURS[key], lambda key=key: s.toggle_field("weather", key))
         for key, label in TERRAINS:
-            self.tiles[f"terrain:{key}"] = Tile(label.replace(" Terrain", ""), TERRAIN_COLOURS[key], lambda key=key: s.toggle_field("terrain", key), width=84)
+            self.tiles[f"terrain:{key}"] = Tile(label.replace(" Terrain", ""), TERRAIN_COLOURS[key], lambda key=key: s.toggle_field("terrain", key), tooltip=label)
 
-        swap = ft.IconButton(icon=ft.Icons.SWAP_HORIZ, icon_size=18, tooltip="Swap attacker and defender (Ctrl+Shift+S)", on_click=lambda _e: on_swap())
-        self.side_chips: dict[tuple[str, str], ft.Chip] = {}
-        rows: list[ft.Control] = []
-        for side, title in (("left", "Attacker side"), ("right", "Defender side")):
-            chips: list[ft.Control] = [ft.Text(title, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=96)]
-            if side == "left":
-                chips.append(swap)
+        self.side_chips: dict[tuple[str, str], Tile] = {}
+        columns: list[ft.Control] = []
+        for side, title in (("left", "Your side"), ("right", "Their side")):
+            chips: list[ft.Control] = [self.tiles[f"tailwind_{side}"]]
             for key, label in SIDE_CONDITION_LABELS:
-                chip = ft.Chip(label=ft.Text(label), selected=False, show_checkmark=False, on_select=lambda _e, side=side, key=key: self._toggle_side(side, key))
+                chip = Tile(label, Palette.SECONDARY, lambda side=side, key=key: self._toggle_side(side, key))
                 self.side_chips[(side, key)] = chip
                 chips.append(chip)
-            spikes = ft.Chip(label=ft.Text("Spikes"), selected=False, show_checkmark=False, tooltip="Click to add a layer (up to three)", on_select=lambda _e, side=side: self._cycle_spikes(side))
+            spikes = Tile("Spikes", Palette.SECONDARY, lambda side=side: self._cycle_spikes(side), tooltip="Click to add a layer (up to three)")
             self.side_chips[(side, "spikes")] = spikes
             chips.append(spikes)
-            rows.append(ft.Row(spacing=Space.XS, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=chips))
+            columns.append(ft.Column(spacing=Space.XS, tight=True, col={"xs": 12, "md": 6}, controls=[
+                _label(title),
+                ft.Row(spacing=Space.XS, run_spacing=Space.XS, wrap=True, controls=chips),
+            ]))
 
+        self._clear = ft.TextButton("Clear", icon=ft.Icons.CLEAR_ALL, tooltip=CLEAR_TOOLTIP, disabled=True, on_click=lambda _e: on_clear())
         self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
-            ft.Row(spacing=Space.LG, wrap=True, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
-                _group("Battle", [self.tiles["singles"], self.tiles["doubles"]]),
-                _group("Speed", [self.tiles["tailwind_left"], self.tiles["trick_room"], self.tiles["tailwind_right"]]),
-                _group("Weather", [self.tiles[f"weather:{k}"] for k, _l in WEATHERS]),
-                _group("Terrain", [self.tiles[f"terrain:{k}"] for k, _l in TERRAINS]),
-                _group("Rooms", [self.tiles["gravity"], self.tiles["magic_room"], self.tiles["wonder_room"]]),
+            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
+                ft.Row(spacing=Space.LG, run_spacing=Space.SM, wrap=True, expand=True, controls=[
+                    _group("Format", [self.tiles["singles"], self.tiles["doubles"]]),
+                    _group("Weather", [self.tiles[f"weather:{k}"] for k, _l in WEATHERS]),
+                    _group("Terrain", [self.tiles[f"terrain:{k}"] for k, _l in TERRAINS]),
+                    _group("Field", [self.tiles["trick_room"], self.tiles["gravity"], self.tiles["magic_room"], self.tiles["wonder_room"]]),
+                ]),
+                self._clear,
             ]),
-            *rows,
+            ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.SM, controls=columns),
         ])
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
@@ -122,13 +134,17 @@ class FieldStrip(ft.Container):
                 self.tiles[f"weather:{key}"].set_active(f.weather == key)
             for key, _l in TERRAINS:
                 self.tiles[f"terrain:{key}"].set_active(f.terrain == key)
+            doubles = f.game_type == "doubles"
             for side in ("left", "right"):
                 conditions = f.left if side == "left" else f.right
                 for key, _l in SIDE_CONDITION_LABELS:
-                    self.side_chips[(side, key)].selected = getattr(conditions, key)
+                    chip = self.side_chips[(side, key)]
+                    chip.set_active(getattr(conditions, key))
+                    chip.visible = doubles or key not in DOUBLES_ONLY
                 spikes = self.side_chips[(side, "spikes")]
-                spikes.selected = conditions.spikes > 0
-                spikes.label = ft.Text(f"Spikes ×{conditions.spikes}" if conditions.spikes else "Spikes")
+                spikes.set_active(conditions.spikes > 0)
+                spikes.label.value = f"Spikes ×{conditions.spikes}" if conditions.spikes else "Spikes"
+            self._clear.disabled = not self.store.has_conditions()
         finally:
             self._syncing = False
         try:

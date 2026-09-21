@@ -147,6 +147,22 @@ class TestCalcStore(_Base):
         self.store.reset()
         self.assertEqual(self.store.state, CalcState())
 
+    def test_a_burst_of_edits_saves_once_when_deferred(self):
+        writes = []
+        real_set = self.prefs.set
+        self.prefs.set = lambda key, value: (writes.append(key), real_set(key, value))
+        scheduled = []
+        self.store.defer_save = lambda: scheduled.append(1)
+        self.store.load_species("left", "kingambit")
+        for n in range(5):
+            self.store.set_points("left", {"attack": n})
+        self.assertNotIn(PREF_STATE, writes, "nothing written while edits keep coming")
+        self.assertGreaterEqual(len(scheduled), 5)
+        self.store.save_state()
+        self.store.save_state()
+        self.assertEqual(writes.count(PREF_STATE), 1, "one write for the burst")
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["points"], {"attack": 4})
+
     def test_builders_from_slot_and_paste(self):
         from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
 
@@ -219,6 +235,126 @@ class TestCalcView(_Base):
         self.assertTrue(self.view.handle_key(SimpleNamespace(key="Escape", ctrl=False, shift=False, alt=False, meta=False)))
         self.assertFalse(cards[0].expanded)
 
+
+    def test_species_search_says_when_nothing_matches(self):
+        panel = self.view.attacker
+        panel._suggest("zzzz")
+        self.assertTrue(panel._no_match.visible)
+        self.assertIn("zzzz", panel._no_match.value)
+        panel.search.value = "zzzz"
+        panel._submit("zzzz")
+        self.assertEqual(panel.search.value, "zzzz", "Enter with no match keeps the text")
+        panel._suggest("king")
+        self.assertFalse(panel._no_match.visible)
+        self.assertEqual(panel._suggestions.controls[0].label.color, "#F1F5F9", "suggestions are readable")
+
+    def test_reset_can_be_undone(self):
+        self._load_pair()
+        before = self.store.state
+        self.view._reset()
+        self.assertEqual(self.store.state, CalcState())
+        snack = self.page.dialogs[-1]
+        self.assertEqual(snack.action, "Undo")
+        snack.on_action(None)
+        self.assertEqual(self.store.state, before)
+
+    def test_ability_controls_only_where_the_engine_uses_them(self):
+        self._load_pair()
+        self.assertFalse(self.view.attacker._ability_on.visible, "Defiant has no on/off state in the engine")
+        self.assertFalse(self.view.defender._ability_on.visible, "nor does Blaze")
+        self.store.set_pokemon("right", ability="Intimidate")
+        self.assertTrue(self.view.defender._ability_on.visible, "Intimidate does")
+        self.assertFalse(self.view.attacker._allies.visible, "fainted allies only matter for Supreme Overlord")
+        self.store.set_pokemon("left", ability="Supreme Overlord")
+        self.assertTrue(self.view.attacker._allies.visible)
+
+    def test_hp_field_restores_a_non_number(self):
+        self._load_pair()
+        panel = self.view.attacker
+        current = panel._hp_abs.value
+        panel._hp_abs.value = "abc"
+        panel._hp_typed("abc")
+        self.assertEqual(panel._hp_abs.value, current)
+
+    def test_summary_bar_shows_both_directions_and_speed(self):
+        self.assertTrue(self.view.summary._hint.visible, "nothing to compare yet")
+        self._load_pair()
+        bar = self.view.summary
+        self.assertFalse(bar._hint.visible)
+        self.assertEqual(bar._left._title.value, "Kingambit → Incineroar")
+        self.assertIn(bar._left._move.value, ("Kowtow Cleave", "Iron Head"))
+        self.assertIn("%", bar._left._pct.value)
+        self.assertEqual(bar._right._move.value, "Flare Blitz")
+        self.assertIn("Incineroar moves first", bar._speed.value)
+        self.view.field.tiles["trick_room"].on_click(None)
+        self.assertIn("Kingambit moves first (Trick Room)", bar._speed.value)
+
+    def test_moves_come_before_the_spread_and_modifiers_are_summarised(self):
+        self._load_pair()
+        panel = self.view.attacker
+        controls = panel.content.controls
+        self.assertLess(controls.index(panel.cards[0]), controls.index(panel._spread_body), "results first")
+        self.assertLess(controls.index(panel._spread_body), controls.index(panel._mods_body))
+        self.assertFalse(panel._mods_body.visible, "stages & status start collapsed")
+        self.store.set_boost("left", "attack", 2)
+        self.store.set_pokemon("left", status="brn")
+        self.assertEqual(panel._mods_header._status.value, "+2 Atk · Burned", "a collapsed section still shows what is active")
+        panel._toggle_mods()
+        self.assertTrue(panel._mods_body.visible)
+        self.assertTrue(self.store.section_open("mods", False), "remembered")
+
+    def test_fill_with_top_moves(self):
+        self.store.load_species("left", "kingambit")
+        self.store.load_species("right", "incineroar")
+        panel = self.view.attacker
+        self.assertTrue(panel._fill.visible, "no moves yet")
+        filled = self.store.fill_top_moves("left")
+        self.assertGreater(filled, 0)
+        moves = [m for m in self.store.state.left.moves if m]
+        self.assertTrue(moves)
+        self.assertNotIn("Protect", moves, "without usage data only damaging moves are suggested")
+        self.assertFalse(panel._fill.visible)
+        self.assertEqual(sorted(moves), ["Iron Head", "Kowtow Cleave"])
+        self.assertEqual(self.store.fill_top_moves("left"), 0, "nothing damaging left to add")
+
+    def test_only_what_changed_is_redrawn(self):
+        self._load_pair()
+        panel = self.view.attacker
+        type_chip = panel._types.controls[0]
+        refreshed = []
+        self.view.rail.refresh_team = lambda: refreshed.append(1)
+        self.store.toggle_crit("left", 0)
+        self.assertIs(panel._types.controls[0], type_chip, "a crit toggle leaves the identity block alone")
+        self.assertTrue(self.store.state.left.crit[0])
+        self.assertTrue(panel.cards[0]._crit.selected, "but the card shows it")
+        self.assertEqual(refreshed, [], "and the rail is not rebuilt")
+        self.store.load_species("left", "incineroar")
+        self.assertEqual(refreshed, [1], "a different attacker moves the rail highlight")
+
+    def test_mounted_view_defers_saving_and_the_sweep(self):
+        self.view.did_mount()   # what Flet calls once the view is on a live page
+        self.addCleanup(self.view.will_unmount)
+        self._load_pair()       # StubPage runs each delayed call to completion
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
+        self.assertFalse(self.store.sweep_stale())
+
+    def test_sweep_ignores_what_it_does_not_read(self):
+        self._load_pair()
+        key = self.store.sweep_key()
+        self.store.set_pokemon("left", source="Box")
+        self.assertEqual(self.store.sweep_key(), key, "where the attacker came from does not matter")
+        self.store.set_pokemon("left", active=[False, False, True, False])
+        self.assertEqual(self.store.sweep_key(), key, "an applied effect is already in the boosts")
+        self.store.set_boost("left", "attack", 1)
+        self.assertNotEqual(self.store.sweep_key(), key)
+
+    def test_status_chips_brighten_when_selected(self):
+        self._load_pair()
+        self.store.set_pokemon("left", status="brn")
+        chips = self.view.attacker._status_chips
+        self.assertTrue(chips["brn"].selected)
+        self.assertNotEqual(chips["brn"].label.color, chips["none"].label.color)
+
     def test_status_move_activation_applies_boosts_and_field(self):
         self._load_pair()
         before = self.store.results.left_vs_right[0].max_pct
@@ -262,6 +398,45 @@ class TestCalcView(_Base):
         self.view.field.tiles["tailwind_left"].on_click(None)
         self.assertGreater(self.store.speed("left"), 102)
         serialise(self.view)
+
+    def test_singles_hides_and_drops_doubles_only_conditions(self):
+        self._load_pair()
+        self.store.set_side_conditions("left", helping_hand=True, friend_guard=True, reflect=True)
+        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
+        self.view.field.tiles["singles"].on_click(None)
+        left = self.store.state.field.left
+        self.assertEqual((left.helping_hand, left.friend_guard, left.reflect), (False, False, True), "only the doubles-only ones go")
+        self.assertFalse(self.view.field.side_chips[("left", "helping_hand")].visible)
+        self.assertFalse(self.view.field.side_chips[("right", "friend_guard")].visible)
+        self.assertTrue(self.view.field.side_chips[("left", "reflect")].visible)
+        self.view.field.tiles["doubles"].on_click(None)
+        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
+
+    def test_clear_resets_conditions_and_modifiers_but_keeps_the_pokemon(self):
+        self._load_pair()
+        self.assertTrue(self.view.field._clear.disabled, "nothing to clear yet")
+        self.store.set_field(weather="Rain", terrain="Grassy", trick_room=True, game_type="singles")
+        self.store.set_side_conditions("right", reflect=True, spikes=2)
+        self.store.set_boost("left", "attack", 2)
+        self.store.set_pokemon("right", status="brn", ability="Intimidate", ability_on=True)
+        self.store.toggle_move_effect("left", 2)   # Swords Dance: +2 Atk, marked active
+        self.store.set_hp_pct("right", 40)
+        self.assertFalse(self.view.field._clear.disabled)
+        before = self.store.state
+
+        self.view._clear_conditions()
+        s = self.store.state
+        self.assertEqual(s.field.weather, "none")
+        self.assertEqual((s.field.terrain, s.field.trick_room, s.field.right.reflect, s.field.right.spikes), ("none", False, False, 0))
+        self.assertEqual(s.field.game_type, "singles", "the format is not a condition")
+        self.assertEqual((s.left.boosts, s.right.status, s.right.ability_on, s.left.active), ({}, "none", False, [False] * 4))
+        self.assertEqual((s.left.species, s.right.species, s.left.moves, s.right.ability, s.right.hp_pct), ("kingambit", "incineroar", before.left.moves, "Intimidate", 40))
+        self.assertTrue(self.view.field._clear.disabled)
+
+        snack = self.page.dialogs[-1]
+        self.assertEqual(snack.action, "Undo")
+        snack.on_action(None)
+        self.assertEqual(self.store.state, before)
 
     def test_panel_search_and_edits_go_through_the_store(self):
         self.view.attacker._suggest("king")
@@ -310,10 +485,19 @@ class TestCalcView(_Base):
         self.view.handle_resize(1000, 700)
         self.assertIs(self.view._host.content, self.view._stack)
         self.assertIsNone(self.view.rail.width)
+        self.assertIsNone(self.view.rail.content.scroll, "inside the stack's scroll the rail must not scroll itself")
+        self.assertFalse(self.view.sweep._list.expand)
         serialise(self.view)
+        self.view.handle_resize(1180, 820)
+        self.assertEqual(self.view.attacker.col, {"xs": 12}, "compact: the panels stack")
         self.view.handle_resize(1440, 900)
         self.assertIs(self.view._host.content, self.view._wide)
         self.assertEqual(self.view.sweep.width, 300)
+        self.assertEqual(self.view.attacker.col, {"xs": 12, "lg": 6})
+        self.assertIsNotNone(self.view.rail.content.scroll, "wide: each column scrolls on its own")
+        self.assertTrue(self.view.sweep._list.expand)
+        self.assertIsNotNone(self.view._centre.scroll)
+        self.assertIsNone(self.view.scroll, "the page itself no longer scrolls")
         serialise(self.view)
         self._load_pair()
         self.assertTrue(self.view.handle_key(SimpleNamespace(key="S", ctrl=True, shift=True, alt=False, meta=False)))
@@ -783,7 +967,7 @@ class TestCatalogueArrivesLate(_Base):
         ctx.catalogs = self.catalogs
         ctx.bus.emit(events.CATALOGS_RELOADED, "species")
         self.assertTrue(view.store.catalogs.has_species)
-        self.assertEqual(view.header._caption.value, "", "the warning clears once the data is there")
+        self.assertEqual(view.header._caption.value, "Champions damage · both directions", "the warning gives way to the usual caption")
 
     def test_an_unrelated_reload_is_ignored(self):
         page = StubPage()

@@ -11,6 +11,7 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
+from ...tasks import Debouncer, is_mounted
 from ...theme import IconSize, Palette, Radius, Space, alpha
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
@@ -48,7 +49,8 @@ class SweepCard(ft.Container):
         yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
         theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
         theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
-        speed = ft.Text(f"Spe {e.speed} {'▼' if e.faster else '▲'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
+        # Same convention as the panels' speed chip: ▲ = you move first.
+        speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
                         tooltip="You move first" if e.faster else "They move first")
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             Sprite(get_pokemon_sprite_url(e.canonical_id), size=36),
@@ -90,7 +92,8 @@ class SweepPanel(ft.Container):
             tooltip="Sort rival opponents",
             on_select=lambda e: self._on_sort_changed(e.control.value),
         )
-        self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._set_query(e.control.value or ""))
+        self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._query_typed(e.control.value or ""))
+        self._query_later: Debouncer | None = None
         self._chips: dict[str | None, ft.Chip] = {}
         chips: list[ft.Control] = []
         for key, label in ((None, "All"), *SWEEP_CLASSES):
@@ -101,7 +104,7 @@ class SweepPanel(ft.Container):
         self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
-        self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
+        self.content = ft.Column(spacing=Space.SM, controls=[
             SectionHeader("Opponents", accent=accent, action=ft.IconButton(icon=ft.Icons.HELP_OUTLINE, icon_size=IconSize.SM, tooltip="\n".join(f"{dict(SWEEP_CLASSES)[k]}: {v}" for k, v in CLASS_HELP.items()))),
             self._presets, self._sort, self._search, self._chip_row,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
@@ -111,6 +114,13 @@ class SweepPanel(ft.Container):
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
+
+    def set_scrolling(self, scrolling: bool) -> None:
+        """In the wide layout the list scrolls under the fixed controls; stacked, it grows."""
+        self._list.scroll = ft.ScrollMode.AUTO if scrolling else None
+        self._list.expand = scrolling
+        self._list.tight = not scrolling
+        self.content.tight = not scrolling
 
     def _sort_options(self) -> list[ft.DropdownOption]:
         latest = self.store.latest_regulation()
@@ -142,6 +152,15 @@ class SweepPanel(ft.Container):
             self.store.set_sweep_sort("usage", reg)
         else:
             self.store.set_sweep_sort(value)
+
+    def _query_typed(self, query: str) -> None:
+        """Filter once typing pauses: each render rebuilds up to a page of cards."""
+        if not is_mounted(self):
+            self._set_query(query)
+            return
+        if self._query_later is None:
+            self._query_later = Debouncer(self.page, 150, self._set_query)
+        self._query_later(query)
 
     def _set_query(self, query: str) -> None:
         self.query = query

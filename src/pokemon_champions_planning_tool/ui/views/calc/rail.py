@@ -16,7 +16,7 @@ from ...theme import Palette, Radius, Space
 from .state import PokemonState, pokemon_from_slot, pokemon_from_species_id
 from .store import CalcStore
 
-_BOX_LIMIT = 40
+_BOX_LIMIT = 40   # cards per page of the box list; "Show more" adds another page
 
 
 class RailCard(ft.Container):
@@ -50,6 +50,8 @@ class CalcRail(ft.Container):
         self._box_filter = ft.TextField(hint_text="Filter box…", dense=True, prefix_icon=ft.Icons.FILTER_LIST, **SEARCH_FIELD_STYLE, on_change=lambda e: self.refresh_box(e.control.value or ""))
         self._box = ft.Column(spacing=Space.XS, tight=True, controls=[])
         self._box_entries = None
+        self._box_limit = _BOX_LIMIT
+        self._box_query = ""
         self.content = ft.Column(spacing=Space.SM, tight=True, controls=[
             self._team_title, self._team,
             SectionHeader("Box", accent=accent), self._box_filter, self._box,
@@ -58,6 +60,10 @@ class CalcRail(ft.Container):
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
+
+    def set_scrolling(self, scrolling: bool) -> None:
+        """Scroll on its own (a column of the wide layout) or grow with its content (stacked)."""
+        self.content.scroll = ft.ScrollMode.AUTO if scrolling else None
 
     def refresh(self) -> None:
         """Called each time the calculator is shown.
@@ -97,23 +103,29 @@ class CalcRail(ft.Container):
         if self._box_entries is None:
             self._box_entries = self.store.box_entries()
         q = query.strip().lower()
+        if q != self._box_query:
+            self._box_query = q
+            self._box_limit = _BOX_LIMIT
+        matches = [e for e in self._box_entries if not q or q in e.pokemon.display_name.lower()]
         cards: list[ft.Control] = []
-        for entry in self._box_entries:
+        for entry in matches[:self._box_limit]:
             p = entry.pokemon
-            if q and q not in p.display_name.lower():
-                continue
             species = self.store.catalogs.species_for(p.canonical_id)
             caption = f"HP {species.stats.hp + 75} · Spe {species.stats.speed + 20}" if species else "not in the species catalogue"
             cards.append(RailCard(
                 sprite_url=get_pokemon_sprite_url(p.canonical_id), name=p.display_name, types=tuple(t.lower() for t in p.types), caption=caption,
                 on_attacker=lambda cid=p.canonical_id: self._load_species("left", cid), on_defender=lambda cid=p.canonical_id: self._load_species("right", cid),
             ))
-            if len(cards) >= _BOX_LIMIT:
-                break
+        if len(matches) > self._box_limit:
+            cards.append(ft.TextButton(f"Show more ({len(matches) - self._box_limit})…", icon=ft.Icons.EXPAND_MORE, on_click=lambda _e: self._more_box()))
         if not cards:
             cards.append(ft.Text("Nothing in the box" if not q else "No match", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
         self._box.controls = cards
         self._safe_update(self._box)
+
+    def _more_box(self) -> None:
+        self._box_limit += _BOX_LIMIT
+        self.refresh_box(self._box_filter.value or "")
 
     def invalidate_box(self) -> None:
         self._box_entries = None

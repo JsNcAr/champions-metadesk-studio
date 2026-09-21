@@ -1,4 +1,6 @@
-"""Calc view: team/box rail | field strip over the two Pokémon panels | opponent sweep."""
+"""Calc view: the matchup summary under the header, then team/box rail | field strip over the
+two Pokémon panels | opponent sweep. On wide windows each of the three columns scrolls on its
+own, so the rail and the opponents stay in view; narrow windows stack them in one scroll."""
 
 from __future__ import annotations
 
@@ -7,7 +9,7 @@ import flet as ft
 from ... import events
 from ...components import PageHeader
 from ...context import AppContext
-from ...tasks import is_mounted
+from ...tasks import Debouncer, is_mounted
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
@@ -16,42 +18,51 @@ from .panels import PokemonPanel
 from .rail import CalcRail
 from .state import CalcRequest, SweepEntry
 from .store import CalcStore
+from .summary import MatchupBar
 from .sweep import SweepPanel
 
+SAVE_DELAY_MS = 500    # a burst of edits (a slider drag) writes preferences.json once
+SWEEP_DELAY_MS = 300   # the opponents sweep starts once the edits pause
 RAIL_WIDTH = 224
 SWEEP_WIDTH = 300
+CAPTION = "Champions damage · both directions"
 
 
 class CalcView(ft.Column):
     def __init__(self, ctx: AppContext, store: CalcStore | None = None) -> None:
-        super().__init__(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO)
+        super().__init__(spacing=Space.MD, expand=True)
         self.ctx = ctx
         self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
         self._narrow = False
         self._sweep_running = False
         self._presets_warming = False
+        self._rail_key: tuple | None = None
+        self._sweep_later: Debouncer | None = None
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
-        self.field = FieldStrip(store=self.store, on_swap=self.store.swap_sides)
+        self.field = FieldStrip(store=self.store, on_clear=self._clear_conditions)
         self.rail = CalcRail(store=self.store, accent=Accent.CALC)
         self.rail.width = RAIL_WIDTH
         self.sweep = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=self._pick_opponent)
         self.sweep.width = SWEEP_WIDTH
+        self.summary = MatchupBar(store=self.store)
 
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
-        self._centre = ft.Column(spacing=Space.MD, tight=True, expand=True, controls=[self.field, self._pokemon_row])
+        self._centre = ft.Column(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.field, self._pokemon_row])
         self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.rail, self._centre, self.sweep])
-        self._stack = ft.Column(spacing=Space.MD, tight=True, controls=[])
-        self._host = ft.Container(content=self._wide)
+        self._stack = ft.Column(spacing=Space.MD, scroll=ft.ScrollMode.AUTO, controls=[])
+        self._host = ft.Container(content=self._wide, expand=True)
+        self.rail.set_scrolling(True)
+        self.sweep.set_scrolling(True)
         self.header = PageHeader(
-            "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption="Champions damage · both directions",
+            "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
                 ft.IconButton(icon=ft.Icons.SWAP_HORIZ, tooltip="Swap attacker and defender (Ctrl+Shift+S)", on_click=lambda _e: self.store.swap_sides()),
-                ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, on_click=lambda _e: self.store.reset()),
+                ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, tooltip="Clear both Pokémon and the field", on_click=lambda _e: self._reset()),
             ],
         )
-        self.controls = [self.header, self._host]
+        self.controls = [self.header, self.summary, self._host]
 
         self.store.subscribe(self._on_store)
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
@@ -62,6 +73,18 @@ class CalcView(ft.Column):
         ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
 
     # -- lifecycle -----------------------------------------------------------------------------
+
+    def did_mount(self) -> None:
+        # Only on a live page: the delays need its loop (and tests want edits applied at once).
+        page = self.ctx.page
+        save_later = Debouncer(page, SAVE_DELAY_MS, lambda _v: self.store.save_state(), quiet_event=False)
+        self.store.defer_save = lambda: save_later(None)
+        self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
+
+    def will_unmount(self) -> None:
+        self.store.save_state()
+        self.store.defer_save = None
+        self._sweep_later = None
 
     def ensure_loaded(self) -> None:
         if not self.store.loaded:
@@ -93,9 +116,14 @@ class CalcView(ft.Column):
         if event[0] == "state":
             self.field.update_from()
         elif event[0] == "results":
+            self.summary.update_from()
             self.attacker.update_from()
             self.defender.update_from()
-            self.rail.refresh_team()
+            # The rail only marks which team member is loaded; TEAMS_CHANGED covers the rest.
+            left = self.store.state.left
+            if (left.species, left.source) != self._rail_key:
+                self._rail_key = (left.species, left.source)
+                self.rail.refresh_team()
             self._sync_species_banner()
             self._maybe_sweep()
         elif event[0] == "sweep":
@@ -105,9 +133,17 @@ class CalcView(ft.Column):
     def _sync_species_banner(self) -> None:
         # Cleared as well as set: the catalogue can arrive while this view is open.
         self.header.set_caption(
-            "" if self.store.catalogs.has_species
+            CAPTION if self.store.catalogs.has_species
             else "Species data not synced yet — Settings › Moves, learnsets & species"
         )
+
+    def _clear_conditions(self) -> None:
+        previous = self.store.clear_conditions()
+        self.ctx.toast("Conditions cleared", "info", action="Undo", on_action=lambda: self.store.restore(previous))
+
+    def _reset(self) -> None:
+        previous = self.store.reset()
+        self.ctx.toast("Calculator reset", "info", action="Undo", on_action=lambda: self.store.restore(previous))
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
         if kind not in ("items", "megas", "moves", "species", "champions"):
@@ -136,7 +172,16 @@ class CalcView(ft.Column):
     # -- opponent sweep ------------------------------------------------------------------------
 
     def _maybe_sweep(self) -> None:
-        """Recompute the sweep in the background when the attacker or the field changed."""
+        """Recompute the sweep in the background when the attacker or the field changed,
+        once edits pause for ``SWEEP_DELAY_MS`` on a live page."""
+        if self._sweep_running or not self.store.sweep_stale():
+            return
+        if self._sweep_later is not None:
+            self._sweep_later(None)
+        else:
+            self._start_sweep()
+
+    def _start_sweep(self) -> None:
         if self._sweep_running or not self.store.sweep_stale():
             return
         if self.store.species("left") is None or not any(self.store.state.left.moves):
@@ -203,6 +248,9 @@ class CalcView(ft.Column):
             self._wide.controls = []
             self._stack.controls = []
             self._centre.controls = []
+            # Inside the stack's single scroll the side columns must not scroll themselves.
+            self.rail.set_scrolling(not narrow)
+            self.sweep.set_scrolling(not narrow)
             if narrow:
                 self._stack.controls = [self.field, self._pokemon_row, self.rail, self.sweep]
                 self._host.content = self._stack
@@ -215,6 +263,11 @@ class CalcView(ft.Column):
         if not narrow:
             self.rail.width = 190 if compact else RAIL_WIDTH
             self.sweep.width = 270 if compact else SWEEP_WIDTH
+        # Between the side columns a compact window leaves each panel under 300px, which
+        # squeezes the HP slider and the ability to nothing: stack them there instead (the
+        # summary bar keeps the head-to-head in view).
+        panel_col = {"xs": 12} if compact and not narrow else {"xs": 12, "lg": 6}
+        self.attacker.col = self.defender.col = panel_col
         try:
             if self.page is not None:
                 self._host.update()
@@ -272,7 +325,6 @@ class CalcView(ft.Column):
         def pick(item_id: str | None) -> None:
             page.pop_dialog()
             record = self.store.catalogs.item_for(item_id) if item_id else None
-            self.store.set_pokemon(side, item=record.display_name if record else None)
             self.store.set_item(side, record.display_name if record else None)
 
         page.show_dialog(ItemPickerDialog(

@@ -10,6 +10,44 @@ for the headings and style.
 
 ## [Unreleased]
 
+A calculator that answers first: the matchup is always in view, and the field takes a
+third less room.
+
+### Added
+- **Calc matchup bar** under the page title: each side's best move on the other, its
+  damage and KO chance, and who moves first. It stays visible while you scroll.
+- **Clear** in the field strip resets weather, terrain, rooms, side conditions, stat
+  stages, statuses and activated abilities, keeping both Pokémon as they are. It can be
+  undone.
+- **Fill with top moves** for a Pokémon with no moves: tournament favourites, or the
+  hardest hitters against the other side.
+- Reset in Calc can be undone.
+
+### Changed
+- Calc shows the moves and their damage right under each Pokémon; the spread and the new
+  "Stages & status" section follow and can be collapsed (a collapsed section still shows
+  what is active, like "+2 Atk · Burned").
+- The team/box rail, the calculator and the opponents list scroll separately, so the rail
+  and the opponents stay in view.
+- The field strip is always open but about a third smaller: Tailwind sits with each
+  side's conditions, and Helping Hand and Friend Guard are hidden in Singles.
+- In windows narrower than 1280px the attacker and defender panels stack instead of
+  squeezing.
+- The ability "Activate" chip and "Allies fainted" only appear for the abilities they
+  affect.
+
+### Performance
+- Dragging a spread slider recomputes, saves and re-runs the opponents list once when
+  you let go, instead of on every step (11 recomputes and 22 panel redraws → 1 and 1).
+
+### Fixed
+- Chip labels across the app were nearly black on dark chips and looked disabled.
+- Calc's species search now says when nothing matches instead of doing nothing.
+- The Calc page caption disappeared after the first result.
+- The opponents list and the panels showed the speed arrow the opposite way round.
+- The box list in Calc stopped at 40 Pokémon without saying so; it now offers "Show more".
+- The HP box in Calc ignored a value typed without pressing Enter.
+
 ## [0.2.1] - 2026-09-21
 
 ### Fixed

@@ -17,6 +17,15 @@ CARD_MAX_EXTENT = 210
 CARD_HEIGHT = 240             # band + sprite + name + caption + types + tags
 CARD_HEIGHT_WITH_STATS = 336  # tags row hidden, six stat bars shown
 
+# (border, background) per frame state, built once. Assigning a freshly built Border makes
+# Flet's diff see a new object and re-send it, so a Box update that re-applied every
+# card's frame re-serialised all 250 borders even when nothing had changed.
+_FRAMES: dict[str, tuple[ft.Border, str]] = {
+    "selected": (ft.Border.all(2, Palette.PRIMARY), Palette.SURFACE_2),
+    "hover": (ft.Border.all(1, Palette.OUTLINE), Palette.SURFACE_3),
+    "rest": (ft.Border.all(1, Palette.OUTLINE_VARIANT), Palette.SURFACE_2),
+}
+
 
 class PokemonCard(ft.Container):
     def __init__(
@@ -103,9 +112,9 @@ class PokemonCard(ft.Container):
             ),
         )
         self.content = ft.Column(spacing=0, tight=True, controls=[self._band, self._body])
-        self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
-        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
+        self._frame = "rest"
+        self.border, self.bgcolor = _FRAMES["rest"]
         self.padding = 0
         self.clip_behavior = ft.ClipBehavior.ANTI_ALIAS
         self.ink = True
@@ -226,9 +235,8 @@ class PokemonCard(ft.Container):
             self.update()
 
     def _apply_frame(self, *, hovering: bool) -> None:
-        if self._selected:
-            self.border = ft.Border.all(2, Palette.PRIMARY)
-            self.bgcolor = Palette.SURFACE_2
-        else:
-            self.border = ft.Border.all(1, Palette.OUTLINE if hovering else Palette.OUTLINE_VARIANT)
-            self.bgcolor = Palette.SURFACE_3 if hovering else Palette.SURFACE_2
+        frame = "selected" if self._selected else ("hover" if hovering else "rest")
+        if frame == self._frame:
+            return   # untouched properties are not part of the next update's patch
+        self._frame = frame
+        self.border, self.bgcolor = _FRAMES[frame]

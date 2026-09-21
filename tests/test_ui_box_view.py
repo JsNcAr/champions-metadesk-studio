@@ -274,3 +274,28 @@ class TestChunkedFirstFill(_BoxViewCase):
         self.assertEqual(len(self.view.grid.controls), 1)
         self.view._on_filters(replace(self.view.store.filters, text=""))
         self.assertEqual(len(self.view.grid.controls), 2, "not re-chunked")
+
+
+class TestCardFrameIsNotReassigned(unittest.TestCase):
+    """A card must not hand Flet a new Border when its frame has not changed.
+
+    A freshly built Border is a new object, which the diff treats as a replacement and
+    re-sends; re-applying the frame on every render re-sent all 250 borders per update.
+    """
+
+    def test_frame_objects_are_shared_and_only_change_with_state(self):
+        from pokemon_champions_planning_tool.ui.views.box.card import PokemonCard
+
+        noop = lambda *a: None  # noqa: E731
+        card = PokemonCard(on_select=noop, on_favorite=noop, on_tag=noop)
+        rest = card.border
+        card.set_selected(False)
+        self.assertIs(card.border, rest, "unchanged frame: same object")
+        card.set_selected(True)
+        selected = card.border
+        self.assertIsNot(selected, rest)
+        card.set_selected(True)
+        self.assertIs(card.border, selected)
+        other = PokemonCard(on_select=noop, on_favorite=noop, on_tag=noop)
+        other.set_selected(True)
+        self.assertIs(other.border, selected, "one Border per state, shared by every card")

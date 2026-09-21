@@ -67,20 +67,24 @@ class StubPage(SimpleNamespace):
 def check_layout(control: ft.Control) -> None:
     """Fail on control-tree shapes Flutter rejects at build time but Flet serialises happily.
 
-    Today: an ``expand`` child inside a wrapping Row/Column. Flutter's Wrap widget throws
-    "Incorrect use of ParentDataWidget" for Expanded, and the release client paints the
-    whole subtree as a grey error box (this is how the Box view once rendered blank).
+    - An ``expand`` child inside a wrapping Row/Column. Flutter's Wrap widget throws
+      "Incorrect use of ParentDataWidget" for Expanded, and the release client paints the
+      whole subtree as a grey error box (this is how the Box view once rendered blank).
+    - One control instance placed in two parents. The client draws it twice, and Flet
+      tracks a control by a single parent and id, so updates to it can go astray. The
+      Calc panels once showed the species name twice this way.
     """
     from dataclasses import fields
     from flet.controls.base_control import BaseControl
 
     problems: list[str] = []
-    seen: set[int] = set()
+    seen: dict[int, str] = {}
 
     def walk(c, path: str) -> None:
         if id(c) in seen:
+            problems.append(f"{type(c).__name__} placed twice: {seen[id(c)]} and {path}")
             return
-        seen.add(id(c))
+        seen[id(c)] = path
         if isinstance(c, (ft.Row, ft.Column)) and getattr(c, "wrap", False):
             for i, child in enumerate(getattr(c, "controls", None) or []):
                 if getattr(child, "expand", None) or getattr(child, "expand_loose", None):

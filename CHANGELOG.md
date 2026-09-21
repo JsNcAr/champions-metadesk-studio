@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
 Faster everywhere, and sprites finally work in the browser build.
 
 ### Added

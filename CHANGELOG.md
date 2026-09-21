@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-21
+
 ### Added
 - **Your team, rated against the rival.** Put a Pokémon in the Calc's Defender panel and each
   member of your active team is coloured by how it fares against it, using the opponents

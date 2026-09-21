@@ -188,7 +188,8 @@ class Catalogs:
 
         out = [(base_species.canonical_id, "Base")]
         for m in megas:
-            lbl = m.display_name.replace(base_species.name, "").replace("-", " ").strip()
+            name = format_display_name(m.canonical_id) if "-mega" in m.canonical_id else m.display_name
+            lbl = name.replace(base_species.name, "").replace("-", " ").strip()
             lbl = " ".join(lbl.split()) if lbl else "Mega"
             out.append((m.canonical_id, lbl))
         return out

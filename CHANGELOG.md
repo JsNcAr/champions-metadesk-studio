@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-21
+
 A calculator that answers first: the matchup is always in view, and the field takes a
 third less room.
 

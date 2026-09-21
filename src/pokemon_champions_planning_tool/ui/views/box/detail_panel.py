@@ -10,6 +10,7 @@ import flet as ft
 from ....domain.type_chart import BUCKETS
 from ...components import SectionHeader, Sprite
 from ...components.banner import InlineBanner
+from ...components.menu_button import menu_button
 from ...components.pokemon import BstPill, SidePanel, StatBlock, TypeChip
 from ...tasks import is_mounted
 from ...theme import Accent, IconSize, Palette, Space
@@ -82,7 +83,7 @@ class DetailPanel(SidePanel):
         self._on_add_to_team = on_add_to_team
         self._team_items: list[ft.PopupMenuItem] = []
         self._add_to_team = ft.PopupMenuButton(
-            content=ft.FilledTonalButton("Add to team", icon=ft.Icons.GROUP_ADD),
+            content=menu_button("Add to team", ft.Icons.GROUP_ADD, tone="tonal"),
             items=[],
             tooltip="Add to a team's first empty slot",
             visible=on_add_to_team is not None,

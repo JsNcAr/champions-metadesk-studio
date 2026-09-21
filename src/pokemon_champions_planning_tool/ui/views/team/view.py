@@ -9,6 +9,7 @@ import flet as ft
 from ....domain.entities.team_member import TeamMember
 from ... import events
 from ...components import EmptyState, PageHeader, SplitPane, StatusChip
+from ...components.menu_button import menu_button
 from ...context import AppContext
 from ...tasks import grid_tile_aspect, grid_tile_width, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Palette, Space
@@ -44,7 +45,7 @@ class TeamView(ft.Column):
         self._health = ft.Row(spacing=Space.XS, tight=True, wrap=True)
         self._import_button = ft.FilledTonalButton("Import", icon=ft.Icons.DOWNLOAD, tooltip="Import a Showdown paste (Ctrl+I)", on_click=lambda _e: self._import())
         self._export_menu = ft.PopupMenuButton(
-            content=ft.OutlinedButton("Export", icon=ft.Icons.UPLOAD),
+            content=menu_button("Export", ft.Icons.UPLOAD),
             tooltip="Export (Ctrl+E)",
             items=[
                 ft.PopupMenuItem(content=ft.Text("Copy Showdown text"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._copy_export()),

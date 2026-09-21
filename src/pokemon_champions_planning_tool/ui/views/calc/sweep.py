@@ -52,17 +52,21 @@ class SweepCard(ft.Container):
         # Same convention as the panels' speed chip: ▲ = you move first.
         speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
                         tooltip="You move first" if e.faster else "They move first")
+        # The class chip shares the name's line rather than taking a column of its own:
+        # on a 270px list that column left the name a few letters ("Incin…").
+        self.name = ft.Text(e.name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+        self.klass_chip = StatusChip(dict(SWEEP_CLASSES)[e.klass], CLASS_TONES[e.klass], tooltip=CLASS_HELP[e.klass])  # type: ignore[arg-type]
+        self.sprite = Sprite(get_pokemon_sprite_url(e.canonical_id), size=36)
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-            Sprite(get_pokemon_sprite_url(e.canonical_id), size=36),
+            self.sprite,
             ft.Column(spacing=1, tight=True, expand=True, controls=[
-                ft.Row(spacing=Space.XS, tight=True, controls=[
-                    ft.Text(e.name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
+                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.name, self.klass_chip]),
+                ft.Row(spacing=Space.XS, controls=[
                     speed,
+                    ft.Text(f"You: {yours}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
                 ]),
-                ft.Text(f"You: {yours}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                 ft.Text(f"Them: {theirs}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
             ]),
-            StatusChip(dict(SWEEP_CLASSES)[e.klass], CLASS_TONES[e.klass], tooltip=CLASS_HELP[e.klass]),  # type: ignore[arg-type]
         ])
         self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
         self.border_radius = Radius.SM

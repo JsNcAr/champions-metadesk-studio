@@ -483,11 +483,13 @@ class TestCalcView(_Base):
         self.assertEqual(len(self.view.sweep._list.controls), 1)
         self.view.sweep._set_query("")
         self.view.sweep._set_class("wall")
-        self.assertTrue(all(c.content.controls[2]._label.value == "Wall" for c in self.view.sweep._list.controls if hasattr(c, "content") and isinstance(c.content, ft.Row)))
+        walls = [c for c in self.view.sweep._list.controls if hasattr(c, "klass_chip")]
+        self.assertTrue(walls)
+        self.assertTrue(all(c.klass_chip._label.value == "Wall" for c in walls))
         self.view.sweep._set_class(None)
         card = self.view.sweep._list.controls[0]
         card.on_click(None)
-        self.assertEqual(self.store.state.right.species, card.content.controls[0].tooltip or self.store.state.right.species)
+        self.assertEqual(self.store.state.right.species, card.sprite.tooltip or self.store.state.right.species)
         self.assertTrue(self.store.state.right.source.startswith("Opponents"))
         self.assertEqual(self.view.rail._team.controls[0].value, "No team yet — build one in Teams.")
         serialise(self.view)

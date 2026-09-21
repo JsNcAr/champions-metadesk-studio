@@ -14,6 +14,7 @@ This folder contains the architecture, requirements, data model, and planning do
 - [Testing Strategy](testing-strategy.md) describes the validation approach.
 - [Packaging and Building Executables](building.md) covers native PyInstaller builds and Docker/Wine cross-compilation.
 - [Releasing](releasing.md) is the step-by-step for publishing a version and writing its release notes.
+- [Design references](design/README.md) credits the external design the Calc view's layout drew on.
 
 ## Current Implementation Status
 

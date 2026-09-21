@@ -79,6 +79,8 @@ class CalcView(ft.Column):
         page = self.ctx.page
         save_later = Debouncer(page, SAVE_DELAY_MS, lambda _v: self.store.save_state(), quiet_event=False)
         self.store.defer_save = lambda: save_later(None)
+        # The delayed save must not be lost when the app closes inside that window.
+        self.ctx.on_shutdown(self.store.save_state)
         self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
 
     def will_unmount(self) -> None:

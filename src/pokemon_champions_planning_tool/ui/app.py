@@ -123,6 +123,22 @@ def _start_background_sync(ctx: AppContext) -> None:
     ctx.sync_tournaments(work, on_done=done, on_error=failed)
 
 
+def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
+    """Flush pending writes however the session ends.
+
+    Some saves are deliberately delayed (the calculator writes 500 ms after the last edit).
+    A web session ends with disconnect/close events; a desktop window may take the process
+    down before those arrive, so the interpreter's exit runs the hooks as well. Being sent to
+    the background (minimised, phone app switched) flushes too, since the OS may end it there.
+    """
+    import atexit
+
+    page.on_disconnect = lambda _e: ctx.run_shutdown_hooks()
+    page.on_close = lambda _e: ctx.run_shutdown_hooks()
+    page.on_app_lifecycle_state_change = lambda _e: ctx.run_shutdown_hooks()
+    atexit.register(ctx.run_shutdown_hooks)
+
+
 def main(page: ft.Page) -> None:
     page.title = APP_NAME
     apply_theme(page)
@@ -131,6 +147,7 @@ def main(page: ft.Page) -> None:
     _seed_once()
     ctx = AppContext(page)
     ctx.prefs = Preferences(Path(DEFAULT_PREFERENCES_FILENAME))
+    _install_shutdown_hooks(page, ctx)
     ctx.catalogs = Catalogs.load()
     # Subscribed before any view so a reloaded catalogue is in place when views react.
     ctx.bus.on(events.CATALOGS_RELOADED, lambda _kind: setattr(ctx, "catalogs", Catalogs.load()))

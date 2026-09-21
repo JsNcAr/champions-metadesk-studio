@@ -26,6 +26,21 @@ class AppContext:
     catalogs: Any = None
     prefs: Preferences = field(default_factory=Preferences)   # in-memory unless the app installs a file-backed one
     _clipboard: Any = field(default=None, init=False, repr=False)
+    _shutdown_hooks: list[Callable[[], None]] = field(default_factory=list, init=False, repr=False)
+
+    def on_shutdown(self, fn: Callable[[], None]) -> None:
+        """Run ``fn`` when the session ends: window closed, browser tab gone, or the app
+        sent to the background. Hooks may run more than once, so they must be idempotent
+        (flush pending writes, and do nothing when there is nothing to flush)."""
+        if fn not in self._shutdown_hooks:
+            self._shutdown_hooks.append(fn)
+
+    def run_shutdown_hooks(self) -> None:
+        for fn in list(self._shutdown_hooks):
+            try:
+                fn()
+            except Exception as exc:  # noqa: BLE001 - one failing hook must not stop the others
+                print(f"⚠️ Shutdown hook failed: {exc}")
 
     def post(self, fn, *args) -> None:
         """Run ``fn(*args)`` on the UI loop from any thread (progress callbacks)."""

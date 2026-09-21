@@ -338,6 +338,17 @@ class TestCalcView(_Base):
         self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
         self.assertFalse(self.store.sweep_stale())
 
+    def test_a_pending_save_is_flushed_when_the_session_ends(self):
+        self.view.did_mount()
+        self.addCleanup(self.view.will_unmount)
+        self.store.defer_save = lambda: None   # the delayed save has not fired yet
+        self.store.load_species("left", "kingambit")
+        self.assertIsNone(self.prefs.get(PREF_STATE), "nothing written yet")
+        self.ctx.on_shutdown(self.store.save_state)   # registering twice keeps one hook
+        self.assertEqual(len(self.ctx._shutdown_hooks), 1)
+        self.ctx.run_shutdown_hooks()                # window closed / tab gone
+        self.assertEqual(self.prefs.get(PREF_STATE)["left"]["species"], "kingambit")
+
     def test_sweep_ignores_what_it_does_not_read(self):
         self._load_pair()
         key = self.store.sweep_key()

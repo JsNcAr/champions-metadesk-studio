@@ -22,6 +22,7 @@ from pokemon_champions_planning_tool.ui.preferences import Preferences  # noqa: 
 from pokemon_champions_planning_tool.ui.theme import Accent  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc import CalcRequest, CalcState, CalcStore, CalcView, PokemonState, pokemon_from_parsed, pokemon_from_slot  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.sweep import SweepPanel  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.calc.state import classify  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.store import PREF_STATE  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.meta.row import TeamRow  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.team.slot_card import SlotCallbacks  # noqa: E402
@@ -190,6 +191,28 @@ class TestCalcStore(_Base):
         self.store.load_species("left", "charizard-mega-y")
         self.assertEqual(self.store.state.left.ability, "Drought")
         self.assertEqual(self.store.state.field.weather, "Sun", "Loading Mega Charizard Y automatically sets Sun")
+
+
+
+def _team_slot(position, canonical_id, name, types, stats, moves, *, ability=None, nature="Adamant", points=None, mega=None, item=None):
+    """A filled team slot shaped like TeamStore's SlotModel, enough for pokemon_from_slot."""
+    from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
+
+    stats = PokemonStats(hp=stats[0], attack=stats[1], defense=stats[2], sp_atk=stats[3], sp_def=stats[4], speed=stats[5])
+    entry = SimpleNamespace(pokemon=SimpleNamespace(canonical_id=canonical_id, display_name=name, abilities=[]))
+    member = SimpleNamespace(selected_form=mega, item=item, ability=ability, points=points or {"attack": 32, "hp": 32}, nature=nature,
+                             moveset=[SimpleNamespace(name=m) for m in moves])
+    form = SimpleNamespace(form_id=mega or canonical_id, label=name, types=types, stats=stats, is_mega=bool(mega))
+    return SimpleNamespace(position=position, entry=entry, member=member, form=form, filled=True,
+                           item=SimpleNamespace(display_name=item) if item else None)
+
+
+class _FakeTeamStore:
+    def __init__(self, slots, team_id="team-1"):
+        self.slots = slots
+        self.active_team_id = team_id
+        self.active_team_name = "Test"
+        self.teams = [team_id]
 
 
 class TestCalcView(_Base):
@@ -988,3 +1011,62 @@ class TestCatalogueArrivesLate(_Base):
         ctx.catalogs = self.catalogs
         ctx.bus.emit(events.CATALOGS_RELOADED, "tournaments")
         self.assertFalse(view.store.catalogs.has_species, "tournament data is not a catalogue swap")
+
+
+class TestTeamRatings(_Base):
+    def setUp(self):
+        super().setUp()
+        self.slots = [
+            _team_slot(1, "incineroar", "Incineroar", ("fire", "dark"), (95, 115, 90, 80, 90, 60), ["Flare Blitz", "Protect"], ability="Intimidate"),
+            _team_slot(2, "kingambit", "Kingambit", ("dark", "steel"), (100, 135, 120, 60, 85, 50), ["Kowtow Cleave"], ability="Defiant"),
+            _team_slot(3, "charizard", "Mega Charizard Y", ("fire", "flying"), (78, 104, 78, 159, 115, 100), ["Heat Wave"],
+                       ability="Drought", nature="Modest", points={"special_attack": 32, "speed": 32}, mega="charizard-mega-y", item="Charizardite Y"),
+        ]
+        self.store.team_store = _FakeTeamStore(self.slots)
+        self.store.load_species("right", "kingambit")
+        self.store.set_move("right", 0, "Iron Head")
+
+    def test_each_member_is_rated_against_the_rival(self):
+        ratings = self.store.rate_team()
+        self.assertEqual(sorted(ratings), ["team-1:1", "team-1:2", "team-1:3"])
+        blaze = ratings["team-1:1"]
+        self.assertEqual(blaze.your_best.name, "Flare Blitz", "Protect is not a damaging move")
+        self.assertEqual(blaze.their_best.name, "Iron Head")
+        self.assertEqual(blaze.faster, blaze.your_speed > blaze.their_speed)
+        for r in ratings.values():
+            self.assertEqual(r.klass, classify(r.your_best, r.their_best, r.faster), r.name)
+        self.assertEqual(ratings["team-1:3"].klass, "crushed", "Mega Charizard Y's Heat Wave in its own sun, faster, OHKOs Kingambit")
+
+    def test_the_field_is_taken_into_account(self):
+        before = self.store.rate_team()["team-1:1"]
+        self.store.set_side_conditions("right", reflect=True)    # the rival's side
+        screened = self.store.rate_team()["team-1:1"]
+        self.assertLess(screened.your_best.max_pct, before.your_best.max_pct, "Reflect halves the physical Flare Blitz")
+        self.store.toggle_field("trick_room")
+        self.assertEqual(self.store.rate_team()["team-1:1"].faster, not screened.faster, "Trick Room flips who moves first")
+
+    def test_nothing_to_rate_without_a_rival_or_a_team(self):
+        self.store.load_pokemon("right", PokemonState())
+        self.assertEqual(self.store.rate_team(), {})
+        self.store.load_species("right", "kingambit")
+        self.store.team_store = _FakeTeamStore([])
+        self.assertEqual(self.store.rate_team(), {})
+
+    def test_ratings_are_cached_until_something_they_read_changes(self):
+        calls = []
+        real = self.store._calc
+        self.store._calc = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+        self.store.rate_team()
+        n = len(calls)
+        self.assertGreater(n, 0)
+        self.store.rate_team()
+        self.store.set_pokemon("right", source="Opponents")
+        self.store.rate_team()
+        self.assertEqual(len(calls), n, "same rival, field and team: no engine calls")
+        self.store.set_field(weather="Rain")
+        self.store.rate_team()
+        self.assertGreater(len(calls), n, "the field changed")
+        n = len(calls)
+        self.store.invalidate_team_ratings()
+        self.store.rate_team()
+        self.assertGreater(len(calls), n, "the team changed")

@@ -208,6 +208,24 @@ class SweepEntry:
     usage_count: int = 0                  # tournament roster count in active regulation
 
 
+@dataclass(frozen=True)
+class TeamRating:
+    """One of your team members against the rival in the Defender panel.
+
+    ``klass`` uses ``classify`` from the member's side: "crushed" is good for you,
+    "threat" means the rival beats this member.
+    """
+
+    slot_key: str                         # "<team id>:<slot position>"
+    name: str
+    klass: str
+    your_best: MoveResult | None          # the member's strongest move against the rival
+    their_best: MoveResult | None         # the rival's strongest move against the member
+    your_speed: int
+    their_speed: int
+    faster: bool                          # the member moves first
+
+
 def hits_to_ko(result: MoveResult | None) -> int | None:
     """Hits on the average roll; None for no damage."""
     if result is None or not result.ok or result.max_pct <= 0:
@@ -288,7 +306,7 @@ def pokemon_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, s
 
 
 __all__ = [
-    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "TERRAINS", "TOGGLE_ABILITIES", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
+    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "TERRAINS", "TOGGLE_ABILITIES", "TeamRating", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
     "FieldState", "MoveResult", "PokemonState", "SideConditions", "SweepEntry", "classify", "hits_to_ko", "pokemon_from_parsed", "pokemon_from_slot",
     "pokemon_from_species_id",
 ]

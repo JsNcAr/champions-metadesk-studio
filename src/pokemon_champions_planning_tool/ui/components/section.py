@@ -34,10 +34,11 @@ class SectionHeader(ft.Row):
     def set_label(self, label: str) -> None:
         self._label.controls[1].value = label.upper()
 
-    def set_status(self, status: str | None, *, color: str | None = None) -> None:
+    def set_status(self, status: str | None, *, color: str | None = None, tooltip: str | None = None) -> None:
         self._status.value = status or ""
         self._status.visible = bool(status)
         self._status.color = color or Palette.ON_SURFACE_VARIANT
+        self._status.tooltip = tooltip
 
 
 class Panel(ft.Container):

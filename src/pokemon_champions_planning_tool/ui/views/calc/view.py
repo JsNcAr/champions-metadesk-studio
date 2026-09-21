@@ -38,6 +38,9 @@ class CalcView(ft.Column):
         self._presets_warming = False
         self._rail_key: tuple | None = None
         self._sweep_later: Debouncer | None = None
+        self._rate_later: Debouncer | None = None
+        self._rated_key: str | None = None
+        self._rating_running = False
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
@@ -68,7 +71,7 @@ class CalcView(ft.Column):
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())
-        ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self.rail.refresh_team())
+        ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self._on_teams_changed())
         ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
         ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
 
@@ -82,11 +85,13 @@ class CalcView(ft.Column):
         # The delayed save must not be lost when the app closes inside that window.
         self.ctx.on_shutdown(self.store.save_state)
         self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
+        self._rate_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_rating(), quiet_event=False)
 
     def will_unmount(self) -> None:
         self.store.save_state()
         self.store.defer_save = None
         self._sweep_later = None
+        self._rate_later = None
 
     def ensure_loaded(self) -> None:
         if not self.store.loaded:
@@ -94,6 +99,7 @@ class CalcView(ft.Column):
         self.rail.refresh()
         self._warm_presets()
         self._maybe_sweep()
+        self._maybe_rate_team()
 
     def _warm_presets(self) -> None:
         """Read the tournament builds on a worker while the view is merely open.
@@ -128,6 +134,7 @@ class CalcView(ft.Column):
                 self.rail.refresh_team()
             self._sync_species_banner()
             self._maybe_sweep()
+            self._maybe_rate_team()
         elif event[0] == "sweep":
             self.sweep.render()
             self._maybe_sweep()
@@ -219,6 +226,51 @@ class CalcView(ft.Column):
             )
         except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
             done(self.store.compute_sweep())
+
+    # -- team ratings ----------------------------------------------------------------------------
+
+    def _on_teams_changed(self) -> None:
+        self.store.invalidate_team_ratings()
+        self.rail.refresh_team()
+        self._maybe_rate_team()
+
+    def _maybe_rate_team(self) -> None:
+        """Colour the team rail against the Defender once edits pause, off the UI loop."""
+        key = self.store.team_rating_key()
+        if key == self._rated_key or self._rating_running:
+            return
+        if self.store.species("right") is None or not self.store.team_slots():
+            self._rated_key = key
+            self.rail.apply_ratings({}, "")   # nothing to rate: clear at once, no computing
+            return
+        if self._rate_later is not None:
+            self._rate_later(None)
+        else:
+            self._start_rating()
+
+    def _start_rating(self) -> None:
+        key = self.store.team_rating_key()
+        if key == self._rated_key or self._rating_running:
+            return
+        self._rating_running = True
+
+        def done(ratings) -> None:
+            self._rating_running = False
+            if self.store.team_rating_key() != key:
+                self._maybe_rate_team()   # the rival, field or team moved on meanwhile
+                return
+            self._rated_key = key
+            rival = self.store.species("right")
+            self.rail.apply_ratings(ratings, rival.name if rival else "")
+
+        def failed(exc: BaseException) -> None:
+            self._rating_running = False
+            print(f"⚠️ Team rating failed: {exc}")
+
+        try:
+            self.ctx.run_in_background(self.store.rate_team, on_done=done, on_error=failed)
+        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
+            done(self.store.rate_team())
 
     def _pick_opponent(self, entry: SweepEntry) -> None:
         preset = self.store.sweep_presets

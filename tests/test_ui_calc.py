@@ -202,7 +202,7 @@ def _team_slot(position, canonical_id, name, types, stats, moves, *, ability=Non
     entry = SimpleNamespace(pokemon=SimpleNamespace(canonical_id=canonical_id, display_name=name, abilities=[]))
     member = SimpleNamespace(selected_form=mega, item=item, ability=ability, points=points or {"attack": 32, "hp": 32}, nature=nature,
                              moveset=[SimpleNamespace(name=m) for m in moves])
-    form = SimpleNamespace(form_id=mega or canonical_id, label=name, types=types, stats=stats, is_mega=bool(mega))
+    form = SimpleNamespace(form_id=mega or canonical_id, label=name, types=types, stats=stats, is_mega=bool(mega), sprite_url=None)
     return SimpleNamespace(position=position, entry=entry, member=member, form=form, filled=True,
                            item=SimpleNamespace(display_name=item) if item else None)
 
@@ -1070,3 +1070,69 @@ class TestTeamRatings(_Base):
         self.store.invalidate_team_ratings()
         self.store.rate_team()
         self.assertGreater(len(calls), n, "the team changed")
+
+
+class TestTeamRatingsInTheRail(_Base):
+    def setUp(self):
+        super().setUp()
+        self.slots = [
+            _team_slot(1, "incineroar", "Incineroar", ("fire", "dark"), (95, 115, 90, 80, 90, 60), ["Flare Blitz"], ability="Intimidate"),
+            _team_slot(2, "charizard", "Mega Charizard Y", ("fire", "flying"), (78, 104, 78, 159, 115, 100), ["Heat Wave"],
+                       ability="Drought", nature="Modest", points={"special_attack": 32, "speed": 32}, mega="charizard-mega-y", item="Charizardite Y"),
+        ]
+        self.store.team_store = _FakeTeamStore(self.slots)
+        self.page = StubPage()
+        self.ctx = AppContext(self.page)
+        self.ctx.prefs = self.prefs
+        self.ctx.catalogs = self.catalogs
+        self.view = CalcView(self.ctx, self.store)
+        self.view.ensure_loaded()
+
+    def _card(self, position):
+        return self.view.rail._team_cards[f"team-1:{position}"]
+
+    def test_team_cards_are_coloured_against_the_defender(self):
+        from pokemon_champions_planning_tool.ui.views.calc.classes import CLASS_BG
+
+        self.assertIsNone(self._card(1).rating, "no defender yet: plain cards")
+        self.store.load_species("right", "kingambit")
+        self.store.set_move("right", 0, "Iron Head")
+        mega = self._card(2)
+        self.assertEqual(mega.rating.klass, "crushed")
+        self.assertEqual(mega.bgcolor, CLASS_BG["crushed"])
+        self.assertIn("vs Kingambit: Crushed", mega.tooltip)
+        self.assertIn("You: Heat Wave", mega.tooltip)
+        self.assertIn("Them: Iron Head", mega.tooltip)
+        self.assertEqual(self.view.rail._team_title._status.value, "vs Kingambit")
+        self.assertIn("Crushed:", self.view.rail._team_title._status.tooltip, "the header explains the colours")
+        serialise(self.view)
+
+        self.store.load_pokemon("right", PokemonState())
+        self.assertIsNone(self._card(2).rating, "defender cleared: colours go")
+        self.assertFalse(self.view.rail._team_title._status.visible)
+
+    def test_the_loaded_attacker_keeps_its_highlight(self):
+        self.store.load_species("right", "kingambit")
+        self.store.set_move("right", 0, "Iron Head")
+        self._card(1).on_click(None)                       # load Incineroar as attacker
+        card = self._card(1)                               # the rail rebuilt its cards
+        from pokemon_champions_planning_tool.ui.theme import Palette
+
+        self.assertIsNotNone(card.rating, "the rebuilt card kept its rating")
+        self.assertEqual(card.border.top.color, Palette.PRIMARY, "the attacker's highlight border wins over the tint")
+
+    def test_only_changed_cards_are_redrawn(self):
+        self.store.load_species("right", "kingambit")
+        self.store.set_move("right", 0, "Iron Head")
+        ratings, rival = self.view.rail._ratings, self.view.rail._rival_name
+        self.assertFalse(self._card(1).set_rating(ratings["team-1:1"], rival), "same rating: nothing to send")
+        self.assertTrue(self._card(1).set_rating(None, rival))
+
+    def test_a_team_change_rates_again(self):
+        self.store.load_species("right", "kingambit")
+        self.store.set_move("right", 0, "Iron Head")
+        before = self.store.team_rating_key()
+        self.ctx.bus.emit(events.TEAMS_CHANGED, None)
+        self.assertNotEqual(self.store.team_rating_key(), before)
+        self.assertEqual(self.view._rated_key, self.store.team_rating_key(), "and the rail caught up")
+

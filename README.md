@@ -183,6 +183,12 @@ tests/                        # Automated unit & integration test suite (441 tes
 
 Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials: Ctrl+1/2/3/4 switch sections (Box, Teams, Meta, Calc), Ctrl+, opens Settings, Ctrl+F focuses the search, Ctrl+K adds to the box, Ctrl+N/I/E create, import and export a team, Escape closes dialogs and panels, Delete removes the selection with Undo.
 
+## Releases
+
+Release notes are in [CHANGELOG.md](CHANGELOG.md). To cut a release, run
+`poetry run python scripts/release.py prepare minor` (see
+[docs/building.md](docs/building.md#publishing-a-release)).
+
 ## Configuration
 
 | Variable | Default | Purpose |

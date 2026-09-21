@@ -287,15 +287,7 @@ class SettingsView(ft.Column):
 
     @staticmethod
     def _about_rows() -> list[tuple[str, str | ft.Control]]:
-        try:
-            from importlib.metadata import version
-
-            try:
-                app_version = version("champions-metadesk-studio")
-            except Exception:
-                app_version = version("pokemon-champions-planning-tool")
-        except Exception:  # noqa: BLE001 - not installed as a distribution
-            app_version = "dev"
+        from pokemon_champions_planning_tool import __version__ as app_version
         sources = ft.Row(
             wrap=True,
             spacing=Space.SM,

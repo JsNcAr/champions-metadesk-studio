@@ -6,7 +6,13 @@ This document describes how to package **Champions MetaDesk Studio** into standa
 
 ## 1. Automated Multi-Platform Releases (GitHub Actions)
 
-The repository includes a GitHub Actions workflow at [`.github/workflows/release.yml`](../.github/workflows/release.yml) that builds standalone executables across all three major platforms whenever a Git version tag is published.
+The repository includes a GitHub Actions workflow at [`.github/workflows/release.yml`](../.github/workflows/release.yml) that builds standalone executables across all three major platforms whenever a Git version tag is published. It runs in three stages:
+
+1. **verify**: fails unless the tag matches the version in `pyproject.toml` and the package `__version__`, runs the test suite, and checks that CHANGELOG.md has a section for the version.
+2. **build**: the three platform builds below, stamped with the version.
+3. **publish**: once all three succeed, creates one GitHub release named after the tag, with that CHANGELOG.md section as its notes and the three archives attached. Versions with a suffix (`1.0.0-rc.1`) are marked as pre-releases.
+
+Running the workflow by hand (*Run workflow* in the Actions tab) builds and uploads the archives as workflow artifacts without publishing anything.
 
 ### Matrix Build Configuration
 * **Windows** (`windows-latest`): Builds `champions-metadesk.exe` and packages it into `champions-metadesk-windows-x64.zip`.
@@ -14,11 +20,40 @@ The repository includes a GitHub Actions workflow at [`.github/workflows/release
 * **macOS** (`macos-latest`): Builds the `ChampionsMetaDeskStudio.app` bundle and packages it into `champions-metadesk-macos.zip`.
 
 ### Publishing a Release
+
+Use `scripts/release.py` from an up-to-date, clean `main`:
+
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+poetry run python scripts/release.py prepare minor --dry-run   # preview the version and notes
+poetry run python scripts/release.py prepare minor             # 0.1.0 -> 0.2.0
 ```
-Or draft a release via the GitHub Web UI. Once the workflow completes, all 3 archives are automatically attached as assets to the release.
+
+`prepare` takes `patch`, `minor`, `major`, or an explicit version such as `1.0.0-rc.1`. It:
+
+1. refuses to run off `main`, with uncommitted changes, behind `origin`, or if the tag exists;
+2. runs the test suite;
+3. writes the version into `pyproject.toml` and `src/pokemon_champions_planning_tool/__init__.py`;
+4. moves the **Unreleased** section of `CHANGELOG.md` under the new version. If
+   Unreleased is empty, it generates the section from the Conventional Commit subjects
+   (`feat`, `fix`, `perf`, `refactor`, `docs`, breaking changes) since the last tag. With
+   `$EDITOR` set, it offers to open the changelog first;
+5. commits `chore(release): vX.Y.Z` and creates an annotated tag carrying the notes;
+6. asks, then pushes `main` and the tag together (`git push --atomic`), which starts
+   the workflow.
+
+Options: `--no-push` stops after the local commit and tag, `--skip-tests`, and `--yes`
+answers every question (for scripted use). If anything fails before the commit, the
+files are restored. Until the push nothing has left your machine, and
+`git tag -d vX.Y.Z && git reset --hard HEAD~1` undoes the release commit.
+
+Good practice between releases: add user-facing entries under **Unreleased** in
+`CHANGELOG.md` as changes land, and write commit subjects as Conventional Commits
+(`type(scope): summary`). After the workflow finishes, download at least one archive
+and check that it starts.
+
+Do not create the tag or the release in the GitHub web UI: the tag would skip the
+version and changelog checks, and a hand-made release can collide with the one the
+workflow publishes.
 
 ---
 

@@ -1,5 +1,7 @@
 name: Release Builds
 
+# A pushed v* tag (see scripts/release.py) tests, builds all three platforms and
+# publishes one GitHub release. Running it by hand builds without publishing.
 on:
   push:
     tags:
@@ -7,11 +9,56 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  verify:
+    name: Test and check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      numeric: ${{ steps.version.outputs.numeric }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check the tag matches the project version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            python scripts/release.py check-version "$GITHUB_REF_NAME"
+          else
+            python scripts/release.py version
+          fi
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip poetry
+          poetry config virtualenvs.in-project true
+
+      - name: Install Python dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: poetry run python -m unittest discover -s tests
+
+      - name: Check the release notes exist
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python scripts/release.py notes "${{ steps.version.outputs.version }}" > /dev/null
+
   build:
     name: Build (${{ matrix.os }})
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -26,6 +73,8 @@ jobs:
           - os: macos-latest
             artifact_name: champions-metadesk-macos
             asset_path: dist/champions-metadesk-macos.zip
+    env:
+      APP_VERSION: ${{ needs.verify.outputs.numeric }}
 
     steps:
       - name: Checkout repository
@@ -57,6 +106,7 @@ jobs:
           poetry run flet pack run.py \
             -n "champions-metadesk" \
             --product-name "Champions MetaDesk Studio" \
+            --product-version "$APP_VERSION" \
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
             -y
@@ -69,7 +119,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
+          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
           Compress-Archive -Path dist\champions-metadesk.exe -DestinationPath dist\champions-metadesk-windows-x64.zip
 
       # --- Build macOS ---
@@ -79,6 +129,7 @@ jobs:
           poetry run flet pack run.py \
             -n "ChampionsMetaDeskStudio" \
             --product-name "Champions MetaDesk Studio" \
+            --product-version "$APP_VERSION" \
             --bundle-id "com.champions.metadesk" \
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
@@ -87,17 +138,43 @@ jobs:
           zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app
           cd ..
 
-      - name: Upload artifact to Actions Run
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.asset_path }}
+          if-no-files-found: error
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+  publish:
+    name: Publish GitHub release
+    # One job creates the release once every platform built, so a failed build never
+    # leaves a release with some archives missing.
+    needs: [verify, build]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
-          files: ${{ matrix.asset_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
+          merge-multiple: true
 
+      - name: Extract release notes from CHANGELOG.md
+        run: python3 scripts/release.py notes "${{ needs.verify.outputs.version }}" > release-notes.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Champions MetaDesk Studio ${{ github.ref_name }}
+          body_path: release-notes.md
+          prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/champions-metadesk-linux-x64.tar.gz
+            dist/champions-metadesk-windows-x64.zip
+            dist/champions-metadesk-macos.zip

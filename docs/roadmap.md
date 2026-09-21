@@ -109,5 +109,12 @@
 - **Dedicated build guide (`docs/building.md`)**: instructions and best practices for host native builds and cross-compilation outputs.
 
 ## Remaining Backlog
-- **Offline sprite caching**: sprites are fetched from the Showdown CDN on demand (Flutter's in-memory cache covers a session).
+- **RK9 team lists for official events** — *pending.* Official events currently appear in
+  Meta only once Victory Road posts its results table, days after the event; RK9 has every
+  team list right away. Fall back to RK9 when Victory Road has none. Details and open
+  questions in [integrations.md](integrations.md#pending-rk9-team-lists-for-official-events).
 - **Battle-log parser** (Showdown `.log` files) — integration backlog, unspecified.
+
+Done since this list was written: offline sprite caching — sprites on disk at launch are
+served from `/sprites/` (the web build cannot load CDN sprites at all under its
+cross-origin policy), and the roster is prefetched in the background for the next launch.

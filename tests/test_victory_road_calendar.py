@@ -102,12 +102,12 @@ class TestDiscoverySync(unittest.TestCase):
         self.assertIn("4 official events discovered", sync_mod.summarize_sync_result(res))
         self.assertIsNotNone(TournamentRepository(self.session).get_state("victory_road.calendar_checked_at"))
 
-        # Second run within 24 h: calendar not re-read; old gets its turn, no sheets and past grace -> closed.
+        # Second run within 24 h: calendar not re-read; old gets its turn, no sheets and past the give-up age -> closed.
         vr2 = MagicMock(); vr2.fetch_season_calendar.return_value = []; vr2.fetch_event.return_value = None
         sync_tournaments(self.session, limitless_provider=self._limitless(), vr_provider=vr2, pokepast_provider=pokepast, vrpaste_provider=MagicMock())
         self.assertEqual(vr2.fetch_season_calendar.call_count, 0)
         self.assertEqual(sorted(c.args[0]["slug"] for c in vr2.fetch_event.call_args_list), ["2026-old", "2026-recent"])
-        self.assertTrue(self._records()["vr-2026-old"].standings_synced, "ended long ago with no sheets: stop asking")
+        self.assertTrue(self._records()["vr-2026-old"].standings_synced, "ended 60 days ago with no sheets: stop asking")
         self.assertFalse(self._records()["vr-2026-recent"].standings_synced)
 
         # A forced sync re-reads the calendar even when fresh.
@@ -130,6 +130,116 @@ class TestDiscoverySync(unittest.TestCase):
         res = sync_tournaments(self.session, limitless_provider=self._limitless(), vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
         self.assertEqual(res["victory_road"]["discovered"], 3)
         self.assertEqual(self._records()["vr-2026-mid"].name, "Custom name")
+
+
+
+class TestTeamListRetryPolicy(unittest.TestCase):
+    """An official event whose page has no team list yet: retried eagerly, then slowly,
+    then given up — instead of being closed for good 14 days after the event."""
+
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        SQLModel.metadata.create_all(self.engine)
+        self.session = Session(self.engine)
+        patch.object(sync_mod, "_PASTE_DELAY_S", 0).start()
+        patch.object(sync_mod.time, "sleep").start()
+        patch.object(sync_mod, "_VR_PAGES_PER_RUN", 2).start()
+        patch.object(sync_mod, "OFFICIAL_EVENT_SLUGS", []).start()
+        self.addCleanup(patch.stopall)
+        self.now = datetime.now(timezone.utc)
+        self.repo = TournamentRepository(self.session)
+        self.repo.set_state("victory_road.calendar_checked_at", self.now.isoformat())   # no calendar reads
+
+    def tearDown(self):
+        self.session.close()
+
+    def _event(self, slug, days_ago):
+        self.session.add(TournamentRecord(tournament_id=f"vr-{slug}", name=f"{slug} Regional", event_date=self.now - timedelta(days=days_ago),
+                                          format_regulation="Regulation M-C", game_platform="Pokémon Champions", standings_synced=False))
+        self.session.commit()
+
+    def _checked(self, slug, days_ago):
+        self.repo.set_state(f"victory_road.no_sheets_checked_at.vr-{slug}", (self.now - timedelta(days=days_ago)).isoformat())
+
+    def _sync(self, vr=None):
+        vr = vr or MagicMock(fetch_season_calendar=MagicMock(return_value=[]), fetch_event=MagicMock(return_value=None))
+        limitless = MagicMock(); limitless.fetch_champions_tournaments.return_value = []; limitless.fetch_standings_batch.return_value = {}
+        with patch("builtins.print") as printed:
+            res = sync_tournaments(self.session, limitless_provider=limitless, vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
+        lines = [" ".join(map(str, c.args)) for c in printed.call_args_list]
+        return res, vr, lines
+
+    def _read(self, vr):
+        return [c.args[0]["slug"] for c in vr.fetch_event.call_args_list]
+
+    def _synced(self, slug):
+        self.session.expire_all()
+        return self.session.get(TournamentRecord, f"vr-{slug}").standings_synced
+
+    def test_a_recent_event_is_read_every_sync_and_says_so(self):
+        self._event("baltimore", 1)
+        res, vr, lines = self._sync()
+        self.assertEqual(self._read(vr), ["baltimore"])
+        self.assertFalse(self._synced("baltimore"))
+        msg = next(line for line in lines if "baltimore" in line)
+        self.assertIn("no team list published yet", msg)
+        self.assertIn("checking on every sync until", msg)
+        self.assertIn("Victory Road", msg)
+        self.assertEqual(res["status"], "synced", "the page answered: not an outage")
+        self.assertIn("1 official event awaiting team lists", sync_mod.summarize_sync_result(res))
+        _res, vr2, _ = self._sync()
+        self.assertEqual(self._read(vr2), ["baltimore"], "still within the eager window: read again")
+
+    def test_after_the_grace_window_it_is_kept_not_closed(self):
+        """The old rule closed an event for good 14 days in; a slow Victory Road update
+        then made it disappear permanently."""
+        self._event("slow", 20)
+        _res, vr, lines = self._sync()
+        self.assertEqual(self._read(vr), ["slow"])
+        self.assertFalse(self._synced("slow"))
+        self.assertIn("checking every 3 days until", next(line for line in lines if "slow" in line))
+
+    def test_a_slow_retry_that_is_not_due_does_not_use_the_page_budget(self):
+        self._event("recent-a", 1)
+        self._event("recent-b", 2)
+        self._event("slow", 20)
+        self._event("due", 30)
+        self._checked("slow", 1)           # read yesterday: not due
+        self._checked("due", 4)            # read 4 days ago: due
+        patch.object(sync_mod, "_VR_PAGES_PER_RUN", 3).start()
+        res, vr, _ = self._sync()
+        self.assertEqual(self._read(vr), ["recent-a", "recent-b", "due"], "the waiting event is skipped, not the due one")
+        self.assertEqual(res["victory_road"]["waiting"], 1)
+
+    def test_past_the_give_up_age_it_is_read_once_more_then_closed(self):
+        self._event("abandoned", 50)
+        self._checked("abandoned", 1)      # recently checked, but past the give-up age it is due regardless
+        _res, vr, lines = self._sync()
+        self.assertEqual(self._read(vr), ["abandoned"])
+        self.assertTrue(self._synced("abandoned"))
+        self.assertIn("no longer checking", next(line for line in lines if "abandoned" in line))
+        self.assertEqual(self.repo.get_state("victory_road.no_sheets_checked_at.vr-abandoned"), "", "bookkeeping cleared")
+
+    def test_a_network_error_never_closes_an_event_or_delays_its_retry(self):
+        self._event("offline", 50)
+        vr = MagicMock(fetch_season_calendar=MagicMock(return_value=[]))
+        def failing(meta, masters_only=True):
+            vr.last_fetch_failed = True
+            return None
+        vr.fetch_event.side_effect = failing
+        _res, _vr, lines = self._sync(vr)
+        self.assertFalse(self._synced("offline"), "an unreadable page is not evidence there is no team list")
+        self.assertIn("couldn't read the page", next(line for line in lines if "offline" in line))
+        self.assertIsNone(self.repo.get_state("victory_road.no_sheets_checked_at.vr-offline"), "no slow-retry clock started")
+
+    def test_a_forced_sync_reads_waiting_events_too(self):
+        self._event("slow", 20)
+        self._checked("slow", 1)
+        vr = MagicMock(fetch_season_calendar=MagicMock(return_value=[]), fetch_event=MagicMock(return_value=None))
+        limitless = MagicMock(); limitless.fetch_champions_tournaments.return_value = []; limitless.fetch_standings_batch.return_value = {}
+        with patch("builtins.print"):
+            sync_tournaments(self.session, force=True, limitless_provider=limitless, vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
+        self.assertIn("slow", self._read(vr))
 
 
 if __name__ == "__main__":

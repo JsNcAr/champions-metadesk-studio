@@ -24,7 +24,9 @@ from ..config import (
     VICTORY_ROAD_CALENDAR_MAX_AGE_HOURS,
     VICTORY_ROAD_MAX_PLACEMENT,
     VICTORY_ROAD_PAGES_PER_RUN,
+    VICTORY_ROAD_GIVE_UP_DAYS,
     VICTORY_ROAD_RESULTS_GRACE_DAYS,
+    VICTORY_ROAD_SLOW_RETRY_DAYS,
     LIMITLESS_STANDINGS_PER_RUN,
     RECENT_EVENT_GRACE_DAYS,
     STARTUP_SYNC_MIN_INTERVAL_HOURS,
@@ -459,6 +461,56 @@ def _register_official_event(repo: TournamentRepository, meta: dict, *, event_da
     )
 
 
+def _vr_retry_key(tournament_id: str) -> str:
+    return f"victory_road.no_sheets_checked_at.{tournament_id}"
+
+
+def _aware(moment: datetime) -> datetime:
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def _vr_read_is_due(repo: TournamentRepository, record: TournamentRecord, now: datetime) -> bool:
+    """Should a pending official event's page be read on this run?
+
+    Every run while the event is recent; afterwards at most once per
+    VICTORY_ROAD_SLOW_RETRY_DAYS, counted from the last read that found no team list.
+    Past the give-up age it is due once more, so the read that closes it happens.
+    """
+    age = now - _aware(record.event_date)
+    if age <= timedelta(days=VICTORY_ROAD_RESULTS_GRACE_DAYS) or age > timedelta(days=VICTORY_ROAD_GIVE_UP_DAYS):
+        return True
+    stamp = repo.get_state(_vr_retry_key(record.tournament_id))
+    if not stamp:
+        return True
+    try:
+        last = _aware(datetime.fromisoformat(stamp))
+    except ValueError:
+        return True
+    return now - last >= timedelta(days=VICTORY_ROAD_SLOW_RETRY_DAYS)
+
+
+def _vr_no_sheets_message(record: TournamentRecord, now: datetime, network_error: bool) -> tuple[str, bool]:
+    """(what to print, whether to stop asking) for a page read that produced no teams."""
+    event_date = _aware(record.event_date)
+    age_days = (now - event_date).days
+    fast_until = event_date + timedelta(days=VICTORY_ROAD_RESULTS_GRACE_DAYS)
+    give_up_on = event_date + timedelta(days=VICTORY_ROAD_GIVE_UP_DAYS)
+    if network_error:
+        return (f"⚠️ Victory Road: couldn't read the page for {record.name}; it stays queued and is retried.", False)
+    if now >= give_up_on:
+        return (
+            f"⚠️ Victory Road: {record.name} still has no team list {age_days} days after the event — "
+            "no longer checking. A forced sync from Settings will look again.",
+            True,
+        )
+    if now < fast_until:
+        plan = (f"checking on every sync until {fast_until:%d %b}, then every {VICTORY_ROAD_SLOW_RETRY_DAYS} days "
+                f"until {give_up_on:%d %b}")
+    else:
+        plan = f"checking every {VICTORY_ROAD_SLOW_RETRY_DAYS} days until {give_up_on:%d %b}"
+    return (f"ℹ️ Victory Road: {record.name} has no team list published yet — {plan}.", False)
+
+
 def _calendar_is_stale(repo: TournamentRepository, now: datetime) -> bool:
     stamp = repo.get_state(_VR_CALENDAR_STATE_KEY)
     if not stamp:
@@ -487,9 +539,11 @@ def _sync_victory_road(
     with its date, name, city and format; new ones are stored as pending. The static
     registry seeds the same way, so the app works before the first calendar read.
     Reading: at most VICTORY_ROAD_PAGES_PER_RUN finished, pending events are read per
-    run, newest first, and the top VICTORY_ROAD_MAX_PLACEMENT sheets ingested. An event
-    page without sheets is retried while the event ended within the grace window; a
-    partly ingested event stays pending and only its missing sheets are fetched.
+    run, newest first, and the top VICTORY_ROAD_MAX_PLACEMENT sheets ingested. A page
+    without a team list is retried on every run for VICTORY_ROAD_RESULTS_GRACE_DAYS after
+    the event, then every VICTORY_ROAD_SLOW_RETRY_DAYS until VICTORY_ROAD_GIVE_UP_DAYS,
+    then closed; events waiting out a slow retry do not use the page budget. A partly
+    ingested event stays pending and only its missing sheets are fetched.
     """
     vr = vr_provider or VictoryRoadProvider()
     pokepast = pokepast_provider or PokepastProvider()
@@ -519,27 +573,38 @@ def _sync_victory_road(
 
     # -- queue -------------------------------------------------------------------------------
     queue = repo.list_official_events(ended_before=now, pending_only=not force)
-    candidates = queue[:_VR_PAGES_PER_RUN]
-    skipped_count = len(queue) - len(candidates)
+    # Events in their slow-retry phase that are not due yet must not use up this run's
+    # page budget — filtered before the cut, so a due event behind them still gets read.
+    due = queue if force else [r for r in queue if _vr_read_is_due(repo, r, now)]
+    waiting = len(queue) - len(due)
+    candidates = due[:_VR_PAGES_PER_RUN]
+    skipped_count = len(due) - len(candidates)
     fetched_count = 0
     added_count = 0
     teams_added = 0
     paste_errors = 0
     no_results = 0
-    grace = timedelta(days=VICTORY_ROAD_RESULTS_GRACE_DAYS)
+    awaiting_lists = 0
 
     for index, record in enumerate(candidates, start=1):
         t_id = record.tournament_id
         _report(on_progress, "official", f"Reading {record.name} ({index} of {len(candidates)})…", done=index - 1, total=len(candidates), teams=teams_added)
         ev = vr.fetch_event(_vr_meta_from_record(record), masters_only=True)
         if ev is None:
-            event_date = record.event_date if record.event_date.tzinfo else record.event_date.replace(tzinfo=timezone.utc)
-            if now - event_date > grace:
-                # Ended long ago and still no sheets: stop asking.
+            # ``is True``: providers without the flag (and test doubles) mean "no team list".
+            network_error = getattr(vr, "last_fetch_failed", False) is True
+            message, give_up = _vr_no_sheets_message(record, now, network_error)
+            print(message)
+            if give_up:
                 repo.mark_standings_synced(t_id, True)
+                repo.set_state(_vr_retry_key(t_id), "")
+            elif not network_error:
+                repo.set_state(_vr_retry_key(t_id), now.isoformat())
+                awaiting_lists += 1
             no_results += 1
             continue
         fetched_count += 1
+        repo.set_state(_vr_retry_key(t_id), "")
 
         norm_format = normalize_format_regulation(ev.format_regulation)
         norm_format = normalize_format_regulation(ev.format_regulation, tournament_name=record.name)
@@ -651,6 +716,10 @@ def _sync_victory_road(
         "paste_errors": paste_errors,
         "discovered": discovered,
         "no_results": no_results,
+        "waiting": waiting,
+        "awaiting_lists": awaiting_lists + waiting,
+        # Pages that answered, with or without a team list: proof the source is reachable.
+        "pages_read": fetched_count + awaiting_lists,
         "queued": max(0, len(queue) - added_count - no_results),
     }
 
@@ -743,7 +812,10 @@ def _sync_tournaments_locked(
         )
 
     status = "synced"
-    if res_limitless["fetched"] == 0 and res_official["fetched"] == 0 and res_limitless.get("standings_synced", 0) == 0:
+    # "Offline" only when nothing answered. A Victory Road page read that found no team
+    # list yet is not an outage, and must not be reported as one.
+    reached_official = res_official.get("pages_read", res_official["fetched"])
+    if res_limitless["fetched"] == 0 and reached_official == 0 and res_limitless.get("standings_synced", 0) == 0:
         status = "offline"
     elif res_official.get("paste_errors", 0) > 0:
         status = "partial"
@@ -776,6 +848,9 @@ def summarize_sync_result(result: dict) -> str:
         bits.append(f"{backlog:,} still queued")
     if vr.get("discovered"):
         bits.append(f"{vr['discovered']} official event{'s' if vr['discovered'] != 1 else ''} discovered")
+    if vr.get("awaiting_lists"):
+        n = int(vr["awaiting_lists"])
+        bits.append(f"{n} official event{'s' if n != 1 else ''} awaiting team lists")
     if vr.get("paste_errors"):
         bits.append(f"{vr['paste_errors']} paste{'s' if vr['paste_errors'] != 1 else ''} failed")
     return "Synced · " + " · ".join(bits)

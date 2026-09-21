@@ -373,11 +373,15 @@ class VictoryRoadProvider:
         """
         slug = event_meta["slug"]
         url = f"{self.base_url}/{slug}/"
+        # None means either "the page has no team list" or "the page could not be read";
+        # callers deciding whether to keep retrying need to know which.
+        self.last_fetch_failed = False
 
         try:
             html = self._fetch_html(url)
         except VictoryRoadNetworkError as exc:
             print(f"⚠️ Victory Road scraper: network error fetching '{slug}': {exc}")
+            self.last_fetch_failed = True
             return None
 
         standings = self._parse_standings_from_html(html)
@@ -393,7 +397,8 @@ class VictoryRoadProvider:
                 )
 
         if not standings:
-            print(f"ℹ️ Victory Road scraper: zero paste entries found on '{slug}'.")
+            # No results table with team pastes yet (typical for a few days after an event).
+            # The sync reports this with its retry plan, so nothing is printed here.
             return None
 
         event_date = datetime.now(timezone.utc)

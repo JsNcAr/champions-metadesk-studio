@@ -103,6 +103,19 @@ class TestSpriteCacheService(unittest.TestCase):
         self.assertEqual(files_after, 0)
         self.assertEqual(bytes_after, 0)
 
+    def test_only_sprites_count_and_get_cleared(self) -> None:
+        # A fresh checkout has only the tracked .gitkeep: Settings showed "1 sprite (0 KB)".
+        self.service.ensure_cache_dir()
+        (self.cache_path / ".gitkeep").write_text("")
+        (self.cache_path / "mew.png.1234.tmp").write_bytes(b"partial")
+        (self.cache_path / "empty.png").write_bytes(b"")
+        self.assertEqual(self.service.cache_stats(), (0, 0))
+
+        (self.cache_path / "mew.png").write_bytes(b"1234")
+        self.assertEqual(self.service.cache_stats(), (1, 4))
+        self.assertEqual(self.service.clear_cache(), 1)
+        self.assertEqual(sorted(p.name for p in self.cache_path.iterdir()), [".gitkeep", "empty.png"])
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -192,5 +205,10 @@ class TestPrepareSpriteCacheDir(unittest.TestCase):
 
         from pokemon_champions_planning_tool.main import prepare_sprite_cache_dir
 
-        with mock.patch.object(Path, "mkdir", side_effect=PermissionError(13, "Read-only file system")):
+        import contextlib
+        import io
+
+        with mock.patch.object(Path, "mkdir", side_effect=PermissionError(13, "Read-only file system")), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertFalse(prepare_sprite_cache_dir("/assets/sprites"))
+        self.assertIn("Sprite cache disabled", out.getvalue())

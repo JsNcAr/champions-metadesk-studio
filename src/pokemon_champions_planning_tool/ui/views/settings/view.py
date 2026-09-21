@@ -217,7 +217,7 @@ class SettingsView(ft.Column):
         )
         if status.cached_sprites > 0:
             size_kb = round(status.cached_sprites_bytes / 1024)
-            self.row_sprites.set_status(f"{plural(status.cached_sprites, 'sprite')} cached locally ({size_kb:,} KB) · 0ms offline access")
+            self.row_sprites.set_status(f"{plural(status.cached_sprites, 'sprite')} cached locally ({size_kb:,} KB) · shown offline")
         else:
             self.row_sprites.set_status("No sprites cached yet (loading on-demand from Showdown CDN)")
         self._format_dropdown.value = self.store.get_battle_format_preference()

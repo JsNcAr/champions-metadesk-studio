@@ -281,6 +281,7 @@ class BoxRepository:
         remove_tags: Iterable[str] = (),
         is_favorite: bool | None = None,
         is_planned: bool | None = None,
+        notes: str | None = None,
     ) -> int:
         """Apply the same metadata change to several entries in one commit."""
         ids = list(box_entry_ids)
@@ -301,6 +302,8 @@ class BoxRepository:
                 record.is_favorite = is_favorite
             if is_planned is not None:
                 record.is_planned = is_planned
+            if notes is not None:
+                record.notes = notes
             record.updated_at = _utc_now()
             self.session.add(record)
         self.session.commit()

@@ -4,7 +4,6 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
 
 from sqlmodel import Session, create_engine
 

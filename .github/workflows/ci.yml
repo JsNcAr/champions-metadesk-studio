@@ -20,18 +20,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
+      # The action appends its `src` input to `args`, so the paths go there: the whole
+      # repository (ruff skips .venv and other ignored folders by itself).
       - name: Lint (pyflakes errors and loop-variable closures)
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@v4.1.0
         with:
           version: "0.16.8"
-          args: check --select F,B023 src scripts run.py
+          args: check --select F,B023
+          src: "."
 
       - name: Install Poetry
         run: |
@@ -39,7 +42,7 @@ jobs:
           poetry config virtualenvs.in-project true
 
       - name: Cache the virtualenv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py3.13-${{ hashFiles('poetry.lock') }}

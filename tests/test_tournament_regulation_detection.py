@@ -1,12 +1,8 @@
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
-from pokemon_champions_planning_tool.domain.pokemon_identity import (
-    REGULATION_MC_SPECIES,
-    normalize_format_regulation,
-)
 from pokemon_champions_planning_tool.infrastructure.database.models import (
     TournamentRecord,
     TournamentTeamMemberRecord,
@@ -15,7 +11,6 @@ from pokemon_champions_planning_tool.infrastructure.database.models import (
 from pokemon_champions_planning_tool.infrastructure.database.database import _remediate_tournament_regulations
 from pokemon_champions_planning_tool.infrastructure.providers.limitless_provider import (
     LimitlessProvider,
-    LimitlessTournament,
 )
 
 

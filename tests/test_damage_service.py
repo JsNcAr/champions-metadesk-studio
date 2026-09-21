@@ -118,7 +118,9 @@ class TestBuilders(unittest.TestCase):
         self.assertEqual([r.move_name for r in results], ["Kowtow Cleave", "Earthquake"], "status moves skipped")
         self.assertGreater(results[0].result.range()[0], 0)
         self.assertLess(results[1].result.range()[1], results[1].result.range()[1] / 0.75 + 1, "doubles spread")
-        both = slot_vs_slot(slot("kingambit", moves=("Kowtow Cleave",)), slot("kingambit", moves=("Flare Blitz",)), default_field(False), self.catalogs)
+        forward, backward = slot_vs_slot(slot("kingambit", moves=("Kowtow Cleave",)), slot("kingambit", moves=("Flare Blitz",)), default_field(False), self.catalogs)
+        self.assertEqual([r.move_name for r in forward], ["Kowtow Cleave"], "each side attacks with its own moves")
+        self.assertEqual([r.move_name for r in backward], ["Flare Blitz"])
         self.assertEqual(pokemon_from_species(KINGAMBIT, status="frozen").status, "", "unknown status codes are dropped")
 
     def test_mega_gardevoir_pixilate_hyper_voice(self):

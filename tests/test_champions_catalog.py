@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch
 
 from sqlmodel import SQLModel, Session, create_engine
-from pokemon_champions_planning_tool.infrastructure.database.models import ChampionsSpeciesRecord
 from pokemon_champions_planning_tool.infrastructure.database.repositories import ChampionsCatalogRepository
 from pokemon_champions_planning_tool.services.champions_catalog_service import sync_champions_catalog_on_startup
 

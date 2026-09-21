@@ -7,7 +7,6 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import flet as ft
 from sqlmodel import Session, SQLModel, create_engine
 
 from _ui_stubs import StubPage, serialise

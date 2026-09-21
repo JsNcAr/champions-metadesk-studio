@@ -809,7 +809,6 @@ class TestFormSwitcher(_Base):
         sweep = self.store.compute_sweep()
         self.store.publish_sweep(sweep)
 
-        panel = self.store
         ctx = AppContext(StubPage())
         view = CalcView(ctx, store=self.store)
         self.assertEqual(view.sweep._sort.value, "usage:latest")
@@ -886,7 +885,6 @@ class TestCalcStoreDbUsage(unittest.TestCase):
         self.assertGreater(len(final_sweep), 30)
 
         # publish_progressive_sweep does not set sweep_key
-        initial_key = self.store._sweep_key
         self.store._sweep_key = None
         self.store.publish_progressive_sweep(progressive_results[0])
         self.assertIsNone(self.store._sweep_key)

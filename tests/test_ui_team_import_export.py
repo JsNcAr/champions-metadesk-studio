@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import flet as ft
 from sqlmodel import Session, SQLModel, create_engine
 
 from _ui_stubs import StubPage, serialise

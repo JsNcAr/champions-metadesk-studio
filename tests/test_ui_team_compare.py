@@ -1,7 +1,6 @@
 """Compare teams dialog and TeamStore.summary_for."""
 
 import unittest
-from unittest.mock import MagicMock
 
 from _ui_stubs import StubPage, serialise
 from pokemon_champions_planning_tool.ui.context import AppContext

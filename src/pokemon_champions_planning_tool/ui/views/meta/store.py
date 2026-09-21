@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from sqlmodel import Session
 
 from ....domain.event_tier import OFFICIAL_TIERS, TIER_LABELS, tiers_for_filter
-from ....domain.pokemon_identity import base_canonical_id, expand_canonical_aliases
+from ....domain.pokemon_identity import expand_canonical_aliases
 from ....domain.search import parse_search_query, remove_query_token
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository

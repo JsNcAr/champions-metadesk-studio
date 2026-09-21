@@ -33,6 +33,7 @@ class _Db(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.sf = lambda: Session(self.engine)
         with self.sf() as s:
             s.add(TournamentRecord(tournament_id="t", name="T", event_date=datetime.now(timezone.utc), format_regulation="Regulation M-B", game_platform="Pokémon Champions", standings_synced=True))

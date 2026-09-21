@@ -6,14 +6,13 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, or_
+from sqlalchemy import or_
 from sqlmodel import Session, delete, func, select
 
 from ...config import MOVE_CATALOG_SCHEMA_VERSION, SPECIES_CATALOG_SCHEMA_VERSION
 from ...domain.entities.box_entry import BoxEntry
 from ...domain.event_tier import classify_event_tier
 from ...domain.entities.pokemon import Pokemon
-from ...domain.entities.pokemon_move import PokemonMove
 from ...domain.entities.team import Team
 from ...domain.entities.team_member import TeamMember
 from ...domain.pokemon_identity import expand_canonical_aliases, format_api_name
@@ -281,6 +280,7 @@ class BoxRepository:
         remove_tags: Iterable[str] = (),
         is_favorite: bool | None = None,
         is_planned: bool | None = None,
+        notes: str | None = None,
     ) -> int:
         """Apply the same metadata change to several entries in one commit."""
         ids = list(box_entry_ids)
@@ -301,6 +301,8 @@ class BoxRepository:
                 record.is_favorite = is_favorite
             if is_planned is not None:
                 record.is_planned = is_planned
+            if notes is not None:
+                record.notes = notes
             record.updated_at = _utc_now()
             self.session.add(record)
         self.session.commit()

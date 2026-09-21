@@ -14,10 +14,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from sqlmodel import Session
@@ -34,12 +34,10 @@ from ....infrastructure.database.repositories import BoxRepository, MegaEvolutio
 from ....services.box_transfer_service import (
     BoxImportReport,
     ParsedBoxItem,
-    ParsedBoxResult,
     apply_box_import,
     export_box_to_csv_text,
     export_box_to_json,
     export_box_to_names,
-    parse_box_import_text,
 )
 from ....services.mega_evolution_service import sync_mega_evolutions_for_species
 from ....services.pokemon_import_service import add_pokemon_to_box, refresh_pokemon_record

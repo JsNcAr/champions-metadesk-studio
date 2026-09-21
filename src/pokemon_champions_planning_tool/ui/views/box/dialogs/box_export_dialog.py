@@ -8,7 +8,7 @@ import flet as ft
 
 from ....components.banner import InlineBanner
 from ....tasks import is_mounted
-from ....theme import Palette, Space
+from ....theme import Space
 
 if TYPE_CHECKING:
     from .....domain.entities.box_entry import BoxEntry

@@ -22,6 +22,7 @@ class _Db(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         now = datetime.now(timezone.utc)
         self.session.add(ChampionsSpeciesRecord(entry_number=1, species_name="charizard", display_name="Charizard"))
@@ -113,6 +114,7 @@ class TestRewrittenAggregates(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         now = datetime.now(timezone.utc)
         self.session.add(TournamentRecord(tournament_id="d", name="Doubles Cup", event_date=now, format_regulation="Regulation M-C", battle_format="doubles"))

@@ -25,6 +25,15 @@ from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, TOURNAMENT_US
 from ..domain.pokemon_identity import get_pokemon_sprite_url, get_showdown_sprite_slug
 
 
+# What counts as a cached sprite. Anything else in the folder (the tracked .gitkeep, a
+# download's temporary file) is neither counted nor served.
+_SPRITE_SUFFIXES = (".png", ".gif", ".webp", ".jpg", ".svg")
+
+
+def _is_sprite(entry: os.DirEntry) -> bool:
+    return entry.is_file() and entry.name.endswith(_SPRITE_SUFFIXES) and entry.stat().st_size > 0
+
+
 class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
     """ThreadPoolExecutor whose workers are daemon threads so app exit is instant."""
 
@@ -89,9 +98,8 @@ class SpriteCacheService:
             return
         try:
             for entry in os.scandir(self.cache_dir):
-                if entry.is_file() and entry.name.endswith((".png", ".gif", ".webp", ".jpg", ".svg")):
-                    if entry.stat().st_size > 0:
-                        self._known_local.add(entry.name)
+                if _is_sprite(entry):
+                    self._known_local.add(entry.name)
         except OSError:
             pass
 
@@ -238,7 +246,7 @@ class SpriteCacheService:
         total_bytes = 0
         try:
             for entry in os.scandir(self.cache_dir):
-                if entry.is_file():
+                if _is_sprite(entry):
                     count += 1
                     total_bytes += entry.stat().st_size
         except OSError:
@@ -246,16 +254,20 @@ class SpriteCacheService:
         return count, total_bytes
 
     def clear_cache(self) -> int:
-        """Empties the sprite cache directory and resets lookup state."""
+        """Deletes the cached sprites (and stray download temp files); returns sprites deleted.
+
+        Other files are left alone, notably the .gitkeep that keeps the folder in git.
+        """
         count = 0
         if not self.cache_dir.is_dir():
             return 0
         try:
             for entry in os.scandir(self.cache_dir):
-                if entry.is_file():
+                sprite = _is_sprite(entry)
+                if sprite or (entry.is_file() and entry.name.endswith(".tmp")):
                     try:
                         os.unlink(entry.path)
-                        count += 1
+                        count += int(sprite)
                     except OSError:
                         pass
         except OSError:

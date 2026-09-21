@@ -47,6 +47,7 @@ class TestPlaceholderLint(unittest.TestCase):
         self.assertFalse(_real().is_stub)
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         with Session(engine) as s:
             PokemonRepository(s).upsert(p)
             self.assertTrue(PokemonRepository(s).get("kingambit").to_domain().is_placeholder)
@@ -56,6 +57,7 @@ class TestWriteGuards(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
 
     def tearDown(self):
@@ -87,6 +89,7 @@ class TestMigrationFlagsOldPlaceholders(unittest.TestCase):
         try:
             engine = create_engine(f"sqlite:///{path}")
             SQLModel.metadata.create_all(engine)
+            self.addCleanup(engine.dispose)
             engine.dispose()
             conn = sqlite3.connect(path)
             conn.execute("ALTER TABLE pokemon_records DROP COLUMN is_placeholder")
@@ -94,13 +97,13 @@ class TestMigrationFlagsOldPlaceholders(unittest.TestCase):
                          " VALUES ('kingambit', 'Kingambit', 'base', '[]', 0, 0, 0, 0, 0, 0, '[]', '[]', '[]', '2026-01-01', '2026-01-01'),"
                          " ('garchomp', 'Garchomp', 'Base', '[\"dragon\"]', 108, 130, 95, 80, 85, 102, '[]', '[]', '[]', '2026-01-01', '2026-01-01')")
             conn.commit(); conn.close()
-            database.get_engine.cache_clear(); database._DB_INITIALIZED.discard(path)
+            database.reset_engines()
             database.initialize_database(path)
             conn = sqlite3.connect(path)
             self.assertEqual(dict(conn.execute("SELECT canonical_id, is_placeholder FROM pokemon_records").fetchall()), {"kingambit": 1, "garchomp": 0})
             conn.close()
         finally:
-            database.get_engine.cache_clear(); database._DB_INITIALIZED.discard(path)
+            database.reset_engines()
             shutil.rmtree(d)
 
 
@@ -123,6 +126,7 @@ class TestUnavailableIsNotNotFound(unittest.TestCase):
     def test_add_by_name_reports_unavailability_instead_of_not_found(self):
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         import contextlib
 
         @contextlib.contextmanager
@@ -145,6 +149,7 @@ class TestVisibility(unittest.TestCase):
 
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         with Session(engine) as s:
             BoxRepository(s).upsert_box_entry(BoxEntry(pokemon=_real("kingambit")))
             BoxRepository(s).upsert_box_entry(BoxEntry(pokemon=_real("garchomp")))
@@ -168,6 +173,7 @@ class TestVisibility(unittest.TestCase):
 
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         with Session(engine) as s:
             BoxRepository(s).upsert_box_entry(BoxEntry(pokemon=Pokemon.placeholder("kingambit", "Kingambit")), allow_placeholder=True)
             s.commit()

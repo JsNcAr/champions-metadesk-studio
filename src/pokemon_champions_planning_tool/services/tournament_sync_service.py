@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ..config import (
     LIMITLESS_MAX_AGE_DAYS,
@@ -35,9 +35,6 @@ from ..domain.event_tier import classify_event_tier
 from ..domain.pokemon_identity import base_canonical_id, format_api_name, normalize_format_regulation
 from ..domain.pokemon_identity import (
     REGULATION_MC_SPECIES,
-    base_canonical_id,
-    format_api_name,
-    normalize_format_regulation,
 )
 from ..infrastructure.database.models import (
     TournamentRecord,
@@ -640,7 +637,7 @@ def _sync_victory_road(
 
             if st.paste_provider == "pokepast":
                 try:
-                    pdata = _with_one_retry(lambda: pokepast.fetch_by_id(st.paste_id))
+                    pdata = _with_one_retry(lambda paste_id=st.paste_id: pokepast.fetch_by_id(paste_id))
                     showdown_text = pdata.get("paste", "")
                     members_raw = _parse_showdown_members(showdown_text)
                 except Exception as exc:
@@ -651,7 +648,7 @@ def _sync_victory_road(
 
             elif st.paste_provider == "vrpaste":
                 try:
-                    vr_data = _with_one_retry(lambda: vrpaste.fetch_by_id(st.paste_id))
+                    vr_data = _with_one_retry(lambda paste_id=st.paste_id: vrpaste.fetch_by_id(paste_id))
                     showdown_text = _assemble_showdown_from_vrpaste(vr_data)
                     for m in vr_data.members:
                         members_raw.append((format_api_name(m.display_name), m.display_name))

@@ -91,6 +91,7 @@ class TestViewsGoNarrow(unittest.TestCase):
 
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         sf = lambda: Session(engine)  # noqa: E731
         ctx = AppContext(StubPage())
         box = BoxView(ctx, BoxStore(ctx.catalogs, sf))
@@ -116,6 +117,7 @@ class TestViewsGoNarrow(unittest.TestCase):
 
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
         view = MetaView(AppContext(StubPage()), MetaStore(lambda: Session(engine)))
         self.assertFalse(view.handle_key(_key("f", ctrl=True)), "unmounted search: nothing to focus, key not consumed")
         self.assertFalse(view.handle_key(_key("x", ctrl=True)))

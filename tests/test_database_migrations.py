@@ -35,20 +35,17 @@ class TestMigrations(unittest.TestCase):
         conn.commit()
         conn.close()
         self.assertNotIn("tera_type", _columns(self.db_path, "team_members"))
-        database.get_engine.cache_clear()
-        database._DB_INITIALIZED.discard(str(self.db_path))
+        database.reset_engines()
 
     def tearDown(self):
-        database.get_engine.cache_clear()
-        database._DB_INITIALIZED.discard(str(self.db_path))
+        database.reset_engines()
         shutil.rmtree(self.dir)
 
     def test_initialize_adds_missing_column_and_is_idempotent(self):
         database.initialize_database(str(self.db_path))
         self.assertIn("tera_type", _columns(self.db_path, "team_members"))
         # Second run (fresh process simulated by clearing the guard) must not raise.
-        database._DB_INITIALIZED.discard(str(self.db_path))
-        database.get_engine.cache_clear()
+        database.reset_engines()
         database.initialize_database(str(self.db_path))
         self.assertIn("tera_type", _columns(self.db_path, "team_members"))
 
@@ -112,8 +109,7 @@ class TestMigrations(unittest.TestCase):
         self.assertEqual(json.loads(rows["m1"][0]), {"hp": 32, "attack": 32, "speed": 1})
         self.assertEqual(rows["m1"][1:], ("{}", "{}", 50), "legacy columns are cleared once converted")
         self.assertEqual(json.loads(rows["m2"][0]), {})
-        database._DB_INITIALIZED.discard(str(self.db_path))
-        database.get_engine.cache_clear()
+        database.reset_engines()
         database.initialize_database(str(self.db_path))  # idempotent
 
     def test_default_form_labels_are_backfilled_onto_old_records(self):
@@ -160,8 +156,7 @@ class TestMigrations(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         self.assertEqual(conn.execute("SELECT member_count FROM tournament_teams").fetchone()[0], 3, "roster size backfilled")
         conn.close()
-        database._DB_INITIALIZED.discard(str(self.db_path))
-        database.get_engine.cache_clear()
+        database.reset_engines()
         database.initialize_database(str(self.db_path))
 
     def test_battle_format_column_is_added_and_remediated(self):

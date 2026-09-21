@@ -2,10 +2,11 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from functools import lru_cache
+import threading
+from typing import Any
 from pathlib import Path
 
-from sqlalchemy import event
+from sqlalchemy import Engine, event
 from sqlmodel import SQLModel, Session, create_engine
 
 from pokemon_champions_planning_tool.config import DEFAULT_DATABASE_FILENAME
@@ -18,10 +19,34 @@ def _resolve_database_url(database_filename: str) -> str:
     return f"sqlite:///{database_path.resolve()}"
 
 
-@lru_cache(maxsize=1)
-def get_engine(database_filename: str = DEFAULT_DATABASE_FILENAME):
-    """Return a cached SQLite engine."""
+_ENGINES: dict[str, Engine] = {}
+_ENGINES_LOCK = threading.Lock()
 
+
+def get_engine(database_filename: str = DEFAULT_DATABASE_FILENAME) -> Engine:
+    """Return the SQLite engine for this file, created once per process."""
+    with _ENGINES_LOCK:
+        engine = _ENGINES.get(database_filename)
+        if engine is None:
+            engine = _ENGINES[database_filename] = _create_engine(database_filename)
+        return engine
+
+
+def reset_engines() -> None:
+    """Dispose every engine and forget which databases were initialised.
+
+    For tests that open several database files in one process: dropping an engine
+    without disposing it leaves its pooled SQLite connections open.
+    """
+    with _ENGINES_LOCK:
+        engines = list(_ENGINES.values())
+        _ENGINES.clear()
+        _DB_INITIALIZED.clear()
+    for engine in engines:
+        engine.dispose()
+
+
+def _create_engine(database_filename: str) -> Engine:
     engine = create_engine(
         _resolve_database_url(database_filename),
         # 30 s: a background sync commits while the UI reads; the default 5 s produced

@@ -359,7 +359,6 @@ Notes:
                 print(f"❌ No team found for '{identifier}'.")
                 return
 
-            team = team_repository.load_team(team_record.team_id)
             members = team_repository.list_members(team_record.team_id)
 
             print(f"Team: {team_record.name}")

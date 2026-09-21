@@ -45,7 +45,6 @@ from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
     TOURNAMENT_USER_AGENT,
 )
-from ...domain.pokemon_identity import _CHAMPIONS_REG_RE
 from ...domain.pokemon_identity import _CHAMPIONS_REG_RE, classify_battle_format
 
 # Standings requests per batch unless the rate budget runs out first.

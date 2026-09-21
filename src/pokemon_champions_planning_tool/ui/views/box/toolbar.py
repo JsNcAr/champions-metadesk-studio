@@ -13,7 +13,7 @@ from ...components.inputs import SEARCH_FIELD_STYLE
 from ...tasks import Debouncer
 from ...theme import TYPE_ORDER, Layout, Motion, Palette, Radius, Space, alpha, on_type_color, type_color
 from ...theme import STAT_COLORS, STAT_LABELS, STAT_ORDER
-from .filters import BST_MAX, BST_MIN, SORT_LABELS, STAT_MAX, STAT_MIN, BoxFilters
+from .filters import BST_MAX, BST_MIN, SORT_LABELS, STAT_MAX, STAT_MIN, BoxFilters, SortKey
 from .table import EXTRA_COLUMNS
 
 _FILTER_DEBOUNCE_MS = 150

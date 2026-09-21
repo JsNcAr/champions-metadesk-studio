@@ -12,7 +12,7 @@ from ...components import Sprite
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
-from ...theme import IconSize, Palette, Radius, Space
+from ...theme import Palette, Radius, Space
 from .state import PokemonState, pokemon_from_slot, pokemon_from_species_id
 from .store import CalcStore
 

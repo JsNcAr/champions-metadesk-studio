@@ -42,6 +42,7 @@ class TestTournamentUsageQueries(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
         self.repo = TournamentRepository(self.session)
 
@@ -211,6 +212,7 @@ class TestBoxStoreUsageCache(unittest.TestCase):
     def test_get_usage_map_caching_and_invalidation(self):
         engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(engine)
+        self.addCleanup(engine.dispose)
 
         def session_factory():
             return Session(engine)

@@ -28,6 +28,7 @@ class TestTournamentSyncService(unittest.TestCase):
         """Set up an in-memory SQLite database session."""
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
 
     def tearDown(self):
@@ -150,6 +151,7 @@ class TestLimitlessStandingsBacklog(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.session = Session(self.engine)
 
     def tearDown(self):

@@ -119,8 +119,34 @@ class TestBoxTransferSerialization(unittest.TestCase):
 
 class TestBoxTransferDatabaseApplication(unittest.TestCase):
     def setUp(self):
+        from unittest import mock
+
+        from pokemon_champions_planning_tool.services import box_transfer_service
+
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        # Offline: unknown species become placeholders instead of reaching PokéAPI.
+        stats = mock.patch.object(box_transfer_service, "get_official_stats", return_value=None)
+        stats.start()
+        self.addCleanup(stats.stop)
+        self.addCleanup(self.engine.dispose)
+
+    def test_merge_keeps_notes_from_the_import(self):
+        from pokemon_champions_planning_tool.infrastructure.database.repositories import BoxRepository
+
+        with Session(self.engine) as session:
+            apply_box_import(session, parse_box_import_text("Charizard").items)
+            items = parse_box_import_text('{"box": [{"species": "Charizard", "notes": "Tailwind lead"}]}').items
+            report = apply_box_import(session, items, strategy="merge")
+            self.assertEqual(report.updated, 1)
+            self.assertEqual(BoxRepository(session).list_entries()[0].notes, "Tailwind lead")
+
+            # A second note is appended, and re-importing the same note changes nothing.
+            items = parse_box_import_text('{"box": [{"species": "Charizard", "notes": "Scarf set"}]}').items
+            apply_box_import(session, items, strategy="merge")
+            self.assertEqual(BoxRepository(session).list_entries()[0].notes, "Tailwind lead\nScarf set")
+            report = apply_box_import(session, items, strategy="merge")
+            self.assertEqual(report.updated, 0)
 
     def test_apply_import_merge_and_replace(self):
         with Session(self.engine) as session:

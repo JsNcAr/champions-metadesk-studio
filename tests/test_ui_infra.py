@@ -217,7 +217,14 @@ class TestLayoutLint(unittest.TestCase):
         self.assertIn("Row(wrap=True)", str(ctx.exception))
         check_layout(ft.Row(controls=[ft.Row(wrap=True, expand=True, controls=[ft.Text("a")]), ft.Container(expand=True)]))
 
+    def test_a_control_placed_twice_is_rejected(self):
+        from _ui_stubs import check_layout
 
+        name = ft.Text("Charizard")
+        with self.assertRaises(AssertionError) as ctx:
+            check_layout(ft.Column(controls=[ft.Row(controls=[name]), ft.Row(controls=[name])]))
+        self.assertIn("Text placed twice", str(ctx.exception))
+        check_layout(ft.Column(controls=[ft.Row(controls=[ft.Text("a")]), ft.Row(controls=[ft.Text("a")])]))
 
 
 class TestGridTileAspect(unittest.TestCase):

@@ -17,7 +17,7 @@ from ...tasks import Debouncer, grid_tile_aspect, is_mounted
 from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Space
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
-from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PAGE_SIZE, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
+from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
 
 _SEARCH_DEBOUNCE_MS = 400
 # With groups collapsed (or as cards) a 20-team page shows only two or three events, so

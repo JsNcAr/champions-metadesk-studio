@@ -378,7 +378,7 @@ def apply_box_import(
         else:
             try:
                 official_data = get_official_stats(item.species) or get_official_stats(canonical_id)
-            except (PokeApiUnavailable, Exception) as exc:
+            except (PokeApiUnavailable, Exception):
                 pass
 
         if official_data:
@@ -415,6 +415,7 @@ def apply_box_import(
                     [existing_entry.box_entry_id],
                     add_tags=item.tags,
                     is_favorite=new_fav,
+                    notes=new_notes,
                 )
                 report.updated += 1
             else:

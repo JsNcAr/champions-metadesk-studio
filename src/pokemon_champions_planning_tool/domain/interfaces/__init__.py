@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from ..entities.item import Item
 
 
 @runtime_checkable

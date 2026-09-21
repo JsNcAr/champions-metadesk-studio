@@ -646,6 +646,7 @@ class TestCalcStoreDbUsage(unittest.TestCase):
 
         self.engine = create_engine("sqlite:///:memory:")
         SQLModel.metadata.create_all(self.engine)
+        self.addCleanup(self.engine.dispose)
         self.sf = lambda: Session(self.engine)
         with self.sf() as s:
             s.add(TournamentRecord(tournament_id="t1", name="Tourney 1", event_date=datetime(2026, 9, 1, tzinfo=timezone.utc), format_regulation="Regulation M-C", battle_format="doubles", game_platform="Pokémon Champions", standings_synced=True))

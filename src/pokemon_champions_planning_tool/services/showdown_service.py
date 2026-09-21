@@ -28,6 +28,7 @@ from ..domain.entities.pokemon_move import PokemonMove
 from ..domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, STAT_KEYS, format_points, points_from_evs, validate_points
 
 if TYPE_CHECKING:
+    from ..domain.entities.pokemon import Pokemon
     from ..infrastructure.database.repositories import BoxRepository
     from ..infrastructure.providers.pokepast_provider import PokepastProvider
 
@@ -622,7 +623,6 @@ def commit_team_import(
     """
     from ..domain.entities.box_entry import BoxEntry
     from ..domain.entities.pokemon import Pokemon
-    from ..domain.entities.pokemon_stats import PokemonStats
     from ..domain.entities.team import Team
     from ..domain.entities.team_member import TeamMember
     from ..infrastructure.database.repositories import BoxRepository, PokemonRepository, TeamRepository

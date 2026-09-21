@@ -127,7 +127,7 @@ class PokemonPanel(ft.Container):
                 self.sprite,
                 ft.Column(spacing=3, tight=True, expand=True, controls=[
                     ft.Row(spacing=Space.SM, tight=True, controls=[self._name, self._mega]),
-                    ft.Row(spacing=Space.SM, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._name, self._form]),
+                    ft.Row(spacing=Space.SM, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._form]),
                     ft.Row(spacing=Space.XS, tight=True, controls=[self._types, self._speed]),
                     ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._ability, self._ability_on]),
                     self._caption, self._legality,

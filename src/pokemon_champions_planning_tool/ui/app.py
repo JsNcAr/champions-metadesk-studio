@@ -38,6 +38,73 @@ def _seed_once() -> None:
         print(f"⚠️ Tournament seed check skipped: {exc}")
 
 
+def _start_catalogue_refresh(ctx: AppContext, shell: AppShell) -> None:
+    """Download catalogues after the window is up, not before it.
+
+    Nothing blocks ``ft.run`` any more: a first launch opens on an empty database with a
+    banner and fills in as the data arrives, and a later launch only refreshes what has
+    gone stale. Before this, a fresh install showed no window at all until four downloads
+    had finished.
+    """
+
+    from ..main import bootstrap_catalogues, catalogues_missing, refresh_catalogues
+
+    with get_session() as session:
+        first_run = catalogues_missing(session)
+    if first_run:
+        shell.set_status("Setting up — downloading the Pokédex, moves and items. The app fills in as it arrives.", "info")
+
+    def work() -> set[str]:
+        with get_session() as session:
+            if first_run:
+                bootstrap_catalogues(session)
+            return refresh_catalogues(session)
+
+    def done(changed: set[str]) -> None:
+        if first_run:
+            with get_session() as session:
+                missing = catalogues_missing(session)
+            if missing:
+                shell.set_status("Some Pokédex data could not be downloaded. Retry from Settings once you are online.", "warning",
+                                 action_label="Settings", on_action=lambda: shell.navigate("settings"))
+            else:
+                shell.clear_status()
+        # One event per kind, so a view reloads for the catalogue it actually reads.
+        for kind in sorted(changed):
+            ctx.bus.emit(events.CATALOGS_RELOADED, kind)
+
+    def failed(exc: BaseException) -> None:
+        print(f"⚠️ Startup catalogue refresh skipped: {exc}")
+        if first_run:
+            shell.set_status(f"Could not download the Pokédex data: {exc}", "error",
+                             action_label="Settings", on_action=lambda: shell.navigate("settings"))
+
+    ctx.run_in_background(work, on_done=done, on_error=failed)
+
+
+def _start_sprite_prefetch(ctx: AppContext) -> None:
+    """Cache the roster's sprites for the next launch, quietly.
+
+    Sprites are served from ``/sprites/`` only once they were on disk at startup, so this
+    is what makes the second launch instant. It also matters for correctness on the web
+    build, where Flet sets ``Cross-Origin-Embedder-Policy: require-corp`` and the Showdown
+    CDN sends no CORP/CORS headers, so a cross-origin sprite cannot load at all.
+    """
+
+    def work() -> int:
+        from ..infrastructure.database.repositories import BoxRepository
+        from ..services.sprite_cache_service import sprite_cache
+
+        with get_session() as session:
+            species = [e.pokemon.canonical_id for e in BoxRepository(session).list_entries(include_planned=True)]
+        return sprite_cache.prefetch(species)
+
+    def failed(exc: BaseException) -> None:
+        print(f"⚠️ Sprite prefetch skipped: {exc}")
+
+    ctx.run_in_background(work, on_done=lambda _n: None, on_error=failed)
+
+
 def _start_background_sync(ctx: AppContext) -> None:
     """Sync tournament data once per process without blocking the UI."""
 
@@ -73,22 +140,45 @@ def main(page: ft.Page) -> None:
     shell.register_view("box", label="Box", icon=ft.Icons.INVENTORY_2_OUTLINED, selected_icon=ft.Icons.INVENTORY_2,
                         control=box_view, on_activate=box_view.ensure_loaded)
     team_store = TeamStore(ctx.catalogs)
-    team_view = TeamView(ctx, team_store)
     shell.register_view("team", label="Teams", icon=ft.Icons.GROUPS_OUTLINED, selected_icon=ft.Icons.GROUPS,
-                        control=team_view, on_activate=team_view.ensure_loaded)
-    meta_view = MetaView(ctx)
+                        factory=lambda: TeamView(ctx, team_store),
+                        on_activate=lambda: getattr(shell.get_view("team"), "ensure_loaded", lambda: None)())
     shell.register_view("meta", label="Meta", icon=ft.Icons.EMOJI_EVENTS_OUTLINED, selected_icon=ft.Icons.EMOJI_EVENTS,
-                        control=meta_view, on_activate=meta_view.ensure_loaded)
-    calc_view = CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store))
+                        factory=lambda: MetaView(ctx),
+                        on_activate=lambda: getattr(shell.get_view("meta"), "ensure_loaded", lambda: None)())
     shell.register_view("calc", label="Calc", icon=ft.Icons.CALCULATE_OUTLINED, selected_icon=ft.Icons.CALCULATE,
-                        control=calc_view, on_activate=calc_view.ensure_loaded)
-    settings_view = SettingsView(ctx)
+                        factory=lambda: CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store)),
+                        on_activate=lambda: getattr(shell.get_view("calc"), "ensure_loaded", lambda: None)())
     shell.register_view("settings", label="Settings", icon=ft.Icons.SETTINGS_OUTLINED, selected_icon=ft.Icons.SETTINGS,
-                        control=settings_view, on_activate=settings_view.refresh, in_rail=False)
+                        factory=lambda: SettingsView(ctx),
+                        on_activate=lambda: getattr(shell.get_view("settings"), "refresh", lambda: None)(), in_rail=False)
     shell.register_settings(lambda: shell.navigate("settings"))
 
-    shell.navigate("box")
+    # The frame goes up first: mounting the shell paints the rail and the empty content
+    # host straight away, so navigating (which builds and fills the Box) happens against a
+    # window the user can already see rather than a blank one.
     page.add(shell)
+    shell.navigate("box")
+
+    async def _prewarm_views() -> None:
+        """Build the other views while the app is idle, so switching to them is instant.
+
+        Yields between each: built back to back they blocked the loop for a quarter of a
+        second right when the Box is still drawing and the user may already be clicking.
+        """
+        import asyncio
+        await asyncio.sleep(0.25)
+        for k in ("team", "meta", "calc", "settings"):
+            try:
+                # Built, mounted hidden and loaded, so the first visit costs a later one.
+                shell.preload(k, activate=True)
+            except Exception:
+                pass
+            await asyncio.sleep(0)
+
+    page.run_task(_prewarm_views)
 
     if STARTUP_SYNC_ENABLED:
+        _start_catalogue_refresh(ctx, shell)
+        _start_sprite_prefetch(ctx)
         _start_background_sync(ctx)

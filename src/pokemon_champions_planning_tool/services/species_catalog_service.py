@@ -75,7 +75,30 @@ def _to_info(r: SpeciesRecord) -> SpeciesInfo:
 
 def load_species_catalog(session: Session) -> dict[str, SpeciesInfo]:
     """Species by our canonical id (immutable values for the UI catalogs)."""
-    return {r.canonical_id: _to_info(r) for r in SpeciesRepository(session).list_all()}
+    import json
+
+    def _decode(value) -> tuple:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return ()
+        return tuple(value or ())
+
+    out: dict[str, SpeciesInfo] = {}
+    for row in SpeciesRepository(session).rows():
+        (showdown_id, canonical_id, name, dex_number, base_species_id, forme, types,
+         hp, attack, defense, special_attack, special_defense, speed, abilities,
+         hidden_ability, weightkg, gender, required_item, battle_only, is_mega, is_legal) = row
+        out[canonical_id] = SpeciesInfo(
+            canonical_id=canonical_id, showdown_id=showdown_id, name=name, dex_number=dex_number,
+            base_species_id=base_species_id, forme=forme, types=_decode(types),
+            base_stats={"hp": hp, "atk": attack, "def": defense, "spa": special_attack, "spd": special_defense, "spe": speed},
+            abilities=_decode(abilities), weightkg=float(weightkg), gender=gender,
+            required_item=required_item, battle_only=battle_only,
+            is_mega=bool(is_mega), is_legal=bool(is_legal),
+        )
+    return out
 
 
 __all__ = ["load_species_catalog", "species_catalog_is_stale", "sync_species_catalog", "sync_species_catalog_on_startup"]

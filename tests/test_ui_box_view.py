@@ -203,3 +203,99 @@ class TestBoxBulkAndRanges(_BoxViewCase):
         self.view.toolbar._toggle_drawer("stats", True)
         self.assertTrue(self.view.toolbar.drawer.visible)
         serialise(self.view)
+
+
+class TestBoxLoadingFeedback(_BoxViewCase):
+    """The roster never blocks the window without saying so."""
+
+    def test_skeleton_shows_until_the_first_render(self):
+        self.assertTrue(self.view._loading.visible, "a fresh view shows the skeleton, not an empty panel")
+        self.assertFalse(self.view.grid.visible)
+        self.view.ensure_loaded()
+        self.assertFalse(self.view._loading.visible)
+        self.assertTrue(self.view.grid.visible)
+
+    def test_usage_sort_fetches_off_the_render_and_ends_sorted(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        self.assertFalse(self.view.store.usage_map_cached("latest"), "not read until something asks for it")
+        self.view._on_filters(replace(self.view.store.filters, sort="usage"))
+        # The stub page runs the worker inline, so by now the fetch has been and gone.
+        self.assertTrue(self.view.store.usage_map_cached("latest"))
+        self.assertFalse(self.view._usage_loading)
+        self.assertFalse(self.view._loading.visible, "the skeleton gives way once the counts are in")
+        self.assertTrue(self.view.grid.visible)
+        self.assertEqual(len(self.view.grid.controls), 2)
+
+    def test_usage_sort_shows_the_skeleton_while_the_counts_are_outstanding(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        # Pin the view in the state it holds while the worker is still running.
+        self.view._usage_loading = True
+        self.view.store.set_filters(replace(self.view.store.filters, sort="usage"))
+        self.view._render()
+        self.assertTrue(self.view._loading.visible)
+        self.assertFalse(self.view.grid.visible)
+        self.assertFalse(self.view._empty.visible)
+        self.assertFalse(self.view._no_match.visible)
+
+
+class TestChunkedFirstFill(_BoxViewCase):
+    """The roster is drawn a chunk at a time so the window never blocks on a full box."""
+
+    def test_first_pass_draws_a_chunk_but_counts_the_whole_match(self):
+        self.view.ensure_loaded()
+        # Redraw from scratch with a chunk of one, and a page that never runs the follow-up.
+        self.view._cards.clear()
+        self.view.grid.controls = []
+        self.view._render_limit = 1
+        self.page.run_task = lambda *a, **k: None
+        self.view._render()
+
+        self.assertEqual(len(self.view.grid.controls), 1, "only the first chunk is drawn")
+        self.assertEqual(self.view.header._count.content.value, "2", "the count is of the whole match")
+        self.assertFalse(self.view._no_match.visible, "a partial draw is not 'no matches'")
+        self.assertTrue(self.view.grid.visible)
+
+    def test_following_chunks_finish_the_roster(self):
+        self.view._render_limit = 1
+        self.view.ensure_loaded()   # StubPage runs the queued chunks straight through
+        self.assertEqual(len(self.view.grid.controls), 2)
+        self.assertIsNone(self.view._render_limit, "chunking is only for the first fill")
+
+    def test_once_drawn_later_renders_are_whole(self):
+        from dataclasses import replace
+
+        self.view.ensure_loaded()
+        self.assertIsNone(self.view._render_limit)
+        self.view._on_filters(replace(self.view.store.filters, text="rilla"))
+        self.assertEqual(len(self.view.grid.controls), 1)
+        self.view._on_filters(replace(self.view.store.filters, text=""))
+        self.assertEqual(len(self.view.grid.controls), 2, "not re-chunked")
+
+
+class TestCardFrameIsNotReassigned(unittest.TestCase):
+    """A card must not hand Flet a new Border when its frame has not changed.
+
+    A freshly built Border is a new object, which the diff treats as a replacement and
+    re-sends; re-applying the frame on every render re-sent all 250 borders per update.
+    """
+
+    def test_frame_objects_are_shared_and_only_change_with_state(self):
+        from pokemon_champions_planning_tool.ui.views.box.card import PokemonCard
+
+        noop = lambda *a: None  # noqa: E731
+        card = PokemonCard(on_select=noop, on_favorite=noop, on_tag=noop)
+        rest = card.border
+        card.set_selected(False)
+        self.assertIs(card.border, rest, "unchanged frame: same object")
+        card.set_selected(True)
+        selected = card.border
+        self.assertIsNot(selected, rest)
+        card.set_selected(True)
+        self.assertIs(card.border, selected)
+        other = PokemonCard(on_select=noop, on_favorite=noop, on_tag=noop)
+        other.set_selected(True)
+        self.assertIs(other.border, selected, "one Border per state, shared by every card")

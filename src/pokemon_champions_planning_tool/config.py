@@ -12,6 +12,15 @@ DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", "pokemon_champions.d
 DEFAULT_PREFERENCES_FILENAME = os.environ.get(
     "PCPT_PREFERENCES", str(Path(DEFAULT_DATABASE_FILENAME).parent / "preferences.json")
 )
+# Absolute on purpose. Flet resolves a *relative* assets_dir against the directory of
+# sys.argv[0], not the working directory, so "assets" became
+# src/pokemon_champions_planning_tool/assets — a path that does not exist, which makes
+# Flet serve no assets at all. The sprite cache meanwhile wrote to ./assets/sprites, so
+# nothing it downloaded was ever reachable. Resolving here keeps the two in step.
+DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", "assets")).resolve())
+DEFAULT_SPRITE_CACHE_DIR = str(
+    Path(os.environ.get("PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites"))).resolve()
+)
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
 POKEAPI_TIMEOUT_SECONDS = 5
 
@@ -43,8 +52,14 @@ VICTORY_ROAD_BASE_URL = "https://victoryroad.pro"
 # new pages per sync run, since each is a 1–2 MB WordPress render.
 VICTORY_ROAD_PAGES_PER_RUN = 2
 VICTORY_ROAD_CALENDAR_MAX_AGE_HOURS = 24
-# An event page with no team sheets yet is retried while the event ended this recently.
+# An official event whose Victory Road page has no team list yet is retried on every
+# sync while it ended this recently (results usually appear within days)...
 VICTORY_ROAD_RESULTS_GRACE_DAYS = 14
+# ...then at most once per this many days, so a slow update does not make the event
+# vanish for good...
+VICTORY_ROAD_SLOW_RETRY_DAYS = 3
+# ...and it is given up on once it ended this long ago with still no team list.
+VICTORY_ROAD_GIVE_UP_DAYS = 45
 # Placements ingested per official event (Regionals publish hundreds of sheets).
 VICTORY_ROAD_MAX_PLACEMENT = int(os.environ.get("PCPT_VR_MAX_PLACEMENT", "64") or 64)
 VRPASTE_BACKEND_URL = "https://vrpaste-backend.vercel.app/api/paste"

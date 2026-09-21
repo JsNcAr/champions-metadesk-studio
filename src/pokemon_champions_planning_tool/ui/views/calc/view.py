@@ -7,6 +7,7 @@ import flet as ft
 from ... import events
 from ...components import PageHeader
 from ...context import AppContext
+from ...tasks import is_mounted
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
@@ -28,6 +29,7 @@ class CalcView(ft.Column):
         self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
         self._narrow = False
         self._sweep_running = False
+        self._presets_warming = False
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
@@ -53,11 +55,11 @@ class CalcView(ft.Column):
 
         self.store.subscribe(self._on_store)
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
+        ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())
         ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self.rail.refresh_team())
-        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: self.store.invalidate_presets())
-        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: (self.store.invalidate_presets(), self._maybe_sweep()))
-        ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._maybe_sweep()))
+        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
+        ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
 
     # -- lifecycle -----------------------------------------------------------------------------
 
@@ -65,7 +67,27 @@ class CalcView(ft.Column):
         if not self.store.loaded:
             self.store.load()
         self.rail.refresh()
+        self._warm_presets()
         self._maybe_sweep()
+
+    def _warm_presets(self) -> None:
+        """Read the tournament builds on a worker while the view is merely open.
+
+        Building them aggregates every roster row four times over, and the paths that
+        need them (picking an opponent, choosing a defender) run on the UI loop — so
+        without this the first click after a sync froze the calculator.
+        """
+        if self.store.presets_ready or self._presets_warming:
+            return
+        self._presets_warming = True
+
+        def finish(_result=None) -> None:
+            self._presets_warming = False
+
+        try:
+            self.ctx.run_in_background(self.store.preset_builds, on_done=finish, on_error=finish)
+        except Exception:  # noqa: BLE001 - no page loop (tests): leave it to the caller
+            self._presets_warming = False
 
     def _on_store(self, event: tuple) -> None:
         if event[0] == "state":
@@ -81,8 +103,21 @@ class CalcView(ft.Column):
             self._maybe_sweep()
 
     def _sync_species_banner(self) -> None:
-        if not self.store.catalogs.has_species:
-            self.header.set_caption("Species data not synced yet — Settings › Moves, learnsets & species")
+        # Cleared as well as set: the catalogue can arrive while this view is open.
+        self.header.set_caption(
+            "" if self.store.catalogs.has_species
+            else "Species data not synced yet — Settings › Moves, learnsets & species"
+        )
+
+    def _on_catalogs_reloaded(self, kind: str) -> None:
+        if kind not in ("items", "megas", "moves", "species", "champions"):
+            return
+        self.store.refresh_catalogs(self.ctx.catalogs or self.store.catalogs)
+        self.rail.refresh()
+        self.sweep.render()
+        self._sync_species_banner()
+        if is_mounted(self):
+            self.update()
 
     def _on_request(self, req: CalcRequest) -> None:
         self.ensure_loaded()
@@ -139,7 +174,24 @@ class CalcView(ft.Column):
             done(self.store.compute_sweep())
 
     def _pick_opponent(self, entry: SweepEntry) -> None:
-        self.store.load_species("right", entry.canonical_id, preset=self.store.sweep_presets, source="Opponents")
+        preset = self.store.sweep_presets
+        if preset and not self.store.presets_ready:
+            # Clicked before the warm-up finished: say so in the rail rather than freeze.
+            self.sweep.set_busy(True)
+
+            def done(_builds=None) -> None:
+                self._presets_warming = False
+                self.sweep.set_busy(False)
+                self.store.load_species("right", entry.canonical_id, preset=True, source="Opponents")
+
+            self._presets_warming = True
+            try:
+                self.ctx.run_in_background(self.store.preset_builds, on_done=done, on_error=lambda _e: done())
+                return
+            except Exception:  # noqa: BLE001 - no page loop (tests): fall through
+                self._presets_warming = False
+                self.sweep.set_busy(False)
+        self.store.load_species("right", entry.canonical_id, preset=preset, source="Opponents")
 
     # -- layout ------------------------------------------------------------------------------------
 

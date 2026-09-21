@@ -63,13 +63,22 @@ def sync_move_catalog_on_startup(session: Session) -> dict:
 
 def load_move_catalog(session: Session) -> tuple[dict[str, MoveInfo], dict[str, frozenset[str]]]:
     """(moves by id, learnsets by species key) as immutable values for the UI catalogs."""
+    import json
+
     repo = MoveRepository(session)
-    moves = {
-        r.move_id: MoveInfo(move_id=r.move_id, name=r.name, type=r.type, category=r.category, power=r.power, accuracy=r.accuracy,
-                            pp=r.pp, priority=r.priority, target=r.target, short_desc=r.short_desc, is_legal=r.is_legal,
-                            mechanics=MoveMechanics.from_json(r.mechanics))
-        for r in repo.list_moves()
-    }
+    moves: dict[str, MoveInfo] = {}
+    for (move_id, name, type_, category, power, accuracy, pp, priority, target,
+         short_desc, is_legal, mechanics) in repo.move_rows():
+        if isinstance(mechanics, str):
+            try:
+                mechanics = json.loads(mechanics)
+            except ValueError:
+                mechanics = {}
+        moves[move_id] = MoveInfo(
+            move_id=move_id, name=name, type=type_, category=category, power=power, accuracy=accuracy,
+            pp=pp, priority=priority, target=target, short_desc=short_desc, is_legal=bool(is_legal),
+            mechanics=MoveMechanics.from_json(mechanics),
+        )
     learnsets = {k: frozenset(v) for k, v in repo.list_learnsets().items()}
     return moves, learnsets
 

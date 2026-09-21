@@ -106,8 +106,9 @@ class SettingsView(ft.Column):
         self.row_items = SyncRow(ft.Icons.DIAMOND_OUTLINED, "Held items", lambda: self._sync("items"))
         self.row_moves = SyncRow(ft.Icons.SPORTS_MARTIAL_ARTS, "Moves, learnsets & species", lambda: self._sync("moves"))
         self.row_tournaments = SyncRow(ft.Icons.EMOJI_EVENTS_OUTLINED, "Tournaments", lambda: self._sync("tournaments"))
+        self.row_sprites = SyncRow(ft.Icons.IMAGE_OUTLINED, "Local sprite cache", lambda: self._sync("sprites"), button_label="Pre-cache")
         self.row_health = SyncRow(ft.Icons.HEALTH_AND_SAFETY_OUTLINED, "Data health", lambda: self._sync("health"), button_label="Repair")
-        self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "health": self.row_health}
+        self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "sprites": self.row_sprites, "health": self.row_health}
 
         self.about = KeyValueList(self._about_rows())
 
@@ -147,6 +148,8 @@ class SettingsView(ft.Column):
                                 ft.Divider(),
                                 self.row_tournaments,
                                 ft.Divider(),
+                                self.row_sprites,
+                                ft.Divider(),
                                 self.row_health,
                             ]
                         ),
@@ -183,10 +186,18 @@ class SettingsView(ft.Column):
 
     def refresh(self) -> None:
         """Reload the counts. Called on activation and after any sync."""
-        status = self.store.status()
-        self.apply_status(status)
-        if self._is_mounted():
-            self.update()
+        def on_done(status: SettingsStatus) -> None:
+            self.apply_status(status)
+            if self._is_mounted():
+                self.update()
+
+        if self._is_mounted() and hasattr(self.ctx, "run_in_background"):
+            self.ctx.run_in_background(self.store.status, on_done=on_done, on_error=lambda _e: None)
+        else:
+            status = self.store.status()
+            self.apply_status(status)
+            if self._is_mounted():
+                self.update()
 
     def apply_status(self, status: SettingsStatus) -> None:
         self.row_megas.set_status(_status_line(plural(status.mega_count, "form"), status.megas_checked_at, status.mega_count))
@@ -204,6 +215,11 @@ class SettingsView(ft.Column):
                 status.tournament_count,
             )
         )
+        if status.cached_sprites > 0:
+            size_kb = round(status.cached_sprites_bytes / 1024)
+            self.row_sprites.set_status(f"{plural(status.cached_sprites, 'sprite')} cached locally ({size_kb:,} KB) · 0ms offline access")
+        else:
+            self.row_sprites.set_status("No sprites cached yet (loading on-demand from Showdown CDN)")
         self._format_dropdown.value = self.store.get_battle_format_preference()
 
     def _on_format_changed(self, val: str) -> None:
@@ -216,7 +232,14 @@ class SettingsView(ft.Column):
 
     def _sync(self, kind: str) -> None:
         row = self._rows[kind]
-        work = {"megas": self.store.sync_megas, "items": self.store.sync_items, "moves": self.store.sync_moves, "tournaments": self.store.sync_tournaments, "health": self.store.repair_data}[kind]
+        work = {
+            "megas": self.store.sync_megas,
+            "items": self.store.sync_items,
+            "moves": self.store.sync_moves,
+            "tournaments": self.store.sync_tournaments,
+            "sprites": self.store.sync_sprites,
+            "health": self.store.repair_data,
+        }[kind]
         row.set_running(True)
         row.set_status("Syncing…")
         if self._is_mounted():
@@ -306,6 +329,8 @@ def _result_summary(kind: str, result: dict[str, Any]) -> str:
         return f"{result.get('moves', 0):,} moves · {result.get('species', 0):,} learnsets · {result.get('species_catalog', 0):,} species"
     if kind == "health":
         return f"{result.get('repaired', 0)} of {result.get('stubs', 0)} repaired"
+    if kind == "sprites":
+        return f"{result.get('enqueued', 0)} queued · {result.get('cached', 0)} cached"
     limitless = result.get("limitless", {})
     victory = result.get("victory_road", {})
     added = int(limitless.get("added", 0)) + int(victory.get("added", 0))
@@ -319,6 +344,8 @@ def _toast_text(kind: str, result: dict[str, Any]) -> str:
         return f"Mega Evolutions synced — {result.get('total_local', 0):,} forms cached"
     if kind == "items":
         return f"Items synced — {result.get('total', 0):,} catalogued"
+    if kind == "sprites":
+        return f"Pre-caching {result.get('enqueued', 0)} sprites in the background"
     if kind == "health":
         stubs, repaired = result.get("stubs", 0), result.get("repaired", 0)
         return "Nothing to repair" if not stubs else (f"Repaired {repaired} Pokémon" if repaired == stubs else f"Repaired {repaired} of {stubs} — PokéAPI unreachable for the rest")

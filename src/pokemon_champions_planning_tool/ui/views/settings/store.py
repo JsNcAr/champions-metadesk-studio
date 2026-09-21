@@ -16,6 +16,7 @@ from sqlmodel import Session, func, select
 
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import (
+    BoxEntryRecord,
     ItemCatalogMetaRecord,
     ItemRecord,
     MegaCheckedSpeciesRecord,
@@ -27,7 +28,6 @@ from ....infrastructure.database.models import (
 )
 from ....services.items_catalog_service import sync_items_catalog
 from ....services.mega_evolution_service import sync_all_champions_megas_on_startup
-from ....infrastructure.database.repositories import BoxRepository
 from ....infrastructure.database.repositories import BoxRepository, TournamentRepository
 from ....services.move_catalog_service import sync_move_catalog
 from ....services.species_catalog_service import sync_species_catalog
@@ -51,6 +51,8 @@ class SettingsStatus:
     moves_synced_at: datetime | None = None
     placeholder_in_box: int = 0      # box entries whose Pokémon has no PokéAPI data
     placeholder_records: int = 0     # placeholder records in the table (any, referenced or not)
+    cached_sprites: int = 0
+    cached_sprites_bytes: int = 0
 
 
 class SettingsStore:
@@ -68,10 +70,20 @@ class SettingsStore:
             team_count = s.exec(select(func.count()).select_from(TournamentTeamRecord)).one()
             move_meta = s.get(MoveCatalogMetaRecord, 1)
             placeholder_records = int(s.exec(select(func.count()).select_from(PokemonRecord).where(PokemonRecord.is_placeholder == True)).one() or 0)  # noqa: E712
-            placeholder_in_box = sum(1 for e in BoxRepository(s).list_entries(include_planned=True) if e.pokemon.is_stub)
+            placeholder_in_box = int(
+                s.exec(
+                    select(func.count(BoxEntryRecord.box_entry_id))
+                    .select_from(BoxEntryRecord)
+                    .join(PokemonRecord, BoxEntryRecord.pokemon_canonical_id == PokemonRecord.canonical_id)
+                    .where(PokemonRecord.is_placeholder == True)  # noqa: E712
+                ).one()
+                or 0
+            )
             tournaments_synced_at = s.exec(
                 select(func.max(TournamentRecord.updated_at)).where(TournamentRecord.standings_synced == True)  # noqa: E712
             ).one()
+        from ....services.sprite_cache_service import sprite_cache
+        cached_sprites, cached_sprites_bytes = sprite_cache.cache_stats()
         return SettingsStatus(
             mega_count=int(mega_count or 0),
             megas_checked_at=megas_checked_at,
@@ -85,9 +97,27 @@ class SettingsStore:
             moves_synced_at=move_meta.last_synced_at if move_meta and move_meta.move_count else None,
             placeholder_in_box=placeholder_in_box,
             placeholder_records=placeholder_records,
+            cached_sprites=cached_sprites,
+            cached_sprites_bytes=cached_sprites_bytes,
         )
 
     # -- sync operations (run on a worker thread) ---------------------------------------
+
+    def sync_sprites(self) -> dict[str, Any]:
+        from ....infrastructure.database.models import TournamentTeamMemberRecord
+        from ....services.sprite_cache_service import sprite_cache
+        with self._sf() as s:
+            repo = BoxRepository(s)
+            # list_all returns raw records (pokemon_canonical_id, no hydrated .pokemon),
+            # which is all a prefetch needs — planned entries included, they are drawn too.
+            box_cids = [r.pokemon_canonical_id for r in repo.list_all(include_planned=True) if r.pokemon_canonical_id]
+            tourney_cids = list(s.exec(
+                select(TournamentTeamMemberRecord.canonical_id).distinct().limit(300)
+            ).all())
+        targets = list(dict.fromkeys(box_cids + tourney_cids))
+        enqueued = sprite_cache.prefetch(targets)
+        count, total_bytes = sprite_cache.cache_stats()
+        return {"targets": len(targets), "enqueued": enqueued, "cached": count, "bytes": total_bytes}
 
     def sync_megas(self) -> dict[str, Any]:
         with self._sf() as s:

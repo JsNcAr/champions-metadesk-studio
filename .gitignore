@@ -222,3 +222,7 @@ preferences.json
 # damage-calc fixture generator (dev only)
 scripts/damage_fixtures/.work/
 scripts/damage_fixtures/node_modules/
+
+# Sprite cache assets
+assets/sprites/*
+!assets/sprites/.gitkeep

@@ -62,12 +62,20 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
 - **Poképaste Sheet Extraction**: Extracts Poképaste URLs and player standings directly into `TournamentTeamRecord`.
 - **Fetch once**: an event already ingested completely is never requested again; a partially ingested event (some pastes failed) stays pending and only its missing pastes are fetched on the next run. Paste fetches get one retry and a short pause.
 - **Discovery**: the season calendar pages (`/{season}-season-calendar/`, this season and the next, re-read at most every 24 h or on a forced sync) list every event with its dates, name and city, winner and format. Each row becomes a pending tournament (date = last day, game and regulation from the Format cell, tier from the name). The static registry (`OFFICIAL_EVENT_SLUGS`) seeds the same way, so the app works before the first calendar read, and existing rows are never overwritten.
-- **Reading queue**: per run, at most `VICTORY_ROAD_PAGES_PER_RUN` (2) finished, pending events are read, newest first; a page with no sheets yet is retried while the event ended within `VICTORY_ROAD_RESULTS_GRACE_DAYS` (14), then closed. Up to `VICTORY_ROAD_MAX_PLACEMENT` sheets (64, env `PCPT_VR_MAX_PLACEMENT`) are ingested per event. Events are classified into tiers (Worlds, International, Regional, Special Event) from the organizer and name; everything from Limitless is community.
+- **Reading queue**: per run, at most `VICTORY_ROAD_PAGES_PER_RUN` (2) finished, pending events are read, newest first. Up to `VICTORY_ROAD_MAX_PLACEMENT` sheets (64, env `PCPT_VR_MAX_PLACEMENT`) are ingested per event. Events are classified into tiers (Worlds, International, Regional, Special Event) from the organizer and name; everything from Limitless is community.
+- **Events without a team list yet**: Victory Road usually adds the results table a few days after an event; until then the page has the winner write-up and brackets but no paste links, so the event has no teams and does not appear in Meta. Such an event stays queued and is retried:
+  - on every sync for `VICTORY_ROAD_RESULTS_GRACE_DAYS` (14) after the event;
+  - then at most every `VICTORY_ROAD_SLOW_RETRY_DAYS` (3) until `VICTORY_ROAD_GIVE_UP_DAYS` (45) after it — events waiting out a slow retry do not use the page budget;
+  - then it is read once more and closed. A forced sync from Settings reads it regardless.
+
+  Each read says which phase the event is in (`… has no team list published yet — checking on every sync until 03 Oct, then every 3 days until 03 Nov.`), the sync toast counts events "awaiting team lists", and a page that could not be *read* (network error) is reported as such and never closes an event or starts its slow-retry clock.
 
 > **Fragility note**: the cell layout was hand-verified against victoryroad.pro on 2026-08-31
-> (see the module docstring in `victory_road_provider.py`). Any site redesign will silently
-> yield zero standings rather than an error, so `fetch_event` logs and returns `None` when no
-> paste entries are found.
+> (see the module docstring in `victory_road_provider.py`) and re-checked on 2026-09-21, when
+> `2025-baltimore` still parsed to 128 Masters entries. A site redesign would yield zero
+> standings rather than an error, which looks exactly like "no team list published yet". If
+> events that finished weeks ago keep reporting no team list, re-check a known-good page such
+> as `2025-baltimore` before assuming Victory Road is just slow.
 
 ---
 
@@ -111,6 +119,37 @@ The storage location and sync behavior can be configured via environment variabl
 
 ## Future Integration Backlog
 
-Optional future integrations:
-- Offline sprite disk caching (Flutter in-memory caching currently covers session duration).
+### Pending: RK9 team lists for official events
+
+**Why.** Official events reach Meta only once Victory Road adds its results table, which
+takes days (sometimes longer) after an event. RK9 (`rk9.gg`), the official registration
+system Victory Road itself links to, publishes the full roster with standings and every
+player's team list right after the event. Checked on 2026-09-21, the day after the 2027
+Baltimore Regional: Victory Road had no team list yet, while RK9 had all 1,172 players.
+
+**What RK9 exposes (public HTML, no login).**
+- Roster: `https://rk9.gg/roster/<event-id>` — a table of Player ID, name, country,
+  division, trainer name, a *View* link to the team list, and final standing.
+- Team list: `https://rk9.gg/teamlist/public/<event-id>/<list-id>` — per Pokémon:
+  species (with form, e.g. "Arcanine [Hisuian Form]"), ability, held item, nature
+  ("Stat Alignment") and four moves.
+- The event id appears on the Victory Road page as a link to
+  `https://rk9.gg/tournament/<event-id>`, so it can be discovered from the page already read.
+
+**Proposed shape.**
+- A `RK9Provider` in `infrastructure/providers/`, used as a fallback when a Victory Road page
+  has no results table but links an RK9 tournament; Victory Road stays the primary source.
+- Read the roster once, keep Masters rows, take the top `VICTORY_ROAD_MAX_PLACEMENT` (64) by
+  standing, then fetch those team lists — one request each, paced like the paste fetches.
+- Map species names through the existing Showdown/canonical-id helpers (RK9 writes forms as
+  `Name [Form]`), and store members with moves, nature, item and ability as for pastes.
+  Team lists carry no stat points; the build presets already tolerate that.
+- Mark the event's source (`sync_source = "rk9"`) so a later Victory Road table does not
+  duplicate rosters — pick one source per event, or replace RK9 rows when Victory Road lands.
+
+**Open questions.** RK9's terms and rate limits for automated reads; whether the roster
+HTML is stable enough (the page is ~2.4 MB); Senior/Junior filtering by the Division column;
+and tests against saved roster and team-list pages, as the Victory Road tests do.
+
+### Other ideas
 - Direct battle log parser (Showdown `.log` file analyzer).

@@ -17,6 +17,15 @@ CARD_MAX_EXTENT = 210
 CARD_HEIGHT = 240             # band + sprite + name + caption + types + tags
 CARD_HEIGHT_WITH_STATS = 336  # tags row hidden, six stat bars shown
 
+# (border, background) per frame state, built once. Assigning a freshly built Border makes
+# Flet's diff see a new object and re-send it, so a Box update that re-applied every
+# card's frame re-serialised all 250 borders even when nothing had changed.
+_FRAMES: dict[str, tuple[ft.Border, str]] = {
+    "selected": (ft.Border.all(2, Palette.PRIMARY), Palette.SURFACE_2),
+    "hover": (ft.Border.all(1, Palette.OUTLINE), Palette.SURFACE_3),
+    "rest": (ft.Border.all(1, Palette.OUTLINE_VARIANT), Palette.SURFACE_2),
+}
+
 
 class PokemonCard(ft.Container):
     def __init__(
@@ -37,6 +46,10 @@ class PokemonCard(ft.Container):
         self._favorite = False
         self._checked = False
         self._selection_mode = False
+        # Everything ``update_from`` last wrote. A filter change re-renders every visible
+        # card, and for all but the few that actually changed the work is identical.
+        self._applied: tuple | None = None
+        self._type_chips: list[TypeChip] = []
 
         self._star = ft.IconButton(
             icon=ft.Icons.STAR_BORDER,
@@ -64,7 +77,8 @@ class PokemonCard(ft.Container):
         self._types = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.CENTER, tight=True)
         self._mega = ft.Icon(ft.Icons.BOLT, size=IconSize.SM, color=Palette.PRIMARY, tooltip="Mega Evolution available", visible=False)
         self._tags = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.CENTER, wrap=True, tight=True)
-        self._stats = StatBlock(spacing=2)
+        # Built the first time the card actually shows stats (the toolbar toggle).
+        self._stats = StatBlock(spacing=2, lazy=True)
         self._stats.visible = False
 
         # Header band tinted by the primary type (like the team slot cards); body below.
@@ -98,9 +112,9 @@ class PokemonCard(ft.Container):
             ),
         )
         self.content = ft.Column(spacing=0, tight=True, controls=[self._band, self._body])
-        self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
-        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
+        self._frame = "rest"
+        self.border, self.bgcolor = _FRAMES["rest"]
         self.padding = 0
         self.clip_behavior = ft.ClipBehavior.ANTI_ALIAS
         self.ink = True
@@ -120,6 +134,18 @@ class PokemonCard(ft.Container):
         usage_text: str | None = None,
     ) -> None:
         pokemon = entry.pokemon
+        applied = (
+            entry.box_entry_id, selected, show_stats, mega_capable, usage_text,
+            entry.is_favorite, entry.is_planned, tuple(entry.tags),
+            pokemon.canonical_id, pokemon.display_name, pokemon.sprite_url,
+            pokemon.form_name, pokemon.dex_number, tuple(pokemon.types),
+            pokemon.total, pokemon.is_stub, pokemon.stats,
+        )
+        if applied == self._applied:
+            self._apply_frame(hovering=False)   # a hover may have left the frame lit
+            return
+        self._applied = applied
+
         self.entry_id = entry.box_entry_id
         self._selected = selected
         self._favorite = entry.is_favorite
@@ -149,7 +175,13 @@ class PokemonCard(ft.Container):
             caption.append(usage_text)
         self._form.value = " · ".join(caption)
         self._form.visible = bool(caption)
-        self._types.controls = [TypeChip(t, size="sm") for t in pokemon.types]
+        # Chips are re-pointed at the new types rather than replaced: a new Flet control
+        # per type per card is the single most expensive thing a grid re-render did.
+        while len(self._type_chips) < len(pokemon.types):
+            self._type_chips.append(TypeChip("normal", size="sm"))
+        for chip, type_name in zip(self._type_chips, pokemon.types):
+            chip.set_type(type_name)
+        self._types.controls = self._type_chips[: len(pokemon.types)]
         self._mega.visible = mega_capable
 
         self._stats.visible = show_stats
@@ -203,9 +235,8 @@ class PokemonCard(ft.Container):
             self.update()
 
     def _apply_frame(self, *, hovering: bool) -> None:
-        if self._selected:
-            self.border = ft.Border.all(2, Palette.PRIMARY)
-            self.bgcolor = Palette.SURFACE_2
-        else:
-            self.border = ft.Border.all(1, Palette.OUTLINE if hovering else Palette.OUTLINE_VARIANT)
-            self.bgcolor = Palette.SURFACE_3 if hovering else Palette.SURFACE_2
+        frame = "selected" if self._selected else ("hover" if hovering else "rest")
+        if frame == self._frame:
+            return   # untouched properties are not part of the next update's patch
+        self._frame = frame
+        self.border, self.bgcolor = _FRAMES[frame]

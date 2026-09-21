@@ -13,7 +13,7 @@ their own session, rebuild only the affected slot, and notify:
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from typing import Any
@@ -45,7 +45,11 @@ from ....services.showdown_service import (
 from ....domain.moves import base_canonical_id
 from ....services.tournament_service import PartnerRecommendation, TournamentService
 from ...catalogs import Catalogs
-from ...move_options import MoveOptions, move_options_for  # noqa: F401 - MoveOptions re-exported for the picker
+from ...move_options import (  # noqa: F401 - MoveOptions re-exported for the picker
+    MoveOptions,
+    invalidate_move_usage,
+    move_options_for,
+)
 from .summary import EMPTY_SUMMARY, SlotModel, SlotMove, TeamSummary, summarize, validate_slot
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -93,7 +97,7 @@ class TeamStore:
             record = team_repo.get(team_id)
             name = record.name if record else ""
             members = team_repo.get_members(team_id)
-            entries = {e.box_entry_id: e for e in BoxRepository(s).list_entries(include_planned=True)}
+            entries = BoxRepository(s).list_entries_by_ids(m.box_entry_id for m in members)
             mega_repo = MegaEvolutionRepository(s)
             megas_by_species: dict[str, list] = {}
             for m in members:
@@ -129,7 +133,7 @@ class TeamStore:
             box_repo = BoxRepository(s)
             mega_repo = MegaEvolutionRepository(s)
             records = team_repo.list_all()
-            counts = {r.team_id: len(team_repo.list_members(r.team_id)) for r in records}
+            counts = team_repo.member_counts()
             self.teams = [TeamRow(r.team_id, r.name, counts.get(r.team_id, 0)) for r in records]
 
             wanted = team_id or self.active_team_id
@@ -139,7 +143,7 @@ class TeamStore:
             self.active_team_name = next((t.name for t in self.teams if t.team_id == wanted), "")
 
             members = team_repo.get_members(wanted) if wanted else []
-            entries = {e.box_entry_id: e for e in box_repo.list_entries(include_planned=True)}
+            entries = box_repo.list_entries_by_ids(m.box_entry_id for m in members)
             megas_by_species: dict[str, list] = {}
             for m in members:
                 entry = entries.get(m.box_entry_id)
@@ -466,9 +470,45 @@ class TeamStore:
         self._partner_cache[key] = partners
         return partners
 
+    def partners_for_positions(
+        self, positions: Sequence[int], limit: int = 3
+    ) -> dict[int, list[PartnerRecommendation]]:
+        """Batch-load tournament teammates for multiple slot positions in a single DB session."""
+        results: dict[int, list[PartnerRecommendation]] = {}
+        to_fetch: list[tuple[int, str, tuple[str, int]]] = []
+
+        for p in positions:
+            slot = self.slot(p)
+            if slot.entry is None:
+                results[p] = []
+                continue
+            key = (base_canonical_id(slot.entry.pokemon.canonical_id), limit)
+            cached = self._partner_cache.get(key)
+            if cached is not None:
+                results[p] = cached
+            else:
+                to_fetch.append((p, slot.entry.pokemon.canonical_id, key))
+
+        if not to_fetch:
+            return results
+
+        with self._sf() as s:
+            svc = TournamentService(s)
+            for p, cid, key in to_fetch:
+                cached = self._partner_cache.get(key)
+                if cached is not None:
+                    results[p] = cached
+                else:
+                    partners = svc.get_top_partners(cid, limit=limit)
+                    self._partner_cache[key] = partners
+                    results[p] = partners
+
+        return results
+
     def invalidate_partners(self) -> None:
         """New tournament data landed: recompute recommendations on the next request."""
         self._partner_cache.clear()
+        invalidate_move_usage()
 
     # -- import / export ------------------------------------------------------------------------------
 

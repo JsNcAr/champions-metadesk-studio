@@ -97,14 +97,31 @@ class StatBar(ft.Row):
 
 
 class StatBlock(ft.Column):
-    """Six stat bars in PokemonStats order."""
+    """Six stat bars in PokemonStats order.
 
-    def __init__(self, stats: PokemonStats | None = None, *, spacing: int = Space.XS) -> None:
+    ``lazy`` defers building the bars until the block is first filled or read. Six bars
+    are twenty-four Flet controls, so a grid of cards that hide their stats by default
+    spent half its build time on controls nobody ever sees.
+    """
+
+    def __init__(self, stats: PokemonStats | None = None, *, spacing: int = Space.XS, lazy: bool = False) -> None:
         super().__init__(spacing=spacing, tight=True)
-        self.bars = {stat: StatBar(stat) for stat in STAT_ORDER}
-        self.controls = list(self.bars.values())
+        self._bars: dict[str, StatBar] = {}
+        if not lazy:
+            self._build()
         if stats is not None:
             self.set_stats(stats)
+
+    def _build(self) -> None:
+        if self._bars:
+            return
+        self._bars = {stat: StatBar(stat) for stat in STAT_ORDER}
+        self.controls = list(self._bars.values())
+
+    @property
+    def bars(self) -> dict[str, StatBar]:
+        self._build()
+        return self._bars
 
     def set_stats(self, stats: PokemonStats, effective: PokemonStats | None = None) -> None:
         for stat, bar in self.bars.items():

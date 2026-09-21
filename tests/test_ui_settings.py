@@ -86,6 +86,50 @@ class TestSettingsStore(unittest.TestCase):
         svc.return_value.sync.assert_called_once_with(force=False, max_age_days=365, include_official=True, on_progress=None)
 
 
+class TestSyncSprites(unittest.TestCase):
+    """The Settings "Sync sprites" action. It read ``.pokemon`` off raw box records, which
+    have only ``pokemon_canonical_id``, and failed with AttributeError on any non-empty box."""
+
+    def setUp(self):
+        self.db = _TempDb()
+        self.store = SettingsStore(self.db.session)
+
+    def tearDown(self):
+        self.db.close()
+
+    def _box(self, *cids, planned=()):
+        from pokemon_champions_planning_tool.domain.entities.box_entry import BoxEntry
+        from pokemon_champions_planning_tool.domain.entities.pokemon import Pokemon
+        from pokemon_champions_planning_tool.domain.entities.pokemon_stats import PokemonStats
+        from pokemon_champions_planning_tool.infrastructure.database.repositories import BoxRepository
+
+        stats = PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)
+        with self.db.session() as s:
+            repo = BoxRepository(s)
+            for cid in cids:
+                repo.upsert_box_entry(BoxEntry(pokemon=Pokemon(canonical_id=cid, display_name=cid.title(), species_name=cid, stats=stats)))
+            for cid in planned:
+                repo.create_planned_entry(BoxEntry(pokemon=Pokemon(canonical_id=cid, display_name=cid.title(), species_name=cid, stats=stats), is_planned=True))
+
+    def test_prefetches_the_box_including_planned_entries(self):
+        from pokemon_champions_planning_tool.services.sprite_cache_service import sprite_cache
+
+        self._box("pikachu", "charizard", planned=("mew",))
+        asked = []
+        with patch.object(sprite_cache, "prefetch", lambda targets: asked.extend(targets) or len(targets)), \
+             patch.object(sprite_cache, "cache_stats", lambda: (0, 0)):
+            result = self.store.sync_sprites()
+        self.assertEqual(sorted(asked), ["charizard", "mew", "pikachu"])
+        self.assertEqual(result["targets"], 3)
+
+    def test_an_empty_box_is_not_an_error(self):
+        from pokemon_champions_planning_tool.services.sprite_cache_service import sprite_cache
+
+        with patch.object(sprite_cache, "prefetch", lambda targets: 0), \
+             patch.object(sprite_cache, "cache_stats", lambda: (0, 0)):
+            self.assertEqual(self.store.sync_sprites()["targets"], 0)
+
+
 class TestRelativeTime(unittest.TestCase):
     def test_buckets(self):
         now = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)

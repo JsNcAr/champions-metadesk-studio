@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from ..moves import MoveInfo, MoveMechanics
@@ -26,8 +27,13 @@ DISPLAY_STAT: dict[str, str] = {"hp": "HP", "atk": "Atk", "def": "Def", "spa": "
 LEVEL = 50
 
 
+@lru_cache(maxsize=256)
 def nature_plus_minus(nature: str | None) -> tuple[str | None, str | None]:
-    """(boosted, hindered) in calc stat keys; neutral or unknown natures give (None, None)."""
+    """(boosted, hindered) in calc stat keys; neutral or unknown natures give (None, None).
+
+    Memoised: every stat of every combatant asks for it, which the opponent sweep does
+    tens of thousands of times for the twenty-five nature names that exist.
+    """
     up, down = NATURES.get((nature or "").strip().lower(), (None, None))
     return (APP_TO_CALC_STAT.get(up) if up else None, APP_TO_CALC_STAT.get(down) if down else None)
 

@@ -60,8 +60,15 @@ class CalcRail(ft.Container):
         self.padding = Space.MD
 
     def refresh(self) -> None:
+        """Called each time the calculator is shown.
+
+        The team list is cheap and tracks the active team, so it is redrawn. The box list
+        is up to a few dozen cards and only changes when the box does — BOX_CHANGED clears
+        ``_box_entries`` — so it is rebuilt only then, not on every visit.
+        """
         self.refresh_team()
-        self.refresh_box(self._box_filter.value or "")
+        if self._box_entries is None:
+            self.refresh_box(self._box_filter.value or "")
 
     def refresh_team(self) -> None:
         slots = self.store.team_slots()

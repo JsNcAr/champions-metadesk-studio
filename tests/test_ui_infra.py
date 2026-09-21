@@ -151,7 +151,7 @@ class TestAppShell(unittest.TestCase):
         shell.navigate("two")
         shell.navigate("two")
         self.assertEqual(built, [1], "factory runs once and the instance is kept")
-        self.assertEqual(shell.host.content.value, "two")
+        self.assertEqual(shell.current_control.value, "two")
 
     def test_on_activate_runs_each_visit(self):
         page, ctx, shell, _ = self._shell()
@@ -311,3 +311,130 @@ class TestShellStatusBanner(unittest.TestCase):
         self.assertTrue(shell.status._action.visible)
         shell.status._on_action()
         self.assertEqual(opened, [1])
+
+
+class TestShellDeck(unittest.TestCase):
+    """Views are layered, not swapped: the first is a base layer, the rest overlays.
+
+    Swapping the host's content detached views (a return trip re-sent the whole tree),
+    and any update containing a view makes Flet walk all of it — so the stack's child
+    list must never change after registration, and the base must never be touched.
+    """
+
+    def _shell(self):
+        page = StubPage()
+        shell = AppShell(AppContext(page))
+        activations = []
+        for key in ("base", "one", "two"):
+            shell.register_view(key, label=key, icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
+                                control=ft.Text(key), on_activate=lambda key=key: activations.append(key))
+        shell.register_view("lazy", label="lazy", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
+                            factory=lambda: ft.Text("lazy"))
+        return shell, activations
+
+    def _visible(self, shell):
+        return sorted(k for k, slot in shell._slots.items() if slot.visible)
+
+    def test_every_view_has_a_slot_from_registration_and_the_deck_never_changes(self):
+        shell, _ = self._shell()
+        slots = list(shell.deck.controls)
+        self.assertEqual(len(slots), 4)
+        for key in ("base", "one", "lazy", "two", "base"):
+            shell.navigate(key)
+        shell.preload("two")
+        self.assertEqual(shell.deck.controls, slots, "same slot objects, same order")
+
+    def test_the_base_is_shown_once_and_never_hidden(self):
+        shell, _ = self._shell()
+        shell.navigate("base")
+        base = shell._slots["base"]
+        self.assertTrue(base.visible)
+        self.assertEqual(base.opacity, 1.0)
+        shell.navigate("one")
+        shell.navigate("two")
+        self.assertTrue(base.visible, "overlays cover the base; they never hide it")
+
+    def test_only_the_current_overlay_remains_above_the_base(self):
+        shell, _ = self._shell()
+        shell.navigate("base")
+        shell.navigate("two")                     # above the base
+        self.assertEqual(self._visible(shell), ["base", "two"])
+        self.assertEqual(shell._slots["two"].opacity, 1.0)
+        shell.navigate("one")                     # arriving *below* the overlay on screen
+        self.assertEqual(self._visible(shell), ["base", "one"])
+        self.assertEqual(shell._slots["one"].opacity, 1.0)
+        shell.navigate("two")                     # and above again
+        self.assertEqual(self._visible(shell), ["base", "two"])
+        shell.navigate("base")
+        self.assertEqual(self._visible(shell), ["base"])
+        self.assertEqual(shell.current_control.value, "base")
+
+    def test_preload_mounts_hidden_and_can_activate(self):
+        shell, activations = self._shell()
+        shell.navigate("base")
+        shell.preload("lazy")
+        self.assertEqual(shell._slots["lazy"].content.value, "lazy", "built into its slot")
+        self.assertFalse(shell._slots["lazy"].visible, "but not shown")
+        shell.preload("one", activate=True)
+        self.assertIn("one", activations)
+        self.assertEqual(shell.current, "base")
+
+    def test_a_retirement_that_arrives_after_a_return_is_ignored(self):
+        """Fading out is deferred; if the user comes straight back, the view must stay."""
+        shell, _ = self._shell()
+        shell.navigate("base")
+        shell.navigate("one")
+        shell._current = "one"
+        shell._retire("one")
+        self.assertTrue(shell._slots["one"].visible)
+
+
+class TestShellColdBuild(unittest.TestCase):
+    """A view that is not built yet: acknowledge the click, then build on the next tick."""
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        self.page = StubPage()
+        self.queued = []
+        self.page.run_task = lambda fn, *a: self.queued.append((fn, a))
+        self.shell = AppShell(AppContext(self.page))
+        self.shell.register_view("base", label="b", icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO, control=ft.Text("b"))
+        self.built = []
+        for key in ("cold", "other"):
+            self.shell.register_view(key, label=key, icon=ft.Icons.INFO, selected_icon=ft.Icons.INFO,
+                                     factory=lambda key=key: self.built.append(key) or ft.Text(key))
+        self.patches = [
+            patch("pokemon_champions_planning_tool.ui.shell.shell.is_mounted", lambda _c: True),
+            patch.object(AppShell, "_update", lambda self, *c: None),
+        ]
+        for p in self.patches:
+            p.start()
+        self.shell.navigate("base")
+        self._drain()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def _drain(self):
+        while self.queued:
+            fn, args = self.queued.pop(0)
+            asyncio.run(fn(*args))
+
+    def test_the_click_is_acknowledged_before_the_build(self):
+        self.shell.navigate("cold")
+        self.assertEqual(self.shell.rail.selected_index, 1, "rail moved at once")
+        self.assertTrue(self.shell.progress.visible, "bar showing")
+        self.assertEqual(self.built, [], "not built on the click")
+        self._drain()
+        self.assertEqual(self.built, ["cold"])
+        self.assertFalse(self.shell.progress.visible)
+        self.assertTrue(self.shell._slots["cold"].visible)
+
+    def test_a_build_overtaken_by_another_click_is_dropped(self):
+        self.shell.navigate("cold")
+        self.shell.navigate("other")
+        self._drain()
+        self.assertEqual(self.built, ["other"], "the abandoned view is not built")
+        self.assertEqual(self.shell.current, "other")

@@ -170,7 +170,8 @@ def main(page: ft.Page) -> None:
         await asyncio.sleep(0.25)
         for k in ("team", "meta", "calc", "settings"):
             try:
-                shell.get_view(k)
+                # Built, mounted hidden and loaded, so the first visit costs a later one.
+                shell.preload(k, activate=True)
             except Exception:
                 pass
             await asyncio.sleep(0)

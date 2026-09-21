@@ -96,7 +96,6 @@ def build_text_theme() -> ft.TextTheme:
 def build_theme() -> ft.Theme:
     rounded_md = ft.RoundedRectangleBorder(radius=Radius.MD)
     rounded_lg = ft.RoundedRectangleBorder(radius=Radius.LG)
-    label = _style(FontSize.LABEL, 16, ft.FontWeight.W_500)
 
     return ft.Theme(
         color_scheme=build_color_scheme(),

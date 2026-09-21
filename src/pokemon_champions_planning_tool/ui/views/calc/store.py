@@ -43,8 +43,10 @@ from .state import (
     PokemonState,
     SideConditions,
     SweepEntry,
+    TeamRating,
     classify,
     hits_to_ko,
+    pokemon_from_slot,
     pokemon_from_species_id,
 )
 
@@ -242,6 +244,10 @@ class CalcStore:
         # scripts) every commit saves at once.
         self.defer_save: Callable[[], None] | None = None
         self._unsaved = False
+        # Team ratings (your team members against the rival in the Defender panel).
+        self._team_version = 0
+        self._team_members: dict[str, tuple[int, PokemonState | None]] = {}
+        self._ratings_cache: tuple[str, dict[str, TeamRating]] | None = None
 
     # -- subscriptions -----------------------------------------------------------------------
 
@@ -574,6 +580,7 @@ class CalcStore:
         self._cache.clear()
         self._sweep_key = None
         self.invalidate_presets()
+        self.invalidate_team_ratings()
         self._recompute(persist=False)
 
     def invalidate_presets(self) -> None:
@@ -940,6 +947,80 @@ class CalcStore:
         self.sweep = self._order_sweep(entries, self.sweep_sort)
         self._sweep_key = self.sweep_key()
         self._notify(("sweep",))
+
+    # -- team ratings ------------------------------------------------------------------------
+
+    # The rival's fields that no rating reads (see ``_SWEEP_IGNORES``).
+    _RATING_IGNORES = ("source", "assumptions", "active")
+
+    def team_rating_key(self) -> str:
+        """What the team ratings depend on: the rival as set up, the field and the team."""
+        d = self.state.to_dict()
+        rival = {k: v for k, v in d["right"].items() if k not in self._RATING_IGNORES}
+        team_id = getattr(self.team_store, "active_team_id", None) if self.team_store is not None else None
+        return "|".join((str(rival), str(d["field"]), str(team_id), str(self._team_version)))
+
+    def invalidate_team_ratings(self) -> None:
+        """The team (or the catalogue) changed: the next ``rate_team`` recomputes."""
+        self._team_version += 1
+        self._team_members.clear()
+
+    def rate_team(self) -> dict[str, TeamRating]:
+        """Each active team member against the rival in the Defender panel, keyed by slot.
+
+        The opponents sweep turned around: the member is "you" (attacker, your side's
+        conditions), the rival is the defender. At most six members, each two ``run_side``
+        calls in fast mode. Pure computation, so it can run on a worker; the last result
+        is kept per ``team_rating_key``.
+        """
+        key = self.team_rating_key()
+        cached = self._ratings_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        ratings = self._rate_team()
+        self._ratings_cache = (key, ratings)
+        return ratings
+
+    def _rate_team(self) -> dict[str, TeamRating]:
+        rival = self.state.right
+        r_species = self.catalogs.species_for(rival.species) if rival.species else None
+        if r_species is None:
+            return {}
+        slots = self.team_slots()
+        if not slots:
+            return {}
+        team_id = getattr(self.team_store, "active_team_id", None)
+        field = self.state.field
+        field_ab = engine_field(field, attacker_is_left=True)
+        field_ba = engine_field(field, attacker_is_left=False)
+        r_engine = engine_pokemon(rival, r_species)
+        r_speed = final_speed(rival, r_species, field, "right")
+        ratings: dict[str, TeamRating] = {}
+        for slot in slots:
+            slot_key = f"{team_id}:{slot.position}"
+            member = self._member_state(slot_key, slot)
+            m_species = self.catalogs.species_for(member.species) if member is not None else None
+            if member is None or m_species is None:
+                continue
+            m_engine = engine_pokemon(member, m_species)
+            yours = best_of(run_side(member, rival, field_ab, self.catalogs, self._calc, m_species, r_species,
+                                     fast=True, a_engine=m_engine, d_engine=r_engine))
+            theirs = best_of(run_side(rival, member, field_ba, self.catalogs, self._calc, r_species, m_species,
+                                      fast=True, a_engine=r_engine, d_engine=m_engine))
+            m_speed = final_speed(member, m_species, field, "left")
+            faster = (m_speed > r_speed) != field.trick_room if m_speed != r_speed else False
+            ratings[slot_key] = TeamRating(slot_key, m_species.name, classify(yours, theirs, faster), yours, theirs, m_speed, r_speed, faster)
+        return ratings
+
+    def _member_state(self, slot_key: str, slot: Any) -> PokemonState | None:
+        """The member's calculator state, rebuilt only when its slot object changed."""
+        marker = id(slot.member)
+        cached = self._team_members.get(slot_key)
+        if cached is not None and cached[0] == marker:
+            return cached[1]
+        state = pokemon_from_slot(slot, self.catalogs)
+        self._team_members[slot_key] = (marker, state)
+        return state
 
     def set_sweep_sort(self, sort_key: str, regulation: str | None = None) -> None:
         """Change the sort order or regulation for the opponent sweep and notify the UI immediately."""

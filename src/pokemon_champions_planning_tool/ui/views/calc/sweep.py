@@ -12,32 +12,11 @@ from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
 from ...tasks import Debouncer, is_mounted
-from ...theme import IconSize, Palette, Radius, Space, alpha
+from ...theme import IconSize, Palette, Radius, Space
+from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
 
-CLASS_TONES = {"threat": "error", "wall": "warning", "neutral": "neutral", "mitigated": "info", "crushed": "success"}
-CLASS_HELP = {
-    "threat": "KOs you in one hit before you can, or in two while you need three or more",
-    "wall": "you need four hits or more",
-    "neutral": "an even race",
-    "mitigated": "you win the race",
-    "crushed": "you KO in one hit and they cannot KO you first",
-}
-CLASS_BG = {
-    "threat": alpha(Palette.ERROR, 0.18),
-    "wall": alpha(Palette.WARNING, 0.18),
-    "neutral": Palette.SURFACE_2,
-    "mitigated": alpha(Palette.SECONDARY, 0.15),
-    "crushed": alpha(Palette.SUCCESS, 0.18),
-}
-CLASS_BORDER = {
-    "threat": ft.Border.all(1, alpha(Palette.ERROR, 0.40)),
-    "wall": ft.Border.all(1, alpha(Palette.WARNING, 0.40)),
-    "neutral": ft.Border.all(1, Palette.OUTLINE_VARIANT),
-    "mitigated": ft.Border.all(1, alpha(Palette.SECONDARY, 0.35)),
-    "crushed": ft.Border.all(1, alpha(Palette.SUCCESS, 0.40)),
-}
 _INITIAL_LIMIT = 40
 _PAGE_SIZE = 40
 

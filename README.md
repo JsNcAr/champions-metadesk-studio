@@ -185,9 +185,9 @@ Press **F1** (or Ctrl+/) in the app for the full list with tips. The essentials:
 
 ## Releases
 
-Release notes are in [CHANGELOG.md](CHANGELOG.md). To cut a release, run
-`poetry run python scripts/release.py prepare minor` (see
-[docs/building.md](docs/building.md#publishing-a-release)).
+Release notes are in [CHANGELOG.md](CHANGELOG.md). To publish a version, run
+`poetry run python scripts/release.py prepare minor`. [docs/releasing.md](docs/releasing.md)
+has the full steps and how to write the release description.
 
 ## Configuration
 

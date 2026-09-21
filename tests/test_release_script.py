@@ -88,8 +88,8 @@ class TestChangelog(unittest.TestCase):
         self.assertEqual(section, "\n\n".join([
             "### Breaking changes\n- **api:** drop the CSV importer (1111111)\n- split store (2222222)",
             "### Added\n- **shell:** crossfade between views (aaaaaaa)",
-            "### Fixed\n- sprites never served (bbbbbbb)",
             "### Performance\n- **box:** chunked fill (ccccccc)",
+            "### Fixed\n- sprites never served (bbbbbbb)",
         ]))
 
     def test_nothing_releasable_renders_empty(self):

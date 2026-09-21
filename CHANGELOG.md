@@ -4,10 +4,17 @@ All notable changes to Champions MetaDesk Studio. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Write entries under **Unreleased** as you go, or leave it empty and
-`scripts/release.py` fills the section from the commit subjects.
+Add entries under **Unreleased** in the same PR as the change; that section becomes
+the next release's description. See [docs/releasing.md](docs/releasing.md#writing-the-release-description)
+for the headings and style.
 
 ## [Unreleased]
+
+Faster everywhere, and sprites finally work in the browser build.
+
+### Added
+- Release tooling: `scripts/release.py` and a release workflow that tests, checks the
+  version, builds all platforms and publishes these notes.
 
 ### Performance
 - The window opens straight away, even on first launch; catalogues download in the
@@ -31,10 +38,6 @@ Write entries under **Unreleased** as you go, or leave it empty and
 - The app no longer fails to open when it cannot create its sprite cache folder
   (a macOS app opened from Finder starts in the read-only `/`).
 - Settings → About shows the real version in packaged builds.
-
-### Added
-- Release tooling: `scripts/release.py` and a release workflow that tests, checks the
-  version, builds all platforms and publishes these notes.
 
 ## [0.1.0] - 2026-09-14
 

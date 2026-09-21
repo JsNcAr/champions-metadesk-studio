@@ -13,10 +13,11 @@ This folder contains the architecture, requirements, data model, and planning do
 - [Integration Notes](integrations.md) covers PokéAPI, SQLite, and export concerns.
 - [Testing Strategy](testing-strategy.md) describes the validation approach.
 - [Packaging and Building Executables](building.md) covers native PyInstaller builds and Docker/Wine cross-compilation.
+- [Releasing](releasing.md) is the step-by-step for publishing a version and writing its release notes.
 
 ## Current Implementation Status
 
-The application is a modern Flet desktop GUI (with browser and CLI fallback modes) backed by SQLite via SQLModel: a filterable Box roster, a six-slot team builder with items, spreads, moves and Showdown import/export, a tournament Meta explorer fed by Limitless and Victory Road, a Champions damage calculator, and a Settings page for data syncs. Phases 0–11 of the [roadmap](roadmap.md) (including native and Windows Docker cross-compilation builds) are complete. `architecture.md` describes the current `ui/` package and backend layers.
+The application is a modern Flet desktop GUI (with browser and CLI fallback modes) backed by SQLite via SQLModel: a filterable Box roster, a six-slot team builder with items, spreads, moves and Showdown import/export, a tournament Meta explorer fed by Limitless and Victory Road, a Champions damage calculator, and a Settings page for data syncs. Phases 0–12 of the [roadmap](roadmap.md) (including native and Windows Docker cross-compilation builds) are complete. `architecture.md` describes the current `ui/` package and backend layers.
 
 ## Recommended Reading Order
 

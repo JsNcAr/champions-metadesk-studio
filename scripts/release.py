@@ -56,8 +56,9 @@ All notable changes to Champions MetaDesk Studio. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Write entries under **Unreleased** as you go, or leave it empty and
-`scripts/release.py` fills the section from the commit subjects.
+Add entries under **Unreleased** in the same PR as the change; that section becomes
+the next release's description. See [docs/releasing.md](docs/releasing.md#writing-the-release-description)
+for the headings and style.
 
 """
 
@@ -65,9 +66,9 @@ Write entries under **Unreleased** as you go, or leave it empty and
 # (chore, ci, test, build, style) are housekeeping and left out of the notes.
 SECTIONS = {
     "feat": "Added",
-    "fix": "Fixed",
-    "perf": "Performance",
     "refactor": "Changed",
+    "perf": "Performance",
+    "fix": "Fixed",
     "docs": "Documentation",
 }
 BREAKING = "Breaking changes"

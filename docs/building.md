@@ -21,35 +21,10 @@ Running the workflow by hand (*Run workflow* in the Actions tab) builds and uplo
 
 ### Publishing a Release
 
-Use `scripts/release.py` from an up-to-date, clean `main`:
-
-```bash
-poetry run python scripts/release.py prepare minor --dry-run   # preview the version and notes
-poetry run python scripts/release.py prepare minor             # 0.1.0 -> 0.2.0
-```
-
-`prepare` takes `patch`, `minor`, `major`, or an explicit version such as `1.0.0-rc.1`. It:
-
-1. refuses to run off `main`, with uncommitted changes, behind `origin`, or if the tag exists;
-2. runs the test suite;
-3. writes the version into `pyproject.toml` and `src/pokemon_champions_planning_tool/__init__.py`;
-4. moves the **Unreleased** section of `CHANGELOG.md` under the new version. If
-   Unreleased is empty, it generates the section from the Conventional Commit subjects
-   (`feat`, `fix`, `perf`, `refactor`, `docs`, breaking changes) since the last tag. With
-   `$EDITOR` set, it offers to open the changelog first;
-5. commits `chore(release): vX.Y.Z` and creates an annotated tag carrying the notes;
-6. asks, then pushes `main` and the tag together (`git push --atomic`), which starts
-   the workflow.
-
-Options: `--no-push` stops after the local commit and tag, `--skip-tests`, and `--yes`
-answers every question (for scripted use). If anything fails before the commit, the
-files are restored. Until the push nothing has left your machine, and
-`git tag -d vX.Y.Z && git reset --hard HEAD~1` undoes the release commit.
-
-Good practice between releases: add user-facing entries under **Unreleased** in
-`CHANGELOG.md` as changes land, and write commit subjects as Conventional Commits
-(`type(scope): summary`). After the workflow finishes, download at least one archive
-and check that it starts.
+Run `poetry run python scripts/release.py prepare minor` from an up-to-date `main`.
+It bumps the version, writes the changelog, tags, and pushes the tag that starts this
+workflow. The full procedure, and how to write the release description, is in
+**[releasing.md](releasing.md)**.
 
 Do not create the tag or the release in the GitHub web UI: the tag would skip the
 version and changelog checks, and a hand-made release can collide with the one the

@@ -6,7 +6,13 @@ This document describes how to package **Champions MetaDesk Studio** into standa
 
 ## 1. Automated Multi-Platform Releases (GitHub Actions)
 
-The repository includes a GitHub Actions workflow at [`.github/workflows/release.yml`](../.github/workflows/release.yml) that builds standalone executables across all three major platforms whenever a Git version tag is published.
+The repository includes a GitHub Actions workflow at [`.github/workflows/release.yml`](../.github/workflows/release.yml) that builds standalone executables across all three major platforms whenever a Git version tag is published. It runs in three stages:
+
+1. **verify**: fails unless the tag matches the version in `pyproject.toml` and the package `__version__`, runs the test suite, and checks that CHANGELOG.md has a section for the version.
+2. **build**: the three platform builds below, stamped with the version.
+3. **publish**: once all three succeed, creates one GitHub release named after the tag, with that CHANGELOG.md section as its notes and the three archives attached. Versions with a suffix (`1.0.0-rc.1`) are marked as pre-releases.
+
+Running the workflow by hand (*Run workflow* in the Actions tab) builds and uploads the archives as workflow artifacts without publishing anything.
 
 ### Matrix Build Configuration
 * **Windows** (`windows-latest`): Builds `champions-metadesk.exe` and packages it into `champions-metadesk-windows-x64.zip`.
@@ -14,11 +20,15 @@ The repository includes a GitHub Actions workflow at [`.github/workflows/release
 * **macOS** (`macos-latest`): Builds the `ChampionsMetaDeskStudio.app` bundle and packages it into `champions-metadesk-macos.zip`.
 
 ### Publishing a Release
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-Or draft a release via the GitHub Web UI. Once the workflow completes, all 3 archives are automatically attached as assets to the release.
+
+Run `poetry run python scripts/release.py prepare minor` from an up-to-date `main`.
+It bumps the version, writes the changelog, tags, and pushes the tag that starts this
+workflow. The full procedure, and how to write the release description, is in
+**[releasing.md](releasing.md)**.
+
+Do not create the tag or the release in the GitHub web UI: the tag would skip the
+version and changelog checks, and a hand-made release can collide with the one the
+workflow publishes.
 
 ---
 

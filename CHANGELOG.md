@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-21
+
 ### Added
 - **Rival teams in the calculator.** A switch above the opponents list shows a rival team
   instead: each member is coloured against your attacker, and one click loads it as the

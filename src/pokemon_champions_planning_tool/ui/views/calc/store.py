@@ -299,10 +299,25 @@ class CalcStore:
         self._commit()
 
     def load_species(self, side: str, canonical_id: str, *, preset: bool = False, source: str | None = None) -> None:
+        if preset:
+            p, _found = self.preset_pokemon(canonical_id, source=source)
+        else:
+            species = self.catalogs.species_for(canonical_id)
+            p = pokemon_from_species_id(species.canonical_id if species else canonical_id, species, source=source or "")
+        self.state = self.state.with_side(side, p)
+        self._apply_ability_field(p.ability)
+        self._commit()
+
+    def preset_pokemon(self, canonical_id: str, *, source: str | None = None) -> tuple[PokemonState, bool]:
+        """The species with its most-used tournament set; True when tournament data had one.
+
+        Without a build it falls back to the species' preset moves (or none) on a plain set.
+        Shared by the Defender panel and rival teams entered at team preview.
+        """
         species = self.catalogs.species_for(canonical_id)
         cid = species.canonical_id if species else canonical_id
         base_cid = species.base_species_id if species else cid
-        build = (self.preset_builds().get(cid) or self.preset_builds().get(base_cid)) if preset else None
+        build = self.preset_builds().get(cid) or self.preset_builds().get(base_cid)
         if build is not None:
             nature = (build.nature or "hardy").lower()
             points = default_points_for_nature(nature, species.stats if species else None)
@@ -319,7 +334,7 @@ class CalcStore:
                 src = f"{source} · {nature.title()}" if build.nature else source
             else:
                 src = f"Tournament preset · {nature.title()}" if build.nature else "Tournament preset"
-            p = PokemonState(
+            return PokemonState(
                 species=cid,
                 nature=nature,
                 points=points,
@@ -327,13 +342,9 @@ class CalcStore:
                 item=item,
                 moves=four_moves,
                 source=src,
-            )
-        else:
-            moves = self.preset_moves().get(cid, self.preset_moves().get(base_cid, [])) if preset else None
-            p = pokemon_from_species_id(cid, species, source=source or "", moves=moves)
-        self.state = self.state.with_side(side, p)
-        self._apply_ability_field(p.ability)
-        self._commit()
+            ), True
+        moves = self.preset_moves().get(cid, self.preset_moves().get(base_cid, []))
+        return pokemon_from_species_id(cid, species, source=source or "", moves=moves), False
 
     def load_pokemon(self, side: str, pokemon: PokemonState) -> None:
         self.state = self.state.with_side(side, pokemon)

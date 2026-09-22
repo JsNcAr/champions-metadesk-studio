@@ -485,7 +485,7 @@ class MetaView(ft.Column):
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))
 
     def _save_rival(self, row: MetaTeamRow) -> None:
-        """Keep a tournament team as a rival team to plan against in the calculator."""
+        """Keep a tournament team as a rival preset to plan against in the calculator."""
         from ..calc.rival_store import RivalStore, rivals_from_meta_row
 
         members = rivals_from_meta_row(row, self.ctx.catalogs)
@@ -494,7 +494,7 @@ class MetaView(ft.Column):
             return
         team = RivalStore(self.store.session_factory).create(f"{row.player_name} — {row.tournament_name}", members, source=f"Meta · {row.player_name} · {row.tournament_name}")
         self.ctx.bus.emit(events.RIVALS_CHANGED, team.rival_team_id)
-        self.ctx.toast(f"Saved {row.player_name}'s team as a rival team", "success", action="Open in Calc",
+        self.ctx.toast(f"Saved {row.player_name}'s team as a rival preset", "success", action="Open in Calc",
                        on_action=lambda: self.ctx.bus.emit(events.RIVAL_OPEN, team.rival_team_id))
 
     def _import(self, row: MetaTeamRow) -> None:

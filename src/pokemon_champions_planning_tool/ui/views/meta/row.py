@@ -289,9 +289,9 @@ class TeamRow(ft.Container):
         if on_calc is not None and row.members:
             items = [ft.PopupMenuItem(content=ft.Text(m.display_name), on_click=lambda _e, i=i: on_calc(self.row, i)) for i, m in enumerate(row.members)]
             if on_rival is not None:
-                items += [ft.PopupMenuItem(), ft.PopupMenuItem(content=ft.Text("Save as rival team"), icon=ft.Icons.SPORTS_MMA_OUTLINED,
+                items += [ft.PopupMenuItem(), ft.PopupMenuItem(content=ft.Text("Save as rival preset"), icon=ft.Icons.SPORTS_MMA_OUTLINED,
                                                                on_click=lambda _e: on_rival(self.row))]
-            actions.append(ft.PopupMenuButton(icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs… or save as a rival team", items=items))
+            actions.append(ft.PopupMenuButton(icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs… or save as a rival preset", items=items))
         if row.legality_known and not row.is_legal:
             actions.append(ft.OutlinedButton("Can't import", disabled=True, tooltip="Contains species outside the Champions Pokédex"))
         else:

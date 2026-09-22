@@ -59,7 +59,7 @@ The project uses Python's standard `unittest` library for automated test executi
 ```bash
 poetry run python -m unittest discover -s tests
 ```
-The test suite executes **590 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
+The test suite executes **595 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
 
 ### Running Headless UI Smoke Test
 ```bash

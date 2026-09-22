@@ -121,10 +121,21 @@ class TestRivalComputation(_Base):
         self.assertEqual(per_rival[1][1], sum(1 for k in ("team-1:1", "team-1:2") if grid[(k, 1)].klass == "threat"))
 
 
+class _TeamsWithHistory(_FakeTeamStore):
+    """The fake team store, plus a second team readable by id (as TeamStore.summary_for)."""
+
+    def __init__(self, slots):
+        super().__init__(slots)
+        self.teams = [SimpleNamespace(team_id="team-1", name="Sand", filled=len(slots)), SimpleNamespace(team_id="team-2", name="Empty", filled=0)]
+
+    def summary_for(self, team_id):
+        return ("Sand", self.slots, None) if team_id == "team-1" else ("Empty", [], None)
+
+
 class _ViewBase(_Base):
     def setUp(self):
         super().setUp()
-        self.store.team_store = _FakeTeamStore(_slots())
+        self.store.team_store = _TeamsWithHistory(_slots())
         self.page = StubPage()
         self.ctx = AppContext(self.page)
         self.ctx.prefs = self.prefs
@@ -237,7 +248,8 @@ class TestRivalPanel(_ViewBase):
         self.assertNotIn("Kept (copy)", [t.name for t in self.view.rivals.teams])
         self.view.rivals.set_active(kept.rival_team_id)
         labels = [getattr(i.content, "value", None) for i in self.view.rivals_panel._menu.items]
-        self.assertIn("Rename…", labels)
+        self.assertIn("Rename preset…", labels)
+        self.assertIn("Use in battle", labels)
 
     def test_paste_tab(self):
         self.view.open_battle_dialog("paste")
@@ -278,6 +290,87 @@ class TestRivalPanel(_ViewBase):
         self.assertEqual(self.store.rival_link[1], 0)
 
 
+class TestPresetsAndMyTeams(_ViewBase):
+    def test_help_buttons_open_a_dialog(self):
+        from pokemon_champions_planning_tool.ui.components.help_button import help_button
+
+        self.view.set_right_mode("rival")
+        for panel in (self.view.rivals_panel, self.view.sweep):
+            button = next(c for c in _walk(panel) if isinstance(c, ft.IconButton) and c.icon == ft.Icons.HELP_OUTLINE)
+            self.assertIsNotNone(button.on_click, "a click, not only a hover tooltip")
+            button.on_click(SimpleNamespace(control=SimpleNamespace(page=self.page)))
+            dialog = self.page.dialogs[-1]
+            self.assertIsInstance(dialog, ft.AlertDialog)
+            check_layout(dialog)
+            serialise(dialog)
+            dialog.actions[0].on_click(None)
+            self.assertEqual(self.page.dialogs, [])
+        self.assertTrue(callable(help_button("t", ["a:"]).on_click))
+
+    def test_save_team_preview_as_a_preset(self):
+        dialog = self._battle("king", "incin")
+        self.assertTrue(dialog._save.disabled, "a preset needs a name")
+        dialog._name.value = "Ladder Kingambit"
+        dialog._sync_actions()
+        dialog._save_team()
+        preset = self.view.rivals.active
+        self.assertEqual((preset.name, preset.is_battle, len(preset.members)), ("Ladder Kingambit", False, 2))
+        self.assertIsNone(self.view.rivals.battle, "saving does not start a battle")
+
+    def test_a_preset_goes_into_the_current_battle_and_stays_as_saved(self):
+        members = [RivalMember(PokemonState(species="incineroar", moves=["Flare Blitz", None, None, None], ability="Intimidate"), frozenset({"item"}))]
+        preset = self.view.rivals.create("Wolfe", members)
+        self.view.set_right_mode("rival")
+        self.assertTrue(self.view.rivals_panel._use.visible, "a preset on screen offers Use in battle")
+        self.view._rival_action("use_preset")
+        battle = self.view.rivals.battle
+        self.assertEqual(self.view.rivals.active_id, battle.rival_team_id)
+        self.assertEqual(battle.members, preset.members)
+        self.assertEqual(battle.source, "Preset · Wolfe")
+        self.assertFalse(self.view.rivals_panel._use.visible)
+        self.view.rivals_panel._list.controls[0].on_click(None)
+        self.store.set_item("right", "Life Orb")
+        self.assertEqual(self.view.rivals.battle.members[0].pokemon.item, "Life Orb", "the battle keeps the reveal")
+        self.assertIsNone(self.view.rivals.get(preset.rival_team_id).members[0].pokemon.item, "the preset does not")
+
+    def test_the_load_dialog_lists_presets_and_starts_from_one(self):
+        preset = self.view.rivals.create("Wolfe", [RivalMember(PokemonState(species="kingambit"))])
+        self.view._rival_action("load")
+        dialog = self.page.dialogs[-1]
+        self.assertEqual(dialog._mode, "presets", "with presets saved, Load team opens on them")
+        self.assertTrue(dialog._start.disabled)
+        self.assertFalse(dialog._save_row.visible, "a preset is already saved")
+        dialog.pick_preset(preset)
+        self.assertEqual(dialog._start.content, "Use in battle")
+        check_layout(dialog)
+        serialise(dialog)
+        dialog._start_battle()
+        self.assertEqual(self.page.dialogs, [])
+        self.assertEqual(self.view.rivals.battle.source, "Preset · Wolfe")
+
+    def test_load_one_of_my_teams(self):
+        self.view.open_battle_dialog("teams")
+        dialog = self.page.dialogs[-1]
+        self.assertEqual([c.title for c in dialog._team_choices.values()], ["Sand", "Empty"])
+        dialog.pick_team("team-1")
+        self.assertEqual([m.pokemon.species for m in dialog.members()], ["incineroar", "charizard-mega-y"])
+        self.assertTrue(all(not m.assumed for m in dialog.members()), "your own sets are known")
+        self.assertEqual(dialog._name.value, "Sand", "named after the team")
+        check_layout(dialog)
+        serialise(dialog)
+        dialog._save_team()
+        preset = self.view.rivals.active
+        self.assertEqual((preset.name, preset.source), ("Sand", "My team · Sand"))
+        self.view.open_battle_dialog("teams")
+        dialog = self.page.dialogs[-1]
+        dialog.pick_team("team-2")
+        self.assertEqual(dialog.members(), [])
+        self.assertTrue(dialog._banner.visible)
+        dialog.pick_team("team-1")
+        dialog._start_battle()
+        self.assertEqual(self.view.rivals.battle.members[1].pokemon.item, "Charizardite Y")
+
+
 class TestMetaSavesRivalTeams(_Base):
     def test_save_as_rival_team_and_open_in_calc(self):
         engine = create_engine("sqlite:///:memory:")
@@ -316,7 +409,7 @@ class TestMetaSavesRivalTeams(_Base):
         saved = []
         team_row = TeamRow(row, on_import=lambda _r: None, on_calc=lambda _r, _i: None, on_rival=saved.append)
         menu = next(c for c in _walk(team_row) if isinstance(c, ft.PopupMenuButton))
-        self.assertEqual(menu.items[-1].content.value, "Save as rival team")
+        self.assertEqual(menu.items[-1].content.value, "Save as rival preset")
         menu.items[-1].on_click(None)
         self.assertEqual(saved, [row])
         serialise(team_row)

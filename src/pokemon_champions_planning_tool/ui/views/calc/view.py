@@ -18,7 +18,7 @@ from ..team.dialogs.move_picker import MovePickerDialog
 from .field_strip import FieldStrip
 from .panels import PokemonPanel
 from .rail import CalcRail
-from .rival_store import RivalStore
+from .rival_store import RivalStore, rivals_from_team
 from .rivals_panel import RivalsPanel, mode_switch
 from .state import CalcRequest, RivalMember, SweepEntry, revealed_fields, rival_set
 from .store import CalcStore
@@ -323,6 +323,8 @@ class CalcView(ft.Column):
         team = self.rivals.active
         if key == "battle":
             self.open_battle_dialog("preview")
+        elif key == "load":
+            self.open_battle_dialog("presets" if self.rivals.presets else "teams")
         elif key == "paste":
             self.open_battle_dialog("paste")
         elif key == "matrix":
@@ -334,6 +336,8 @@ class CalcView(ft.Column):
                 self.ctx.toast(f"{self._species_name(linked[2].pokemon.species)} updated in the rival team", "success")
         elif team is None:
             return
+        elif key == "use_preset":
+            self._use_preset(team.rival_team_id)
         elif key == "end_battle":
             members = list(team.members)
             self.rivals.end_battle()
@@ -354,15 +358,15 @@ class CalcView(ft.Column):
         if team is None:
             return
         if key == "rename":
-            name = await self.ctx.prompt_text("Rename rival team", "Name", value=team.name, submit_label="Rename")
+            name = await self.ctx.prompt_text("Rename preset", "Preset name", value=team.name, submit_label="Rename")
             if name:
                 self.rivals.rename(rival_team_id, name)
             return
-        name = await self.ctx.prompt_text("Save battle as rival team", "Name", value="", submit_label="Save")
+        name = await self.ctx.prompt_text("Save battle as preset", "Preset name", value="", submit_label="Save")
         if name:
             saved = self.rivals.save_battle_as(name)
             if saved is not None:
-                self.ctx.toast(f"Saved “{saved.name}”; the battle goes on", "success")
+                self.ctx.toast(f"Saved preset “{saved.name}”; the battle goes on", "success")
 
     def open_battle_dialog(self, mode: str = "preview") -> None:
         from .dialogs.battle_preview import BattleDialog
@@ -376,12 +380,36 @@ class CalcView(ft.Column):
                 self.ctx.toast(f"Battle started: {len(members)} Pokémon", "success")
             else:
                 self.rivals.create(name, members, source=source)
-                self.ctx.toast(f"Saved rival team “{name}”", "success")
+                self.ctx.toast(f"Saved preset “{name}”", "success")
             self.set_right_mode("rival")
 
+        def use(preset_id: str) -> None:
+            page.pop_dialog()
+            self._use_preset(preset_id)
+
         self.ensure_loaded()
-        page.show_dialog(BattleDialog(calc_store=self.store, run_in_background=self.ctx.run_in_background, on_start=start,
-                                      on_close=page.pop_dialog, mode=mode))
+        team_store = self.store.team_store
+        my_teams: list[tuple] = []
+        if team_store is not None:
+            try:
+                if not getattr(team_store, "teams", None):
+                    team_store.load()
+                my_teams = [(t.team_id, t.name, t.filled) for t in team_store.teams]
+            except Exception as exc:  # noqa: BLE001 - the other sources still work
+                print(f"⚠️ Teams could not be listed: {exc}")
+        catalogs = self.store.catalogs
+        page.show_dialog(BattleDialog(
+            calc_store=self.store, run_in_background=self.ctx.run_in_background, on_start=start, on_close=page.pop_dialog, mode=mode,
+            presets=self.rivals.presets, on_use_preset=use, my_teams=my_teams,
+            load_team=(lambda team_id: rivals_from_team(team_store, catalogs, team_id)) if team_store is not None else None,
+        ))
+
+    def _use_preset(self, preset_id: str) -> None:
+        preset = self.rivals.get(preset_id)
+        battle = self.rivals.use_preset(preset_id)
+        if preset is not None and battle is not None:
+            self.set_right_mode("rival")
+            self.ctx.toast(f"Battling “{preset.name}”: the preset stays as saved", "success")
 
     def _open_matrix(self) -> None:
         from .dialogs.team_matrix import TeamMatrixDialog

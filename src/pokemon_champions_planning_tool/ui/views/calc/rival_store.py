@@ -20,7 +20,7 @@ from sqlmodel import Session
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import RivalTeamRecord
 from ....infrastructure.database.repositories import RivalTeamRepository
-from .state import RIVAL_FIELDS, PokemonState, RivalMember, RivalTeam, pokemon_from_parsed, revealed_fields, rival_set
+from .state import RIVAL_FIELDS, PokemonState, RivalMember, RivalTeam, pokemon_from_parsed, pokemon_from_slot, revealed_fields, rival_set
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 Listener = Callable[[tuple], None]
@@ -94,6 +94,24 @@ def rivals_from_text_or_url(text: str, catalogs: Any) -> tuple[list[RivalMember]
         return members, skipped, source
     members, skipped = rivals_from_paste(text, catalogs, source="Paste")
     return members, skipped, "Paste"
+
+
+def rivals_from_team(team_store: Any, catalogs: Any, team_id: Any) -> tuple[str, list[RivalMember], list[str]]:
+    """One of your own teams (Teams view) as a rival team: its name, members and the slots
+    that could not be read. Its sets are known, so nothing is assumed. Reads the database."""
+    name, slots, _summary = team_store.summary_for(team_id)
+    members: list[RivalMember] = []
+    skipped: list[str] = []
+    for slot in slots:
+        if not getattr(slot, "filled", False):
+            continue
+        pokemon = pokemon_from_slot(slot, catalogs, source=f"Team · {name}")
+        if pokemon is None:
+            label = getattr(getattr(slot, "form", None), "label", None) or getattr(getattr(getattr(slot, "entry", None), "pokemon", None), "display_name", "?")
+            skipped.append(str(label))
+        else:
+            members.append(RivalMember(pokemon))
+    return name, members[:MAX_MEMBERS], skipped
 
 
 def rivals_from_meta_row(row: Any, catalogs: Any) -> list[RivalMember]:
@@ -174,6 +192,11 @@ class RivalStore:
     def battle(self) -> RivalTeam | None:
         return next((t for t in self.teams if t.is_battle), None)
 
+    @property
+    def presets(self) -> list[RivalTeam]:
+        """The saved rival teams (presets), most recently used first."""
+        return [t for t in self.teams if not t.is_battle]
+
     def set_active(self, rival_team_id: str | None) -> None:
         if rival_team_id != self.active_id and (rival_team_id is None or self.get(rival_team_id) is not None):
             self.active_id = rival_team_id
@@ -200,6 +223,15 @@ class RivalStore:
         self.active_id = team.rival_team_id
         self._notify()
         return team
+
+    def use_preset(self, rival_team_id: str) -> RivalTeam | None:
+        """Load a preset into "Current battle": the preset stays as it is, and what the
+        battle reveals goes to the battle's copy."""
+        preset = self.get(rival_team_id)
+        if preset is None or preset.is_battle:
+            return None
+        self._touch(rival_team_id)
+        return self.start_battle(preset.members, source=f"Preset · {preset.name}")
 
     def end_battle(self) -> None:
         battle = self.battle
@@ -306,4 +338,4 @@ class RivalStore:
                 s.commit()
 
 
-__all__ = ["BATTLE_NAME", "MAX_MEMBERS", "RivalStore", "rival_from_parsed", "rival_from_species", "rivals_from_meta_row", "rivals_from_parsed_team", "rivals_from_paste", "rivals_from_text_or_url"]
+__all__ = ["BATTLE_NAME", "MAX_MEMBERS", "RivalStore", "rival_from_parsed", "rival_from_species", "rivals_from_meta_row", "rivals_from_parsed_team", "rivals_from_team", "rivals_from_paste", "rivals_from_text_or_url"]

@@ -10,6 +10,11 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Changed
+- The team export dialog says "Stat points" instead of "EVs". Copy and Publish still write
+  them on Showdown's `EVs:` line, which is what Showdown and Poképaste read, and pasting a
+  "Stat points:" line back into the app works too.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added

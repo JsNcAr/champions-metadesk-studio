@@ -451,10 +451,11 @@ class TeamStore:
 
     # -- export / analytics -----------------------------------------------------------------------------
 
-    def export_text(self) -> str:
+    def export_text(self, *, points_label: str = "EVs") -> str:
+        """The active team as a Showdown paste. Keep ``EVs`` for text that leaves the app."""
         members = [s.member for s in self.slots if s.member is not None]
         entries = {s.member.box_entry_id: s.entry for s in self.slots if s.member is not None and s.entry is not None}
-        return export_team_to_showdown_text(members, entries)
+        return export_team_to_showdown_text(members, entries, points_label=points_label)
 
     def partners(self, position: int, limit: int = 3) -> list[PartnerRecommendation]:
         """Blocking (run in the background): tournament teammates for the slot's species."""

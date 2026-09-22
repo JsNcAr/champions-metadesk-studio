@@ -16,9 +16,16 @@ class ExportDialog(ft.AlertDialog):
         super().__init__(modal=True, scrollable=True)
         self.ctx = ctx
         self.store = store
-        text = store.export_text().strip() or "(No team members to export)"
-        self._text = ft.TextField(value=text, multiline=True, min_lines=8, max_lines=16, read_only=True,
+        # Shown with "Stat points:", what Champions calls them; copied and published with
+        # Showdown's "EVs:" line, the only one Showdown and Poképaste read spreads from.
+        self._paste = store.export_text().strip()
+        shown = store.export_text(points_label="Stat points").strip() or "(No team members to export)"
+        self._text = ft.TextField(value=shown, multiline=True, min_lines=8, max_lines=16, read_only=True,
                                   text_style=ft.TextStyle(font_family="monospace", size=12))
+        self._format_note = ft.Text(
+            "Copy and Publish write the stat points on Showdown's “EVs:” line, the format Showdown and Poképaste read.",
+            theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT,
+        )
         self._banner = InlineBanner(visible=False)
         self._link = ft.TextButton("Open paste", icon=ft.Icons.OPEN_IN_NEW, visible=False)
         self._copy_link = ft.TextButton("Copy link", icon=ft.Icons.LINK, visible=False)
@@ -27,7 +34,7 @@ class ExportDialog(ft.AlertDialog):
         self.url: str | None = None
 
         self.title = ft.Text(f"Export · {store.active_team_name}")
-        self.content = ft.Container(width=640, content=ft.Column(spacing=Space.MD, tight=True, controls=[self._text, self._banner, ft.Row(spacing=Space.SM, controls=[self._link, self._copy_link])]))
+        self.content = ft.Container(width=640, content=ft.Column(spacing=Space.MD, tight=True, controls=[self._text, self._format_note, self._banner, ft.Row(spacing=Space.SM, controls=[self._link, self._copy_link])]))
         self.actions = [
             ft.TextButton("Close", on_click=lambda _e: self.close()),
             ft.FilledTonalButton("Copy", icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._copy()),
@@ -61,7 +68,7 @@ class ExportDialog(ft.AlertDialog):
                 pass
 
     def _copy(self) -> None:
-        self.ctx.copy_to_clipboard(self._text.value or "")
+        self.ctx.copy_to_clipboard(self._paste)
         self.ctx.toast("Showdown text copied", "success")
 
     def _do_publish(self) -> None:

@@ -283,6 +283,18 @@ class TestRoundTrip(unittest.TestCase):
         self.assertEqual(slot.species_name, "Incineroar")
         self.assertEqual(slot.item_name, "Assault Vest")
         self.assertEqual(slot.ability_name, "Intimidate")
+
+    def test_stat_points_label_for_display_imports_the_same(self):
+        member, box_entry = self._make_mock_member(
+            display_name="Incineroar", item="Assault Vest", ability="Intimidate", moves=["Fake Out"],
+            nature="Adamant", points={"hp": 32, "attack": 2, "defense": 32},
+        )
+        shown = export_team_to_showdown_text([member], {"test-uuid": box_entry}, points_label="Stat points")
+        self.assertIn("Stat points: 32 HP / 2 Atk / 32 Def", shown)
+        self.assertNotIn("EVs:", shown)
+        for text in (shown, shown.replace("Stat points:", "SP:")):
+            slot = parse_showdown_text(text).slots[0]
+            self.assertEqual(slot.points, {"hp": 32, "attack": 2, "defense": 32}, text.splitlines()[3])
         self.assertEqual(slot.nature, "Adamant")
         self.assertIn("Fake Out", slot.moves)
 

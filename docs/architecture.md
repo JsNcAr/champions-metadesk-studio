@@ -54,7 +54,9 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      lazily parsed sheet; Import hands the paste to the team builder.
   4. **Calc**: bi-directional damage calculator, one-click field strip (singles/doubles, weather,
      terrain, rooms, screens, hazards), team/box rail, result-bearing move cards with status
-     toggles, and opponent sweep rail classifying species against the attacker.
+     toggles, and a right column that either classifies every species against the attacker
+     (opponents sweep) or shows a rival team: saved plans and the "Current battle" entered at
+     team preview, with battle reveals written back and a Team vs team grid.
   5. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
 - Package layout:
 
@@ -72,7 +74,7 @@ ui/
                     build.py (ft.Theme from tokens)
   shell/            AppShell: NavigationRail, layered view deck, view registry, shortcuts
   components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
-  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep), rail (team/box), field_strip (tiles + side chips), panels (radar + editor + stages + move cards), move_card, sweep (opponents)
+  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep), rail (team/box), field_strip (tiles + side chips), panels (radar + editor + stages + move cards), move_card, sweep (opponents), rival_store (rival teams, Flet-free) + rivals_panel, dialogs/ (team preview and paste, Team vs team grid)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

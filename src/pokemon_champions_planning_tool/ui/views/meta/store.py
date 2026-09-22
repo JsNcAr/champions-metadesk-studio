@@ -141,6 +141,7 @@ class MetaFilters:
 class MetaStore:
     def __init__(self, session_factory: SessionFactory = get_session) -> None:
         self._sf = session_factory
+        self.session_factory = session_factory   # rival teams saved from Meta use the same database
         self.filters = MetaFilters()
         pref = self.load_preference()
         self.filters = MetaFilters(battle_format=pref)

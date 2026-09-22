@@ -10,6 +10,23 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Rival teams in the calculator.** A switch above the opponents list shows a rival team
+  instead: each member is coloured against your attacker, and one click loads it as the
+  Defender (your team is then coloured against it too).
+  - **In a battle**, Team preview (Ctrl+B) takes the six species you see and fills each with
+    its most used tournament set. What you set on a rival in the Defender panel (item,
+    ability, moves, nature, stat points) is kept for the rest of the battle, and its ? mark
+    stops listing what you have seen.
+  - **To plan**, save any tournament team from Meta (the calculator menu on a team),
+    or paste a Showdown team or a Poképaste link. Saved plans change only through
+    "Save Defender to …", so browsing them never overwrites them.
+  - **Team vs team** shows your active team against theirs, every pairing coloured, with
+    how many rivals each of your Pokémon answers and how many of yours each rival threatens.
+
+### Fixed
+- Ctrl+F in the calculator did not focus the species search.
+
 ## [0.3.1] - 2026-09-21
 
 ### Fixed

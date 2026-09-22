@@ -9,6 +9,7 @@ what the battle reveals (an item, a move) is written back so it sticks.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
 from typing import Any
@@ -19,7 +20,7 @@ from sqlmodel import Session
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import RivalTeamRecord
 from ....infrastructure.database.repositories import RivalTeamRepository
-from .state import RIVAL_FIELDS, PokemonState, RivalMember, RivalTeam, pokemon_from_parsed
+from .state import RIVAL_FIELDS, PokemonState, RivalMember, RivalTeam, pokemon_from_parsed, revealed_fields, rival_set
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 Listener = Callable[[tuple], None]
@@ -54,10 +55,15 @@ def rival_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, sou
 
 def rivals_from_paste(text: str, catalogs: Any, *, source: str) -> tuple[list[RivalMember], list[str]]:
     """Members from a Showdown paste, and the species that could not be used."""
-    from ....domain.pokemon_identity import format_api_name
     from ....services.showdown_service import parse_showdown_text
 
-    parsed = parse_showdown_text(text or "")
+    return rivals_from_parsed_team(parse_showdown_text(text or ""), catalogs, source=source)
+
+
+def rivals_from_parsed_team(parsed: Any, catalogs: Any, *, source: str) -> tuple[list[RivalMember], list[str]]:
+    """Members from a parsed paste (``ParsedTeamResult``), and the species not in the catalogue."""
+    from ....domain.pokemon_identity import format_api_name
+
     members: list[RivalMember] = []
     skipped: list[str] = []
     for slot in parsed.slots[:MAX_MEMBERS]:
@@ -69,6 +75,25 @@ def rivals_from_paste(text: str, catalogs: Any, *, source: str) -> tuple[list[Ri
         else:
             members.append(member)
     return members, skipped
+
+
+def rivals_from_text_or_url(text: str, catalogs: Any) -> tuple[list[RivalMember], list[str], str]:
+    """A paste or a Poképaste link: its members, the skipped species and a source label.
+
+    A link is fetched over the network, so call this on a worker.
+    """
+    from ....infrastructure.providers.pokepast_provider import PokepastProvider
+    from ....services.showdown_service import import_from_pokepast_url
+
+    text = (text or "").strip()
+    if PokepastProvider.is_pokepast_url(text):
+        parsed = import_from_pokepast_url(text, PokepastProvider())
+        title = (getattr(parsed, "title", "") or "").strip()
+        source = f"Poképaste · {title}" if title else "Poképaste"
+        members, skipped = rivals_from_parsed_team(parsed, catalogs, source=source)
+        return members, skipped, source
+    members, skipped = rivals_from_paste(text, catalogs, source="Paste")
+    return members, skipped, "Paste"
 
 
 def rivals_from_meta_row(row: Any, catalogs: Any) -> list[RivalMember]:
@@ -217,11 +242,26 @@ class RivalStore:
             return
         self._replace(team.with_member(slot, member))
 
+    def sync_member(self, rival_team_id: str, slot: int, pokemon: PokemonState) -> bool:
+        """Write the Defender back to the member it came from; True when anything changed.
+
+        The set fields that differ from what was stored (item, ability, moves, nature,
+        spread) count as revealed and stop being assumed. Stat stages, crits and applied
+        move effects belong to the turn and are not kept.
+        """
+        team = self.get(rival_team_id)
+        if team is None or not 0 <= slot < len(team.members):
+            return False
+        kept = rival_set(pokemon)
+        # The caption stays the member's own ("Team preview · Adamant"), not the panel's.
+        kept = replace(kept, source=team.members[slot].pokemon.source, assumptions=list(team.members[slot].pokemon.assumptions))
+        version = self.version
+        self.update_member(rival_team_id, slot, kept, revealed=revealed_fields(team.members[slot].pokemon, kept))
+        return self.version != version
+
     # -- internals ------------------------------------------------------------------------------
 
     def _update(self, rival_team_id: str, **changes: Any) -> None:
-        from dataclasses import replace
-
         team = self.get(rival_team_id)
         if team is not None:
             self._replace(replace(team, **changes))
@@ -266,4 +306,4 @@ class RivalStore:
                 s.commit()
 
 
-__all__ = ["BATTLE_NAME", "MAX_MEMBERS", "RivalStore", "rival_from_parsed", "rival_from_species", "rivals_from_meta_row", "rivals_from_paste"]
+__all__ = ["BATTLE_NAME", "MAX_MEMBERS", "RivalStore", "rival_from_parsed", "rival_from_species", "rivals_from_meta_row", "rivals_from_parsed_team", "rivals_from_paste", "rivals_from_text_or_url"]

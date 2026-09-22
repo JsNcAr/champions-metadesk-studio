@@ -252,6 +252,17 @@ class RivalTeam:
         return replace(self, members=tuple(members))
 
 
+def rival_set(p: PokemonState) -> PokemonState:
+    """What a rival member keeps from the Defender panel: its set, HP and status, without
+    this turn's stat stages, crits and applied move effects."""
+    return replace(p, boosts={}, crit=[False, False, False, False], active=[False, False, False, False], ability_on=False)
+
+
+def revealed_fields(old: PokemonState, new: PokemonState) -> set[str]:
+    """The ``RIVAL_FIELDS`` that differ between two states of a rival member."""
+    return {f for f in RIVAL_FIELDS if getattr(old, f) != getattr(new, f)}
+
+
 @dataclass(frozen=True)
 class TeamRating:
     """One of your team members against the rival in the Defender panel.
@@ -350,7 +361,7 @@ def pokemon_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, s
 
 
 __all__ = [
-    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "RIVAL_FIELDS", "TERRAINS", "TOGGLE_ABILITIES", "RivalMember", "RivalTeam", "TeamRating", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
+    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "RIVAL_FIELDS", "TERRAINS", "TOGGLE_ABILITIES", "RivalMember", "RivalTeam", "TeamRating", "revealed_fields", "rival_set", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
     "FieldState", "MoveResult", "PokemonState", "SideConditions", "SweepEntry", "classify", "hits_to_ko", "pokemon_from_parsed", "pokemon_from_slot",
     "pokemon_from_species_id",
 ]

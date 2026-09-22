@@ -534,3 +534,25 @@ class TournamentSeedMetaRecord(SQLModel, table=True):
     total_teams: int = Field(default=0)
     loaded_at: datetime = Field(default_factory=_utc_now)
 
+
+
+class RivalTeamRecord(SQLModel, table=True):
+    """An opponent's team kept for the damage calculator; never part of the box or your teams.
+
+    ``kind`` is "saved" (a plan against a known team) or "battle" (the one temporary
+    "Current battle" team). ``members`` holds up to six ``{"pokemon": PokemonState dict,
+    "assumed": [field, …]}`` entries; ``assumed`` lists what came from tournament data
+    rather than being known (moves, item, ability, nature, points).
+    """
+
+    __tablename__: ClassVar[str] = "rival_teams"
+
+    rival_team_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True)
+    kind: str = Field(default="saved", index=True)
+    source: str = ""
+    notes: str = ""
+    members: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
+    last_used_at: datetime = Field(default_factory=_utc_now)

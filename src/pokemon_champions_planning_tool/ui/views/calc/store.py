@@ -8,10 +8,11 @@ is computed on demand and notified as ``("sweep",)``.
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import AbstractContextManager
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Any
 
 from sqlmodel import Session
@@ -218,6 +219,31 @@ def best_of(results: tuple[MoveResult, ...]) -> MoveResult | None:
     return max(ok, key=lambda r: (r.min_pct + r.max_pct)) if ok else None
 
 
+def matchup(you: PokemonState, you_species: SpeciesInfo, rival: PokemonState, rival_species: SpeciesInfo, field: FieldState,
+            catalogs: Catalogs, calc: Callable = calculate, *, fields: tuple[Field, Field] | None = None,
+            you_engine: CalcPokemon | None = None, rival_engine: CalcPokemon | None = None, you_moves: list[tuple[Any, str]] | None = None,
+            you_speed: int | None = None, rival_speed: int | None = None, rival_attacks: bool = True,
+            ) -> tuple[MoveResult | None, MoveResult | None, int, int, bool, str]:
+    """"You" (left, attacking) against a rival (right) under the field, both ways, fast mode.
+
+    Returns your best hit, theirs, both speeds, whether you move first and the class (see
+    ``classify``). The opponents sweep, the team ratings, the rival cards and the team grid
+    all read a matchup this way; the keyword arguments let a caller reuse what it already
+    built for many matchups. ``rival_attacks=False`` skips their side (moves unknown).
+    """
+    field_ab, field_ba = fields or (engine_field(field, attacker_is_left=True), engine_field(field, attacker_is_left=False))
+    y_engine = you_engine if you_engine is not None else engine_pokemon(you, you_species)
+    r_engine = rival_engine if rival_engine is not None else engine_pokemon(rival, rival_species)
+    yours = best_of(run_side(you, rival, field_ab, catalogs, calc, you_species, rival_species,
+                             fast=True, a_engine=y_engine, d_engine=r_engine, prebuilt_moves=you_moves))
+    theirs = best_of(run_side(rival, you, field_ba, catalogs, calc, rival_species, you_species,
+                              fast=True, a_engine=r_engine, d_engine=y_engine)) if rival_attacks else None
+    y_speed = you_speed if you_speed is not None else final_speed(you, you_species, field, "left")
+    r_speed = rival_speed if rival_speed is not None else final_speed(rival, rival_species, field, "right")
+    faster = (y_speed > r_speed) != field.trick_room if y_speed != r_speed else False
+    return yours, theirs, y_speed, r_speed, faster, classify(yours, theirs, faster)
+
+
 class CalcStore:
     def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory | None = get_session, *, prefs: Any = None,
                  calculate_fn: Callable | None = None, team_store: Any = None) -> None:
@@ -248,6 +274,14 @@ class CalcStore:
         self._team_version = 0
         self._team_members: dict[str, tuple[int, PokemonState | None]] = {}
         self._ratings_cache: tuple[str, dict[str, TeamRating]] | None = None
+        # Rival teams: which member the Defender came from, and matchups cached per pair.
+        self.rival_link: tuple[str, int] | None = None
+        self._pair_cache: dict[str, TeamRating] = {}
+
+    @property
+    def session_factory(self) -> SessionFactory | None:
+        """The database the calculator reads (None in tests); rival teams use the same."""
+        return self._sf
 
     # -- subscriptions -----------------------------------------------------------------------
 
@@ -290,6 +324,8 @@ class CalcStore:
                 self.state = replace(self.state, field=replace(self.state.field, **field_updates))
 
     def apply_request(self, req: CalcRequest) -> None:
+        if req.defender is not None:
+            self._unlink_rival()
         if req.attacker is not None:
             self.state = self.state.with_side("left", req.attacker)
             self._apply_ability_field(req.attacker.ability)
@@ -299,10 +335,26 @@ class CalcStore:
         self._commit()
 
     def load_species(self, side: str, canonical_id: str, *, preset: bool = False, source: str | None = None) -> None:
+        self._unlink_rival(side)
+        if preset:
+            p, _found = self.preset_pokemon(canonical_id, source=source)
+        else:
+            species = self.catalogs.species_for(canonical_id)
+            p = pokemon_from_species_id(species.canonical_id if species else canonical_id, species, source=source or "")
+        self.state = self.state.with_side(side, p)
+        self._apply_ability_field(p.ability)
+        self._commit()
+
+    def preset_pokemon(self, canonical_id: str, *, source: str | None = None) -> tuple[PokemonState, bool]:
+        """The species with its most-used tournament set; True when tournament data had one.
+
+        Without a build it falls back to the species' preset moves (or none) on a plain set.
+        Shared by the Defender panel and rival teams entered at team preview.
+        """
         species = self.catalogs.species_for(canonical_id)
         cid = species.canonical_id if species else canonical_id
         base_cid = species.base_species_id if species else cid
-        build = (self.preset_builds().get(cid) or self.preset_builds().get(base_cid)) if preset else None
+        build = self.preset_builds().get(cid) or self.preset_builds().get(base_cid)
         if build is not None:
             nature = (build.nature or "hardy").lower()
             points = default_points_for_nature(nature, species.stats if species else None)
@@ -319,7 +371,7 @@ class CalcStore:
                 src = f"{source} · {nature.title()}" if build.nature else source
             else:
                 src = f"Tournament preset · {nature.title()}" if build.nature else "Tournament preset"
-            p = PokemonState(
+            return PokemonState(
                 species=cid,
                 nature=nature,
                 points=points,
@@ -327,15 +379,12 @@ class CalcStore:
                 item=item,
                 moves=four_moves,
                 source=src,
-            )
-        else:
-            moves = self.preset_moves().get(cid, self.preset_moves().get(base_cid, [])) if preset else None
-            p = pokemon_from_species_id(cid, species, source=source or "", moves=moves)
-        self.state = self.state.with_side(side, p)
-        self._apply_ability_field(p.ability)
-        self._commit()
+            ), True
+        moves = self.preset_moves().get(cid, self.preset_moves().get(base_cid, []))
+        return pokemon_from_species_id(cid, species, source=source or "", moves=moves), False
 
     def load_pokemon(self, side: str, pokemon: PokemonState) -> None:
+        self._unlink_rival(side)
         self.state = self.state.with_side(side, pokemon)
         self._apply_ability_field(pokemon.ability)
         self._commit()
@@ -578,6 +627,7 @@ class CalcStore:
         """
         self.catalogs = catalogs
         self._cache.clear()
+        self._pair_cache.clear()
         self._sweep_key = None
         self.invalidate_presets()
         self.invalidate_team_ratings()
@@ -760,12 +810,14 @@ class CalcStore:
 
     def swap_sides(self) -> None:
         f = self.state.field
+        self.rival_link = None
         self.state = CalcState(left=self.state.right, right=self.state.left, field=replace(f, left=f.right, right=f.left))
         self._commit()
 
     def reset(self) -> CalcState:
         """Clear both Pokémon and the field; returns the previous state for Undo."""
         previous = self.state
+        self.rival_link = None
         self.state = CalcState()
         self._commit()
         return previous
@@ -793,6 +845,8 @@ class CalcStore:
 
     def restore(self, state: CalcState) -> None:
         """Put back a state returned by ``reset`` (or ``clear_conditions``)."""
+        if state.right != self.state.right:
+            self.rival_link = None
         self.state = state
         self._commit()
 
@@ -907,31 +961,14 @@ class CalcStore:
             else:
                 their_moves = []
                 defender = pokemon_from_species_id(species.canonical_id, species)
-            d_engine = engine_pokemon(defender, species)
-            yours = best_of(
-                run_side(
-                    attacker, defender, field_ab, self.catalogs, self._calc,
-                    a_species, species,
-                    fast=True, a_engine=a_engine, d_engine=d_engine, prebuilt_moves=a_moves,
-                )
+            yours, theirs, _mine, speed, faster, klass = matchup(
+                attacker, a_species, defender, species, self.state.field, self.catalogs, self._calc,
+                fields=(field_ab, field_ba), you_engine=a_engine, you_moves=a_moves, you_speed=my_speed, rival_attacks=bool(their_moves),
             )
-            theirs = (
-                best_of(
-                    run_side(
-                        defender, attacker, field_ba, self.catalogs, self._calc,
-                        species, a_species,
-                        fast=True, a_engine=d_engine, d_engine=a_engine,
-                    )
-                )
-                if their_moves
-                else None
-            )
-            speed = final_speed(defender, species, self.state.field, "right")
-            faster = (my_speed > speed) != self.state.field.trick_room if my_speed != speed else False
             cid_lower = species.canonical_id.lower()
             base_lower = (species.base_species_id or "").lower()
             usage = umap.get(cid_lower) or umap.get(base_lower, 0)
-            entries.append(SweepEntry(species.canonical_id, species.name, speed, classify(yours, theirs, faster), yours, theirs, faster, bool(their_moves), usage_count=usage))
+            entries.append(SweepEntry(species.canonical_id, species.name, speed, klass, yours, theirs, faster, bool(their_moves), usage_count=usage))
 
             if on_progressive is not None and not notified_progressive and len(entries) >= 30:
                 notified_progressive = True
@@ -1002,15 +1039,95 @@ class CalcStore:
             m_species = self.catalogs.species_for(member.species) if member is not None else None
             if member is None or m_species is None:
                 continue
-            m_engine = engine_pokemon(member, m_species)
-            yours = best_of(run_side(member, rival, field_ab, self.catalogs, self._calc, m_species, r_species,
-                                     fast=True, a_engine=m_engine, d_engine=r_engine))
-            theirs = best_of(run_side(rival, member, field_ba, self.catalogs, self._calc, r_species, m_species,
-                                      fast=True, a_engine=r_engine, d_engine=m_engine))
-            m_speed = final_speed(member, m_species, field, "left")
-            faster = (m_speed > r_speed) != field.trick_room if m_speed != r_speed else False
-            ratings[slot_key] = TeamRating(slot_key, m_species.name, classify(yours, theirs, faster), yours, theirs, m_speed, r_speed, faster)
+            yours, theirs, m_speed, _r, faster, klass = matchup(member, m_species, rival, r_species, field, self.catalogs, self._calc,
+                                                                fields=(field_ab, field_ba), rival_engine=r_engine, rival_speed=r_speed)
+            ratings[slot_key] = TeamRating(slot_key, m_species.name, klass, yours, theirs, m_speed, r_speed, faster)
         return ratings
+
+    # -- rival teams -------------------------------------------------------------------------
+
+    def load_rival(self, rival_team_id: str, slot: int, pokemon: PokemonState) -> None:
+        """Load a rival team member as the Defender and remember where it came from, so what
+        the battle reveals can be written back (``rival_link``)."""
+        self.state = self.state.with_side("right", pokemon)
+        self._apply_ability_field(pokemon.ability)
+        self.rival_link = (rival_team_id, slot)
+        self._commit()
+
+    def _unlink_rival(self, side: str = "right") -> None:
+        if side == "right":
+            self.rival_link = None
+
+    def _pair_key(self, you: PokemonState, rival: PokemonState) -> str:
+        d_you = {k: v for k, v in asdict(you).items() if k not in self._SWEEP_IGNORES}
+        d_rival = {k: v for k, v in asdict(rival).items() if k not in self._RATING_IGNORES}
+        return json.dumps((d_you, d_rival, asdict(self.state.field)), sort_keys=True, default=str)
+
+    def _rate_pair(self, you: PokemonState, rival: PokemonState, name: str, slot_key: str, fields: tuple[Field, Field]) -> TeamRating | None:
+        """One matchup, cached by both states and the field (the grid reuses unchanged cells)."""
+        key = self._pair_key(you, rival)
+        cached = self._pair_cache.get(key)
+        if cached is not None:
+            return replace(cached, slot_key=slot_key, name=name)
+        y_species = self.catalogs.species_for(you.species) if you.species else None
+        r_species = self.catalogs.species_for(rival.species) if rival.species else None
+        if y_species is None or r_species is None:
+            return None
+        yours, theirs, y_speed, r_speed, faster, klass = matchup(you, y_species, rival, r_species, self.state.field, self.catalogs, self._calc, fields=fields)
+        rating = TeamRating(slot_key, name, klass, yours, theirs, y_speed, r_speed, faster)
+        if len(self._pair_cache) >= 512:
+            self._pair_cache.clear()
+        self._pair_cache[key] = rating
+        return rating
+
+    def rate_rivals(self, members: tuple[PokemonState, ...] | list[PokemonState]) -> tuple[TeamRating | None, ...]:
+        """The Attacker against each rival team member, in slot order (None: unknown species).
+
+        From the attacker's side, like the opponents list: "threat" means that rival beats
+        your attacker. Pure computation for a worker; unchanged pairs come from the cache.
+        """
+        attacker = self.state.left
+        if not attacker.species or self.catalogs.species_for(attacker.species) is None:
+            return tuple(None for _ in members)
+        fields = (engine_field(self.state.field, attacker_is_left=True), engine_field(self.state.field, attacker_is_left=False))
+        out = []
+        for index, rival in enumerate(members):
+            r_species = self.catalogs.species_for(rival.species) if rival.species else None
+            out.append(self._rate_pair(attacker, rival, r_species.name if r_species else "", str(index), fields) if r_species else None)
+        return tuple(out)
+
+    def team_matrix(self, members: tuple[PokemonState, ...] | list[PokemonState]) -> dict[tuple[str, int], TeamRating]:
+        """Your active team (rows) against a rival team (columns): ``{(slot key, rival index): rating}``.
+
+        Each cell is a matchup from your member's side, cached per pair, so editing one rival
+        member recomputes one column. Pure computation for a worker.
+        """
+        slots = self.team_slots()
+        team_id = getattr(self.team_store, "active_team_id", None)
+        fields = (engine_field(self.state.field, attacker_is_left=True), engine_field(self.state.field, attacker_is_left=False))
+        grid: dict[tuple[str, int], TeamRating] = {}
+        for slot in slots:
+            slot_key = f"{team_id}:{slot.position}"
+            member = self._member_state(slot_key, slot)
+            m_species = self.catalogs.species_for(member.species) if member is not None and member.species else None
+            if member is None or m_species is None:
+                continue
+            for index, rival in enumerate(members):
+                rating = self._rate_pair(member, rival, m_species.name, slot_key, fields)
+                if rating is not None:
+                    grid[(slot_key, index)] = rating
+        return grid
+
+    def team_members(self) -> list[tuple[str, PokemonState]]:
+        """The active team's members as calculator states, keyed like the ratings."""
+        team_id = getattr(self.team_store, "active_team_id", None)
+        out = []
+        for slot in self.team_slots():
+            slot_key = f"{team_id}:{slot.position}"
+            member = self._member_state(slot_key, slot)
+            if member is not None and member.species:
+                out.append((slot_key, member))
+        return out
 
     def _member_state(self, slot_key: str, slot: Any) -> PokemonState | None:
         """The member's calculator state, rebuilt only when its slot object changed."""
@@ -1094,4 +1211,4 @@ class CalcStore:
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_PRESETS", "PREF_SECTIONS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "move_effect", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_SECTIONS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "matchup", "move_effect", "run", "run_side"]

@@ -32,6 +32,10 @@ IMPORT_REQUESTED = "import.requested"
 NAVIGATE = "navigate"
 # Ask the damage calculator to load Pokémon; payload: ui.views.calc.CalcRequest.
 CALC_REQUESTED = "calc.requested"
+# Rival teams were saved or changed outside the calculator (Meta). Payload: team id or None.
+RIVALS_CHANGED = "rivals.changed"
+# Ask the calculator to show a rival team. Payload: rival team id.
+RIVAL_OPEN = "rivals.open"
 # The team builder's active team changed. Payload: team id (UUID) or None.
 ACTIVE_TEAM = "team.active"
 

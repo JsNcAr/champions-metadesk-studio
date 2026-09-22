@@ -338,7 +338,7 @@ class MetaView(ft.Column):
                 card = EventCard(row, shown=0, on_open=self._open_event, on_import=self._import)
                 self._cards[row.tournament_id] = card
                 self._grid.controls.append(card)
-            group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs))
+            group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs, on_rival=self._save_rival))
             self._cards[row.tournament_id].set_shown(len(group.rows))
         self._list.visible = self.view_mode == "rows"
         self._grid.visible = self.view_mode == "cards"
@@ -417,7 +417,7 @@ class MetaView(ft.Column):
             page.pop_dialog()
             self._import(row)
 
-        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog, on_calc=self._calc_vs)
+        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog, on_calc=self._calc_vs, on_rival=self._save_rival)
         page.show_dialog(dialog)
         self.ctx.run_in_background(lambda: self.store.teams_for_event(tournament_id), on_done=dialog.set_rows, on_error=dialog.set_error)
 
@@ -483,6 +483,19 @@ class MetaView(ft.Column):
             self.ctx.toast(f"{member.display_name} is not in the species catalogue", "warning")
             return
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))
+
+    def _save_rival(self, row: MetaTeamRow) -> None:
+        """Keep a tournament team as a rival preset to plan against in the calculator."""
+        from ..calc.rival_store import RivalStore, rivals_from_meta_row
+
+        members = rivals_from_meta_row(row, self.ctx.catalogs)
+        if not members:
+            self.ctx.toast("None of this team's Pokémon are in the species catalogue", "warning")
+            return
+        team = RivalStore(self.store.session_factory).create(f"{row.player_name} — {row.tournament_name}", members, source=f"Meta · {row.player_name} · {row.tournament_name}")
+        self.ctx.bus.emit(events.RIVALS_CHANGED, team.rival_team_id)
+        self.ctx.toast(f"Saved {row.player_name}'s team as a rival preset", "success", action="Open in Calc",
+                       on_action=lambda: self.ctx.bus.emit(events.RIVAL_OPEN, team.rival_team_id))
 
     def _import(self, row: MetaTeamRow) -> None:
         title = f"{row.player_name} — {row.tournament_name}"

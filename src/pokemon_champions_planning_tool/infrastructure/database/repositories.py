@@ -31,6 +31,7 @@ from .models import (
     MoveCatalogMetaRecord,
     MoveRecord,
     PokemonRecord,
+    RivalTeamRecord,
     TeamMemberRecord,
     TeamRecord,
     TournamentRecord,
@@ -568,6 +569,44 @@ class TeamRepository:
 
         members = self.get_members(team_id)
         return record.to_domain(members)
+
+
+class RivalTeamRepository:
+    """Rival teams for the calculator: saved plans and the one "Current battle" team."""
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    def list_saved(self) -> list[RivalTeamRecord]:
+        """Saved rival teams, most recently used first."""
+        stmt = select(RivalTeamRecord).where(RivalTeamRecord.kind == "saved").order_by(RivalTeamRecord.last_used_at.desc())
+        return list(self.session.exec(stmt).all())
+
+    def get(self, rival_team_id: UUID) -> RivalTeamRecord | None:
+        return self.session.get(RivalTeamRecord, rival_team_id)
+
+    def battle(self) -> RivalTeamRecord | None:
+        return self.session.exec(select(RivalTeamRecord).where(RivalTeamRecord.kind == "battle")).first()
+
+    def upsert(self, record: RivalTeamRecord) -> RivalTeamRecord:
+        """Insert or update; a new battle team replaces the previous one (there is only one)."""
+        if record.kind == "battle":
+            for old in self.session.exec(select(RivalTeamRecord).where(RivalTeamRecord.kind == "battle")).all():
+                if old.rival_team_id != record.rival_team_id:
+                    self.session.delete(old)
+        record.updated_at = _utc_now()
+        merged = self.session.merge(record)
+        self.session.commit()
+        self.session.refresh(merged)
+        return merged
+
+    def delete(self, rival_team_id: UUID) -> bool:
+        record = self.session.get(RivalTeamRecord, rival_team_id)
+        if record is None:
+            return False
+        self.session.delete(record)
+        self.session.commit()
+        return True
 
 
 class ChampionsCatalogRepository:

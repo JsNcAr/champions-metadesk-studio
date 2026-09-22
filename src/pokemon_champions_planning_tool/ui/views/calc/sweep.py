@@ -9,13 +9,22 @@ import flet as ft
 
 from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
+from ...components.help_button import help_button
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
 from ...tasks import Debouncer, is_mounted
-from ...theme import IconSize, Palette, Radius, Space
+from ...theme import Palette, Radius, Space
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
+
+SWEEP_HELP: tuple[str, ...] = (
+    "Every Champions species against your Attacker, with their most used tournament set when \"Tournament sets\" is on. "
+    "Click one to load it as the Defender.",
+    "The colours, from your side:",
+    *(f"{label}: {CLASS_HELP[key]}." for key, label in SWEEP_CLASSES),
+    "Spe ▲ means you move first (Tailwind and Trick Room included); ▼ that they do.",
+)
 
 _INITIAL_LIMIT = 40
 _PAGE_SIZE = 40
@@ -88,7 +97,7 @@ class SweepPanel(ft.Container):
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
         self.content = ft.Column(spacing=Space.SM, controls=[
-            SectionHeader("Opponents", accent=accent, action=ft.IconButton(icon=ft.Icons.HELP_OUTLINE, icon_size=IconSize.SM, tooltip="\n".join(f"{dict(SWEEP_CLASSES)[k]}: {v}" for k, v in CLASS_HELP.items()))),
+            SectionHeader("Opponents", accent=accent, action=help_button("Opponents", SWEEP_HELP, tooltip="What the colours mean")),
             self._presets, self._sort, self._search, self._chip_row,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
             self._list,

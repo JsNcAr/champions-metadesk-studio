@@ -4,6 +4,8 @@ own, so the rail and the opponents stay in view; narrow windows stack them in on
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import flet as ft
 
 from ... import events
@@ -16,7 +18,9 @@ from ..team.dialogs.move_picker import MovePickerDialog
 from .field_strip import FieldStrip
 from .panels import PokemonPanel
 from .rail import CalcRail
-from .state import CalcRequest, SweepEntry
+from .rival_store import RivalStore, rivals_from_team
+from .rivals_panel import RivalsPanel, mode_switch
+from .state import CalcRequest, RivalMember, SweepEntry, revealed_fields, rival_set
 from .store import CalcStore
 from .summary import MatchupBar
 from .sweep import SweepPanel
@@ -25,14 +29,16 @@ SAVE_DELAY_MS = 500    # a burst of edits (a slider drag) writes preferences.jso
 SWEEP_DELAY_MS = 300   # the opponents sweep starts once the edits pause
 RAIL_WIDTH = 224
 SWEEP_WIDTH = 300
+PREF_RIGHT_MODE = "calc.right_mode"   # "all" (every opponent) | "rival" (a rival team)
 CAPTION = "Champions damage · both directions"
 
 
 class CalcView(ft.Column):
-    def __init__(self, ctx: AppContext, store: CalcStore | None = None) -> None:
+    def __init__(self, ctx: AppContext, store: CalcStore | None = None, rivals: RivalStore | None = None) -> None:
         super().__init__(spacing=Space.MD, expand=True)
         self.ctx = ctx
         self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
+        self.rivals = rivals or RivalStore(self.store.session_factory)
         self._narrow = False
         self._sweep_running = False
         self._presets_warming = False
@@ -41,6 +47,11 @@ class CalcView(ft.Column):
         self._rate_later: Debouncer | None = None
         self._rated_key: str | None = None
         self._rating_running = False
+        self._rivals_later: Debouncer | None = None
+        self._write_later: Debouncer | None = None
+        self._rivals_key: str | None = None
+        self._rivals_running = False
+        self._right_mode = "rival" if self._pref(PREF_RIGHT_MODE, "all") == "rival" else "all"
 
         self.attacker = PokemonPanel("left", title="Attacker", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
         self.defender = PokemonPanel("right", title="Defender", accent=Accent.CALC, store=self.store, on_pick_move=self._open_move_picker, on_pick_item=self._open_item_picker, on_copy=self._copy)
@@ -49,15 +60,23 @@ class CalcView(ft.Column):
         self.rail.width = RAIL_WIDTH
         self.sweep = SweepPanel(store=self.store, accent=Accent.CALC, on_pick=self._pick_opponent)
         self.sweep.width = SWEEP_WIDTH
+        self.rivals_panel = RivalsPanel(rivals=self.rivals, species_name=self._species_name, accent=Accent.CALC,
+                                        on_pick=self._pick_rival, on_action=self._rival_action)
+        self.rivals_panel.width = SWEEP_WIDTH
+        # One switch per panel (a control has one parent); both follow ``_right_mode``.
+        self._switches = [mode_switch(self._right_mode, self.set_right_mode), mode_switch(self._right_mode, self.set_right_mode)]
+        self.sweep.content.controls.insert(0, self._switches[0])
+        self.rivals_panel.set_switch(self._switches[1])
         self.summary = MatchupBar(store=self.store)
 
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
         self._centre = ft.Column(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.field, self._pokemon_row])
-        self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.rail, self._centre, self.sweep])
+        self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.rail, self._centre, self._right()])
         self._stack = ft.Column(spacing=Space.MD, scroll=ft.ScrollMode.AUTO, controls=[])
         self._host = ft.Container(content=self._wide, expand=True)
         self.rail.set_scrolling(True)
         self.sweep.set_scrolling(True)
+        self.rivals_panel.set_scrolling(True)
         self.header = PageHeader(
             "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
@@ -68,6 +87,9 @@ class CalcView(ft.Column):
         self.controls = [self.header, self.summary, self._host]
 
         self.store.subscribe(self._on_store)
+        self.rivals.subscribe(lambda _e: self._on_rivals())
+        ctx.bus.on(events.RIVALS_CHANGED, lambda _p: self.rivals.load() if self.rivals.loaded else None)
+        ctx.bus.on(events.RIVAL_OPEN, self._open_rival)
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())
@@ -86,20 +108,32 @@ class CalcView(ft.Column):
         self.ctx.on_shutdown(self.store.save_state)
         self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
         self._rate_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_rating(), quiet_event=False)
+        self._rivals_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_rating_rivals(), quiet_event=False)
+        self._write_later = Debouncer(page, SAVE_DELAY_MS, lambda _v: self._write_back(), quiet_event=False)
 
     def will_unmount(self) -> None:
         self.store.save_state()
         self.store.defer_save = None
         self._sweep_later = None
         self._rate_later = None
+        self._rivals_later = None
+        if self._write_later is not None:
+            self._write_back()      # a battle edit inside the save delay is not lost
+        self._write_later = None
 
     def ensure_loaded(self) -> None:
         if not self.store.loaded:
             self.store.load()
+        if not self.rivals.loaded:
+            try:
+                self.rivals.load()
+            except Exception as exc:  # noqa: BLE001 - rival teams must not keep the calculator from opening
+                print(f"⚠️ Rival teams could not be read: {exc}")
         self.rail.refresh()
         self._warm_presets()
         self._maybe_sweep()
         self._maybe_rate_team()
+        self._maybe_rate_rivals()
 
     def _warm_presets(self) -> None:
         """Read the tournament builds on a worker while the view is merely open.
@@ -135,6 +169,8 @@ class CalcView(ft.Column):
             self._sync_species_banner()
             self._maybe_sweep()
             self._maybe_rate_team()
+            self._on_defender_changed()
+            self._maybe_rate_rivals()
         elif event[0] == "sweep":
             self.sweep.render()
             self._maybe_sweep()
@@ -177,6 +213,284 @@ class CalcView(ft.Column):
             names.append(f"{species.name if species else 'defender'} as defender")
         if names:
             self.ctx.toast("Loaded " + " and ".join(names), "success")
+
+    def _pref(self, key: str, default):
+        try:
+            return self.ctx.prefs.get(key, default)
+        except Exception:  # noqa: BLE001 - no preferences (tests)
+            return default
+
+    def _species_name(self, canonical_id: str | None) -> str:
+        species = self.store.catalogs.species_for(canonical_id) if canonical_id else None
+        return species.name if species else (canonical_id or "?")
+
+    # -- right column: all opponents | rival team ------------------------------------------------
+
+    def _right(self) -> ft.Control:
+        return self.rivals_panel if self._right_mode == "rival" else self.sweep
+
+    def set_right_mode(self, mode: str) -> None:
+        mode = "rival" if mode == "rival" else "all"
+        for switch in self._switches:
+            switch.selected = [mode]
+        if mode == self._right_mode:
+            return
+        old, self._right_mode = self._right(), mode
+        new = self._right()
+        try:
+            self.ctx.prefs.set(PREF_RIGHT_MODE, mode)
+        except Exception:  # noqa: BLE001
+            pass
+        new.width = old.width
+        for column in (self._wide, self._stack):
+            column.controls = [new if c is old else c for c in column.controls]
+        if mode == "rival":
+            self.rivals_panel.render()
+            self._maybe_rate_rivals()
+        else:
+            self.sweep.render()
+            self._maybe_sweep()
+        try:
+            if self._host.page is not None:
+                self._host.update()
+        except RuntimeError:
+            pass
+
+    def _open_rival(self, rival_team_id) -> None:
+        """Meta's "Open in Calc" after saving a rival team."""
+        self.ensure_loaded()
+        self.rivals.load()
+        self.rivals.set_active(str(rival_team_id) if rival_team_id else None)
+        self.set_right_mode("rival")
+        self.ctx.bus.emit(events.NAVIGATE, "calc")
+
+    def _on_rivals(self) -> None:
+        self._sync_link()
+        self.rivals_panel.render()
+        self._maybe_rate_rivals()
+
+    def _pick_rival(self, slot: int) -> None:
+        team = self.rivals.active
+        if team is None or not 0 <= slot < len(team.members):
+            return
+        self._write_back()      # a pending battle edit belongs to the member loaded before
+        label = "Battle" if team.is_battle else team.name
+        pokemon = replace(team.members[slot].pokemon, source=f"Rival · {label} · slot {slot + 1}")
+        self.store.load_rival(team.rival_team_id, slot, pokemon)
+
+    def _linked_member(self) -> tuple[str, int, RivalMember] | None:
+        link = self.store.rival_link
+        team = self.rivals.get(link[0]) if link else None
+        if link is None or team is None or not 0 <= link[1] < len(team.members):
+            return None
+        return link[0], link[1], team.members[link[1]]
+
+    def _sync_link(self) -> None:
+        linked = self._linked_member()
+        active = self.rivals.active
+        self.rivals_panel.set_linked(linked[1] if linked and active and linked[0] == active.rival_team_id else None)
+        pending = None
+        if linked is not None:
+            team = self.rivals.get(linked[0])
+            if team is not None and not team.is_battle and revealed_fields(linked[2].pokemon, rival_set(self.store.state.right)):
+                pending = self._species_name(linked[2].pokemon.species)
+        self.rivals_panel.set_pending(pending)
+
+    def _on_defender_changed(self) -> None:
+        """A battle member edited in the Defender panel is written back once edits pause; a
+        saved team's member only offers "Save Defender to …"."""
+        linked = self._linked_member()
+        self._sync_link()
+        if linked is None:
+            return
+        team = self.rivals.get(linked[0])
+        if team is None or not team.is_battle:
+            return
+        if self._write_later is not None:
+            self._write_later(None)
+        else:
+            self._write_back()
+
+    def _write_back(self) -> None:
+        linked = self._linked_member()
+        if linked is None:
+            return
+        team = self.rivals.get(linked[0])
+        if team is not None and team.is_battle:
+            self.rivals.sync_member(linked[0], linked[1], self.store.state.right)
+
+    def _rival_action(self, key: str) -> None:
+        team = self.rivals.active
+        if key == "battle":
+            self.open_battle_dialog("preview")
+        elif key == "load":
+            self.open_battle_dialog("presets" if self.rivals.presets else "teams")
+        elif key == "paste":
+            self.open_battle_dialog("paste")
+        elif key == "matrix":
+            self._open_matrix()
+        elif key == "update_member":
+            linked = self._linked_member()
+            if linked is not None:
+                self.rivals.sync_member(linked[0], linked[1], self.store.state.right)
+                self.ctx.toast(f"{self._species_name(linked[2].pokemon.species)} updated in the rival team", "success")
+        elif team is None:
+            return
+        elif key == "use_preset":
+            self._use_preset(team.rival_team_id)
+        elif key == "end_battle":
+            members = list(team.members)
+            self.rivals.end_battle()
+            self.ctx.toast("Battle ended", "info", action="Undo", on_action=lambda: self.rivals.start_battle(members, source=team.source))
+        elif key == "duplicate":
+            copy = self.rivals.duplicate(team.rival_team_id)
+            if copy is not None:
+                self.ctx.toast(f"Duplicated as “{copy.name}”", "success")
+        elif key == "delete":
+            members = list(team.members)
+            self.rivals.delete(team.rival_team_id)
+            self.ctx.toast(f"Deleted “{team.name}”", "info", action="Undo", on_action=lambda: self.rivals.create(team.name, members, source=team.source))
+        elif key in ("rename", "save_battle"):
+            self.ctx.page.run_task(self._name_team, key, team.rival_team_id)
+
+    async def _name_team(self, key: str, rival_team_id: str) -> None:
+        team = self.rivals.get(rival_team_id)
+        if team is None:
+            return
+        if key == "rename":
+            name = await self.ctx.prompt_text("Rename preset", "Preset name", value=team.name, submit_label="Rename")
+            if name:
+                self.rivals.rename(rival_team_id, name)
+            return
+        name = await self.ctx.prompt_text("Save battle as preset", "Preset name", value="", submit_label="Save")
+        if name:
+            saved = self.rivals.save_battle_as(name)
+            if saved is not None:
+                self.ctx.toast(f"Saved preset “{saved.name}”; the battle goes on", "success")
+
+    def open_battle_dialog(self, mode: str = "preview") -> None:
+        from .dialogs.battle_preview import BattleDialog
+
+        page = self.ctx.page
+
+        def start(members: list[RivalMember], source: str, name: str | None) -> None:
+            page.pop_dialog()
+            if name is None:
+                self.rivals.start_battle(members, source=source)
+                self.ctx.toast(f"Battle started: {len(members)} Pokémon", "success")
+            else:
+                self.rivals.create(name, members, source=source)
+                self.ctx.toast(f"Saved preset “{name}”", "success")
+            self.set_right_mode("rival")
+
+        def use(preset_id: str) -> None:
+            page.pop_dialog()
+            self._use_preset(preset_id)
+
+        self.ensure_loaded()
+        team_store = self.store.team_store
+        my_teams: list[tuple] = []
+        if team_store is not None:
+            try:
+                if not getattr(team_store, "teams", None):
+                    team_store.load()
+                my_teams = [(t.team_id, t.name, t.filled) for t in team_store.teams]
+            except Exception as exc:  # noqa: BLE001 - the other sources still work
+                print(f"⚠️ Teams could not be listed: {exc}")
+        catalogs = self.store.catalogs
+        page.show_dialog(BattleDialog(
+            calc_store=self.store, run_in_background=self.ctx.run_in_background, on_start=start, on_close=page.pop_dialog, mode=mode,
+            presets=self.rivals.presets, on_use_preset=use, my_teams=my_teams,
+            load_team=(lambda team_id: rivals_from_team(team_store, catalogs, team_id)) if team_store is not None else None,
+        ))
+
+    def _use_preset(self, preset_id: str) -> None:
+        preset = self.rivals.get(preset_id)
+        battle = self.rivals.use_preset(preset_id)
+        if preset is not None and battle is not None:
+            self.set_right_mode("rival")
+            self.ctx.toast(f"Battling “{preset.name}”: the preset stays as saved", "success")
+
+    def _open_matrix(self) -> None:
+        from .dialogs.team_matrix import TeamMatrixDialog
+
+        team = self.rivals.active
+        if team is None or not team.members:
+            return
+        members = self.store.team_members()
+        if not members:
+            self.ctx.toast("Your active team is empty: pick or build one in Teams", "info")
+            return
+        page = self.ctx.page
+        rivals = [m.pokemon for m in team.members]
+        team_name = getattr(self.store.team_store, "active_team_name", None) or "Your team"
+
+        def pick(slot_key: str, index: int) -> None:
+            page.pop_dialog()
+            member = next((p for k, p in members if k == slot_key), None)
+            if member is not None:
+                self.store.load_pokemon("left", member)
+            self._pick_rival(index)
+
+        dialog = TeamMatrixDialog(team_name=team_name, rival_team_name="Current battle" if team.is_battle else team.name,
+                                  members=members, rivals=rivals, species_name=self._species_name, on_pick=pick, on_close=page.pop_dialog)
+        page.show_dialog(dialog)
+        try:
+            self.ctx.run_in_background(lambda: self.store.team_matrix(rivals), on_done=dialog.set_grid, on_error=dialog.set_error)
+        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
+            dialog.set_grid(self.store.team_matrix(rivals))
+
+    # -- rival cards against the attacker -------------------------------------------------------
+
+    def _rivals_rating_key(self) -> str:
+        team = self.rivals.active
+        return "|".join((self.store.sweep_key(), str(team.rival_team_id if team else None), str(self.rivals.version)))
+
+    def _maybe_rate_rivals(self) -> None:
+        """Rate the rival team against the Attacker once edits pause; only while it is shown."""
+        if self._right_mode != "rival" or self._rivals_running:
+            return
+        key = self._rivals_rating_key()
+        if key == self._rivals_key:
+            return
+        team = self.rivals.active
+        if team is None or not team.members or self.store.species("left") is None:
+            self._rivals_key = key
+            self.rivals_panel.set_ratings((), "")
+            return
+        if self._rivals_later is not None:
+            self._rivals_later(None)
+        else:
+            self._start_rating_rivals()
+
+    def _start_rating_rivals(self) -> None:
+        key = self._rivals_rating_key()
+        team = self.rivals.active
+        if key == self._rivals_key or self._rivals_running or team is None:
+            return
+        self._rivals_running = True
+        self.rivals_panel.set_busy(True)
+        members = [m.pokemon for m in team.members]
+
+        def done(ratings) -> None:
+            self._rivals_running = False
+            self.rivals_panel.set_busy(False)
+            if self._rivals_rating_key() != key:
+                self._maybe_rate_rivals()
+                return
+            self._rivals_key = key
+            attacker = self.store.species("left")
+            self.rivals_panel.set_ratings(ratings, attacker.name if attacker else "")
+
+        def failed(exc: BaseException) -> None:
+            self._rivals_running = False
+            self.rivals_panel.set_busy(False)
+            print(f"⚠️ Rival rating failed: {exc}")
+
+        try:
+            self.ctx.run_in_background(lambda: self.store.rate_rivals(members), on_done=done, on_error=failed)
+        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
+            done(self.store.rate_rivals(members))
 
     # -- opponent sweep ------------------------------------------------------------------------
 
@@ -305,18 +619,19 @@ class CalcView(ft.Column):
             # Inside the stack's single scroll the side columns must not scroll themselves.
             self.rail.set_scrolling(not narrow)
             self.sweep.set_scrolling(not narrow)
+            self.rivals_panel.set_scrolling(not narrow)
             if narrow:
-                self._stack.controls = [self.field, self._pokemon_row, self.rail, self.sweep]
+                self._stack.controls = [self.field, self._pokemon_row, self.rail, self._right()]
                 self._host.content = self._stack
                 self.rail.width = None
-                self.sweep.width = None
+                self.sweep.width = self.rivals_panel.width = None
             else:
                 self._centre.controls = [self.field, self._pokemon_row]
-                self._wide.controls = [self.rail, self._centre, self.sweep]
+                self._wide.controls = [self.rail, self._centre, self._right()]
                 self._host.content = self._wide
         if not narrow:
             self.rail.width = 190 if compact else RAIL_WIDTH
-            self.sweep.width = 270 if compact else SWEEP_WIDTH
+            self.sweep.width = self.rivals_panel.width = 270 if compact else SWEEP_WIDTH
         # Between the side columns a compact window leaves each panel under 300px, which
         # squeezes the HP slider and the ability to nothing: stack them there instead (the
         # summary bar keeps the head-to-head in view).
@@ -335,6 +650,9 @@ class CalcView(ft.Column):
             return True
         if e.ctrl and key == "f":
             return self.attacker.focus_search()
+        if e.ctrl and key == "b":
+            self.open_battle_dialog("preview")
+            return True
         if key == "escape":
             return self.attacker.collapse_cards() | self.defender.collapse_cards()
         return False

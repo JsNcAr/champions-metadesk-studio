@@ -208,6 +208,61 @@ class SweepEntry:
     usage_count: int = 0                  # tournament roster count in active regulation
 
 
+# Fields of a rival member that can be guessed from tournament data before they are seen.
+RIVAL_FIELDS: tuple[str, ...] = ("moves", "item", "ability", "nature", "points")
+
+
+@dataclass(frozen=True)
+class RivalMember:
+    """One Pokémon of a rival team, as the calculator would load it as the Defender.
+
+    ``assumed`` names the fields that came from tournament data and have not been seen:
+    a team entered at team preview starts fully assumed; revealing an item drops "item".
+    """
+
+    pokemon: PokemonState
+    assumed: frozenset[str] = frozenset()
+
+    def to_dict(self) -> dict:
+        return {"pokemon": asdict(self.pokemon), "assumed": sorted(self.assumed)}
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "RivalMember":
+        d = dict(data or {})
+        return cls(PokemonState.from_dict(d.get("pokemon")), frozenset(f for f in d.get("assumed") or () if f in RIVAL_FIELDS))
+
+
+@dataclass(frozen=True)
+class RivalTeam:
+    """A saved rival team (a plan) or the temporary "Current battle" team."""
+
+    rival_team_id: str
+    name: str
+    kind: str = "saved"                  # "saved" | "battle"
+    source: str = ""
+    members: tuple[RivalMember, ...] = ()
+
+    @property
+    def is_battle(self) -> bool:
+        return self.kind == "battle"
+
+    def with_member(self, slot: int, member: RivalMember) -> "RivalTeam":
+        members = list(self.members)
+        members[slot] = member
+        return replace(self, members=tuple(members))
+
+
+def rival_set(p: PokemonState) -> PokemonState:
+    """What a rival member keeps from the Defender panel: its set, HP and status, without
+    this turn's stat stages, crits and applied move effects."""
+    return replace(p, boosts={}, crit=[False, False, False, False], active=[False, False, False, False], ability_on=False)
+
+
+def revealed_fields(old: PokemonState, new: PokemonState) -> set[str]:
+    """The ``RIVAL_FIELDS`` that differ between two states of a rival member."""
+    return {f for f in RIVAL_FIELDS if getattr(old, f) != getattr(new, f)}
+
+
 @dataclass(frozen=True)
 class TeamRating:
     """One of your team members against the rival in the Defender panel.
@@ -306,7 +361,7 @@ def pokemon_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, s
 
 
 __all__ = [
-    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "TERRAINS", "TOGGLE_ABILITIES", "TeamRating", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
+    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "RIVAL_FIELDS", "TERRAINS", "TOGGLE_ABILITIES", "RivalMember", "RivalTeam", "TeamRating", "revealed_fields", "rival_set", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
     "FieldState", "MoveResult", "PokemonState", "SideConditions", "SweepEntry", "classify", "hits_to_ko", "pokemon_from_parsed", "pokemon_from_slot",
     "pokemon_from_species_id",
 ]

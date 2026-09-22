@@ -393,7 +393,8 @@ class PokemonPanel(ft.Container):
     def focus_search(self) -> bool:
         try:
             if self.search.page is not None:
-                self.search.focus()
+                # ``focus`` is a coroutine in Flet 0.85: called bare it never ran.
+                self.search.page.run_task(self.search.focus)
                 return True
         except RuntimeError:
             pass

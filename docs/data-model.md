@@ -237,6 +237,12 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 ### `TournamentSeedMetaRecord` (Table: `tournament_seed_meta`)
 - Tracks tournament seed dataset loading: `id: int` (Primary Key), `seed_version: str`, `total_tournaments: int`, `total_teams: int`, `loaded_at: datetime`
 
+### `RivalTeamRecord` (Table: `rival_teams`)
+- Rival presets to plan against in the calculator (`kind="saved"`), and the temporary team of the battle being played (`kind="battle"`; "Use in battle" copies a preset's members into it): `rival_team_id: UUID` (Primary Key), `name: str` (indexed), `kind: str` (`"saved"` or `"battle"`, indexed; at most one `battle` row exists), `source: str` (e.g. "Meta · Wolfe · Worlds", "Team preview", "Poképaste"), `notes: str`
+- `members: list[dict]` (JSON, up to six): `{"pokemon": <calculator PokemonState as a dict>, "assumed": [<fields>]}`. `assumed` lists which of `moves`, `item`, `ability`, `nature` and `points` were filled from tournament data and have not been seen yet; a battle drops a field from it once you set that field on the Defender
+- `created_at`, `updated_at`, `last_used_at: datetime` (the Calc lists saved teams by last use)
+- A new table: `create_all` adds it to an existing database, no migration step
+
 ---
 
 ## Derived Values

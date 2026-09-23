@@ -132,6 +132,7 @@ def export_team_to_showdown_text(
     box_entries_by_id: dict[UUID, object],
     *,
     points_label: str = "EVs",
+    tera: bool = True,
 ) -> str:
     """Serialize a list of TeamMember domain objects to Showdown paste format.
 
@@ -142,6 +143,8 @@ def export_team_to_showdown_text(
             Poképaste) read stat points from the ``EVs:`` line, so text meant to be pasted
             elsewhere keeps the default. "Stat points" is for display; this app's importer
             reads either.
+        tera: Write the ``Tera Type:`` line. False when the team's format has no
+            Terastallization; the saved value is kept, only the text leaves it out.
 
     Returns:
         Multi-block Showdown text string.  Blocks are separated by ``\\n\\n``.
@@ -166,9 +169,9 @@ def export_team_to_showdown_text(
             lines.append(f"Ability: {member.ability}")
 
         # --- Tera Type ---
-        tera = getattr(member, "tera_type", None)
-        if tera:
-            lines.append(f"Tera Type: {str(tera).strip().capitalize()}")
+        tera_type = getattr(member, "tera_type", None)
+        if tera and tera_type:
+            lines.append(f"Tera Type: {str(tera_type).strip().capitalize()}")
 
         # --- Shiny (omit false) ---
         if getattr(box_entry, "shiny", False):
@@ -563,13 +566,15 @@ def publish_to_pokepast(
     pokepast_provider: "PokepastProvider",
     author: str = "Pokémon Champions Planning Tool",
     notes: str = "",
+    *,
+    tera: bool = True,
 ) -> ShowdownExportResult:
     """Serialize a team and publish it to Pokepast.es.
 
     Returns:
         :class:`ShowdownExportResult` with the generated ``pokepast_url``.
     """
-    text = export_team_to_showdown_text(team_members, box_entries_by_id)
+    text = export_team_to_showdown_text(team_members, box_entries_by_id, tera=tera)
     url = pokepast_provider.publish(
         title=team_name,
         author=author,

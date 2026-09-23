@@ -160,6 +160,7 @@ class TeamRecord(SQLModel, table=True):
     team_id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
     description: str = ""
+    format_id: str | None = None        # domain.formats id; None follows the default format
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
@@ -169,6 +170,7 @@ class TeamRecord(SQLModel, table=True):
             team_id=team.team_id,
             name=team.name,
             description=team.description,
+            format_id=team.format_id,
             created_at=team.created_at,
             updated_at=team.updated_at,
         )
@@ -178,6 +180,7 @@ class TeamRecord(SQLModel, table=True):
             team_id=self.team_id,
             name=self.name,
             description=self.description,
+            format_id=self.format_id,
             members=members or [],
             created_at=self.created_at,
             updated_at=self.updated_at,

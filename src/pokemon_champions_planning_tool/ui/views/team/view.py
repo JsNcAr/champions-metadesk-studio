@@ -8,11 +8,12 @@ import flet as ft
 
 from ....domain.entities.team_member import TeamMember
 from ... import events
+from ....domain.formats import Mechanic
 from ...components import EmptyState, PageHeader, SplitPane, StatusChip
 from ...components.menu_button import menu_button
 from ...context import AppContext
 from ...tasks import grid_tile_aspect, grid_tile_width, is_mounted
-from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Palette, Space
+from ...theme import Accent, DEFAULT_WINDOW_WIDTH, Layout, Palette, Radius, Space
 from .dialogs.assign import AssignDialog
 from .dialogs.export_dialog import ExportDialog
 from .dialogs.import_dialog import ImportDialog
@@ -32,7 +33,7 @@ class TeamView(ft.Column):
     def __init__(self, ctx: AppContext, store: TeamStore | None = None) -> None:
         super().__init__(spacing=Space.MD, expand=True)
         self.ctx = ctx
-        self.store = store or TeamStore(ctx.catalogs)
+        self.store = store or TeamStore(ctx.catalogs, formats=ctx.formats)
         self.focused: int | None = None
         self._loaded = False
 
@@ -43,6 +44,19 @@ class TeamView(ft.Column):
         )
         self._rename = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=18, tooltip="Rename team", on_click=lambda _e: self.ctx.page.run_task(self._rename_team))
         self._health = ft.Row(spacing=Space.XS, tight=True, wrap=True)
+        # The format the team is built for: its mechanics decide which controls the cards show.
+        self._format_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_TERTIARY_CONTAINER, max_lines=1)
+        self._format_menu = ft.PopupMenuButton(
+            tooltip="The format this team is built for",
+            content=ft.Container(
+                content=ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    ft.Icon(ft.Icons.RULE, size=16, color=Palette.ON_TERTIARY_CONTAINER), self._format_label,
+                    ft.Icon(ft.Icons.ARROW_DROP_DOWN, size=18, color=Palette.ON_TERTIARY_CONTAINER),
+                ]),
+                bgcolor=Palette.TERTIARY_CONTAINER, border_radius=Radius.PILL, padding=ft.Padding.only(left=Space.SM, right=Space.XS, top=4, bottom=4),
+            ),
+            items=[],
+        )
         self._import_button = ft.FilledTonalButton("Import", icon=ft.Icons.DOWNLOAD, tooltip="Import a Showdown paste (Ctrl+I)", on_click=lambda _e: self._import())
         self._export_menu = ft.PopupMenuButton(
             content=menu_button("Export", ft.Icons.UPLOAD),
@@ -73,7 +87,7 @@ class TeamView(ft.Column):
         )
         self.header = PageHeader("Teams", icon=ft.Icons.GROUPS, accent=Accent.TEAMS, actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
         self._team_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True,
-                                controls=[self._team_select, self._rename, self._health])
+                                controls=[self._team_select, self._rename, self._format_menu, self._health])
 
         # -- body -------------------------------------------------------------------------------
         callbacks = SlotCallbacks(
@@ -114,6 +128,7 @@ class TeamView(ft.Column):
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.META_SYNCED, lambda _r: self.store.invalidate_partners())
         ctx.bus.on(events.IMPORT_REQUESTED, self._on_import_requested)
+        ctx.bus.on(events.FORMAT_CHANGED, lambda _p: self.store.refresh_format() if self._loaded else None)
 
     # -- lifecycle --------------------------------------------------------------------------------
 
@@ -151,12 +166,13 @@ class TeamView(ft.Column):
             self._render_teams()
         elif kind == "all":
             for card, slot in zip(self.cards, self.store.slots):
-                card.update_from(slot, focused=slot.position == self.focused)
+                card.update_from(slot, focused=slot.position == self.focused, fmt=self.store.active_format)
+            self._render_format()
             self._render_summary()
             self._load_partners()
         elif kind == "slot":
             position = change[1]
-            self.cards[position - 1].update_from(self.store.slot(position), focused=position == self.focused)
+            self.cards[position - 1].update_from(self.store.slot(position), focused=position == self.focused, fmt=self.store.active_format)
             self._load_partners(position)
         elif kind == "summary":
             self._render_summary()
@@ -169,8 +185,29 @@ class TeamView(ft.Column):
         self._empty.visible = not has_team
         self.grid.visible = has_team
         self._rename.visible = has_team
+        self._format_menu.visible = has_team
+        self._render_format()
         self.header.set_caption(self.store.active_team_name if has_team else None)
         self.ctx.bus.emit(events.ACTIVE_TEAM, self.store.active_team_id)
+
+    def _render_format(self) -> None:
+        own = self.store.active_team_format_id
+        fmt = self.store.active_format
+        default = self.store.formats.default()
+        self._format_label.value = f"{fmt.name} · {fmt.mechanics_label}"
+        self._format_menu.tooltip = ("This team follows the default format (Settings)" if own is None else "This team's own format") + f"\n{fmt.description}".rstrip()
+        items = [ft.PopupMenuItem(content=ft.Text(f"Default format ({default.name})"), checked=own is None,
+                                  on_click=lambda _e: self._set_format(None)), ft.PopupMenuItem()]
+        items += [ft.PopupMenuItem(content=ft.Text(f"{f.name} · {f.mechanics_label}"), checked=own == f.format_id,
+                                   on_click=lambda _e, fid=f.format_id: self._set_format(fid)) for f in self.store.formats.all()]
+        items += [ft.PopupMenuItem(), ft.PopupMenuItem(content=ft.Text("Manage formats in Settings…"), icon=ft.Icons.SETTINGS_OUTLINED,
+                                                        on_click=lambda _e: self.ctx.bus.emit(events.NAVIGATE, "settings"))]
+        self._format_menu.items = items
+
+    def _set_format(self, format_id: str | None) -> None:
+        if format_id != self.store.active_team_format_id:
+            self.store.set_format(format_id)
+            self.ctx.toast(f"Built for {self.store.active_format.name}", "success")
 
     def _render_summary(self) -> None:
         summary = self.store.summary
@@ -388,7 +425,7 @@ class TeamView(ft.Column):
         self.ctx.page.show_dialog(ItemPickerDialog(
             catalogs=self.store.catalogs, species_name=slot.species_name,
             current_item_id=slot.item.canonical_id if slot.item else None,
-            on_pick=pick, on_close=self.ctx.page.pop_dialog,
+            on_pick=pick, on_close=self.ctx.page.pop_dialog, mega=self.store.active_format.has(Mechanic.MEGA),
         ))
 
     def _open_spread(self, position: int) -> None:

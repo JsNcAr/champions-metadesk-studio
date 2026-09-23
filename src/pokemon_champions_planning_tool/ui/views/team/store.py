@@ -21,6 +21,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
+from ....domain.formats import Format, Mechanic
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_move import PokemonMove
 from ....domain.entities.team import Team
@@ -50,6 +51,7 @@ from ...move_options import (  # noqa: F401 - MoveOptions re-exported for the pi
     invalidate_move_usage,
     move_options_for,
 )
+from ...formats import FormatRegistry
 from .summary import EMPTY_SUMMARY, SlotModel, SlotMove, TeamSummary, summarize, validate_slot
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -62,12 +64,14 @@ class TeamRow:
     team_id: UUID
     name: str
     filled: int
+    format_id: str | None = None      # None: follows the default format
 
 
 class TeamStore:
-    def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory = get_session) -> None:
+    def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory = get_session, *, formats: FormatRegistry | None = None) -> None:
         self._sf = session_factory
         self.catalogs = catalogs or Catalogs()
+        self.formats = formats or FormatRegistry()
         self.teams: list[TeamRow] = []
         self.active_team_id: UUID | None = None
         self.active_team_name: str = ""
@@ -96,6 +100,7 @@ class TeamStore:
             team_repo = TeamRepository(s)
             record = team_repo.get(team_id)
             name = record.name if record else ""
+            fmt = self.formats.for_team(record.format_id if record else None)
             members = team_repo.get_members(team_id)
             entries = BoxRepository(s).list_entries_by_ids(m.box_entry_id for m in members)
             mega_repo = MegaEvolutionRepository(s)
@@ -123,8 +128,8 @@ class TeamStore:
             slot.item = self.catalogs.item_for(m.item)
             slot.moves = self._resolve_moves(slot)
         for slot in slots:
-            slot.validation = validate_slot(slot, slots)
-        return name, slots, summarize(slots)
+            slot.validation = validate_slot(slot, slots, fmt)
+        return name, slots, summarize(slots, fmt)
 
     def load(self, team_id: UUID | None = None) -> None:
         """Reload the team list and the active team (defaults to the first team)."""
@@ -134,7 +139,7 @@ class TeamStore:
             mega_repo = MegaEvolutionRepository(s)
             records = team_repo.list_all()
             counts = team_repo.member_counts()
-            self.teams = [TeamRow(r.team_id, r.name, counts.get(r.team_id, 0)) for r in records]
+            self.teams = [TeamRow(r.team_id, r.name, counts.get(r.team_id, 0), r.format_id) for r in records]
 
             wanted = team_id or self.active_team_id
             if wanted is None or not any(t.team_id == wanted for t in self.teams):
@@ -171,11 +176,40 @@ class TeamStore:
             slot.megas = megas_by_species.get(entry.pokemon.species_name or entry.pokemon.canonical_id, [])
             slot.item = self.catalogs.item_for(m.item)
             slot.moves = self._resolve_moves(slot)
-        for slot in self.slots:
-            slot.validation = validate_slot(slot, self.slots)
-        self.summary = summarize(self.slots)
+        self._validate()
         self._notify(("teams",))
         self._notify(("all",))
+
+    # -- format ---------------------------------------------------------------------------------
+
+    @property
+    def active_team_format_id(self) -> str | None:
+        """The active team's own format id (None: it follows the default)."""
+        return next((t.format_id for t in self.teams if t.team_id == self.active_team_id), None)
+
+    @property
+    def active_format(self) -> Format:
+        """The rules the active team is built for: its own format or the default one."""
+        return self.formats.for_team(self.active_team_format_id)
+
+    def set_format(self, format_id: str | None) -> None:
+        """Build the active team for another format (None: follow the default)."""
+        if self.active_team_id is None:
+            return
+        with self._sf() as s:
+            TeamRepository(s).set_format(self.active_team_id, format_id)
+        self.load(self.active_team_id)
+
+    def refresh_format(self) -> None:
+        """The default or a custom format changed: re-check the team under its rules."""
+        self._validate()
+        self._notify(("all",))
+
+    def _validate(self) -> None:
+        fmt = self.active_format
+        for slot in self.slots:
+            slot.validation = validate_slot(slot, self.slots, fmt)
+        self.summary = summarize(self.slots, fmt)
 
     def slot(self, position: int) -> SlotModel:
         return self.slots[position - 1]
@@ -247,9 +281,12 @@ class TeamStore:
             )
             for m in (s.member for s in self.slots if s.member is not None)
         ]
+        format_id = self.active_team_format_id
         new_id = self.create_team(name)
         with self._sf() as s:
             repo = TeamRepository(s)
+            if format_id is not None:
+                repo.set_format(new_id, format_id)
             for member in copies:
                 repo.upsert_member(new_id, member)
         self.load(new_id)
@@ -266,9 +303,7 @@ class TeamStore:
         slot = self.slot(position)
         slot.item = self.catalogs.item_for(slot.member.item) if slot.member else None
         slot.moves = self._resolve_moves(slot)
-        for s in self.slots:
-            s.validation = validate_slot(s, self.slots)
-        self.summary = summarize(self.slots)
+        self._validate()
         self._notify(("slot", position))
         self._notify(("summary",))
 
@@ -402,7 +437,7 @@ class TeamStore:
         item = self.catalogs.item_for(item_id) if item_id else None
         form = slot.member.selected_form or "base"
         is_currently_mega = slot.form is not None and slot.form.is_mega
-        if item is not None and item.target_species:
+        if item is not None and item.target_species and self.active_format.has(Mechanic.MEGA):
             if item.target_species.lower() == slot.species_name.lower():
                 form = self._mega_form_for(slot, item) or form
         elif is_currently_mega:
@@ -455,7 +490,7 @@ class TeamStore:
         """The active team as a Showdown paste. Keep ``EVs`` for text that leaves the app."""
         members = [s.member for s in self.slots if s.member is not None]
         entries = {s.member.box_entry_id: s.entry for s in self.slots if s.member is not None and s.entry is not None}
-        return export_team_to_showdown_text(members, entries, points_label=points_label)
+        return export_team_to_showdown_text(members, entries, points_label=points_label, tera=self.active_format.has(Mechanic.TERA))
 
     def partners(self, position: int, limit: int = 3) -> list[PartnerRecommendation]:
         """Blocking (run in the background): tournament teammates for the slot's species."""
@@ -546,4 +581,4 @@ class TeamStore:
         members = [s.member for s in self.slots if s.member is not None]
         entries = {s.member.box_entry_id: s.entry for s in self.slots if s.member is not None and s.entry is not None}
         return publish_to_pokepast(members, entries, team_name=self.active_team_name, team_id=str(self.active_team_id),
-                                   pokepast_provider=PokepastProvider(), author=author, notes=notes)
+                                   pokepast_provider=PokepastProvider(), author=author, notes=notes, tera=self.active_format.has(Mechanic.TERA))

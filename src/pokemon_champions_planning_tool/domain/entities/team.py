@@ -18,6 +18,7 @@ class Team:
     name: str
     team_id: UUID = field(default_factory=uuid4)
     description: str = ""
+    format_id: str | None = None        # None: the team follows the default format (Settings)
     members: list[TeamMember] = field(default_factory=list)
     created_at: datetime = field(default_factory=_utc_now)
     updated_at: datetime = field(default_factory=_utc_now)

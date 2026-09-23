@@ -29,9 +29,11 @@ class ItemPickerDialog(ft.AlertDialog):
         current_item_id: str | None,
         on_pick: Callable[[str | None], None],
         on_close: Callable[[], None],
+        mega: bool = True,
     ) -> None:
         super().__init__(modal=True)
         self._catalogs = catalogs
+        self._mega = mega           # False: the team's format has no Mega Evolution, so no Mega Stones
         self._species = (species_name or "").lower()
         self._on_pick = on_pick
         self._on_close = on_close
@@ -100,6 +102,8 @@ class ItemPickerDialog(ft.AlertDialog):
             source = [i for i in source if q in i.display_name.lower() or q in (i.short_effect or "").lower()]
         compatible, others, incompatible = [], [], []
         for item in sorted(source, key=lambda i: i.display_name.lower()):
+            if item.target_species and not self._mega:
+                continue
             if item.target_species:
                 (compatible if item.target_species.lower() == self._species else incompatible).append(item)
             else:

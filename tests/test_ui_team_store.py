@@ -208,8 +208,16 @@ class TestTeamStore(_TeamStoreCase):
         self.assertEqual((member.tera_type, member.notes), ("grass", "lead"))
         text = self.store.export_text()
         self.assertIn("Charizard", text)
-        self.assertIn("Tera Type: Grass", text)
+        self.assertNotIn("Tera Type", text, "Champions has no Terastallization: the line is left out, the value kept")
         self.assertIn("- Protect", text)
+        from dataclasses import replace
+
+        from pokemon_champions_planning_tool.domain.formats import BUILTIN_FORMATS, Mechanic, custom_copy
+
+        tera = self.store.formats.save_custom(replace(custom_copy(BUILTIN_FORMATS[0], "custom-tera", "With Tera"),
+                                                      mechanics=frozenset({Mechanic.MEGA, Mechanic.TERA})))
+        self.store.set_format(tera.format_id)
+        self.assertIn("Tera Type: Grass", self.store.export_text(), "a format with Tera writes it")
 
     def test_clear_restore_swap_rename_delete(self):
         self.store.create_team("Sun")

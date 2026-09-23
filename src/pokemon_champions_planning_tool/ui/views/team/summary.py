@@ -12,6 +12,7 @@ from typing import Literal
 
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
+from ....domain.formats import BUILTIN_FORMATS, Format, Mechanic
 from ....domain.moves import MoveInfo
 from ....domain.pokemon_identity import format_display_name
 from ....domain.entities.team_member import TeamMember
@@ -220,15 +221,17 @@ def team_items(slots: list[SlotModel], *, except_position: int | None = None) ->
     return [s.item for s in slots if s.item is not None and s.position != except_position]
 
 
-def validate_slot(slot: SlotModel, slots: list[SlotModel]) -> ValidationResult | None:
-    """Guardrails for one slot against the rest of the team (the cross-slot check the
-    legacy UI hard-disabled with `if False`)."""
+def validate_slot(slot: SlotModel, slots: list[SlotModel], fmt: Format | None = None) -> ValidationResult | None:
+    """Guardrails for one slot against the rest of the team, under the team's format
+    (Champions by default: Mega Evolution, one Mega per team)."""
     if slot.entry is None or slot.item is None:
         return None
-    return validate_item_assignment(slot.item, species_name=slot.species_name, team_items=team_items(slots, except_position=slot.position))
+    fmt = fmt or BUILTIN_FORMATS[0]
+    return validate_item_assignment(slot.item, species_name=slot.species_name, team_items=team_items(slots, except_position=slot.position),
+                                    mega=fmt.has(Mechanic.MEGA), one_mega_per_team=fmt.one_mega_per_team)
 
 
-def summarize(slots: list[SlotModel]) -> TeamSummary:
+def summarize(slots: list[SlotModel], fmt: Format | None = None) -> TeamSummary:
     filled = [s for s in slots if s.filled]
     if not filled:
         return EMPTY_SUMMARY
@@ -247,17 +250,21 @@ def summarize(slots: list[SlotModel]) -> TeamSummary:
     mega_stones = sum(1 for s in filled if s.item is not None and s.item.target_species)
     planned = sum(1 for s in filled if s.is_planned)
 
+    fmt = fmt or BUILTIN_FORMATS[0]
     checks: list[HealthCheck] = []
     if len(filled) < 6:
         checks.append(HealthCheck("info", f"{len(filled)}/6", f"{6 - len(filled)} empty slot{'s' if 6 - len(filled) != 1 else ''}"))
     else:
         checks.append(HealthCheck("ok", "6/6", "Full team"))
-    if duplicates:
+    if duplicates and fmt.item_clause:
         names = ", ".join(next(s.item.display_name for s in filled if s.item and s.item.canonical_id == d) for d in duplicates)
         checks.append(HealthCheck("error", "Duplicate items", f"Held twice: {names}. Item Clause allows one of each."))
-    else:
+    elif fmt.item_clause:
         checks.append(HealthCheck("ok", "Items unique", "No duplicate held items"))
-    if mega_stones > 1:
+    if not fmt.has(Mechanic.MEGA):
+        if mega_stones:
+            checks.append(HealthCheck("warn", f"{mega_stones} Mega Stone{'s' if mega_stones != 1 else ''}", "This team's format has no Mega Evolution"))
+    elif mega_stones > 1 and fmt.one_mega_per_team:
         checks.append(HealthCheck("warn", f"{mega_stones} Mega Stones", "Only one Pokémon per team may Mega Evolve"))
     elif mega_stones == 1:
         checks.append(HealthCheck("ok", "1 Mega Stone", "One Mega Evolution available"))

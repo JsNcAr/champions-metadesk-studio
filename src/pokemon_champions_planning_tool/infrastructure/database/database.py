@@ -84,7 +84,7 @@ from sqlalchemy import text
 _DB_INITIALIZED: set[str] = set()
 
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12   # 12: teams.format_id
 
 
 def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
@@ -131,6 +131,8 @@ def initialize_database(database_filename: str = DEFAULT_DATABASE_FILENAME):
                 "CREATE INDEX IF NOT EXISTS ix_tournament_teams_division ON tournament_teams (division);",
                 # team_members — Terastallization type per slot
                 "ALTER TABLE team_members ADD COLUMN tera_type VARCHAR;",
+                # teams — the format a team is built for (None: the default format)
+                "ALTER TABLE teams ADD COLUMN format_id VARCHAR;",
                 # team_members — Champions stat points (replaces the mainline EV/IV spread)
                 "ALTER TABLE team_members ADD COLUMN points JSON NOT NULL DEFAULT '{}';",
                 # moves — damage-formula fields; move_catalog_meta — schema version forcing a re-sync

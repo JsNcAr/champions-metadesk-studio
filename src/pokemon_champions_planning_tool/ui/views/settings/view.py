@@ -14,6 +14,7 @@ from ...components import KeyValueList, PageHeader, Panel, SectionHeader
 from ...context import AppContext
 from ...format import absolute_time, plural, relative_time
 from ...theme import Accent, IconSize, Palette, Radius, Space
+from .format_panel import FormatDialog, FormatPanel
 from .store import SettingsStatus, SettingsStore
 
 _MAX_WIDTH = 720
@@ -112,8 +113,9 @@ class SettingsView(ft.Column):
 
         self.about = KeyValueList(self._about_rows())
 
+        self.formats = FormatPanel(registry=ctx.formats, on_edit=self._edit_format, on_delete=self._delete_format, on_default=self._set_default_format)
         self._format_dropdown = ft.Dropdown(
-            label="Battle format",
+            label="Tournament filter",
             value=self.store.get_battle_format_preference(),
             options=[
                 ft.DropdownOption(key="doubles", text="Doubles only (VGC default)"),
@@ -153,6 +155,7 @@ class SettingsView(ft.Column):
                                 self.row_health,
                             ]
                         ),
+                        self.formats,
                         Panel(
                             [
                                 SectionHeader("Tournament preferences"),
@@ -180,6 +183,7 @@ class SettingsView(ft.Column):
         ]
 
         ctx.bus.on(events.META_SYNCED, lambda _payload: self.refresh())
+        ctx.bus.on(events.FORMAT_CHANGED, lambda _payload: self.formats.render())
         ctx.bus.on(events.SYNC_PROGRESS, lambda p: self._on_sync_progress(p))
 
     # -- lifecycle ----------------------------------------------------------------------
@@ -227,6 +231,29 @@ class SettingsView(ft.Column):
         self.ctx.bus.emit(events.BATTLE_FORMAT_CHANGED, val)
         labels = {"doubles": "Doubles only", "all": "All formats", "singles": "Singles only"}
         self.ctx.toast(f"Tournament filter set to {labels.get(val, val)}", "success")
+
+    # -- formats --------------------------------------------------------------------------
+
+    def _set_default_format(self, format_id: str) -> None:
+        registry = self.ctx.formats
+        if format_id and format_id != registry.default().format_id:
+            registry.set_default(format_id)
+            self.ctx.toast(f"Default format: {registry.default().name}", "success")
+
+    def _edit_format(self, fmt) -> None:
+        page = self.ctx.page
+
+        def saved(new) -> None:
+            page.pop_dialog()
+            self.ctx.toast(f"Saved format “{new.name}”", "success")
+
+        page.show_dialog(FormatDialog(registry=self.ctx.formats, fmt=fmt, on_saved=saved, on_close=page.pop_dialog))
+
+    def _delete_format(self, fmt) -> None:
+        registry = self.ctx.formats
+        registry.delete_custom(fmt.format_id)
+        self.ctx.toast(f"Deleted format “{fmt.name}”; its teams follow the default", "info", action="Undo",
+                       on_action=lambda: registry.save_custom(fmt))
 
     # -- syncing ------------------------------------------------------------------------
 

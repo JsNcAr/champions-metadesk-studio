@@ -23,6 +23,7 @@ from ....domain.damage.util import get_final_speed
 from ....domain.damage.state import FieldState as EngineFieldState, Mon
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_stats import PokemonStats
+from ....domain.formats import BUILTIN_FORMATS, Format, Mechanic
 from ....domain.species import SpeciesInfo
 from ....domain.stat_calc import MAX_POINTS_PER_STAT, MAX_POINTS_TOTAL, champions_stats, default_points_for_nature, points_total
 from ....domain.type_chart import defensive_multiplier
@@ -246,12 +247,13 @@ def matchup(you: PokemonState, you_species: SpeciesInfo, rival: PokemonState, ri
 
 class CalcStore:
     def __init__(self, catalogs: Catalogs | None = None, session_factory: SessionFactory | None = get_session, *, prefs: Any = None,
-                 calculate_fn: Callable | None = None, team_store: Any = None) -> None:
+                 calculate_fn: Callable | None = None, team_store: Any = None, formats: Any = None) -> None:
         self.catalogs = catalogs or Catalogs()
         self._sf = session_factory
         self._prefs = prefs
         self._calc = calculate_fn or calculate
         self.team_store = team_store
+        self.formats = formats          # FormatRegistry; the default format sets the mechanics shown
         self.state = CalcState()
         self.results = CalcResults()
         self.sweep: tuple[SweepEntry, ...] = ()
@@ -277,6 +279,21 @@ class CalcStore:
         # Rival teams: which member the Defender came from, and matchups cached per pair.
         self.rival_link: tuple[str, int] | None = None
         self._pair_cache: dict[str, TeamRating] = {}
+
+    @property
+    def format(self) -> Format:
+        """The default format: whether Mega forms are offered, Singles or Doubles on reset."""
+        try:
+            return self.formats.default() if self.formats is not None else BUILTIN_FORMATS[0]
+        except Exception:  # noqa: BLE001 - a broken registry falls back to Champions
+            return BUILTIN_FORMATS[0]
+
+    @property
+    def mega_enabled(self) -> bool:
+        return self.format.has(Mechanic.MEGA)
+
+    def _fresh_state(self) -> CalcState:
+        return CalcState(field=FieldState(game_type=self.format.game_type))
 
     @property
     def session_factory(self) -> SessionFactory | None:
@@ -307,7 +324,9 @@ class CalcStore:
                 self.sweep_sort = str(self._prefs.get(PREF_SWEEP_SORT, "usage"))
                 self.sweep_regulation = str(self._prefs.get(PREF_SWEEP_REGULATION, "latest"))
             except Exception:  # noqa: BLE001 - a corrupt preference must not break the view
-                self.state = CalcState()
+                self.state = self._fresh_state()
+            if self._prefs.get(PREF_STATE, None) is None:
+                self.state = self._fresh_state()
         self._recompute(persist=False)
 
     def _apply_ability_field(self, ability: str | None, *, force: bool = False) -> None:
@@ -685,7 +704,7 @@ class CalcStore:
             self.set_pokemon(side, item=clean_item)
             return
 
-        mega_cid = self.catalogs.mega_for_item(p.species, clean_item)
+        mega_cid = self.catalogs.mega_for_item(p.species, clean_item) if self.mega_enabled else None
         if mega_cid and mega_cid != p.species:
             self.switch_form(side, mega_cid)
             self.set_pokemon(side, item=clean_item)
@@ -818,7 +837,7 @@ class CalcStore:
         """Clear both Pokémon and the field; returns the previous state for Undo."""
         previous = self.state
         self.rival_link = None
-        self.state = CalcState()
+        self.state = self._fresh_state()
         self._commit()
         return previous
 

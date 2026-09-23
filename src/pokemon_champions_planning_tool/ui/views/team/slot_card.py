@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import flet as ft
 
+from ....domain.formats import BUILTIN_FORMATS, Format, Mechanic
 from ....domain.type_chart import TYPES
 from ....services.tournament_service import PartnerRecommendation
 from ...components import Sprite, StatusChip
@@ -238,8 +239,9 @@ class SlotCard(ft.Container):
 
     # -- model -> controls ------------------------------------------------------------------------
 
-    def update_from(self, slot: SlotModel, *, focused: bool = False) -> None:
+    def update_from(self, slot: SlotModel, *, focused: bool = False, fmt: Format | None = None) -> None:
         self._focused = focused
+        fmt = fmt or BUILTIN_FORMATS[0]
         self._filled = slot.filled
         if not slot.filled or slot.form is None:
             self._inner.content = self._empty
@@ -263,7 +265,9 @@ class SlotCard(ft.Container):
         self._menu.items = self._menu_items()
 
         choices = slot.form_choices()
-        self._form.visible = len(choices) > 1
+        # Mechanic controls show only when the team's format has the mechanic.
+        self._form.visible = len(choices) > 1 and fmt.has(Mechanic.MEGA)
+        self._tera.visible = fmt.has(Mechanic.TERA)
         self._form.segments = [ft.Segment(value=c.form_id, label=ft.Text(c.label if not c.is_mega else " ".join(c.label.replace(pokemon.display_name, "").split()) or c.label)) for c in choices]
         self._form.selected = [form.form_id]
 
@@ -307,7 +311,7 @@ class SlotCard(ft.Container):
             self._guardrail.show(v.error, "error")
         elif v is not None and v.warning:
             self._guardrail.show(v.warning, "warning")
-        elif v is not None and v.unlocked_form:
+        elif v is not None and v.unlocked_form and fmt.has(Mechanic.MEGA):
             self._guardrail.show(f"Unlocks {form.label if form.is_mega else 'Mega Evolution'}", "info")
         else:
             self._guardrail.hide()

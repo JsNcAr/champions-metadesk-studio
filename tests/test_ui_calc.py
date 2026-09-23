@@ -309,22 +309,34 @@ class TestCalcView(_Base):
         self.assertIn("%", bar._left._pct.value)
         self.assertEqual(bar._right._move.value, "Flare Blitz")
         self.assertIn("Incineroar moves first", bar._speed.value)
-        self.view.field.tiles["trick_room"].on_click(None)
+        self.view.field.pick("trick_room", None)
         self.assertIn("Kingambit moves first (Trick Room)", bar._speed.value)
+        opened = []
+        self.view.attacker.expand_move = opened.append
+        bar._open("left")
+        self.assertEqual(opened, [bar._best["left"].index], "clicking the best hit opens that move")
 
-    def test_moves_come_before_the_spread_and_modifiers_are_summarised(self):
+    def test_moves_first_then_build_and_stages_tabs(self):
         self._load_pair()
         panel = self.view.attacker
-        controls = panel.content.controls
-        self.assertLess(controls.index(panel.cards[0]), controls.index(panel._spread_body), "results first")
-        self.assertLess(controls.index(panel._spread_body), controls.index(panel._mods_body))
-        self.assertFalse(panel._mods_body.visible, "stages & status start collapsed")
+        self.assertEqual(panel.tab, "moves", "results first")
+        self.assertTrue(panel._moves_body.visible)
+        self.assertFalse(panel._build_body.visible or panel._stages_body.visible)
         self.store.set_boost("left", "attack", 2)
         self.store.set_pokemon("left", status="brn")
-        self.assertEqual(panel._mods_header._status.value, "+2 Atk · Burned", "a collapsed section still shows what is active")
-        panel._toggle_mods()
-        self.assertTrue(panel._mods_body.visible)
-        self.assertTrue(self.store.section_open("mods", False), "remembered")
+        self.assertEqual(panel.tab_bar.labels["stages"].value, "Stages · 2", "the tab says what it holds")
+        self.assertEqual(panel.tab_bar.tabs["stages"].tooltip, "+2 Atk · Burned")
+        panel.select_tab("stages")
+        self.assertTrue(panel._stages_body.visible)
+        self.assertFalse(panel._moves_body.visible)
+        self.assertEqual(self.prefs.get("calc.tabs"), {"left": "stages"}, "remembered")
+        self.assertTrue(self.view.handle_key(SimpleNamespace(key="2", ctrl=False, shift=False, alt=True, meta=False)))
+        self.assertEqual((self.view.attacker.tab, self.view.defender.tab), ("build", "build"))
+        self.assertTrue(panel._build_bench.controls, "the Build tab shows the best move's benchmarks")
+        self.assertIn("Kowtow Cleave", panel._build_bench.controls[0].value)
+        serialise(self.view)
+        again = CalcView(self.ctx, self.store)
+        self.assertEqual(again.attacker.tab, "build", "the tab comes back")
 
     def test_fill_with_top_moves(self):
         self.store.load_species("left", "kingambit")
@@ -345,14 +357,14 @@ class TestCalcView(_Base):
         panel = self.view.attacker
         type_chip = panel._types.controls[0]
         refreshed = []
-        self.view.rail.refresh_team = lambda: refreshed.append(1)
+        self.view.team_strip.refresh_team = lambda: refreshed.append(1)
         self.store.toggle_crit("left", 0)
         self.assertIs(panel._types.controls[0], type_chip, "a crit toggle leaves the identity block alone")
         self.assertTrue(self.store.state.left.crit[0])
         self.assertTrue(panel.cards[0]._crit.selected, "but the card shows it")
-        self.assertEqual(refreshed, [], "and the rail is not rebuilt")
+        self.assertEqual(refreshed, [], "and the team strip is not rebuilt")
         self.store.load_species("left", "incineroar")
-        self.assertEqual(refreshed, [1], "a different attacker moves the rail highlight")
+        self.assertEqual(refreshed, [1], "a different attacker moves the strip highlight")
 
     def test_mounted_view_defers_saving_and_the_sweep(self):
         self.view.did_mount()   # what Flet calls once the view is on a live page
@@ -412,39 +424,49 @@ class TestCalcView(_Base):
         self.assertFalse(self.store.toggle_move_effect("right", 3), "unknown status moves have no toggle")
         self.assertFalse(self.store.toggle_move_effect("left", 0), "damaging moves have no effect toggle")
 
-    def test_field_strip_and_speed_order(self):
+    def test_field_bar_side_conditions_and_speed_order(self):
         self._load_pair()
-        self.view.field.tiles["weather:Sun"].on_click(None)
+        field = self.view.field
+        self.assertEqual(field.weather.content.content.controls[1].value, "Weather", "nothing set: the menu is named")
+        field.pick("weather", "Sun")
         self.assertEqual(self.store.state.field.weather, "Sun")
-        self.assertTrue(self.view.field.tiles["weather:Sun"].active)
-        self.view.field.tiles["weather:Sun"].on_click(None)
+        self.assertEqual(field.weather.content.content.controls[1].value, "Sun", "the menu shows what is set")
+        field.pick("weather", "none")
         self.assertEqual(self.store.state.field.weather, "none")
-        self.view.field.tiles["singles"].on_click(None)
+        field.pick("game_type", "singles")
         self.assertEqual(self.store.state.field.game_type, "singles")
-        self.view.field._toggle_side("right", "reflect")
-        self.view.field._cycle_spikes("right")
-        self.view.field._cycle_spikes("right")
+        their = self.view.defender.conditions
+        their.toggle("reflect")
+        their.add_spikes()
+        their.add_spikes()
         self.assertEqual((self.store.state.field.right.reflect, self.store.state.field.right.spikes), (True, 2))
-        self.assertEqual(self.view.field.side_chips[("right", "spikes")].label.value, "Spikes ×2")
+        self.assertEqual(their.chips["spikes"].label.value, "Spikes ×2")
+        self.assertIn("reflect", their.chips, "their side's conditions sit under the Defender")
+        self.assertNotIn("reflect", self.view.attacker.conditions.chips)
         self.assertEqual(self.store.speed_order(), "right", "Incineroar (80) outspeeds Kingambit (50)")
-        self.view.field.tiles["trick_room"].on_click(None)
+        field.pick("trick_room", None)
         self.assertEqual(self.store.speed_order(), "left")
-        self.view.field.tiles["tailwind_left"].on_click(None)
+        self.assertEqual(field.rooms.content.content.controls[1].value, "Trick Room")
+        self.view.attacker.conditions.toggle("tailwind")
         self.assertGreater(self.store.speed("left"), 102)
+        self.store.set_pokemon("left", ability="Sand Stream")
+        self.assertIn("Kingambit's Sand Stream", field.weather.tooltip, "an ability's weather says where it came from")
         serialise(self.view)
 
     def test_singles_hides_and_drops_doubles_only_conditions(self):
         self._load_pair()
         self.store.set_side_conditions("left", helping_hand=True, friend_guard=True, reflect=True)
-        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
-        self.view.field.tiles["singles"].on_click(None)
+        mine = self.view.attacker.conditions
+        self.assertIn("helping_hand", mine.chips)
+        self.view.field.pick("game_type", "singles")
         left = self.store.state.field.left
         self.assertEqual((left.helping_hand, left.friend_guard, left.reflect), (False, False, True), "only the doubles-only ones go")
-        self.assertFalse(self.view.field.side_chips[("left", "helping_hand")].visible)
-        self.assertFalse(self.view.field.side_chips[("right", "friend_guard")].visible)
-        self.assertTrue(self.view.field.side_chips[("left", "reflect")].visible)
-        self.view.field.tiles["doubles"].on_click(None)
-        self.assertTrue(self.view.field.side_chips[("left", "helping_hand")].visible)
+        self.assertNotIn("helping_hand", mine.chips)
+        self.assertIn("reflect", mine.chips)
+        offered = [item.content.value for item in self.view.defender.conditions.add.items]
+        self.assertNotIn("Friend Guard", offered, "Singles does not offer them")
+        self.view.field.pick("game_type", "doubles")
+        self.assertIn("Helping Hand", [item.content.value for item in mine.add.items])
 
     def test_clear_resets_conditions_and_modifiers_but_keeps_the_pokemon(self):
         self._load_pair()
@@ -487,8 +509,11 @@ class TestCalcView(_Base):
         self.assertEqual(self.store.state.left.status, "brn")
         self.view.attacker._hp_typed("90")
         self.assertEqual(self.store.cur_hp("left"), 90)
-        self.view.attacker._toggle_spread()
-        self.assertFalse(self.view.attacker._spread_body.visible)
+        self.assertFalse(self.view.attacker._search_row.visible, "a loaded Pokémon hides the search")
+        self.view.attacker.open_search()
+        self.assertTrue(self.view.attacker._search_row.visible)
+        self.assertTrue(self.view.handle_key(SimpleNamespace(key="Escape", ctrl=False, shift=False, alt=False, meta=False)))
+        self.assertFalse(self.view.attacker._search_row.visible, "Escape closes it")
         serialise(self.view)
 
     def test_rail_and_sweep(self):
@@ -514,25 +539,32 @@ class TestCalcView(_Base):
         card.on_click(None)
         self.assertEqual(self.store.state.right.species, card.sprite.tooltip or self.store.state.right.species)
         self.assertTrue(self.store.state.right.source.startswith("Opponents"))
-        self.assertEqual(self.view.rail._team.controls[0].value, "No team yet — build one in Teams.")
+        self.assertEqual(self.view.team_strip._row.controls[0].value, "No team yet — build one in Teams.")
         serialise(self.view)
 
     def test_resize_and_request(self):
         self.view.handle_resize(1000, 700)
         self.assertIs(self.view._host.content, self.view._stack)
-        self.assertIsNone(self.view.rail.width)
-        self.assertIsNone(self.view.rail.content.scroll, "inside the stack's scroll the rail must not scroll itself")
+        self.assertIsNone(self.view.side_panel.width)
+        self.assertIsNone(self.view.sweep._list.scroll, "inside the stack's scroll the lists must not scroll themselves")
         self.assertFalse(self.view.sweep._list.expand)
         serialise(self.view)
         self.view.handle_resize(1180, 820)
-        self.assertEqual(self.view.attacker.col, {"xs": 12}, "compact: the panels stack")
+        self.assertFalse(self.view.side_panel.visible, "untouched, the side panel starts closed on a laptop-sized window")
+        self.assertEqual(self.view.attacker.col, {"xs": 6}, "so the two Pokémon sit side by side")
+        self.view.set_side_open(True)
+        self.assertEqual(self.view.attacker.col, {"xs": 12}, "opened by hand, 1180 is too narrow for two columns beside it")
+        self.view.set_side_open(False)
+        self.assertEqual(self.view.attacker.col, {"xs": 6})
+        self.assertFalse(self.prefs.get("calc.side_open"), "the choice is remembered")
+        self.assertTrue(self.view.handle_key(SimpleNamespace(key="Backslash", ctrl=True, shift=False, alt=False, meta=False)))
+        self.assertTrue(self.view.side_panel.visible, "Ctrl+\\ brings it back")
         self.view.handle_resize(1440, 900)
         self.assertIs(self.view._host.content, self.view._wide)
-        self.assertEqual(self.view.sweep.width, 300)
-        self.assertEqual(self.view.attacker.col, {"xs": 12, "lg": 6})
-        self.assertIsNotNone(self.view.rail.content.scroll, "wide: each column scrolls on its own")
-        self.assertTrue(self.view.sweep._list.expand)
-        self.assertIsNotNone(self.view._centre.scroll)
+        self.assertEqual(self.view.side_panel.width, 330)
+        self.assertEqual(self.view.attacker.col, {"xs": 6}, "1440 fits both columns beside the panel")
+        self.assertTrue(self.view.sweep._list.expand, "wide: the lists scroll on their own")
+        self.assertIsNotNone(self.view._columns.scroll)
         self.assertIsNone(self.view.scroll, "the page itself no longer scrolls")
         serialise(self.view)
         self._load_pair()
@@ -1072,7 +1104,7 @@ class TestTeamRatings(_Base):
         self.assertGreater(len(calls), n, "the team changed")
 
 
-class TestTeamRatingsInTheRail(_Base):
+class TestTeamRatingsInTheStrip(_Base):
     def setUp(self):
         super().setUp()
         self.slots = [
@@ -1089,7 +1121,7 @@ class TestTeamRatingsInTheRail(_Base):
         self.view.ensure_loaded()
 
     def _card(self, position):
-        return self.view.rail._team_cards[f"team-1:{position}"]
+        return self.view.team_strip._team_cards[f"team-1:{position}"]
 
     def test_team_cards_are_coloured_against_the_defender(self):
         from pokemon_champions_planning_tool.ui.views.calc.classes import CLASS_BG
@@ -1099,32 +1131,37 @@ class TestTeamRatingsInTheRail(_Base):
         self.store.set_move("right", 0, "Iron Head")
         mega = self._card(2)
         self.assertEqual(mega.rating.klass, "crushed")
-        self.assertEqual(mega.bgcolor, CLASS_BG["crushed"])
-        self.assertIn("vs Kingambit: Crushed", mega.tooltip)
-        self.assertIn("You: Heat Wave", mega.tooltip)
-        self.assertIn("Them: Iron Head", mega.tooltip)
-        self.assertEqual(self.view.rail._rating_caption.value, "Coloured against Kingambit")
-        self.assertIn("Crushed:", self.view.rail._rating_caption.tooltip, "the caption explains the colours")
+        self.assertEqual(mega.tile.bgcolor, CLASS_BG["crushed"])
+        self.assertIn("vs Kingambit: Crushed", mega.tile.tooltip)
+        self.assertIn("You: Heat Wave", mega.tile.tooltip)
+        self.assertIn("Them: Iron Head", mega.tile.tooltip)
+        legend = self.view.team_strip._legend
+        self.assertTrue(legend.visible)
+        self.assertIn("Coloured against Kingambit", legend.tooltip)
+        self.assertIn("Crushed:", legend.tooltip, "the legend explains the colours")
         serialise(self.view)
 
         self.store.load_pokemon("right", PokemonState())
         self.assertIsNone(self._card(2).rating, "defender cleared: colours go")
-        self.assertFalse(self.view.rail._rating_caption.visible)
+        self.assertFalse(self.view.team_strip._legend.visible)
 
     def test_the_loaded_attacker_keeps_its_highlight(self):
         self.store.load_species("right", "kingambit")
         self.store.set_move("right", 0, "Iron Head")
-        self._card(1).on_click(None)                       # load Incineroar as attacker
-        card = self._card(1)                               # the rail rebuilt its cards
+        self._card(1).on_primary()                         # load Incineroar as attacker
+        card = self._card(1)                               # the strip rebuilt its members
         from pokemon_champions_planning_tool.ui.theme import Palette
 
-        self.assertIsNotNone(card.rating, "the rebuilt card kept its rating")
-        self.assertEqual(card.border.top.color, Palette.PRIMARY, "the attacker's highlight border wins over the tint")
+        self.assertIsNotNone(card.rating, "the rebuilt member kept its rating")
+        self.assertEqual(card.tile.border.top.color, Palette.PRIMARY, "the attacker's highlight border wins over the tint")
+        self.assertEqual(self.store.state.left.species, "incineroar")
+        self._card(2).on_secondary()                       # right-click: the other side
+        self.assertEqual(self.store.state.right.species, "charizard-mega-y")
 
     def test_only_changed_cards_are_redrawn(self):
         self.store.load_species("right", "kingambit")
         self.store.set_move("right", 0, "Iron Head")
-        ratings, rival = self.view.rail._ratings, self.view.rail._rival_name
+        ratings, rival = self.view.team_strip._ratings, self.view.team_strip._rival_name
         self.assertFalse(self._card(1).set_rating(ratings["team-1:1"], rival), "same rating: nothing to send")
         self.assertTrue(self._card(1).set_rating(None, rival))
 
@@ -1134,5 +1171,5 @@ class TestTeamRatingsInTheRail(_Base):
         before = self.store.team_rating_key()
         self.ctx.bus.emit(events.TEAMS_CHANGED, None)
         self.assertNotEqual(self.store.team_rating_key(), before)
-        self.assertEqual(self.view._rated_key, self.store.team_rating_key(), "and the rail caught up")
+        self.assertEqual(self.view._rated_key, self.store.team_rating_key(), "and the strip caught up")
 

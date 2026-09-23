@@ -11,7 +11,8 @@ from .....domain.pokemon_identity import get_pokemon_sprite_url
 from ....components import Sprite
 from ....theme import Palette, Radius, Space
 from ..classes import CLASS_BG, CLASS_BORDER, CLASS_HELP
-from ..state import SWEEP_CLASSES, MoveResult, PokemonState, TeamRating
+from ..hit import hit_text, speed_line
+from ..state import SWEEP_CLASSES, PokemonState, TeamRating
 
 CELL_W = 76
 CELL_H = 46
@@ -19,24 +20,13 @@ NAME_W = 132
 GOOD = frozenset({"crushed", "mitigated"})
 
 
-def _hit(result: MoveResult | None, fallback: str) -> str:
-    if result is None:
-        return fallback
-    ko = f" ({result.ko_text})" if result.ko_text else ""
-    return f"{result.name} {result.min_pct:g}–{result.max_pct:g}%{ko}"
-
-
 def cell_tooltip(rating: TeamRating, rival_name: str) -> str:
     label = dict(SWEEP_CLASSES).get(rating.klass, rating.klass)
-    if rating.your_speed == rating.their_speed:
-        speed = f"speed tie ({rating.your_speed})"
-    else:
-        speed = f"{'you move' if rating.faster else 'they move'} first ({rating.your_speed} vs {rating.their_speed})"
     return "\n".join((
         f"{rating.name} vs {rival_name}: {label} — {CLASS_HELP.get(rating.klass, '')}",
-        f"You: {_hit(rating.your_best, 'no damaging move')}",
-        f"Them: {_hit(rating.their_best, 'no damaging move')}",
-        speed.capitalize(),
+        f"You: {hit_text(rating.your_best, ko=True)}",
+        f"Them: {hit_text(rating.their_best, ko=True)}",
+        speed_line(rating),
         "Click to load both",
     ))
 

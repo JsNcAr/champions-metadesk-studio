@@ -162,17 +162,27 @@ class _ViewBase(_Base):
 
 
 class TestRivalPanel(_ViewBase):
-    def test_the_right_column_switches_and_remembers(self):
-        self.assertIs(self.view._wide.controls[2], self.view.sweep)
-        self.view.set_right_mode("rival")
-        self.assertIs(self.view._wide.controls[2], self.view.rivals_panel)
-        self.assertEqual(self.prefs.get(PREF_RIGHT_MODE, None), "rival")
-        self.assertEqual([s.selected for s in self.view._switches], [["rival"], ["rival"]])
+    def test_the_side_panel_switches_and_remembers(self):
+        side = self.view.side_panel
+        self.assertEqual(side.tab, "opponents")
+        self.assertIs(side._body.content, self.view.sweep)
+        side.select("rivals")
+        self.assertIs(side._body.content, self.view.rivals_panel)
+        self.assertEqual(self.prefs.get("calc.side_tab", None), "rivals")
         self.assertTrue(self.view.rivals_panel._empty.visible, "no rival team yet")
+        self.assertTrue(self.view.rival_strip._empty.visible, "the strip offers team preview")
+        side.select("box")
+        self.assertIs(side._body.content, self.view.box)
+        side.select("rivals")
         check_layout(self.view)
         serialise(self.view)
         again = CalcView(self.ctx, CalcStore(self.catalogs, session_factory=None, prefs=Preferences(self.prefs.path)))
-        self.assertIs(again._wide.controls[2], again.rivals_panel)
+        self.assertEqual(again.side_panel.tab, "rivals")
+
+    def test_the_old_right_column_choice_carries_over(self):
+        self.prefs.set(PREF_RIGHT_MODE, "rival")
+        again = CalcView(self.ctx, CalcStore(self.catalogs, session_factory=None, prefs=Preferences(self.prefs.path)))
+        self.assertEqual(again.side_panel.tab, "rivals")
 
     def test_team_preview_by_keyboard_starts_a_battle(self):
         dialog = self._battle("king", "incin")
@@ -185,7 +195,10 @@ class TestRivalPanel(_ViewBase):
         self.assertEqual(self.page.dialogs, [])
         battle = self.view.rivals.battle
         self.assertEqual([m.pokemon.species for m in battle.members], ["kingambit", "incineroar"])
-        self.assertIs(self.view._wide.controls[2], self.view.rivals_panel, "the column shows the battle")
+        strip = self.view.rival_strip
+        self.assertEqual(len(strip.avatars), 2, "the strip above the Defender shows the battle")
+        self.assertIsNotNone(strip.avatars[1].rating, "rated against the attacker")
+        self.assertIn("Tournament set", strip.avatars[1].tile.tooltip)
         cards = self.view.rivals_panel._list.controls
         self.assertEqual(len(cards), 2)
         self.assertIsNotNone(self.view.rivals_panel._ratings[1], "rated against the attacker")
@@ -210,7 +223,12 @@ class TestRivalPanel(_ViewBase):
         self.view.rivals_panel._list.controls[0].on_click(None)
         self.view.rivals_panel._list.controls[1].on_click(None)
         self.assertEqual(self.store.state.right.item, "Life Orb", "still there when it comes back")
-        self.assertFalse(self.view.rivals_panel._update_member.visible, "a battle saves by itself")
+        self.assertFalse(self.view.rival_strip._update_member.visible, "a battle saves by itself")
+        self.assertEqual(self.view.rival_strip._linked, 1)
+        self.view.rival_strip.avatars[0].on_secondary()          # right-click: as the attacker
+        self.assertEqual(self.store.state.left.species, "kingambit")
+        self.view.rival_strip.avatars[1].on_primary()
+        self.assertEqual(self.store.state.right.species, "incineroar")
 
     def test_a_saved_plan_changes_only_on_request(self):
         members = [RivalMember(PokemonState(species="incineroar", moves=["Flare Blitz", None, None, None], ability="Intimidate"), frozenset({"item"}))]
@@ -219,12 +237,12 @@ class TestRivalPanel(_ViewBase):
         self.view.rivals_panel._list.controls[0].on_click(None)
         self.store.set_item("right", "Life Orb")
         self.assertIsNone(self.view.rivals.get(team.rival_team_id).members[0].pokemon.item, "browsing a plan never overwrites it")
-        self.assertTrue(self.view.rivals_panel._update_member.visible)
-        self.assertIn("Incineroar", self.view.rivals_panel._update_member.content)
+        self.assertTrue(self.view.rival_strip._update_member.visible)
+        self.assertIn("Incineroar", self.view.rival_strip._update_member.content)
         self.view._rival_action("update_member")
         saved = self.view.rivals.get(team.rival_team_id).members[0]
         self.assertEqual((saved.pokemon.item, saved.assumed), ("Life Orb", frozenset()))
-        self.assertFalse(self.view.rivals_panel._update_member.visible)
+        self.assertFalse(self.view.rival_strip._update_member.visible)
 
     def test_team_actions(self):
         async def named(*_a, **_k):
@@ -247,7 +265,7 @@ class TestRivalPanel(_ViewBase):
         self.view._rival_action("delete")
         self.assertNotIn("Kept (copy)", [t.name for t in self.view.rivals.teams])
         self.view.rivals.set_active(kept.rival_team_id)
-        labels = [getattr(i.content, "value", None) for i in self.view.rivals_panel._menu.items]
+        labels = [getattr(i.content, "value", None) for i in self.view.rival_strip._menu.items]
         self.assertIn("Rename preset…", labels)
         self.assertIn("Use in battle", labels)
 
@@ -321,13 +339,13 @@ class TestPresetsAndMyTeams(_ViewBase):
         members = [RivalMember(PokemonState(species="incineroar", moves=["Flare Blitz", None, None, None], ability="Intimidate"), frozenset({"item"}))]
         preset = self.view.rivals.create("Wolfe", members)
         self.view.set_right_mode("rival")
-        self.assertTrue(self.view.rivals_panel._use.visible, "a preset on screen offers Use in battle")
+        self.assertTrue(self.view.rival_strip._use.visible, "a preset on screen offers Use in battle")
         self.view._rival_action("use_preset")
         battle = self.view.rivals.battle
         self.assertEqual(self.view.rivals.active_id, battle.rival_team_id)
         self.assertEqual(battle.members, preset.members)
         self.assertEqual(battle.source, "Preset · Wolfe")
-        self.assertFalse(self.view.rivals_panel._use.visible)
+        self.assertFalse(self.view.rival_strip._use.visible)
         self.view.rivals_panel._list.controls[0].on_click(None)
         self.store.set_item("right", "Life Orb")
         self.assertEqual(self.view.rivals.battle.members[0].pokemon.item, "Life Orb", "the battle keeps the reveal")
@@ -394,7 +412,7 @@ class TestMetaSavesRivalTeams(_Base):
         self.assertEqual(kw["action"], "Open in Calc")
         kw["on_action"]()
         self.assertEqual(calc.rivals.active.name, "Wolfe — Worlds")
-        self.assertIs(calc._wide.controls[2], calc.rivals_panel)
+        self.assertEqual(calc.side_panel.tab, "rivals")
 
     def test_the_row_menu_offers_it(self):
         from datetime import datetime

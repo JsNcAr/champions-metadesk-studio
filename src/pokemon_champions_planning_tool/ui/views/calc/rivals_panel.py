@@ -1,5 +1,5 @@
-"""Right column, "Rival team" mode: a saved rival team or the "Current battle" team, each
-member classified against the Attacker, one click to load it as the Defender."""
+"""The side panel's Rivals tab: a saved rival team or the "Current battle" team, each member
+classified against the Attacker, one click to load it as the Defender."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from ...components.section import SectionHeader
 from ...theme import IconSize, Palette, Radius, Space
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
 from .rival_store import RivalStore
-from .state import SWEEP_CLASSES, MoveResult, RivalMember, RivalTeam, TeamRating
-
-RIGHT_MODES: tuple[tuple[str, str], ...] = (("all", "All opponents"), ("rival", "Rival team"))
+from .hit import hit_text
+from .state import SWEEP_CLASSES, RivalMember, TeamRating
 
 HELP_LINES: tuple[str, ...] = (
-    "The right column shows either every opponent or one rival team; the switch above it chooses.",
+    "The rival team sits above the Defender: click a member to load it as the Defender (right-click: as the Attacker). Its menu holds "
+    "team preview, loading, presets and the Team vs team grid; this tab lists the members in detail.",
     "The two kinds of rival team:",
     "Current battle: the team you are facing now. Team preview (Ctrl+B) takes the six species you see and fills each with its most "
     "used tournament set. What you set on a member in the Defender panel (item, ability, moves, nature, stat points) is kept for "
@@ -30,26 +30,12 @@ HELP_LINES: tuple[str, ...] = (
     "Reading the cards:",
     "Each member is rated against your Attacker, from your side.",
     *(f"{label}: {CLASS_HELP[key]}." for key, label in SWEEP_CLASSES),
-    "The ? mark lists the fields still guessed from tournament data. Click a member to load it as the Defender; your team rail "
+    "The ? mark lists the fields still guessed from tournament data. Click a member to load it as the Defender; your team strip "
     "then colours each of your Pokémon against it. Team vs team shows every pairing of your active team against theirs.",
 )
 
 # What each menu entry does; the view maps the keys to its handlers.
 Action = Callable[[str], None]
-
-
-def mode_switch(mode: str, on_change: Callable[[str], None]) -> ft.SegmentedButton:
-    """The switch heading the right column; the view keeps one per panel, in sync."""
-    return ft.SegmentedButton(
-        segments=[ft.Segment(value=key, label=ft.Text(label)) for key, label in RIGHT_MODES],
-        selected=[mode],
-        show_selected_icon=False,
-        on_change=lambda e: on_change((e.control.selected or [mode])[0]),
-    )
-
-
-def _hit(result: MoveResult | None, fallback: str) -> str:
-    return f"{result.name} {result.min_pct:g}–{result.max_pct:g}%" if result else fallback
 
 
 def assumed_note(member: RivalMember) -> str:
@@ -84,10 +70,10 @@ class RivalCard(ft.Container):
             lines = [
                 ft.Row(spacing=Space.XS, controls=[
                     speed,
-                    ft.Text(f"You: {_hit(rating.your_best, 'no damage')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
+                    ft.Text(f"You: {hit_text(rating.your_best, 'no damage')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
                             max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
                 ]),
-                ft.Text(f"Them: {_hit(rating.their_best, 'no damaging move')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
+                ft.Text(f"Them: {hit_text(rating.their_best, 'no damaging move')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
                         max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
             ]
             self.bgcolor = CLASS_BG.get(rating.klass, Palette.SURFACE_2)
@@ -114,6 +100,9 @@ class RivalCard(ft.Container):
 
 
 class RivalsPanel(ft.Container):
+    """The side panel's Rivals tab: the rival team's members in detail (the strip above the
+    Defender holds the team picker and every action)."""
+
     def __init__(self, *, rivals: RivalStore, species_name: Callable[[str | None], str], accent: str,
                  on_pick: Callable[[int], None], on_action: Action) -> None:
         super().__init__()
@@ -125,28 +114,7 @@ class RivalsPanel(ft.Container):
         self._attacker = ""
         self._linked: int | None = None
 
-        self._switch_slot = ft.Container()
-        self._select = ft.Dropdown(label="Current battle or preset", dense=True, text_size=12, expand=True, options=[],
-                                   on_select=lambda e: self.rivals.set_active(e.control.value or None))
-        # An icon trigger leaves the team names the width of the column.
-        self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="Rival team actions", items=[])
-        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip="Start a battle: enter the six Pokémon you see (Ctrl+B)",
-                                             on_click=lambda _e: on_action("battle"))
-        self._load = ft.OutlinedButton("Load…", icon=ft.Icons.FOLDER_OPEN_OUTLINED,
-                                       tooltip="Load a preset, one of your teams or a paste, into the battle or as a new preset",
-                                       on_click=lambda _e: on_action("load"))
-        # Shown while a preset is on screen: the one-click way from a plan to a battle.
-        self._use = ft.FilledButton("Use in battle", icon=ft.Icons.SPORTS_MMA, visible=False,
-                                    tooltip="Load this preset as the “Current battle”; the preset itself stays as saved",
-                                    on_click=lambda _e: on_action("use_preset"))
-        # An icon beside the team it grids: the column is too narrow for three labelled buttons.
-        self._matrix = ft.IconButton(icon=ft.Icons.GRID_VIEW, tooltip="Team vs team: your team against theirs, every pairing",
-                                     icon_color=Palette.PRIMARY, on_click=lambda _e: on_action("matrix"))
-        # A saved plan is never changed by browsing it: edits to its member in the Defender
-        # panel are kept only through this button (a battle team saves them by itself).
-        self._update_member = ft.FilledTonalButton("", icon=ft.Icons.SAVE_AS_OUTLINED, visible=False,
-                                                   tooltip="Keep the Defender's item, ability, moves, nature and stat points in this rival team",
-                                                   on_click=lambda _e: on_action("update_member"))
+        self._title = SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", HELP_LINES, tooltip="How rival teams work"))
         self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
@@ -159,23 +127,13 @@ class RivalsPanel(ft.Container):
             ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, on_click=lambda _e: on_action("battle")),
             ft.TextButton("Load team…", icon=ft.Icons.FOLDER_OPEN_OUTLINED, on_click=lambda _e: on_action("load")),
         ])
-        self._controls_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._select, self._matrix, self._menu])
-        self._buttons_row = ft.Row(spacing=Space.SM, wrap=True, controls=[self._preview, self._load])
         self.content = ft.Column(spacing=Space.SM, controls=[
-            self._switch_slot,
-            SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", HELP_LINES, tooltip="How rival teams work")),
-            self._controls_row, self._use, self._buttons_row, self._update_member,
+            self._title,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
             self._empty,
             self._list,
         ])
-        self.bgcolor = Palette.SURFACE_2
-        self.border_radius = Radius.MD
-        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
-        self.padding = Space.MD
-
-    def set_switch(self, switch: ft.Control) -> None:
-        self._switch_slot.content = switch
+        self.padding = 0
 
     def set_scrolling(self, scrolling: bool) -> None:
         self._list.scroll = ft.ScrollMode.AUTO if scrolling else None
@@ -193,15 +151,6 @@ class RivalsPanel(ft.Container):
         self._attacker = attacker_name
         self.render()
 
-    def set_pending(self, name: str | None) -> None:
-        """Offer "Save Defender to <name>" while a saved team's member was edited."""
-        visible = name is not None
-        label = f"Save Defender to {name}" if name else ""
-        if visible != self._update_member.visible or label != self._update_member.content:
-            self._update_member.visible = visible
-            self._update_member.content = label
-            self._safe_update(self._update_member)
-
     def set_linked(self, slot: int | None) -> None:
         if slot != self._linked:
             self._linked = slot
@@ -209,35 +158,10 @@ class RivalsPanel(ft.Container):
 
     # -- rendering -------------------------------------------------------------------------------
 
-    def _menu_items(self, team: RivalTeam | None) -> list[ft.PopupMenuItem]:
-        def item(label: str, icon: str, key: str) -> ft.PopupMenuItem:
-            return ft.PopupMenuItem(content=ft.Text(label), icon=icon, on_click=lambda _e: self._on_action(key))
-
-        items = [item("New battle (team preview)…", ft.Icons.BOLT, "battle"),
-                 item("Load team (presets, my teams, paste)…", ft.Icons.FOLDER_OPEN_OUTLINED, "load")]
-        if team is None:
-            return items
-        items.append(ft.PopupMenuItem())   # divider
-        if team.is_battle:
-            items += [item("Save battle as preset…", ft.Icons.BOOKMARK_ADD_OUTLINED, "save_battle"), item("End battle", ft.Icons.STOP_CIRCLE_OUTLINED, "end_battle")]
-        else:
-            items += [item("Use in battle", ft.Icons.SPORTS_MMA, "use_preset"), item("Rename preset…", ft.Icons.EDIT_OUTLINED, "rename"),
-                      item("Duplicate preset", ft.Icons.COPY_ALL, "duplicate"), item("Delete preset", ft.Icons.DELETE_OUTLINE, "delete")]
-        return items
-
     def render(self) -> None:
-        teams = self.rivals.teams
         team = self.rivals.active
-        # "Current battle" first, then the presets by last use.
-        self._select.options = [ft.DropdownOption(key=t.rival_team_id, text=t.name) for t in teams]
-        self._use.visible = team is not None and not team.is_battle and bool(team.members)
-        self._select.value = team.rival_team_id if team else None
-        self._menu.items = self._menu_items(team)
-        self._select.visible = bool(teams)
-        self._matrix.disabled = team is None or not team.members
         self._empty.visible = team is None
-        # The empty state carries its own buttons: the rows above would repeat them.
-        self._controls_row.visible = self._buttons_row.visible = team is not None
+        self._title.set_label("Current battle" if team is not None and team.is_battle else (team.name if team is not None else "Rival team"))
         if team is None:
             self._list.controls = []
             self._status.value = ""
@@ -268,4 +192,4 @@ class RivalsPanel(ft.Container):
             pass
 
 
-__all__ = ["RIGHT_MODES", "RivalCard", "RivalsPanel", "assumed_note", "mode_switch"]
+__all__ = ["RivalCard", "RivalsPanel", "assumed_note"]

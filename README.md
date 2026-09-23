@@ -8,7 +8,7 @@ teams, the live tournament meta and a two-way damage calculator in one app.**
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
 
-![The damage calculator: matchup summary, field conditions, attacker and defender with their moves, and every opponent classified against the attacker](docs/images/calc.png)
+![The damage calculator as a versus screen: your team and the rival team on top, the matchup bar and the field bar, attacker and defender side by side with their move cards, and every opponent classified against the attacker in the side panel](docs/images/calc.png)
 
 Champions MetaDesk Studio keeps a player's roster, builds and meta research in one place.
 Add the Pokémon you own, build teams with Champions' stat-point spreads and item rules, browse
@@ -69,6 +69,8 @@ Pokémon Company ([details](#license-and-disclaimer)).*
   paste or a Poképaste link) and the team you are facing now: enter the six species at team
   preview or load a preset into the battle, and each rival is one click from the Defender
   panel, keeps what the battle reveals, and shows up in a Team vs team grid of every pairing.
+  Benchmarks say how many stat points a KO or a survival takes, and in Doubles spread moves
+  are calculated on two targets, or one when only one foe is left.
 
 ## Download
 

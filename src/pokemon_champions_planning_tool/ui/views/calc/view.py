@@ -37,7 +37,7 @@ class CalcView(ft.Column):
     def __init__(self, ctx: AppContext, store: CalcStore | None = None, rivals: RivalStore | None = None) -> None:
         super().__init__(spacing=Space.MD, expand=True)
         self.ctx = ctx
-        self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs)
+        self.store = store or CalcStore(ctx.catalogs, prefs=ctx.prefs, formats=ctx.formats)
         self.rivals = rivals or RivalStore(self.store.session_factory)
         self._narrow = False
         self._sweep_running = False
@@ -90,6 +90,7 @@ class CalcView(ft.Column):
         self.rivals.subscribe(lambda _e: self._on_rivals())
         ctx.bus.on(events.RIVALS_CHANGED, lambda _p: self.rivals.load() if self.rivals.loaded else None)
         ctx.bus.on(events.RIVAL_OPEN, self._open_rival)
+        ctx.bus.on(events.FORMAT_CHANGED, lambda _p: (self.attacker.update_from(), self.defender.update_from()))
         ctx.bus.on(events.CALC_REQUESTED, self._on_request)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self.rail.invalidate_box())

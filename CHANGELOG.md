@@ -10,10 +10,26 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Formats and mechanics.** A team is built for a format, and the team builder shows only the
+  mechanics that format has. Pokémon Champions (Regulations M-A to M-C) has Mega Evolution
+  and no Terastallization, so the Tera dropdown is gone from the slot cards. **Settings ›
+  Format & mechanics** sets the default format and creates custom ones: singles or doubles,
+  Mega Evolution and Terastallization on or off, one Mega per team, Item Clause. Z-Moves and
+  Dynamax are listed as not supported yet. The chip next to the team name picks a team's own
+  format.
+  - Without Mega Evolution a Mega Stone no longer changes the form, the item picker hides
+    the stones, and the calculator hides its Base/Mega switch (it follows the default
+    format, which also decides Singles or Doubles when the calculator is reset).
+  - Tera types are kept: export writes the `Tera Type:` line only when the team's format
+    has Terastallization, and imports still read it.
+
 ### Changed
 - The team export dialog says "Stat points" instead of "EVs". Copy and Publish still write
   them on Showdown's `EVs:` line, which is what Showdown and Poképaste read, and pasting a
   "Stat points:" line back into the app works too.
+- Settings' "Battle format" dropdown is now called **Tournament filter**: it filters
+  tournament data (Doubles only, All, Singles only) and is separate from the formats above.
 
 ## [0.4.0] - 2026-09-21
 

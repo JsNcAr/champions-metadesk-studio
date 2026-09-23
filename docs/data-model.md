@@ -144,6 +144,7 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `team_id: UUID` (Primary Key, Indexed)
 - `name: str` (Indexed)
 - `description: str`
+- `format_id: str | None` (a `domain/formats.py` format id; `None` follows the default format. Added in schema version 12)
 - `created_at: datetime`
 - `updated_at: datetime`
 
@@ -244,6 +245,17 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - A new table: `create_all` adds it to an existing database, no migration step
 
 ---
+
+## Formats (preferences, not tables)
+
+`domain/formats.py` defines a format: singles or doubles, the regulations it covers, the
+generation mechanics it has (`Mechanic`: Mega Evolution, Terastallization, Z-Moves,
+Dynamax, each marked implemented or not yet), and its rules (one Mega per team, Item
+Clause). The built-in `champions-reg-m` (Regulations M-A to M-C, doubles, Mega only) is the
+default. `ui/formats.py` keeps the chosen default in `preferences.json` under
+`formats.default` and custom formats under `formats.custom` (a list of `Format.to_dict()`
+dicts). A team's `format_id` overrides the default; the team builder shows only the
+mechanics of the team's format, and export writes `Tera Type:` only when it has Tera.
 
 ## Derived Values
 

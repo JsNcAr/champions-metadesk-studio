@@ -156,7 +156,7 @@ def main(page: ft.Page) -> None:
     box_view = BoxView(ctx)
     shell.register_view("box", label="Box", icon=ft.Icons.INVENTORY_2_OUTLINED, selected_icon=ft.Icons.INVENTORY_2,
                         control=box_view, on_activate=box_view.ensure_loaded)
-    team_store = TeamStore(ctx.catalogs)
+    team_store = TeamStore(ctx.catalogs, formats=ctx.formats)
     shell.register_view("team", label="Teams", icon=ft.Icons.GROUPS_OUTLINED, selected_icon=ft.Icons.GROUPS,
                         factory=lambda: TeamView(ctx, team_store),
                         on_activate=lambda: getattr(shell.get_view("team"), "ensure_loaded", lambda: None)())
@@ -164,7 +164,7 @@ def main(page: ft.Page) -> None:
                         factory=lambda: MetaView(ctx),
                         on_activate=lambda: getattr(shell.get_view("meta"), "ensure_loaded", lambda: None)())
     shell.register_view("calc", label="Calc", icon=ft.Icons.CALCULATE_OUTLINED, selected_icon=ft.Icons.CALCULATE,
-                        factory=lambda: CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store)),
+                        factory=lambda: CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store, formats=ctx.formats)),
                         on_activate=lambda: getattr(shell.get_view("calc"), "ensure_loaded", lambda: None)())
     shell.register_view("settings", label="Settings", icon=ft.Icons.SETTINGS_OUTLINED, selected_icon=ft.Icons.SETTINGS,
                         factory=lambda: SettingsView(ctx),

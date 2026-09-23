@@ -59,6 +59,9 @@ def validate_item_assignment(
     item: ItemRecord | Item | None,
     species_name: str | None,
     team_items: list[ItemRecord | Item | None] | None = None,
+    *,
+    mega: bool = True,
+    one_mega_per_team: bool = True,
 ) -> ValidationResult:
     """Validates whether an item can be held by a given species and team slot.
 
@@ -67,6 +70,9 @@ def validate_item_assignment(
       2. Mega Stone species mismatch: Charizardite X held by Pikachu yields a red error.
       3. Mega Stone species match: Unlocks the target form (e.g. 'mega-x').
       4. Multi-Mega team limit: Second Mega Stone on team yields a warning.
+
+    ``mega`` and ``one_mega_per_team`` come from the team's format: without Mega Evolution
+    a stone unlocks nothing (and says so); without the limit, rule 4 is skipped.
 
     Pure function — zero I/O or DB access.
     """
@@ -88,7 +94,9 @@ def validate_item_assignment(
         warning = f"{display_name} is not available in Pokémon Champions format."
 
     # Rule 2 & 3: Mega Stone species matching check
-    if target_species:
+    if target_species and not mega:
+        warning = warning or "Mega Evolution is not part of this team's format."
+    elif target_species:
         normalized_species = (species_name or "").strip().lower()
         if normalized_species and target_species.lower() != normalized_species:
             # Mismatch: Red error blocks form unlock
@@ -99,7 +107,7 @@ def validate_item_assignment(
             unlocked_form = target_form
 
         # Rule 4: Multi-Mega Stone check across team
-        if team_items:
+        if team_items and one_mega_per_team:
             other_megas = [
                 i for i in team_items
                 if i and i != item and getattr(i, "target_species", None) is not None

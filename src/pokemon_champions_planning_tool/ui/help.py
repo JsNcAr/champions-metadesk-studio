@@ -37,6 +37,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Drag a slot card's header onto another card to swap them; the card menu offers the same and \"Move to lead\".",
         "The move picker lists only the species' Champions-legal moves, ranked by tournament usage. \"Show all moves\" in the team menu lists the rest with a warning.",
         "Mega forms use their base species' learnset; picking a Mega Stone switches the form automatically.",
+        "The format chip next to the team name picks the rules the team is built for; the cards show only that format's mechanics (Champions: Mega Evolution, no Tera). Settings › Format & mechanics sets the default and creates custom formats, for example one with Terastallization.",
         "Edit spread uses Champions stat points: 0–32 per stat, 66 in total (level 50 and 31 IVs are fixed). Presets and a Min speed chip (0 points + a −Spe nature) cover Trick Room; the health chips explain each rule on hover.",
         "Compare teams… in the team menu shows two teams side by side, including uncovered types.",
         "Import from Meta opens the preview pre-filled; illegal species block the import, illegal moves only warn.",

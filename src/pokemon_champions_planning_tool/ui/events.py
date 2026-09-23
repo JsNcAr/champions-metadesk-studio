@@ -32,6 +32,8 @@ IMPORT_REQUESTED = "import.requested"
 NAVIGATE = "navigate"
 # Ask the damage calculator to load Pokémon; payload: ui.views.calc.CalcRequest.
 CALC_REQUESTED = "calc.requested"
+# The default format or a custom format changed (Settings). Payload: None.
+FORMAT_CHANGED = "formats.changed"
 # Rival teams were saved or changed outside the calculator (Meta). Payload: team id or None.
 RIVALS_CHANGED = "rivals.changed"
 # Ask the calculator to show a rival team. Payload: rival team id.

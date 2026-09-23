@@ -316,7 +316,7 @@ class PokemonPanel(ft.Container):
                 self._types.controls = [TypeChip(t, size="sm") for t in species.types_lower]
                 self._mega.visible = species.is_mega
                 form_choices = self.store.catalogs.form_choices_for(species.canonical_id)
-                if form_choices:
+                if form_choices and self.store.mega_enabled:
                     self._form.visible = True
                     self._form.segments = [ft.Segment(value=cid, label=ft.Text(lbl)) for cid, lbl in form_choices]
                     self._form.selected = [species.canonical_id]

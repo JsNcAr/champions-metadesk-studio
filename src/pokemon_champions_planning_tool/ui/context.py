@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import flet as ft
 
 from . import dialogs, tasks
-from .events import EventBus
+from .events import FORMAT_CHANGED, EventBus
 from .preferences import Preferences
+
+if TYPE_CHECKING:
+    from .formats import FormatRegistry
 
 
 @dataclass
@@ -26,7 +29,19 @@ class AppContext:
     catalogs: Any = None
     prefs: Preferences = field(default_factory=Preferences)   # in-memory unless the app installs a file-backed one
     _clipboard: Any = field(default=None, init=False, repr=False)
+    _formats: Any = field(default=None, init=False, repr=False)
     _shutdown_hooks: list[Callable[[], None]] = field(default_factory=list, init=False, repr=False)
+
+    @property
+    def formats(self) -> "FormatRegistry":
+        """The formats (built-in and custom) over the current preferences. Rebuilt when the
+        app installs its file-backed preferences after the context was created."""
+        from .formats import FormatRegistry
+
+        if self._formats is None or self._formats.prefs is not self.prefs:
+            self._formats = FormatRegistry(self.prefs)
+            self._formats.subscribe(lambda _e: self.bus.emit(FORMAT_CHANGED, None))
+        return self._formats
 
     def on_shutdown(self, fn: Callable[[], None]) -> None:
         """Run ``fn`` when the session ends: window closed, browser tab gone, or the app

@@ -420,6 +420,17 @@ class TeamRepository:
         self.session.commit()
         return True
 
+    def set_format(self, team_id: UUID, format_id: str | None) -> TeamRecord | None:
+        record = self.get(team_id)
+        if record is None:
+            return None
+        record.format_id = format_id
+        record.updated_at = _utc_now()
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
     def rename(self, team_id: UUID, new_name: str) -> TeamRecord | None:
         record = self.get(team_id)
         if record is None:

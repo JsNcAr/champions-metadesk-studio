@@ -16,6 +16,7 @@ import re
 import requests
 
 from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...domain.item_sprites import sheet_url
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
 
@@ -101,6 +102,7 @@ def _build_item_record(
     is_champions_legal: bool,
     mega_mappings: dict[str, dict[str, str]],
     pokeapi_data: dict | None,
+    spritenum: int | None = None,
 ) -> ItemRecord:
     """Assembles an ItemRecord from Showdown legality + optional PokéAPI metadata."""
     pokeapi_slug = _showdown_slug_to_pokeapi(showdown_slug)
@@ -123,6 +125,10 @@ def _build_item_record(
             if effect_entry.get("language", {}).get("name") == "en":
                 short_effect = effect_entry.get("short_effect", "")
                 break
+
+    # No PokéAPI art (Champions-only Mega Stones, Fairy Feather…): Showdown's item sheet cell.
+    if not sprite_url and spritenum is not None:
+        sprite_url = sheet_url(spritenum)
 
     # Mega Stone links from Showdown data
     mega_info = mega_mappings.get(showdown_slug)
@@ -172,6 +178,7 @@ class HybridItemProvider:
         """
         legal_slugs = self._showdown.fetch_champions_legal_item_slugs()
         mega_mappings = self._showdown.fetch_mega_stone_mappings()
+        spritenums = self.item_spritenums()
 
         # Collect all items Showdown knows about (legal + mega stones that
         # were overridden to null = legal, even if base was Past)
@@ -205,10 +212,15 @@ class HybridItemProvider:
             pokeapi_data = pokeapi_cache.get(pokeapi_slug)
 
             records.append(
-                _build_item_record(showdown_slug, is_legal, mega_mappings, pokeapi_data)
+                _build_item_record(showdown_slug, is_legal, mega_mappings, pokeapi_data, spritenums.get(showdown_slug))
             )
 
         return records
+
+    def item_spritenums(self) -> dict[str, int]:
+        """{showdown_slug: sheet cell}, or {} when the adapter cannot tell (offline)."""
+        fetch = getattr(self._showdown, "fetch_item_spritenums", None)
+        return fetch() if fetch is not None else {}
 
     def get_champions_legal_count(self) -> int:
         """Returns the current count of Champions-legal slugs from Showdown (0 = offline)."""

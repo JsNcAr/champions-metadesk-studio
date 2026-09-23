@@ -8,10 +8,11 @@ import flet as ft
 
 from .....infrastructure.database.models import ItemRecord
 from ....catalogs import Catalogs
+from ....components.item_icon import item_icon
 from ....components import EmptyState, StatusChip
 from ....components.inputs import SEARCH_FIELD_STYLE
 from ....tasks import is_mounted
-from ....theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
+from ....theme import STAT_COLORS, STAT_LABELS, Palette, Radius, Space
 
 _MAX_ROWS = 80
 
@@ -30,10 +31,17 @@ class ItemPickerDialog(ft.AlertDialog):
         on_pick: Callable[[str | None], None],
         on_close: Callable[[], None],
         mega: bool = True,
+        usage: dict[str, float] | None = None,
+        sort: str = "popular",
+        on_sort: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(modal=True)
         self._catalogs = catalogs
         self._mega = mega           # False: the team's format has no Mega Evolution, so no Mega Stones
+        # {item id: share of this species' tournament rosters}; may arrive after opening (set_usage).
+        self.usage: dict[str, float] = dict(usage or {})
+        self.sort = sort if sort in ("popular", "name") else "popular"
+        self._on_sort = on_sort
         self._species = (species_name or "").lower()
         self._on_pick = on_pick
         self._on_close = on_close
@@ -47,6 +55,11 @@ class ItemPickerDialog(ft.AlertDialog):
         self._search = ft.TextField(**SEARCH_FIELD_STYLE, hint_text="Search items…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True, expand=True,
                                     on_change=lambda _e: self._refresh(), on_submit=lambda _e: self._pick_first())
         self._legal = ft.Switch(label="Champions-legal only", value=True, on_change=lambda e: self._set_legal(bool(e.control.value)))
+        self._sort_toggle = ft.SegmentedButton(
+            segments=[ft.Segment(value="popular", label=ft.Text("Popular"), tooltip="Most held by this species in tournaments first"),
+                      ft.Segment(value="name", label=ft.Text("A–Z"))],
+            selected=[self.sort], show_selected_icon=False, on_change=lambda e: self.set_sort((e.control.selected or ["popular"])[0]),
+        )
         self._categories = ft.ListView(width=160, spacing=2, controls=[])
         self._category_tiles: dict[str, ft.Container] = {}
         for key, label in [("all", "All items")] + [(c, _category_label(c)) for c in categories]:
@@ -69,7 +82,7 @@ class ItemPickerDialog(ft.AlertDialog):
                 spacing=Space.MD,
                 expand=True,
                 controls=[
-                    ft.Row(spacing=Space.MD, controls=[self._search, self._legal]),
+                    ft.Row(spacing=Space.MD, controls=[self._search, self._sort_toggle, self._legal]),
                     ft.Row(spacing=Space.MD, expand=True, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self._categories, ft.VerticalDivider(width=1), self._list]),
                 ],
             ),
@@ -83,6 +96,25 @@ class ItemPickerDialog(ft.AlertDialog):
         self._refresh()
 
     # -- filtering -------------------------------------------------------------------------------
+
+    def set_usage(self, usage: dict[str, float]) -> None:
+        """The species' tournament usage, read on a worker after the picker opened."""
+        self.usage = dict(usage or {})
+        self._refresh()
+
+    def set_sort(self, sort: str) -> None:
+        self.sort = sort
+        self._sort_toggle.selected = [sort]
+        if self._on_sort is not None:
+            self._on_sort(sort)
+        self._refresh()
+
+    def _popular(self, items: list[ItemRecord]) -> list[ItemRecord]:
+        """The items this species holds in tournaments, most held first (empty in A–Z)."""
+        if self.sort != "popular" or not self.usage:
+            return []
+        held = [i for i in items if self.usage.get(i.canonical_id, 0.0) > 0]
+        return sorted(held, key=lambda i: (-self.usage[i.canonical_id], i.display_name.lower()))
 
     def _set_legal(self, value: bool) -> None:
         self._legal_only = value
@@ -114,7 +146,16 @@ class ItemPickerDialog(ft.AlertDialog):
         compatible, others, incompatible = self._candidates()
         for key, tile in self._category_tiles.items():
             tile.bgcolor = Palette.SURFACE_3 if key == self._category else None
-        rows: list[ft.Control] = [self._row(i, compatible=True) for i in compatible] + [self._row(i) for i in others[:_MAX_ROWS]]
+        popular = self._popular(compatible + others)
+        taken = {i.canonical_id for i in popular}
+        rows: list[ft.Control] = []
+        if popular:
+            species = self._species.replace("-", " ").title() or "this Pokémon"
+            rows.append(ft.Text(f"Popular for {species}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT))
+            rows += [self._row(i, compatible=i in compatible, share=self.usage[i.canonical_id]) for i in popular]
+            rows.append(ft.Text("Other items", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT))
+        rows += [self._row(i, compatible=True) for i in compatible if i.canonical_id not in taken]
+        rows += [self._row(i) for i in [o for o in others if o.canonical_id not in taken][:_MAX_ROWS]]
         if incompatible:
             if self._show_incompatible:
                 rows.append(ft.Text("Mega Stones for other species", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT))
@@ -131,8 +172,10 @@ class ItemPickerDialog(ft.AlertDialog):
         self._show_incompatible = not self._show_incompatible
         self._refresh()
 
-    def _row(self, item: ItemRecord, *, compatible: bool = False, incompatible: bool = False) -> ft.Control:
+    def _row(self, item: ItemRecord, *, compatible: bool = False, incompatible: bool = False, share: float | None = None) -> ft.Control:
         badges: list[ft.Control] = []
+        if share:
+            badges.append(StatusChip(f"{share * 100:.0f}%", "success", tooltip="Share of this species' tournament teams holding it"))
         if incompatible:
             badges.append(StatusChip(f"Needs {item.target_species.title()}", "error", icon=ft.Icons.BLOCK))
         elif compatible:
@@ -144,10 +187,7 @@ class ItemPickerDialog(ft.AlertDialog):
             chip = StatusChip(f"{round((mult - 1) * 100):+d}% {STAT_LABELS.get(stat, stat)}", "neutral")
             chip._label.color = STAT_COLORS.get(stat, Palette.ON_SURFACE_VARIANT)
             badges.append(chip)
-        leading = (
-            ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.DISABLED))
-            if item.sprite_url else ft.Icon(ft.Icons.BOLT if item.target_species else ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.ON_SURFACE_VARIANT)
-        )
+        leading = item_icon(item.sprite_url, size=32, fallback=ft.Icons.BOLT if item.target_species else ft.Icons.DIAMOND_OUTLINED)
         return ft.Container(
             content=ft.Row(
                 spacing=Space.MD,
@@ -170,6 +210,6 @@ class ItemPickerDialog(ft.AlertDialog):
 
     def _pick_first(self) -> None:
         compatible, others, _ = self._candidates()
-        first = (compatible + others)[:1]
+        first = (self._popular(compatible + others) or compatible + others)[:1]
         if first:
             self._on_pick(first[0].canonical_id)

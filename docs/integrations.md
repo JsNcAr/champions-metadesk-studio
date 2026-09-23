@@ -87,6 +87,8 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
 
 ---
 
+- **Item icons**: item sprites come from PokéAPI. Items PokéAPI has no art for (the Champions-only Mega Stones, Fairy Feather…) use their cell on Showdown's item sheet (`sprites/itemicons-sheet.png`, 24×24 cells, 16 per row, the cell given by `spritenum` in `data/items.ts`, overridden by the Champions mod). Their `sprite_url` is the sheet URL with the cell as the fragment (`…#553`, see `domain/item_sprites.py`), and `components/item_icon.py` crops it. The sheet is cached with the Pokémon sprites, because the web build cannot load Showdown images directly (no CORS/CORP headers).
+
 ## Move Catalogue (Pokémon Showdown)
 
 Three static files, fetched at most every 30 days or from Settings:

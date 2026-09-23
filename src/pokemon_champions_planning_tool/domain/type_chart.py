@@ -69,6 +69,69 @@ def defensive_profile(defending_types: Sequence[str]) -> dict[str, float]:
     return {atk: defensive_multiplier(atk, defending_types) for atk in TYPES}
 
 
+# Abilities that change what hits a Pokémon, on top of its types (Showdown's rules; only
+# the unconditional effects — Wonder Guard, Filter and the like are left to the calculator).
+# Keys are lowercase with spaces for hyphens (``_ability_key``).
+ABILITY_DEFENSE: dict[str, dict[str, float]] = {
+    "levitate": {"ground": 0.0},
+    "earth eater": {"ground": 0.0},
+    "flash fire": {"fire": 0.0},
+    "well baked body": {"fire": 0.0},
+    "water absorb": {"water": 0.0},
+    "storm drain": {"water": 0.0},
+    "dry skin": {"water": 0.0},
+    "volt absorb": {"electric": 0.0},
+    "lightning rod": {"electric": 0.0},
+    "motor drive": {"electric": 0.0},
+    "sap sipper": {"grass": 0.0},
+    "thick fat": {"fire": 0.5, "ice": 0.5},
+    "heatproof": {"fire": 0.5},
+    "water bubble": {"fire": 0.5},
+    "purifying salt": {"ghost": 0.5},
+    "fluffy": {"fire": 2.0},
+}
+
+
+def _ability_key(ability: str | None) -> str:
+    return (ability or "").replace("-", " ").strip().lower()
+
+
+def defensive_profile_with_ability(defending_types: Sequence[str], ability: str | None) -> tuple[dict[str, float], list[str]]:
+    """``defensive_profile`` with the ability's changes, and one note per change
+    ("Levitate: immune to Ground")."""
+    profile = defensive_profile(defending_types)
+    changes = ABILITY_DEFENSE.get(_ability_key(ability), {})
+    notes: list[str] = []
+    raw = (ability or "").strip()
+    name = raw if any(c.isupper() for c in raw) else raw.replace("-", " ").title()
+    for atk, factor in changes.items():
+        before = profile.get(atk, 1.0)
+        profile[atk] = before * factor
+        if factor == 0.0:
+            notes.append(f"{name}: immune to {atk.capitalize()}")
+        elif factor < 1.0:
+            notes.append(f"{name}: {atk.capitalize()} damage halved")
+        else:
+            notes.append(f"{name}: takes double {atk.capitalize()} damage")
+    return profile, notes
+
+
+def team_weakness_from_profiles(profiles: Iterable[dict[str, float] | None]) -> dict[str, tuple[int, int, int]]:
+    """``team_weakness_summary`` from per-member profiles (so abilities count)."""
+    members = [p for p in profiles if p]
+    out: dict[str, tuple[int, int, int]] = {}
+    for atk in TYPES:
+        mults = [p.get(atk, 1.0) for p in members]
+        out[atk] = (sum(1 for m in mults if m > 1.0), sum(1 for m in mults if 0.0 < m < 1.0), sum(1 for m in mults if m == 0.0))
+    return out
+
+
+def team_matrix_from_profiles(profiles: Iterable[dict[str, float] | None]) -> dict[str, list[float]]:
+    """``team_defensive_matrix`` from per-member profiles; empty members read neutral."""
+    members = list(profiles)
+    return {atk: [(p.get(atk, 1.0) if p else 1.0) for p in members] for atk in TYPES}
+
+
 def bucket_profile(profile: dict[str, float]) -> dict[float, list[str]]:
     """Group a profile by multiplier: {4.0: [...], 2.0: [...], 1.0: [...], 0.5: [...], 0.25: [...], 0.0: [...]}.
     Keys are always present (possibly empty), in BUCKETS order; type order follows TYPES."""

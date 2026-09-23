@@ -700,10 +700,14 @@ class CalcView(ft.Column):
             record = self.store.catalogs.item_for(item_id) if item_id else None
             self.store.set_item(side, record.display_name if record else None)
 
-        page.show_dialog(ItemPickerDialog(
+        dialog = ItemPickerDialog(
             catalogs=self.store.catalogs, species_name=species.name.split("-")[0].lower(), current_item_id=current.canonical_id if current else None,
-            on_pick=pick, on_close=page.pop_dialog,
-        ))
+            on_pick=pick, on_close=page.pop_dialog, mega=self.store.mega_enabled,
+            sort=str(self.ctx.prefs.get("team.item_sort", "popular")), on_sort=lambda v: self.ctx.prefs.set("team.item_sort", v),
+        )
+        page.show_dialog(dialog)
+        # Tournament usage ranks the list; it can take a query the first time, so it arrives later.
+        self.ctx.run_in_background(lambda: self.store.item_usage(side), on_done=dialog.set_usage, on_error=lambda _e: None)
 
     def _copy(self, text: str) -> None:
         self.ctx.copy_to_clipboard(text)

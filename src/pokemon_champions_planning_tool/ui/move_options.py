@@ -1,4 +1,4 @@
-"""Move choices for one species: legal moves, every other move, and tournament usage.
+"""Move and item choices for one species: legal moves, every other move, and tournament usage.
 
 Flet-free and store-independent so the team builder and the damage calculator share it.
 """
@@ -32,11 +32,36 @@ EMPTY_MOVE_OPTIONS = MoveOptions((), (), {}, False)
 # costs tens of milliseconds on a year of data, and the answer only changes when
 # tournament data does — so it is kept until ``invalidate_move_usage()`` says otherwise.
 _usage_cache: dict[str, dict[str, float]] = {}
+_item_usage_cache: dict[str, dict[str, float]] = {}
 
 
 def invalidate_move_usage() -> None:
-    """New tournament data landed: re-read usage on the next request."""
+    """New tournament data landed: re-read move and item usage on the next request."""
     _usage_cache.clear()
+    _item_usage_cache.clear()
+
+
+def item_usage_for(catalogs: Catalogs, canonical_id: str | None, session_factory: SessionFactory | None) -> dict[str, float]:
+    """{item catalogue id: share of this species' tournament rosters holding it} (megas count
+    for their base species). Blocking the first time per species: call it off the UI loop."""
+    if not canonical_id or session_factory is None:
+        return {}
+    base_id = base_canonical_id(canonical_id)
+    cached = _item_usage_cache.get(base_id)
+    if cached is not None:
+        return cached
+    try:
+        with session_factory() as s:
+            by_name = TournamentService(s).item_usage(base_id)
+    except Exception:  # noqa: BLE001 - usage is a ranking hint, never required
+        return {}
+    usage: dict[str, float] = {}
+    for name, share in by_name.items():
+        record = catalogs.item_for(name) or catalogs.item_for(name.lower().replace(" ", "-"))
+        if record is not None:
+            usage[record.canonical_id] = usage.get(record.canonical_id, 0.0) + share
+    _item_usage_cache[base_id] = usage
+    return usage
 
 
 def _usage_for(base_id: str, session_factory: SessionFactory | None) -> dict[str, float]:

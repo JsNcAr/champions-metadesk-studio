@@ -153,6 +153,7 @@ class TestRulesFollowTheFormat(_TeamStoreCase):
         self.store.set_item(2, "lucarionite")
         self.assertIn("2 Mega Stones", [c.label for c in self.store.summary.checks])
         self.assertIn("Only one", self.store.slot(2).validation.warning)
+        self.assertEqual(self.store.slot(2).validation.warning_short, "2nd Mega Stone")
         self._custom(one_mega_per_team=False)
         self.assertNotIn("2 Mega Stones", [c.label for c in self.store.summary.checks])
         self.assertIsNone(self.store.slot(2).validation.warning)

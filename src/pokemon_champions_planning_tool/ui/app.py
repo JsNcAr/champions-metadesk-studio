@@ -97,7 +97,16 @@ def _start_sprite_prefetch(ctx: AppContext) -> None:
 
         with get_session() as session:
             species = [e.pokemon.canonical_id for e in BoxRepository(session).list_entries(include_planned=True)]
-        return sprite_cache.prefetch(species)
+        # Showdown's item sheet: the icons of the items PokéAPI has no art for (the
+        # Champions Mega Stones…). Cached like the sprites, so the web build can show them.
+        from ..domain.item_sprites import ITEM_SHEET_URL
+
+        extra = 0
+        sheet = sprite_cache.filename_for_url(ITEM_SHEET_URL)
+        if sheet and not sprite_cache.is_cached(sheet):
+            sprite_cache.enqueue_download(ITEM_SHEET_URL, sheet)
+            extra = 1
+        return sprite_cache.prefetch(species) + extra
 
     def failed(exc: BaseException) -> None:
         print(f"⚠️ Sprite prefetch skipped: {exc}")

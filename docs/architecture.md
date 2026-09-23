@@ -49,9 +49,11 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      matrix, notes, tags.
   2. **Teams**: a team library (every team as a tile, from one joined query on a worker; also
      the empty state) and the editor: team switcher, format chip and a health summary chip; six compact slot cards
-     in a responsive grid, one of which expands in place into the editor (form, ability and
-     only the mechanics the team's format has, such as Tera; item with guardrails and stat
-     deltas; moves; the stat-point spread inline; partners; notes); an analysis panel with
+     in a responsive grid that never reflows (they condense while a slot is being edited),
+     and the selected slot's editor in a pane under them (form, ability and only the mechanics
+     the team's format has, such as Tera; item with its effect, guardrails and stat deltas;
+     defensive matchups with abilities counted; moves with category, power, accuracy and STAB;
+     the stat-point spread inline; partners; notes; the species' tournament set); an analysis panel with
      Health, level-50 Stats, Types (defensive and offensive grids) and Roles tabs, each built
      when first shown; assign / item / move / import / export / compare dialogs.
   3. **Meta**: tournament teams as rows grouped by event with filters, paging and a

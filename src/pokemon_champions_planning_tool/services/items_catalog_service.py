@@ -41,6 +41,13 @@ def check_items_catalog_staleness(session: Session) -> bool:
         return False
 
     is_stale = remote_count != local_count
+    if not is_stale:
+        # Items synced before icons came from Showdown's sheet: sync once more to fill them.
+        spritenums = provider.item_spritenums()
+        missing = [r for r in repo.list_all() if not r.sprite_url and r.canonical_id.replace("-", "") in spritenums]
+        if missing:
+            print(f"🔄 Items: {len(missing)} items have no icon yet; re-syncing to add them.")
+            return True
     if is_stale:
         print(
             f"🔄 Items: Showdown reports {remote_count} legal items, "
@@ -88,7 +95,16 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
     new_ids = set()
     for record in new_records:
         new_ids.add(record.canonical_id)
-        was_new = repo.get(record.canonical_id) is None
+        old = repo.get(record.canonical_id)
+        was_new = old is None
+        if old is not None and record.canonical_id in existing:
+            # Not re-fetched from PokéAPI this time: keep what it gave us before. Without
+            # this, every unforced sync blanked the name, category, effect and sprite of
+            # the items already in the database.
+            record.display_name = old.display_name
+            record.category = old.category
+            record.short_effect = old.short_effect
+            record.sprite_url = old.sprite_url or record.sprite_url
         repo.upsert(record)
         if was_new:
             added += 1

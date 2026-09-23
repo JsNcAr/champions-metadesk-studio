@@ -187,6 +187,25 @@ def get_mega_stone_mappings() -> dict[str, dict[str, str]]:
     return mappings
 
 
+def parse_item_spritenums(*texts: str) -> dict[str, int]:
+    """{item slug: spritenum} from Showdown item files; later files override earlier ones."""
+    pattern = re.compile(r"spritenum:\s*(\d+)")
+    out: dict[str, int] = {}
+    for text in texts:
+        if not text:
+            continue
+        for slug, body in _extract_item_blocks(text).items():
+            m = pattern.search(body)
+            if m:
+                out[slug] = int(m.group(1))
+    return out
+
+
+@lru_cache(maxsize=1)
+def get_item_spritenums() -> dict[str, int]:
+    """{item slug: cell on Showdown's item sheet}, the Champions mod over the base file."""
+    return parse_item_spritenums(_fetch_base_items_ts(), _fetch_champions_items_ts())
+
 
 def clear_showdown_cache() -> None:
     """Evicts all lru_cache entries so the next call re-fetches from GitHub.
@@ -197,3 +216,4 @@ def clear_showdown_cache() -> None:
     _fetch_champions_items_ts.cache_clear()
     get_champions_legal_slugs.cache_clear()
     get_mega_stone_mappings.cache_clear()
+    get_item_spritenums.cache_clear()

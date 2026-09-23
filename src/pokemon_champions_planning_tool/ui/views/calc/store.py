@@ -33,7 +33,7 @@ from ....infrastructure.database.repositories import TournamentRepository
 from ....services.damage_calc_service import build_calc_move, calculate, pokemon_from_species
 from ....services.tournament_service import TournamentBuild, TournamentService
 from ...catalogs import Catalogs
-from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, move_options_for
+from ...move_options import EMPTY_MOVE_OPTIONS, MoveOptions, invalidate_move_usage, item_usage_for, move_options_for
 from .state import (
     BOOST_STATS,
     DOUBLES_ONLY,
@@ -457,6 +457,11 @@ class CalcStore:
         if species is None:
             return EMPTY_MOVE_OPTIONS
         return move_options_for(self.catalogs, species.canonical_id, self._sf)
+
+    def item_usage(self, side: str) -> dict[str, float]:
+        """Blocking the first time per species: {item id: share of its tournament rosters}."""
+        species = self.species(side)
+        return item_usage_for(self.catalogs, species.canonical_id, self._sf) if species is not None else {}
 
     def search_species(self, query: str) -> list[SpeciesInfo]:
         matches = self.catalogs.search_species(query, limit=24)

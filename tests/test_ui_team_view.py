@@ -266,53 +266,116 @@ class TestTeamGrid(_TeamViewCase):
         self.store.assign(1, self.charizard)
         self.store.assign(2, self.lucario)
 
-    def test_cards_rest_compact_and_one_expands_in_place(self):
-        from pokemon_champions_planning_tool.ui.views.team.view import COMPACT_COL, EXPANDED_COL
-
-        self.assertEqual([c.content for c in self.view._cells], self.view.compacts, "all compact at first")
-        self.assertEqual(self.view.compacts[0]._name.value, "Charizard")
+    def test_the_editor_opens_in_a_pane_and_cards_stay_in_place(self):
+        cells = list(self.view.grid.controls)
+        self.assertEqual([c.content for c in cells], self.view.compacts, "all compact at first")
+        self.assertFalse(self.view._pane.visible)
         self.view.compacts[0].on_click(None)
-        self.assertEqual(self.view.expanded, 1)
-        self.assertIs(self.view._cells[0].content, self.view.cards[0])
-        self.assertEqual(self.view._cells[0].col, EXPANDED_COL)
-        self.assertIs(self.view.grid.controls[0], self.view._cells[0])
+        self.assertEqual(self.view.selected, 1)
+        self.assertIs(self.view._pane.content, self.view.cards[0], "the editor sits in the pane")
+        self.assertEqual(list(self.view.grid.controls), cells, "no card moved or was replaced")
+        self.assertEqual([c.content for c in cells], self.view.compacts)
+        self.assertTrue(all(c._condensed for c in self.view.compacts), "the cards condense while editing")
+        self.assertTrue(self.view.compacts[0]._editing.visible)
+        self.assertEqual(self.view.cards[0]._slot_label.value, "1 / 2")
         self.check_layout(self.view)
         serialise(self.view)
-        self.view._set_expanded(2)
-        self.assertIs(self.view._cells[0].content, self.view.compacts[0], "one editor open at a time")
-        self.assertEqual(self.view._cells[0].col, COMPACT_COL)
-        self.assertIs(self.view._cells[1].content, self.view.cards[1])
-        self.view._set_expanded(4)
-        self.assertEqual(self.view.expanded, 2, "an empty slot does not expand")
+        self.view.compacts[1].on_click(None)
+        self.assertIs(self.view._pane.content, self.view.cards[1], "another card switches the pane")
+        self.assertFalse(self.view.compacts[0]._editing.visible)
+        self.view._set_selected(4)
+        self.assertEqual(self.view.selected, 2, "an empty slot does not open")
+        self.view.compacts[1].on_click(None)
+        self.assertIsNone(self.view.selected, "clicking the open card closes the pane")
+        self.assertFalse(self.view._pane.visible)
+        self.assertFalse(any(c._condensed for c in self.view.compacts))
         self.view.compacts[3].on_click(None)
         from pokemon_champions_planning_tool.ui.views.team.dialogs.assign import AssignDialog
 
         self.assertIsInstance(self.page.dialogs[-1], AssignDialog, "clicking an empty card assigns")
 
+    def test_stepping_through_the_filled_slots(self):
+        self.view._set_selected(1)
+        self.view.cards[0]._next.on_click(None)
+        self.assertEqual(self.view.selected, 2)
+        self.view.cards[1]._next.on_click(None)
+        self.assertEqual(self.view.selected, 1, "wraps around, skipping empty slots")
+        self.view.handle_key(_key("Arrow Left", alt=True))
+        self.assertEqual(self.view.selected, 2, "Alt+← moves the selection while the pane is open")
+
     def test_editor_edits_show_on_the_compact_card(self):
-        self.view._set_expanded(1)
+        self.view._set_selected(1)
         self.view._open_item_picker(1)
         self.page.dialogs[-1]._on_pick("choice-band")
         self.assertEqual(self.view.compacts[0]._item.value, "Choice Band")
+        self.assertTrue(self.view.cards[0]._item_effect.visible, "the item's effect under it")
         self.store.set_move(1, 0, "Flamethrower")
         self.view._clear_move(1, 0)
         self.assertIsNone(self.store.slot(1).moves[0])
         self.assertEqual(self.store.slot(1).battle_stats.speed, int(self.view.compacts[0]._speed.value.split()[-1]))
 
-    def test_keyboard_expand_move_and_escape_order(self):
+    def test_defense_block_and_weakness_line(self):
+        card = self.view.cards[0]          # Charizard: Fire/Flying
+        labels = [row.controls[0].content.value for row in card._defense.controls]
+        self.assertEqual(labels, ["4×", "2×", "½", "¼", "Immune"])
+        quad = [chip for chip in card._defense.controls[0].controls[1].controls]
+        self.assertEqual(len(quad), 1, "Rock hits Fire/Flying 4×")
+        weak = "".join(span.text for span in self.view.compacts[0]._weak.spans)
+        self.assertTrue(weak.startswith("Weak: Rock 4×"), weak)
+        self.assertIn("Immune: Ground", self.view.compacts[0]._weak.tooltip)
+
+    def test_keyboard_select_move_and_escape_order(self):
         self.view._focus(1)
         self.view.handle_key(_key("Enter"))
-        self.assertEqual(self.view.expanded, 1)
+        self.assertEqual(self.view.selected, 1)
         self.view.handle_key(_key("Arrow Right", alt=True, shift=True))
         self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Charizard", "Alt+Shift+→ moves the card")
-        self.assertEqual(self.view.expanded, 2, "the editor follows the card")
+        self.assertEqual(self.view.selected, 2, "the editor follows the card")
         self.assertTrue(self.view.summary.visible)
         self.view.handle_key(_key("Escape"))
-        self.assertIsNone(self.view.expanded, "first Escape collapses the editor")
+        self.assertIsNone(self.view.selected, "first Escape closes the editor")
         self.view.handle_key(_key("Escape"))
         self.assertIsNone(self.view.focused, "then clears the focus")
         self.view.handle_key(_key("Escape"))
         self.assertFalse(self.view.summary.visible, "then closes the panel")
+
+    def test_tournament_set_menu_applies_and_undoes(self):
+        from pokemon_champions_planning_tool.services.tournament_service import TournamentBuild
+
+        build = TournamentBuild("charizard", ["Heat Wave", "Protect"], "timid", "Choice Band", "Solar Power")
+        self.store._builds = {"charizard": build}
+        self.view._set_selected(1)
+        card = self.view.cards[0]
+        self.assertTrue(card._build_menu.visible)
+        self.assertIn("Choice Band · Solar Power · Timid · Heat Wave, Protect", card._build_line.value)
+        card._build_menu.items[2].on_click(None)                    # Apply the full set
+        member = self.store.slot(1).member
+        self.assertEqual(([m.name for m in member.moveset if m.name], member.item, member.ability, member.nature),
+                         (["Heat Wave", "Protect"], "choice-band", "Solar Power", "Timid"))
+        snack = next(d for d in reversed(self.page.dialogs) if isinstance(d, ft.SnackBar))
+        snack.on_action(None)
+        self.assertIsNone(self.store.slot(1).member.item, "Undo restores the slot")
+        self.store._builds = {}
+        self.view._set_selected(2)
+        self.assertFalse(self.view.cards[1]._build_menu.visible, "no tournament data: no menu")
+
+    def test_move_rows_show_category_power_accuracy_and_stab(self):
+        from types import SimpleNamespace
+
+        from pokemon_champions_planning_tool.domain.moves import MoveInfo
+        from pokemon_champions_planning_tool.ui.views.team.slot_card import MoveButton
+
+        heat_wave = MoveInfo("heatwave", "Heat Wave", "fire", "special", 95, 90, 10, 0, "allAdjacentFoes", "May burn the foes.", True)
+        button = MoveButton(index=0, on_click=lambda: None)
+        button.update_from(SimpleNamespace(name="Heat Wave", info=heat_wave, legal=True), species="Charizard", types=("fire", "flying"))
+        self.assertTrue(button._category.visible)
+        self.assertEqual(button._category.tooltip, "Fire · Special")
+        self.assertTrue(button._stab.visible, "a Fire move on Charizard")
+        self.assertEqual(button._meta.value, "95 · 90%")
+        self.assertIn("Hits both foes", button.tooltip)
+        self.assertIn("May burn the foes.", button.tooltip)
+        button.update_from(SimpleNamespace(name="Heat Wave", info=heat_wave, legal=True), species="Lucario", types=("fighting", "steel"))
+        self.assertFalse(button._stab.visible)
 
     def test_compact_menu_moves_cards(self):
         items = {getattr(i.content, "value", None): i for i in self.view.compacts[1]._menu.items}

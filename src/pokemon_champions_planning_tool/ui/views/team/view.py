@@ -30,7 +30,6 @@ from .store import TeamStore
 from .summary_panel import SummaryPanel
 
 COMPACT_COL = {"xs": 12, "md": 6, "xl": 4}     # three across wide, two beside the panel, one narrow
-EXPANDED_COL = {"xs": 12, "md": 12, "xl": 12}
 SPREAD_SAVE_MS = 400
 _TONE_COLOURS = {
     "success": (Palette.SUCCESS_CONTAINER, Palette.ON_SUCCESS_CONTAINER), "warning": (Palette.WARNING_CONTAINER, Palette.ON_WARNING_CONTAINER),
@@ -45,7 +44,7 @@ class TeamView(ft.Column):
         self.ctx = ctx
         self.store = store or TeamStore(ctx.catalogs, formats=ctx.formats)
         self.focused: int | None = None
-        self.expanded: int | None = None
+        self.selected: int | None = None     # the slot shown in the editor pane under the grid
         self._loaded = False
         self._spread_later: dict[int, Debouncer] = {}
         self._pending_spread: dict[int, tuple[str, dict[str, int]]] = {}
@@ -132,21 +131,25 @@ class TeamView(ft.Column):
             on_spread_change=self._spread_changed,
             on_swap=self._swap,
             on_focus=self._focus,
-            on_collapse=lambda _p: self._set_expanded(None),
+            on_collapse=lambda _p: self._set_selected(None),
+            on_step=self._step,
+            on_apply_build=self._apply_build,
             on_partner=self._open_partner,
             on_calc=self._open_calc,
         )
-        compact_callbacks = CompactCallbacks(on_expand=self._set_expanded, on_assign=self._open_assign, on_swap=self._swap,
+        compact_callbacks = CompactCallbacks(on_expand=self._toggle_selected, on_assign=self._open_assign, on_swap=self._swap,
                                              on_clear=self._clear_slot, on_calc=self._open_calc)
-        # ``cards`` are the editors (one is on screen, expanded); ``compacts`` the resting cards.
+        # ``cards`` are the editors (the selected one sits in the pane); ``compacts`` stay in the grid.
         self.cards = [SlotCard(p, callbacks) for p in range(1, 7)]
         self.compacts = [CompactSlot(p, compact_callbacks) for p in range(1, 7)]
         self._cells = [ft.Container(col=COMPACT_COL, content=c) for c in self.compacts]
         self.grid = ft.ResponsiveRow(spacing=Space.GRID_GAP, run_spacing=Space.GRID_GAP, vertical_alignment=ft.CrossAxisAlignment.START, controls=list(self._cells))
-        self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=lambda p: (self._set_expanded(p), self._focus(p)))
+        self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=lambda p: self._set_selected(p))
         self.summary.visible = bool(ctx.prefs.get("team.summary_visible", True))
         self._summary_toggle.selected = self.summary.visible
-        self._main = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.grid])
+        # The editor pane under the grid: the cards never move, the pane shows the selected slot.
+        self._pane = ft.Container(visible=False)
+        self._main = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, spacing=Space.MD, controls=[self.grid, self._pane])
         self._body = SplitPane(self._main, self.summary, gap=Space.LG)
         self._narrow = False
         # The library of every team; with no teams it is the view's empty state.
@@ -209,21 +212,23 @@ class TeamView(ft.Column):
             return True
         if e.alt and key in _ARROWS:
             step = -1 if "Left" in key else 1
-            current = self.focused or self.expanded or 1
+            current = self.selected or self.focused or 1
             if e.shift:
                 self._swap(current, current + step)          # move the card itself
+            elif self.selected is not None:
+                self._step(self.selected, step)              # the pane follows the selection
             else:
                 self._focus(((current - 1 + step) % 6) + 1)
             return True
-        if key == "Enter" and not (e.ctrl or e.alt or e.shift) and self.focused is not None and self.expanded != self.focused:
-            self._set_expanded(self.focused)
+        if key == "Enter" and not (e.ctrl or e.alt or e.shift) and self.focused is not None and self.selected != self.focused:
+            self._set_selected(self.focused)
             return True
         if key == "Escape" and self.mode == "library" and self.store.active_team_id is not None:
             self.close_library()
             return True
         if key == "Escape":
-            if self.expanded is not None:
-                self._set_expanded(None)
+            if self.selected is not None:
+                self._set_selected(None)
                 return True
             if self.focused is not None:
                 self._focus(None)
@@ -264,13 +269,16 @@ class TeamView(ft.Column):
         slot = self.store.slot(position)
         self.compacts[position - 1].update_from(slot, focused=position == self.focused)
         self.cards[position - 1].update_from(slot, focused=position == self.focused, fmt=fmt)
-        if self.expanded == position and not slot.filled:
-            self._set_expanded(None)
+        if self.selected == position and not slot.filled:
+            self._set_selected(None)
+        elif self.selected is not None:
+            self._update_slot_info()
 
     def _update_cell(self, position: int) -> None:
-        """A one-slot edit sends that slot's card only (and the header's health chip)."""
+        """A one-slot edit sends that slot's card (and its editor, when open) and the health chip."""
         cell = self._cells[position - 1]
-        for control in (cell, self._health, self.summary):
+        pane = [self._pane] if self.selected == position else []
+        for control in (cell, *pane, self._health, self.summary):
             if is_mounted(control):
                 control.update()
 
@@ -362,28 +370,64 @@ class TeamView(ft.Column):
 
     # -- expanding and focus ----------------------------------------------------------------------
 
-    def _set_expanded(self, position: int | None) -> None:
-        """Expand one card in place into the editor (the others stay compact)."""
+    def _toggle_selected(self, position: int) -> None:
+        """A card click: open its editor, or close it when it is already open."""
+        self._set_selected(None if position == self.selected else position)
+
+    def _set_selected(self, position: int | None) -> None:
+        """Show a slot's editor in the pane under the grid. The cards keep their places:
+        they only condense while the pane is open, and the selected one is marked."""
         if position is not None and not self.store.slot(position).filled:
-            return          # nothing to edit: an empty slot is assigned, not expanded
-        if position == self.expanded:
+            return          # nothing to edit: an empty slot is assigned, not selected
+        if position == self.selected:
             return
-        changed = [p for p in (self.expanded, position) if p is not None]
-        self.expanded = position
-        for p in changed:
-            # A new cell rather than a new ``col`` on the old one: the client does not
-            # re-measure a ResponsiveRow child whose column spans changed in place.
-            opening = p == position
-            self._cells[p - 1].content = None          # one parent per control
-            cell = ft.Container(col=EXPANDED_COL if opening else COMPACT_COL, content=self.cards[p - 1] if opening else self.compacts[p - 1])
-            self._cells[p - 1] = cell
-            self.grid.controls[p - 1] = cell
+        self.selected = position
+        self._pane.content = self.cards[position - 1] if position is not None else None
+        self._pane.visible = position is not None
+        for compact in self.compacts:
+            compact.set_condensed(position is not None)
+            compact.set_selected(compact.position == position)
         if position is not None:
             self.focused = position
-            for compact in self.compacts:
-                compact.set_focused(compact.position == position)
-        if is_mounted(self.grid):
-            self.grid.update()
+            self._update_slot_info()
+            self._load_build(position)
+        if is_mounted(self._main):
+            self._main.update()
+
+    def _filled_positions(self) -> list[int]:
+        return [s.position for s in self.store.slots if s.filled]
+
+    def _update_slot_info(self) -> None:
+        filled = self._filled_positions()
+        if self.selected in filled:
+            self.cards[self.selected - 1].set_slot_info(filled.index(self.selected) + 1, len(filled))
+
+    def _step(self, position: int, delta: int) -> None:
+        """‹ ›: the previous or next filled slot, wrapping around."""
+        filled = self._filled_positions()
+        if position not in filled or len(filled) < 2:
+            return
+        self._set_selected(filled[(filled.index(position) + delta) % len(filled)])
+
+    def _load_build(self, position: int) -> None:
+        """The species' most used tournament set, for the pane's "Tournament set" menu."""
+        card = self.cards[position - 1]
+        card.set_build(None)
+
+        def done(build) -> None:
+            if self.selected == position:
+                card.set_build(build)
+
+        self.ctx.run_in_background(lambda: self.store.tournament_build(position), on_done=done, on_error=lambda _e: None)
+
+    def _apply_build(self, position: int, moves_only: bool) -> None:
+        build = self.store.tournament_build(position)       # cached by the menu's load
+        if build is None:
+            return
+        previous = self.store.apply_build(position, build, moves_only=moves_only)
+        if previous is not None:
+            what = "moves" if moves_only else "set"
+            self.ctx.toast(f"Applied the tournament {what}", "success", action="Undo", on_action=lambda: self._restore(previous))
 
     def _focus(self, position: int | None) -> None:
         self.focused = position
@@ -400,7 +444,7 @@ class TeamView(ft.Column):
         self._library_auto = auto
         if self.mode != "library":
             self.mode = "library"
-            self._set_expanded(None)
+            self._set_selected(None)
             self.controls = [self.header, self.library]
             self.header.set_caption("All teams")
             for control in (self._import_button, self._export_menu, self._summary_toggle):
@@ -554,10 +598,11 @@ class TeamView(ft.Column):
     def _swap(self, a: int, b: int) -> None:
         if not 1 <= b <= 6 or a == b:
             return
-        was_expanded = self.expanded == a
+        was_selected = self.selected == a
         if self.store.swap(a, b):
-            if was_expanded:
-                self._set_expanded(b)
+            if was_selected:
+                self.selected = None
+                self._set_selected(b)
             self._focus(b)
 
     def _open_compare(self) -> None:
@@ -662,11 +707,15 @@ class TeamView(ft.Column):
             item = self.store.set_item(position, item_id)
             self.ctx.toast(f"{slot.entry.pokemon.display_name} holds {item.display_name}" if item else "Item removed", "success")
 
-        self.ctx.page.show_dialog(ItemPickerDialog(
+        dialog = ItemPickerDialog(
             catalogs=self.store.catalogs, species_name=slot.species_name,
             current_item_id=slot.item.canonical_id if slot.item else None,
             on_pick=pick, on_close=self.ctx.page.pop_dialog, mega=self.store.active_format.has(Mechanic.MEGA),
-        ))
+            sort=str(self.ctx.prefs.get("team.item_sort", "popular")), on_sort=lambda v: self.ctx.prefs.set("team.item_sort", v),
+        )
+        self.ctx.page.show_dialog(dialog)
+        # Tournament usage ranks the list; it can take a query the first time, so it arrives later.
+        self.ctx.run_in_background(lambda: self.store.item_usage(position), on_done=dialog.set_usage, on_error=lambda _e: None)
 
     # -- import / export ----------------------------------------------------------------------------------------
 
@@ -682,7 +731,7 @@ class TeamView(ft.Column):
         def done(team_id: UUID) -> None:
             self.ctx.bus.emit(events.NAVIGATE, "team")
             self.close_library()
-            self._set_expanded(None)
+            self._set_selected(None)
             self._focus(None)
             self._update_self()
 
@@ -718,4 +767,4 @@ class TeamView(ft.Column):
             self.update()
 
 
-__all__ = ["COMPACT_COL", "EXPANDED_COL", "TeamView"]
+__all__ = ["COMPACT_COL", "TeamView"]

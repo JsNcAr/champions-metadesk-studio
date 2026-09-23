@@ -361,6 +361,15 @@ class TournamentService:
             usage[key] = usage.get(key, 0.0) + n / teams
         return usage
 
+    def item_usage(self, canonical_id: str, *, battle_format: str | None = "doubles") -> dict[str, float]:
+        """Share of stored rosters of this species (megas included) holding each item,
+        keyed by the item's name as the rosters spell it."""
+        counts = self.repo.item_usage(canonical_id, battle_format=battle_format)
+        if not counts:
+            return {}
+        rosters = max(1, self.repo.species_roster_count(canonical_id, battle_format=battle_format))
+        return {name: n / rosters for name, n in counts}
+
     def common_moves_by_species(self, top: int = 4, *, battle_format: str | None = "doubles") -> dict[str, list[str]]:
         """The ``top`` most used roster moves per base species id (the "tournament set")."""
         usage = self.repo.move_usage_all(battle_format=battle_format)

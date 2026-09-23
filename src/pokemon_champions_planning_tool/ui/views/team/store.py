@@ -47,11 +47,12 @@ from ....services.showdown_service import (
     resolve_import_readiness,
 )
 from ....domain.moves import base_canonical_id
-from ....services.tournament_service import PartnerRecommendation, TournamentService
+from ....services.tournament_service import PartnerRecommendation, TournamentBuild, TournamentService
 from ...catalogs import Catalogs
 from ...move_options import (  # noqa: F401 - MoveOptions re-exported for the picker
     MoveOptions,
     invalidate_move_usage,
+    item_usage_for,
     move_options_for,
 )
 from ...formats import FormatRegistry
@@ -110,6 +111,7 @@ class TeamStore:
         # re-renders the card, so answers are kept until tournament data changes.
         self._partner_cache: dict[tuple[str, int], list[PartnerRecommendation]] = {}
         self._listeners: list[Listener] = []
+        self._builds: dict[str, TournamentBuild] | None = None    # most used set per base species
 
     # -- subscription ---------------------------------------------------------------------
 
@@ -483,6 +485,55 @@ class TeamStore:
             return MoveOptions((), (), {}, False)
         return move_options_for(self.catalogs, slot.entry.pokemon.canonical_id, self._sf)
 
+    def tournament_build(self, position: int) -> TournamentBuild | None:
+        """Blocking the first time (run in the background): the slot species' most used
+        tournament set (item, ability, nature, four moves), or None without data."""
+        slot = self.slot(position)
+        if slot.entry is None:
+            return None
+        if self._builds is None:
+            try:
+                with self._sf() as s:
+                    self._builds = TournamentService(s).common_builds_by_species()
+            except Exception:  # noqa: BLE001 - a hint, never required
+                return None
+        cid = slot.entry.pokemon.canonical_id
+        build = self._builds.get(base_canonical_id(cid)) or self._builds.get(cid)
+        return build if build is not None and (build.moves or build.item) else None
+
+    def apply_build(self, position: int, build: TournamentBuild, *, moves_only: bool = False) -> TeamMember | None:
+        """Fill a slot from a tournament set; returns the member before, for Undo.
+
+        The item goes through ``set_item``, so a Mega Stone still switches the form (and
+        its ability). The spread's points are kept; only the nature changes.
+        """
+        slot = self.slot(position)
+        if slot.member is None:
+            return None
+        previous = slot.member
+        moves = [PokemonMove(name=name) for name in list(build.moves)[:4]]
+        moves += [PokemonMove(name="")] * (4 - len(moves))
+        changes: dict[str, Any] = {"moveset": moves}
+        if not moves_only:
+            if build.nature:
+                changes["nature"] = build.nature.capitalize()
+            if build.ability:
+                changes["ability"] = build.ability
+        self._update(position, **changes)
+        if not moves_only and build.item:
+            record = self.catalogs.item_for(build.item) or self.catalogs.item_for(build.item.lower().replace(" ", "-"))
+            if record is not None:
+                self.set_item(position, record.canonical_id)
+        return previous
+
+    def item_usage(self, position: int) -> dict[str, float]:
+        """Blocking the first time per species (run in the background): {item id: share of
+        this species' tournament rosters holding it}."""
+        slot = self.slot(position)
+        if slot.entry is None:
+            return {}
+        return item_usage_for(self.catalogs, slot.entry.pokemon.canonical_id, self._sf)
+
     def set_move(self, position: int, index: int, name: str) -> None:
         slot = self.slot(position)
         if slot.member is None:
@@ -624,6 +675,7 @@ class TeamStore:
     def invalidate_partners(self) -> None:
         """New tournament data landed: recompute recommendations on the next request."""
         self._partner_cache.clear()
+        self._builds = None
         invalidate_move_usage()
 
     # -- import / export ------------------------------------------------------------------------------

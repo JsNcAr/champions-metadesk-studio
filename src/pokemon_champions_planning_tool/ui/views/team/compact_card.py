@@ -18,7 +18,8 @@ from ...tasks import is_mounted
 from ...theme import IconSize, Motion, OVERLAY_SHADOW, Palette, Radius, Space, alpha, type_color
 from .summary import SlotModel
 
-COMPACT_HEIGHT = 146
+COMPACT_HEIGHT = 162
+CONDENSED_HEIGHT = 96     # while the editor pane is open: header, item and weaknesses
 
 
 @dataclass
@@ -60,6 +61,7 @@ class CompactSlot(ft.Container):
         self._types = ft.Row(spacing=Space.XS, tight=True)
         self._warn = ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=IconSize.SM, color=Palette.WARNING, visible=False)
         self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_size=IconSize.MD, tooltip="Slot actions", items=[])
+        self._editing = ft.Icon(ft.Icons.EDIT, size=IconSize.SM, color=Palette.PRIMARY, visible=False, tooltip="Open in the editor below")
         self._grip = ft.Icon(ft.Icons.DRAG_INDICATOR, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT, tooltip="Drag onto another slot to swap")
         self._head = ft.Container(
             padding=ft.Padding.only(left=Space.XS, right=0, top=Space.XS, bottom=Space.XS),
@@ -67,7 +69,7 @@ class CompactSlot(ft.Container):
             content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 self._grip, self._badge, self.sprite,
                 ft.Column(spacing=2, tight=True, expand=True, controls=[self._name, self._types]),
-                self._warn, self._menu,
+                self._editing, self._warn, self._menu,
             ]),
         )
         self._drag_name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
@@ -81,13 +83,17 @@ class CompactSlot(ft.Container):
         self._ability = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._moves = ft.Column(spacing=2, tight=True)
         self._spread = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+        self._weak = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._speed = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, tooltip="Speed at level 50, from the spread and nature")
+        self._spread_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._speed])
+        self._condensed = False
         self._filled_body = ft.Column(spacing=Space.XS, tight=True, controls=[
             self.drag_handle,
             ft.Container(padding=ft.Padding.symmetric(horizontal=Space.SM), content=ft.Column(spacing=Space.XS, tight=True, controls=[
                 ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item, self._ability]),
+                self._weak,
                 self._moves,
-                ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._speed]),
+                self._spread_row,
             ])),
         ])
         self._empty = ft.Column(spacing=Space.SM, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=[
@@ -131,6 +137,10 @@ class CompactSlot(ft.Container):
             ft.Row(spacing=Space.SM, controls=[_move_line(moves[0]), _move_line(moves[1])]),
             ft.Row(spacing=Space.SM, controls=[_move_line(moves[2]), _move_line(moves[3])]),
         ]
+        line, tip = slot.weakness_line()
+        self._weak.spans = self._weak_spans(line)
+        self._weak.value = "" if self._weak.spans else line
+        self._weak.tooltip = tip or None
         stats = slot.battle_stats
         self._spread.value = slot.spread_summary or "No spread yet"
         self._speed.value = f"Spe {stats.speed}" if stats else ""
@@ -143,6 +153,33 @@ class CompactSlot(ft.Container):
         self._inner.alignment = ft.Alignment.TOP_CENTER
         self.tooltip = "Edit this slot"
         self._apply_frame()
+
+    @staticmethod
+    def _weak_spans(line: str) -> list[ft.TextSpan]:
+        """"Weak: Fire 4× · Water": the 4× part in bold red, the rest plain."""
+        if not line.startswith("Weak: "):
+            return []
+        spans = [ft.TextSpan("Weak: ", style=ft.TextStyle(color=Palette.ON_SURFACE_VARIANT))]
+        for i, part in enumerate(line[len("Weak: "):].split(" · ")):
+            if i:
+                spans.append(ft.TextSpan(" · ", style=ft.TextStyle(color=Palette.ON_SURFACE_VARIANT)))
+            quad = part.endswith("×")
+            spans.append(ft.TextSpan(part, style=ft.TextStyle(color=Palette.ERROR if quad else Palette.ON_SURFACE,
+                                                                  weight=ft.FontWeight.W_700 if quad else None)))
+        return spans
+
+    def set_condensed(self, condensed: bool) -> None:
+        """While the editor pane is open the cards shrink to header, item and weaknesses,
+        so the whole team stays above the editor. Positions never change."""
+        if condensed == self._condensed:
+            return
+        self._condensed = condensed
+        self._moves.visible = self._spread_row.visible = not condensed
+        self.height = CONDENSED_HEIGHT if condensed else COMPACT_HEIGHT
+
+    def set_selected(self, selected: bool) -> None:
+        self._editing.visible = selected
+        self.set_focused(selected)
 
     def set_focused(self, focused: bool) -> None:
         if focused != self._focused:
@@ -212,4 +249,4 @@ class CompactSlot(ft.Container):
             self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT if self._filled else Palette.OUTLINE)
 
 
-__all__ = ["COMPACT_HEIGHT", "CompactCallbacks", "CompactSlot"]
+__all__ = ["COMPACT_HEIGHT", "CONDENSED_HEIGHT", "CompactCallbacks", "CompactSlot"]

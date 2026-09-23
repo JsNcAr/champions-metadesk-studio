@@ -25,10 +25,22 @@ for the headings and style.
     has Terastallization, and imports still read it.
 
 - **A reworked Teams view.** The six slots are compact cards that all fit on screen: sprite,
-  types, item, ability, moves, nature and spread, and level-50 Speed. Clicking one expands it
-  in place into the editor, with the build, the moves and the stat-point spread side by side.
-  The spread is edited inline and saved as you go, a move can be cleared with ×, notes are
-  always visible, and the common partners open their tournament teams in Meta.
+  types, item, ability, weaknesses, moves, nature and spread, and level-50 Speed. Clicking one
+  opens its editor in a pane under the cards; the cards stay where they are (they only shrink
+  while the editor is open) and ‹ › step through the team. The editor puts the build, the
+  moves and the stat-point spread side by side. The spread is edited inline and saved as you
+  go, a move can be cleared with ×, notes are always visible, and the common partners open
+  their tournament teams in Meta.
+- **Defensive matchups for each Pokémon.** The editor lists what hits it 4× and 2×, what it
+  resists (½, ¼) and what it is immune to, counting abilities such as Levitate, Flash Fire,
+  Water Absorb, Thick Fat or Fluffy; each card shows a "Weak: Rock 4× · Water…" line. The
+  team's defensive grid counts abilities too.
+- **Move and item details.** Move rows show the category, power, accuracy and a STAB mark,
+  with the effect, priority and targets on hover; the held item shows its effect.
+- **Popular items first.** The item picker (Teams and Calc) lists the items that species holds
+  in tournaments first, with their share; "A–Z" switches back to alphabetical.
+- **Tournament set.** The editor's "Tournament set" menu shows the species' most used set and
+  applies it (or only its moves) to the slot, with Undo.
 - **Team library.** The team switcher (six sprites and the name) and Ctrl+L open every team
   as a tile: its six Pokémon, format, size and last edit. Search by team or Pokémon, sort by
   last edit, name or completeness, and open, rename, duplicate, compare, copy or delete a team
@@ -44,8 +56,9 @@ for the headings and style.
   (it opens the Health tab). Rename moved into the team menu next to New, Duplicate, Compare
   and Delete.
 - Slot cards move with a visible drag handle or Move left / right in their menu (instead of
-  five "Swap with slot N" entries); Alt+Shift+←/→ moves the focused card, Enter expands it,
-  and Escape collapses the editor, then clears the focus, then closes the panel.
+  five "Swap with slot N" entries); Alt+Shift+←/→ moves the focused card, Enter opens it in
+  the editor, Alt+←/→ steps through the team while the editor is open, and Escape closes the
+  editor, then clears the focus, then closes the panel.
 - Swapping two slots no longer reloads the whole team.
 - The box picker says when it shows only the first 60 matches.
 - The team export dialog says "Stat points" instead of "EVs". Copy and Publish still write

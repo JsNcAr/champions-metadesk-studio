@@ -18,14 +18,14 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+K", "Add a Pokémon to the box"),
     ("Ctrl+Shift+A", "Select every visible box entry"),
     ("Delete", "Delete the selected box entries (with Undo)"),
-    ("Escape", "Close the dialog, then collapse the slot editor or the side panel, then clear the selection"),
+    ("Escape", "Close the dialog, then the slot editor or the side panel, then clear the selection"),
     ("Ctrl+L", "All teams: the team library (Teams)"),
     ("Ctrl+N", "New team"),
     ("Ctrl+I", "Import a Showdown paste or Poképaste URL"),
     ("Ctrl+E", "Copy the active team as Showdown text"),
-    ("Alt+← / →", "Focus the previous or next slot card (Teams)"),
+    ("Alt+← / →", "Focus the previous or next slot card; with the editor open, show the previous or next Pokémon (Teams)"),
     ("Alt+Shift+← / →", "Move the focused slot card left or right (Teams)"),
-    ("Enter", "Expand the focused slot card into the editor (Teams)"),
+    ("Enter", "Open the focused slot card in the editor (Teams)"),
 )
 
 TIPS: dict[str, tuple[str, ...]] = {
@@ -37,8 +37,9 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Deleting is reversible for a few seconds through the toast's Undo; only entries on a team ask first.",
     ),
     "Teams": (
-        "All six slots show as compact cards; click one (or focus it and press Enter) to expand it in place into the editor, and Escape collapses it. Drag a card by its ⠿ handle onto another to swap them; its menu has Move left / right and Move to lead.",
-        "The editor has three parts: build (form, ability, item and its checks), moves (× clears one) and the spread, edited inline and saved as you go. Common partners open their tournament teams in Meta.",
+        "All six slots show as compact cards with their weaknesses; click one (or focus it and press Enter) to open it in the editor under the cards, ‹ › to step through the team, and Escape to close it. Drag a card by its ⠿ handle onto another to swap them; its menu has Move left / right and Move to lead.",
+        "The editor has three parts: build (form, ability, item and its effect, and the Defense block: 4×, 2×, ½, ¼ and immune, abilities such as Levitate included), moves (category, power, accuracy and STAB; × clears one) and the spread, edited inline and saved as you go. Common partners open their tournament teams in Meta.",
+        "Tournament set in the editor's header applies the species' most used set (or only its moves), with Undo. The item picker lists the items the species holds in tournaments first.",
         "The analysis panel has four tabs: Health (every check), Stats (level-50 stats; click Spe for the speed order), Types (defensive and offensive coverage) and Roles (speed control, Fake Out, Intimidate, redirection, Protect count…). The chip next to the format sums up the checks and opens Health.",
         "The move picker lists only the species' Champions-legal moves, ranked by tournament usage. \"Show all moves\" in the team menu lists the rest with a warning.",
         "Mega forms use their base species' learnset; picking a Mega Stone switches the form automatically.",

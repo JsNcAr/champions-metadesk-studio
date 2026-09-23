@@ -1521,6 +1521,52 @@ class TournamentRepository:
         ).all()
         return [(str(move), int(n)) for move, n in rows if move]
 
+    def item_usage(self, canonical_id: str, *, include_megas: bool = True, battle_format: str | None = "doubles") -> list[tuple[str, int]]:
+        """(item name, rosters holding it) for a species, most held first; same filters as
+        ``move_usage`` (megas count for their base species)."""
+        from sqlalchemy import text as _text
+
+        base = canonical_id.lower()
+        params: dict[str, Any] = {"cid": base}
+        if include_megas:
+            clause = "m.canonical_id = :cid OR (m.canonical_id >= :mega_lo AND m.canonical_id < :mega_hi)"
+            params["mega_lo"] = f"{base}-mega"
+            params["mega_hi"] = f"{base}-megb"
+        else:
+            clause = "m.canonical_id = :cid"
+        joins = ""
+        extra = ""
+        if battle_format and battle_format != "all":
+            joins = (
+                "JOIN tournament_teams tt ON tt.tournament_team_id = m.tournament_team_id "
+                "JOIN tournaments tr ON tr.tournament_id = tt.tournament_id "
+            )
+            extra = "AND tr.battle_format = :bformat "
+            params["bformat"] = battle_format
+        rows = self.session.exec(
+            _text(
+                f"SELECT m.item AS item, COUNT(*) AS n FROM tournament_team_members m {joins}"
+                f"WHERE ({clause}) AND m.item IS NOT NULL AND m.item != '' {extra}GROUP BY m.item ORDER BY n DESC, item ASC"
+            ).bindparams(**params)
+        ).all()
+        return [(str(item), int(n)) for item, n in rows if item]
+
+    def species_roster_count(self, canonical_id: str, *, include_megas: bool = True, battle_format: str | None = "doubles") -> int:
+        """How many stored rosters carry this species (the denominator for usage shares)."""
+        from sqlalchemy import text as _text
+
+        base = canonical_id.lower()
+        params: dict[str, Any] = {"cid": base, "mega_lo": f"{base}-mega", "mega_hi": f"{base}-megb"}
+        clause = "m.canonical_id = :cid OR (m.canonical_id >= :mega_lo AND m.canonical_id < :mega_hi)" if include_megas else "m.canonical_id = :cid"
+        joins = extra = ""
+        if battle_format and battle_format != "all":
+            joins = ("JOIN tournament_teams tt ON tt.tournament_team_id = m.tournament_team_id "
+                     "JOIN tournaments tr ON tr.tournament_id = tt.tournament_id ")
+            extra = "AND tr.battle_format = :bformat "
+            params["bformat"] = battle_format
+        row = self.session.exec(_text(f"SELECT COUNT(*) FROM tournament_team_members m {joins}WHERE ({clause}) {extra}").bindparams(**params)).first()
+        return int(row[0] or 0) if row else 0
+
     def move_usage_all(self, *, battle_format: str | None = "doubles") -> dict[str, list[tuple[str, int]]]:
         """{base species id: [(move name, rosters using it), …] most used first} for every species
         in one query (megas fold into their base species)."""

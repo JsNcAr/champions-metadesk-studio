@@ -69,12 +69,16 @@ class SpreadEditor(ft.Column):
         for stat in STAT_ORDER:
             slider = ft.Slider(min=0, max=MAX_POINTS_PER_STAT, divisions=MAX_POINTS_PER_STAT, value=self._points[stat], expand=True, active_color=STAT_COLORS[stat],
                                on_change=lambda e, stat=stat: self._slider_changed(stat, int(round(e.control.value))))
+            # Compact rows (the team editor pane) use a shorter field, so six stats fit beside
+            # the build and the moves without scrolling.
             field = ft.TextField(value=str(self._points[stat]), width=52, dense=True, text_align=ft.TextAlign.CENTER, keyboard_type=ft.KeyboardType.NUMBER,
+                                 text_size=13 if compact else None,
+                                 content_padding=ft.Padding.symmetric(horizontal=4, vertical=8) if compact else None,
                                  on_change=lambda e, stat=stat: self._typed(stat, e.control.value or ""))
             computed = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, width=52, text_align=ft.TextAlign.RIGHT)
             arrow = ft.Icon(ft.Icons.ARROW_UPWARD, size=12, visible=False)
             self._sliders[stat], self._fields[stat], self._computed[stat], self._arrows[stat] = slider, field, computed, arrow
-            rows.append(ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+            rows.append(ft.Row(spacing=Space.SM, height=42 if compact else None, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 ft.Row(spacing=2, tight=True, width=label_width, controls=[ft.Text(STAT_LABELS[stat], theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=STAT_COLORS[stat]), arrow]),
                 slider, field, computed,
             ]))

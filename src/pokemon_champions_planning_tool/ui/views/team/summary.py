@@ -17,7 +17,17 @@ from ....domain.moves import MoveInfo
 from ....domain.pokemon_identity import format_display_name
 from ....domain.entities.team_member import TeamMember
 from ....domain.stat_calc import MAX_POINTS_TOTAL, champions_stats, format_points, points_total, validate_points
-from ....domain.type_chart import TYPES, best_offensive_multiplier, team_defensive_matrix, team_offensive_matrix, team_offensive_summary, team_weakness_summary, uncovered_types
+from ....domain.type_chart import (
+    TYPES,
+    best_offensive_multiplier,
+    bucket_profile,
+    defensive_profile_with_ability,
+    team_matrix_from_profiles,
+    team_offensive_matrix,
+    team_offensive_summary,
+    team_weakness_from_profiles,
+    uncovered_types,
+)
 from ....infrastructure.database.models import ItemRecord, MegaEvolutionRecord
 from ....services.item_effect_service import ValidationResult, compute_effective_stats, validate_item_assignment
 
@@ -183,6 +193,36 @@ class SlotModel:
         return self.member.ability if self.member else None
 
     @property
+    def defense(self) -> tuple[dict[str, float], list[str]] | None:
+        """What hits this slot for how much (types and ability), and the ability's notes."""
+        if not self.filled or self.form is None:
+            return None
+        return defensive_profile_with_ability(self.form.types, self.active_ability)
+
+    def matchups(self) -> dict[float, list[str]]:
+        """``defense`` grouped by multiplier (4×, 2×, 1×, ½, ¼, 0×; rarer values keep their own key)."""
+        defense = self.defense
+        return bucket_profile(defense[0]) if defense is not None else {}
+
+    def weakness_line(self, limit: int = 4) -> tuple[str, str]:
+        """("Weak: Fire 4× · Water · Ground", tooltip with the whole profile)."""
+        groups = self.matchups()
+        if not groups:
+            return "", ""
+        weak = [(m, t) for m, types in sorted(groups.items(), reverse=True) if m > 1.0 for t in types]
+        if not weak:
+            line = "No weaknesses"
+        else:
+            parts = [f"{t.capitalize()} {m:g}×" if m > 2.0 else t.capitalize() for m, t in weak[:limit]]
+            line = "Weak: " + " · ".join(parts) + (f" +{len(weak) - limit}" if len(weak) > limit else "")
+        tip = []
+        for mult, label in ((4.0, "4×"), (2.0, "2×"), (0.5, "½"), (0.25, "¼"), (0.0, "Immune")):
+            types = [t for m, ts in groups.items() if (m >= 4.0 if mult == 4.0 else m == mult) for t in ts]
+            if types:
+                tip.append(f"{label}: " + ", ".join(t.capitalize() for t in types))
+        return line, "\n".join(tip + (self.defense[1] if self.defense else []))
+
+    @property
     def spread_summary(self) -> str:
         if self.member is None:
             return ""
@@ -286,7 +326,8 @@ def summarize(slots: list[SlotModel], fmt: Format | None = None) -> TeamSummary:
     if planned:
         checks.append(HealthCheck("info", f"{planned} planned", f"{planned} template{'s' if planned != 1 else ''} not yet in your box"))
 
-    types_per_slot = [list(s.form.types) if s.form else [] for s in slots]
+    # Abilities count (Levitate is not weak to Ground), empty slots read neutral.
+    profiles = [s.defense[0] if s.defense is not None else None for s in slots]
     move_types = [s.damaging_types if s.filled else [] for s in slots]
     has_moves = any(move_types)
     offense = team_offensive_matrix(move_types)
@@ -303,8 +344,8 @@ def summarize(slots: list[SlotModel], fmt: Format | None = None) -> TeamSummary:
         mega_stones=mega_stones,
         duplicate_items=duplicates,
         checks=tuple(checks),
-        weakness=team_weakness_summary(types_per_slot),
-        matrix=team_defensive_matrix(types_per_slot),
+        weakness=team_weakness_from_profiles(profiles),
+        matrix=team_matrix_from_profiles(profiles),
         offense=offense,
         offense_counts=team_offensive_summary(offense),
         uncovered=uncovered,

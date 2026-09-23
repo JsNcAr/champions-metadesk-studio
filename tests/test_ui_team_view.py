@@ -318,12 +318,29 @@ class TestTeamGrid(_TeamViewCase):
 
     def test_a_problem_shows_as_a_short_line_on_the_card(self):
         card = self.view.compacts[1]
-        self.assertFalse(card._problem.visible)
+        self.assertFalse(card._warn.visible)
         self.store.set_item(2, "charizardite-x")            # a Charizard stone on Lucario
-        self.assertTrue(card._problem.visible)
-        self.assertIn("can only be held by Charizard", card._problem.value)
+        self.assertTrue(card._warn.visible)
+        self.assertEqual(card._problem.value, "Wrong stone", "a few words on the card")
+        self.assertIn("can only be held by Charizard", card._warn.tooltip, "the full text on hover")
         self.view._set_selected(1)
-        self.assertTrue(card._problem.visible, "still shown while the editor is open")
+        self.assertTrue(card._warn.visible, "still shown while the editor is open")
+
+    def test_short_warning_texts(self):
+        from types import SimpleNamespace
+
+        from pokemon_champions_planning_tool.services.item_effect_service import ValidationResult
+        from pokemon_champions_planning_tool.ui.views.team.compact_card import problem_short, slot_problems
+
+        def slot(validation=None, illegal=()):
+            return SimpleNamespace(validation=validation, illegal_moves=list(illegal))
+
+        second = ValidationResult(warning="Only one Pokémon per team can Mega Evolve in battle.", warning_short="2nd Mega Stone")
+        self.assertEqual(problem_short(slot(second)), "2nd Mega Stone")
+        self.assertEqual(problem_short(slot(None, ["Knock Off"])), "Illegal move")
+        self.assertEqual(problem_short(slot(second, ["Knock Off", "Taunt"])), "2 illegal moves", "a flagged move outranks a warning")
+        self.assertEqual(slot_problems(slot(second, ["Knock Off"])),
+                         ["Not in the Champions learnset: Knock Off", "Only one Pokémon per team can Mega Evolve in battle."])
 
     def test_defense_block_and_weakness_line(self):
         card = self.view.cards[0]          # Charizard: Fire/Flying

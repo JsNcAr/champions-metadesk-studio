@@ -23,6 +23,9 @@ class ValidationResult:
     error: str | None = None
     unlocked_form: str | None = None
     stat_modifiers: dict[str, float] = field(default_factory=dict)
+    # A few words for tight places (the team's compact cards): "2nd Mega Stone".
+    warning_short: str | None = None
+    error_short: str | None = None
 
 
 def compute_effective_stats(
@@ -87,20 +90,25 @@ def validate_item_assignment(
 
     warning: str | None = None
     error: str | None = None
+    warning_short: str | None = None
+    error_short: str | None = None
     unlocked_form: str | None = None
 
     # Rule 1: Champions format legality check
     if not is_legal:
         warning = f"{display_name} is not available in Pokémon Champions format."
+        warning_short = "Not legal"
 
     # Rule 2 & 3: Mega Stone species matching check
     if target_species and not mega:
-        warning = warning or "Mega Evolution is not part of this team's format."
+        if warning is None:
+            warning, warning_short = "Mega Evolution is not part of this team's format.", "No Mega here"
     elif target_species:
         normalized_species = (species_name or "").strip().lower()
         if normalized_species and target_species.lower() != normalized_species:
             # Mismatch: Red error blocks form unlock
             error = f"{display_name} can only be held by {target_species.title()}."
+            error_short = "Wrong stone"
             unlocked_form = None
         else:
             # Match: Unlock target form!
@@ -113,9 +121,8 @@ def validate_item_assignment(
                 if i and i != item and getattr(i, "target_species", None) is not None
             ]
             if other_megas:
-                warning = (
-                    warning or "Only one Pokémon per team can Mega Evolve in battle."
-                )
+                if warning is None:
+                    warning, warning_short = "Only one Pokémon per team can Mega Evolve in battle.", "2nd Mega Stone"
 
     is_valid = error is None
 
@@ -125,4 +132,6 @@ def validate_item_assignment(
         error=error,
         unlocked_form=unlocked_form,
         stat_modifiers=dict(stat_modifiers),
+        warning_short=warning_short,
+        error_short=error_short,
     )

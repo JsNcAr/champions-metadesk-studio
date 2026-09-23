@@ -65,7 +65,9 @@ for the headings and style.
   them on Showdown's `EVs:` line, which is what Showdown and Poképaste read, and pasting a
   "Stat points:" line back into the app works too.
 - While a slot's editor is open the other cards keep showing their moves, and a card with a
-  problem shows it in a short line ("⚠ Knock Off: not in the learnset") instead of only an icon.
+  problem shows a short warning next to its item ("⚠ Illegal move", "⚠ 2nd Mega Stone",
+  "⚠ Wrong stone") instead of only an icon; the full text is in its tooltip and the editor.
+- Slot cards are more compact (146 px instead of 180, and 128 instead of 160 while the editor is open).
 - Slot cards show the held item's sprite.
 - Settings' "Battle format" dropdown is now called **Tournament filter**: it filters
   tournament data (Doubles only, All, Singles only) and is separate from the formats above.

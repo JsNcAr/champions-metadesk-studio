@@ -19,8 +19,8 @@ from ...tasks import is_mounted
 from ...theme import IconSize, Motion, OVERLAY_SHADOW, Palette, Radius, Space, alpha, type_color
 from .summary import SlotModel
 
-COMPACT_HEIGHT = 180
-CONDENSED_HEIGHT = 160    # while the editor pane is open: the nature and spread row hides
+COMPACT_HEIGHT = 146
+CONDENSED_HEIGHT = 128    # while the editor pane is open: the nature and spread row hides
 
 
 @dataclass
@@ -45,18 +45,32 @@ def _move_line(move) -> ft.Control:
     ])
 
 
-def problem_line(slot: SlotModel) -> str:
-    """The card's most important problem in a few words: an error, a flagged move, a warning."""
+def slot_problems(slot: SlotModel) -> list[str]:
+    """Every problem of the slot, in full, most important first."""
+    v = slot.validation
+    flagged = slot.illegal_moves
+    out = [v.error] if v is not None and v.error else []
+    if flagged:
+        out.append(f"Not in the Champions learnset: {', '.join(flagged)}")
+    if v is not None and v.warning:
+        out.append(v.warning)
+    return out
+
+
+def problem_short(slot: SlotModel) -> str:
+    """The most important problem in two or three words, for the card's header chip:
+    "Wrong stone", "Illegal move", "2 illegal moves", "2nd Mega Stone". The flagged move is
+    already orange in the card's move list, and the tooltip has every problem in full."""
     v = slot.validation
     if v is not None and v.error:
-        return v.error
+        return v.error_short or "Item problem"
     flagged = slot.illegal_moves
     if len(flagged) == 1:
-        return f"{flagged[0]}: not in the learnset"
+        return "Illegal move"
     if flagged:
-        return f"{len(flagged)} moves not in the learnset"
+        return f"{len(flagged)} illegal moves"
     if v is not None and v.warning:
-        return v.warning
+        return v.warning_short or "Item warning"
     return ""
 
 
@@ -71,21 +85,33 @@ class CompactSlot(ft.Container):
 
         self._badge = ft.Container(content=ft.Text(str(position), theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE),
                                    width=20, height=20, border_radius=Radius.PILL, bgcolor=Palette.SURFACE_4, alignment=ft.Alignment.CENTER)
-        self.sprite = Sprite(size=40)
+        self.sprite = Sprite(size=36)
         self._name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1,
                              overflow=ft.TextOverflow.ELLIPSIS)
         self._types = ft.Row(spacing=Space.XS, tight=True)
-        self._warn = ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=IconSize.SM, color=Palette.WARNING, visible=False)
+        # The most important problem in a few words; every problem, in full, in the tooltip.
+        # It sits on the item row (the widest line of the card; most problems are about the
+        # item anyway), between the item and the ability.
+        self._problem = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_WARNING_CONTAINER, max_lines=1,
+                                overflow=ft.TextOverflow.ELLIPSIS)
+        self._warn = ft.Container(
+            visible=False, bgcolor=Palette.WARNING_CONTAINER, border_radius=Radius.PILL, padding=ft.Padding.only(left=4, right=6),
+            content=ft.Row(spacing=2, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=12, color=Palette.WARNING), self._problem]),
+        )
         self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_size=IconSize.MD, tooltip="Slot actions", items=[])
         self._editing = ft.Icon(ft.Icons.EDIT, size=IconSize.SM, color=Palette.PRIMARY, visible=False, tooltip="Open in the editor below")
         self._grip = ft.Icon(ft.Icons.DRAG_INDICATOR, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT, tooltip="Drag onto another slot to swap")
         self._head = ft.Container(
-            padding=ft.Padding.only(left=Space.XS, right=0, top=Space.XS, bottom=Space.XS),
+            padding=ft.Padding.only(left=Space.XS, right=0, top=2, bottom=2),
             border_radius=ft.BorderRadius.only(top_left=Radius.MD, top_right=Radius.MD),
             content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 self._grip, self._badge, self.sprite,
-                ft.Column(spacing=2, tight=True, expand=True, controls=[self._name, self._types]),
-                self._editing, self._warn, self._menu,
+                ft.Column(spacing=0, tight=True, expand=True, controls=[
+                    self._name,
+                    self._types,
+                ]),
+                self._editing, self._menu,
             ]),
         )
         self._drag_name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
@@ -99,17 +125,15 @@ class CompactSlot(ft.Container):
         self._ability = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._moves = ft.Column(spacing=2, tight=True)
         self._spread = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
-        self._problem = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.WARNING, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, visible=False)
         self._weak = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._speed = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, tooltip="Speed at level 50, from the spread and nature")
         self._spread_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._speed])
         self._condensed = False
-        self._filled_body = ft.Column(spacing=Space.XS, tight=True, controls=[
+        self._filled_body = ft.Column(spacing=2, tight=True, controls=[
             self.drag_handle,
-            ft.Container(padding=ft.Padding.symmetric(horizontal=Space.SM), content=ft.Column(spacing=Space.XS, tight=True, controls=[
-                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item, self._ability]),
+            ft.Container(padding=ft.Padding.only(left=Space.SM, right=Space.SM, bottom=Space.XS), content=ft.Column(spacing=2, tight=True, controls=[
+                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item, self._warn, self._ability]),
                 self._weak,
-                self._problem,
                 self._moves,
                 self._spread_row,
             ])),
@@ -163,13 +187,10 @@ class CompactSlot(ft.Container):
         stats = slot.battle_stats
         self._spread.value = slot.spread_summary or "No spread yet"
         self._speed.value = f"Spe {stats.speed}" if stats else ""
-        v = slot.validation
-        problems = [x for x in ((v.error if v else None), (v.warning if v else None)) if x] + ([f"{len(slot.illegal_moves)} move(s) outside the learnset"] if slot.illegal_moves else [])
+        problems = slot_problems(slot)
         self._warn.visible = bool(problems)
         self._warn.tooltip = "\n".join(problems) or None
-        self._problem.value = f"⚠ {problem_line(slot)}" if problems else ""
-        self._problem.tooltip = self._warn.tooltip
-        self._problem.visible = bool(problems)
+        self._problem.value = problem_short(slot) if problems else ""
         self._menu.items = self._menu_items()
         self._inner.content = self._filled_body
         self._inner.alignment = ft.Alignment.TOP_CENTER

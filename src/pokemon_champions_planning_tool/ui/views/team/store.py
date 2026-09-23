@@ -17,11 +17,13 @@ from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from typing import Any
+from datetime import datetime
 from uuid import UUID
 
 from sqlmodel import Session
 
 from ....domain.formats import Format, Mechanic
+from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ....domain.team_roles import RoleMember
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_move import PokemonMove
@@ -66,6 +68,32 @@ class TeamRow:
     name: str
     filled: int
     format_id: str | None = None      # None: follows the default format
+
+
+@dataclass(frozen=True)
+class LibraryMember:
+    slot: int
+    name: str
+    sprite_url: str | None
+
+
+@dataclass(frozen=True)
+class LibraryRow:
+    """One team in the library: enough to draw its tile without loading its slots."""
+
+    team_id: UUID
+    name: str
+    format_id: str | None
+    updated_at: datetime | None
+    members: tuple[LibraryMember, ...]
+
+    @property
+    def filled(self) -> int:
+        return len(self.members)
+
+    def matches(self, query: str) -> bool:
+        q = query.strip().lower()
+        return not q or q in self.name.lower() or any(q in m.name.lower() for m in self.members)
 
 
 class TeamStore:
@@ -180,6 +208,21 @@ class TeamStore:
         self._validate()
         self._notify(("teams",))
         self._notify(("all",))
+
+    # -- library ------------------------------------------------------------------------------
+
+    def library_rows(self) -> list[LibraryRow]:
+        """Blocking (run in the background): every team with its six sprites, one query."""
+        with self._sf() as s:
+            rows = TeamRepository(s).list_with_species()
+        out = []
+        for record, members in rows:
+            out.append(LibraryRow(
+                record.team_id, record.name, record.format_id, record.updated_at,
+                tuple(LibraryMember(slot, name, get_pokemon_sprite_url(form if form and form != "base" else canonical_id))
+                      for slot, name, canonical_id, form in members),
+            ))
+        return out
 
     # -- format ---------------------------------------------------------------------------------
 
@@ -510,6 +553,18 @@ class TeamStore:
         return []
 
     # -- export / analytics -----------------------------------------------------------------------------
+
+    def export_text_for(self, team_id: UUID) -> str:
+        """Showdown text of any team (the library's Copy), without switching to it."""
+        if team_id == self.active_team_id:
+            return self.export_text()
+        with self._sf() as s:
+            record = TeamRepository(s).get(team_id)
+        _name, slots, _summary = self.summary_for(team_id)
+        members = [sl.member for sl in slots if sl.member is not None]
+        entries = {sl.member.box_entry_id: sl.entry for sl in slots if sl.member is not None and sl.entry is not None}
+        fmt = self.formats.for_team(record.format_id if record else None)
+        return export_team_to_showdown_text(members, entries, tera=fmt.has(Mechanic.TERA))
 
     def export_text(self, *, points_label: str = "EVs") -> str:
         """The active team as a Showdown paste. Keep ``EVs`` for text that leaves the app."""

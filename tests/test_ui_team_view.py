@@ -20,6 +20,7 @@ from pokemon_champions_planning_tool.infrastructure.database.repositories import
 from pokemon_champions_planning_tool.ui import events
 from pokemon_champions_planning_tool.ui.catalogs import Catalogs
 from pokemon_champions_planning_tool.ui.context import AppContext
+from pokemon_champions_planning_tool.ui.theme import Palette
 from pokemon_champions_planning_tool.ui.views.team import TeamStore
 from pokemon_champions_planning_tool.ui.views.team.dialogs.item_picker import ItemPickerDialog
 from pokemon_champions_planning_tool.ui.views.team.view import TeamView
@@ -73,15 +74,15 @@ class _TeamViewCase(unittest.TestCase):
 class TestTeamView(_TeamViewCase):
     def test_empty_state_then_create_team(self):
         self.view.ensure_loaded()
-        self.assertTrue(self.view._empty.visible)
-        self.assertFalse(self.view.grid.visible)
+        self.assertEqual(self.view.mode, "library", "no teams: the library is the empty state")
+        self.assertTrue(self.view.library._empty.visible)
         serialise(self.view)
         self.ctx.prompt_text = AsyncMock(return_value="Sun")
         self.page.run_task(self.view._new_team)
         self.assertEqual(self.store.active_team_name, "Sun")
-        self.assertTrue(self.view.grid.visible)
-        self.assertEqual(len(self.view._team_select.options), 1)
-        self.assertIn("0/6", self.view._team_select.options[0].text)
+        self.assertEqual(self.view.mode, "editor", "a new team opens in the editor")
+        self.assertIn(self.view._body, self.view.controls)
+        self.assertEqual((self.view._switch_name.value, self.view._switch_count.value), ("Sun", "0/6"))
 
     def test_assign_renders_card_and_summary_and_emits_active_team(self):
         actives = []
@@ -219,7 +220,9 @@ class TestTeamView(_TeamViewCase):
         other = self.store.create_team("Rain")
         self.ctx.bus.emit(events.TEAMS_CHANGED, other)
         self.assertEqual(self.store.active_team_id, other)
-        self.assertEqual(len(self.view._team_select.options), 2)
+        self.assertEqual(self.view._switch_name.value, "Rain")
+        self.view.open_library()
+        self.assertEqual([r.name for r in self.view.library.rows], ["Rain", "Sun"], "most recently edited first")
 
 
 
@@ -352,6 +355,71 @@ class TestTeamGrid(_TeamViewCase):
         labels = [getattr(i.content, "value", None) for i in self.view._more.items]
         for label in ("New team", "Rename team…", "Duplicate team…", "Compare teams…", "Delete team…"):
             self.assertIn(label, labels)
+
+
+class TestTeamLibrary(_TeamViewCase):
+    def setUp(self):
+        super().setUp()
+        self.view.ensure_loaded()
+        self.sun = self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        self.store.assign(2, self.lucario)
+        self.rain = self.store.create_team("Rain")
+        self.store.assign(1, self.lucario)
+        self.view._open_team(self.sun)
+
+    def test_tiles_show_every_team_with_its_sprites(self):
+        from _ui_stubs import check_layout
+
+        self.view.handle_key(type("K", (), {"key": "l", "ctrl": True, "alt": False, "shift": False})())
+        self.assertEqual(self.view.mode, "library")
+        lib = self.view.library
+        rows = {r.name: r for r in lib.rows}
+        self.assertEqual([m.name for m in rows["Sun"].members], ["Charizard", "Lucario"])
+        self.assertTrue(all(m.sprite_url for m in rows["Sun"].members))
+        tiles = lib._grid.controls
+        self.assertEqual(len(tiles), 2)
+        active = next(t for t in tiles if t.row.name == "Sun")
+        self.assertEqual(active.border.top.color, Palette.PRIMARY, "the open team is marked")
+        check_layout(self.view)
+        serialise(self.view)
+        lib._search.value = "charizard"
+        lib.render()
+        self.assertEqual([t.row.name for t in lib._grid.controls], ["Sun"], "search matches Pokémon too")
+        lib._search.value = ""
+        lib.set_sort("complete")
+        self.assertEqual([r.name for r in lib.shown()], ["Sun", "Rain"])
+        lib.set_sort("name")
+        self.assertEqual([r.name for r in lib.shown()], ["Rain", "Sun"])
+
+    def test_opening_and_leaving_the_library(self):
+        self.view.open_library()
+        tile = next(t for t in self.view.library._grid.controls if t.row.name == "Rain")
+        tile.on_click(None)
+        self.assertEqual((self.view.mode, self.store.active_team_name), ("editor", "Rain"))
+        self.view.open_library()
+        self.view.handle_key(type("K", (), {"key": "Escape", "ctrl": False, "alt": False, "shift": False})())
+        self.assertEqual(self.view.mode, "editor", "Escape goes back to the team")
+
+    def test_tile_actions(self):
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.compare import CompareDialog
+
+        self.view.open_library()
+        self.view._compare_with(self.rain)
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, CompareDialog)
+        self.assertEqual(dialog._picker.value, str(self.rain))
+        self.assertEqual(dialog._right._name.value, "Rain")
+        copied = []
+        self.ctx.copy_to_clipboard = copied.append
+        self.view._copy_team(self.rain)
+        self.assertIn("Lucario", copied[-1])
+        self.assertNotIn("Charizard", copied[-1], "the tile's team, not the open one")
+        self.assertEqual(self.store.active_team_name, "Sun", "copying does not switch teams")
+        self.ctx.prompt_text = AsyncMock(return_value="Drizzle")
+        self.view._act_on(self.rain, self.view._rename_team)
+        self.assertIn("Drizzle", [r.name for r in self.view.library.rows])
+        self.assertEqual(self.view.mode, "library", "renaming stays in the library")
 
 
 if __name__ == "__main__":

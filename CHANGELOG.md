@@ -29,6 +29,10 @@ for the headings and style.
   in place into the editor, with the build, the moves and the stat-point spread side by side.
   The spread is edited inline and saved as you go, a move can be cleared with ×, notes are
   always visible, and the common partners open their tournament teams in Meta.
+- **Team library.** The team switcher (six sprites and the name) and Ctrl+L open every team
+  as a tile: its six Pokémon, format, size and last edit. Search by team or Pokémon, sort by
+  last edit, name or completeness, and open, rename, duplicate, compare, copy or delete a team
+  from its tile. With no teams yet it is the Teams view's starting screen.
 - **Team analysis in tabs.** Health (every check), Stats (level-50 stats of the six,
   sortable, so Spe gives the team's speed order), Types (defensive and offensive coverage)
   and a new **Roles** checklist: speed control, Fake Out, Intimidate, redirection, weather,

@@ -454,6 +454,7 @@ class TeamRepository:
 
         if existing_record is None:
             self.session.add(new_record)
+            self._touch(team_id)
             self.session.commit()
             self.session.refresh(new_record)
             return new_record
@@ -471,6 +472,7 @@ class TeamRepository:
         existing_record.level = new_record.level
         existing_record.tera_type = new_record.tera_type
         self.session.add(existing_record)
+        self._touch(team_id)
         self.session.commit()
         self.session.refresh(existing_record)
         return existing_record
@@ -513,6 +515,7 @@ class TeamRepository:
         else:
             member_b.slot_position = slot_a
             self.session.add(member_b)
+        self._touch(team_id)
         self.session.commit()
         return True
 
@@ -531,6 +534,7 @@ class TeamRepository:
             return False
 
         self.session.delete(record)
+        self._touch(team_id)
         self.session.commit()
         return True
 
@@ -555,6 +559,28 @@ class TeamRepository:
         if records:
             self.session.commit()
         return len(records)
+
+    def _touch(self, team_id: UUID) -> None:
+        """Mark a team edited (the library sorts by it); committed with the caller's change."""
+        record = self.get(team_id)
+        if record is not None:
+            record.updated_at = _utc_now()
+            self.session.add(record)
+
+    def list_with_species(self) -> list[tuple[TeamRecord, list[tuple[int, str, str | None, str | None]]]]:
+        """Every team with its members as (slot, display name, canonical id, form), in one
+        joined query: the team library draws six sprites per team without loading slots."""
+        teams = self.list_all()
+        stmt = (
+            select(TeamMemberRecord.team_id, TeamMemberRecord.slot_position, PokemonRecord.display_name,
+                   PokemonRecord.canonical_id, TeamMemberRecord.selected_form)
+            .join(BoxEntryRecord, BoxEntryRecord.box_entry_id == TeamMemberRecord.box_entry_id)
+            .join(PokemonRecord, PokemonRecord.canonical_id == BoxEntryRecord.pokemon_canonical_id)
+        )
+        members: dict[UUID, list[tuple[int, str, str | None, str | None]]] = {}
+        for team_id, slot, name, canonical_id, form in self.session.exec(stmt).all():
+            members.setdefault(team_id, []).append((int(slot), name, canonical_id, form))
+        return [(t, sorted(members.get(t.team_id, []))) for t in teams]
 
     def member_counts(self) -> dict[UUID, int]:
         """{team id: filled slots} for every team in one grouped query.

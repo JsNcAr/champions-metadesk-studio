@@ -58,7 +58,7 @@ class _TeamColumn(ft.Container):
 
 
 class CompareDialog(ft.AlertDialog):
-    def __init__(self, store: TeamStore, *, on_close: Callable[[], None]) -> None:
+    def __init__(self, store: TeamStore, *, on_close: Callable[[], None], other_id: UUID | None = None) -> None:
         super().__init__(modal=False, scrollable=True)
         self.store = store
         self._left, self._right = _TeamColumn(), _TeamColumn()
@@ -66,7 +66,7 @@ class CompareDialog(ft.AlertDialog):
         self._picker = ft.Dropdown(
             label="Compare with", width=260, dense=True,
             options=[ft.DropdownOption(key=str(t.team_id), text=f"{t.name} · {t.filled}/6") for t in others],
-            value=str(others[0].team_id) if others else None,
+            value=None,
             on_select=lambda e: self.set_other(UUID(e.control.value)) if e.control.value else None,
         )
         self.title = ft.Text("Compare teams")
@@ -80,8 +80,12 @@ class CompareDialog(ft.AlertDialog):
         self.actions = [ft.TextButton("Close", on_click=lambda _e: on_close())]
         self.actions_alignment = ft.MainAxisAlignment.END
         self._left.update_from(store.active_team_name, store.slots, store.summary)
-        if others:
-            self.set_other(others[0].team_id)
+        # The team picked in the library, or the first other one; comparing a team with
+        # itself falls back to the first other team.
+        wanted = other_id if other_id is not None and any(t.team_id == other_id for t in others) else (others[0].team_id if others else None)
+        if wanted is not None:
+            self._picker.value = str(wanted)
+            self.set_other(wanted)
         else:
             self._right.update_from("No other team", [SlotModel(p) for p in range(1, 7)], EMPTY_SUMMARY)
             self._right._caption.value = "Create a second team to compare"

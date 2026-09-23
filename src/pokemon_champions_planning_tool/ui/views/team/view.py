@@ -11,7 +11,7 @@ from ....domain.entities.team_member import TeamMember
 from ....domain.formats import Mechanic
 from ....domain.team_roles import team_roles
 from ... import events
-from ...components import EmptyState, PageHeader, SplitPane
+from ...components import PageHeader, Sprite, SplitPane
 from ...components.menu_button import menu_button
 from ...context import AppContext
 from ...tasks import Debouncer, is_mounted
@@ -23,6 +23,7 @@ from .dialogs.export_dialog import ExportDialog
 from .dialogs.import_dialog import ImportDialog
 from .dialogs.item_picker import ItemPickerDialog
 from .dialogs.move_picker import MovePickerDialog
+from .library import LibraryCallbacks, TeamLibrary
 from .slot_card import SlotCallbacks, SlotCard
 from .status import health_summary
 from .store import TeamStore
@@ -50,9 +51,16 @@ class TeamView(ft.Column):
         self._pending_spread: dict[int, tuple[str, dict[str, int]]] = {}
 
         # -- header ------------------------------------------------------------------------
-        self._team_select = ft.Dropdown(
-            options=[], width=260, dense=True, enable_filter=True, hint_text="Select a team",
-            on_select=lambda e: self._select_team(e.control.value),
+        # The team switcher: the active team's six sprites and name; opens the library.
+        self._switch_sprites = ft.Row(spacing=2, tight=True)
+        self._switch_name = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._switch_count = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE_VARIANT)
+        self._switcher = ft.Container(
+            content=ft.Row(spacing=Space.SM, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                self._switch_sprites, self._switch_name, self._switch_count, ft.Icon(ft.Icons.UNFOLD_MORE, size=18, color=Palette.ON_SURFACE_VARIANT),
+            ]),
+            padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS), border_radius=Radius.MD, bgcolor=Palette.SURFACE_2,
+            border=ft.Border.all(1, Palette.OUTLINE_VARIANT), ink=True, tooltip="All teams (Ctrl+L)", on_click=lambda _e: self.open_library(),
         )
         # The format the team is built for: its mechanics decide which controls the cards show.
         self._format_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_TERTIARY_CONTAINER, max_lines=1)
@@ -95,6 +103,7 @@ class TeamView(ft.Column):
             icon=ft.Icons.MORE_VERT,
             tooltip="Team actions",
             items=[
+                ft.PopupMenuItem(content=ft.Text("All teams…"), icon=ft.Icons.GRID_VIEW, on_click=lambda _e: self.open_library()),
                 ft.PopupMenuItem(content=ft.Text("New team"), icon=ft.Icons.ADD, on_click=lambda _e: self.ctx.page.run_task(self._new_team)),
                 ft.PopupMenuItem(content=ft.Text("Rename team…"), icon=ft.Icons.EDIT_OUTLINED, on_click=lambda _e: self.ctx.page.run_task(self._rename_team)),
                 ft.PopupMenuItem(content=ft.Text("Duplicate team…"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self.ctx.page.run_task(self._duplicate_team)),
@@ -106,7 +115,7 @@ class TeamView(ft.Column):
         )
         self.header = PageHeader("Teams", icon=ft.Icons.GROUPS, accent=Accent.TEAMS, actions=[self._import_button, self._export_menu, self._summary_toggle, self._more])
         self._team_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                controls=[self._team_select, self._format_menu, self._health])
+                                controls=[self._switcher, self._format_menu, self._health])
 
         # -- body -------------------------------------------------------------------------------
         callbacks = SlotCallbacks(
@@ -137,13 +146,19 @@ class TeamView(ft.Column):
         self.summary = SummaryPanel(on_close=self._toggle_summary, on_focus_slot=lambda p: (self._set_expanded(p), self._focus(p)))
         self.summary.visible = bool(ctx.prefs.get("team.summary_visible", True))
         self._summary_toggle.selected = self.summary.visible
-        self._empty = EmptyState(ft.Icons.GROUPS_OUTLINED, "No teams yet", "Create a team, or import one from a Showdown paste or the Meta explorer.",
-                                 action_label="Create team", on_action=lambda: self.ctx.page.run_task(self._new_team),
-                                 secondary_label="Import", on_secondary=self._import)
-        self._empty.visible = False
-        self._main = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.grid, ft.Row(alignment=ft.MainAxisAlignment.CENTER, controls=[self._empty])])
+        self._main = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, controls=[self.grid])
         self._body = SplitPane(self._main, self.summary, gap=Space.LG)
         self._narrow = False
+        # The library of every team; with no teams it is the view's empty state.
+        self.mode = "editor"
+        self._library_loading = False
+        self._library_auto = False
+        self.library = TeamLibrary(LibraryCallbacks(
+            on_open=self._open_team, on_new=lambda: self.ctx.page.run_task(self._new_team), on_import=self._import,
+            on_rename=lambda tid: self._act_on(tid, self._rename_team), on_duplicate=lambda tid: self._act_on(tid, self._duplicate_team),
+            on_compare=self._compare_with, on_copy=self._copy_team, on_delete=lambda tid: self._act_on(tid, self._delete_team),
+            on_back=self.close_library, format_label=self._format_short,
+        ))
         self.controls = [self.header, self._team_row, self._body]
 
         self.store.subscribe(self._on_store_change)
@@ -177,6 +192,12 @@ class TeamView(ft.Column):
 
     def handle_key(self, e) -> bool:
         key = (e.key or "")
+        if e.ctrl and key.lower() == "l":
+            if self.mode == "library":
+                self.close_library()
+            else:
+                self.open_library()
+            return True
         if e.ctrl and key.lower() == "n":
             self.ctx.page.run_task(self._new_team)
             return True
@@ -196,6 +217,9 @@ class TeamView(ft.Column):
             return True
         if key == "Enter" and not (e.ctrl or e.alt or e.shift) and self.focused is not None and self.expanded != self.focused:
             self._set_expanded(self.focused)
+            return True
+        if key == "Escape" and self.mode == "library" and self.store.active_team_id is not None:
+            self.close_library()
             return True
         if key == "Escape":
             if self.expanded is not None:
@@ -220,13 +244,17 @@ class TeamView(ft.Column):
             for position in range(1, 7):
                 self._render_slot(position, fmt)
             self._render_format()
+            self._render_switcher()
             self._render_summary()
             self._load_partners()
         elif kind == "slot":
             position = change[1]
             self._render_slot(position, fmt)
+            self._render_switcher()
             self._load_partners(position)
             self._update_cell(position)
+            if is_mounted(self._switcher):
+                self._switcher.update()
             return
         elif kind == "summary":
             self._render_summary()
@@ -247,16 +275,27 @@ class TeamView(ft.Column):
                 control.update()
 
     def _render_teams(self) -> None:
-        self._team_select.options = [ft.DropdownOption(key=str(t.team_id), text=f"{t.name}  ·  {t.filled}/6") for t in self.store.teams]
-        self._team_select.value = str(self.store.active_team_id) if self.store.active_team_id else None
         has_team = self.store.active_team_id is not None
-        self._empty.visible = not has_team
-        self.grid.visible = has_team
-        self._format_menu.visible = has_team
-        self._health.visible = has_team
+        self._switch_name.value = self.store.active_team_name
         self._render_format()
-        self.header.set_caption(self.store.active_team_name if has_team else None)
         self.ctx.bus.emit(events.ACTIVE_TEAM, self.store.active_team_id)
+        if not has_team:
+            self.open_library(auto=True)    # no team to edit: the library is the empty state
+        elif self.mode == "library" and self._library_auto:
+            self.close_library()            # the first team arrived (created, imported, added from the Box)
+        elif self.mode == "library":
+            self._refresh_library()
+        else:
+            self.header.set_caption(self.store.active_team_name)
+
+    def _render_switcher(self) -> None:
+        slots = self.store.slots
+        self._switch_sprites.controls = [
+            Sprite(s.form.sprite_url, size=24) if s.filled and s.form is not None else
+            ft.Container(width=24, height=24, border_radius=Radius.PILL, border=ft.Border.all(1, Palette.OUTLINE_VARIANT))
+            for s in slots
+        ]
+        self._switch_count.value = f"{sum(1 for s in slots if s.filled)}/6"
 
     def _render_format(self) -> None:
         own = self.store.active_team_format_id
@@ -353,6 +392,72 @@ class TeamView(ft.Column):
         self.summary.update_from(self.store.slots, self.store.summary, focused=position)
         self._update_self()
 
+    # -- library -------------------------------------------------------------------------------------
+
+    def open_library(self, *, auto: bool = False) -> None:
+        """Show every team. ``auto``: opened because there is no team, so the editor comes
+        back by itself once one exists."""
+        self._library_auto = auto
+        if self.mode != "library":
+            self.mode = "library"
+            self._set_expanded(None)
+            self.controls = [self.header, self.library]
+            self.header.set_caption("All teams")
+            for control in (self._import_button, self._export_menu, self._summary_toggle):
+                control.visible = False
+        self._refresh_library()
+        self._update_self()
+
+    def close_library(self) -> None:
+        if self.mode == "editor" or self.store.active_team_id is None:
+            return
+        self.mode = "editor"
+        self.controls = [self.header, self._team_row, self._body]
+        self.header.set_caption(self.store.active_team_name)
+        for control in (self._import_button, self._export_menu, self._summary_toggle):
+            control.visible = True
+        self._update_self()
+
+    def _refresh_library(self) -> None:
+        """Read the library rows off the UI loop; a second request while one runs is dropped
+        (the running one reads the latest data when it starts)."""
+        if self._library_loading:
+            return
+        self._library_loading = True
+        self.library.set_loading(True)
+
+        def done(rows) -> None:
+            self._library_loading = False
+            self.library.set_rows(rows, self.store.active_team_id)
+
+        def failed(exc: BaseException) -> None:
+            self._library_loading = False
+            self.library.set_rows([], self.store.active_team_id)
+            self.ctx.toast(f"Could not read the teams: {exc}", "error")
+
+        self.ctx.run_in_background(self.store.library_rows, on_done=done, on_error=failed)
+
+    def _open_team(self, team_id: UUID) -> None:
+        self.store.select_team(team_id)
+        self.close_library()
+
+    def _act_on(self, team_id: UUID, action) -> None:
+        """Run a team-menu action (rename, duplicate, delete) on a team picked in the library."""
+        self.store.select_team(team_id)
+        self.ctx.page.run_task(action)
+
+    def _compare_with(self, team_id: UUID) -> None:
+        page = self.ctx.page
+        page.show_dialog(CompareDialog(self.store, on_close=page.pop_dialog, other_id=team_id))
+
+    def _copy_team(self, team_id: UUID) -> None:
+        self.ctx.copy_to_clipboard(self.store.export_text_for(team_id))
+        self.ctx.toast("Showdown text copied", "success")
+
+    def _format_short(self, format_id: str | None) -> str:
+        fmt = self.store.formats.for_team(format_id)
+        return fmt.name.replace("Regulations ", "Reg ")
+
     def _show_analysis(self, tab: str) -> None:
         if not self.summary.visible:
             self._toggle_summary()
@@ -360,14 +465,11 @@ class TeamView(ft.Column):
 
     # -- team actions ------------------------------------------------------------------------------------
 
-    def _select_team(self, value: str | None) -> None:
-        if value:
-            self.store.select_team(UUID(value))
-
     async def _new_team(self) -> None:
         name = await self.ctx.prompt_text("New team", "Team name", submit_label="Create", validate=self._validate_name)
         if name:
             self.store.create_team(name)
+            self.close_library()                 # a new team opens in the editor
             self.ctx.toast(f"Created {name}", "success")
             self._update_self()
 
@@ -579,6 +681,7 @@ class TeamView(ft.Column):
     def open_import(self, text: str, title: str) -> None:
         def done(team_id: UUID) -> None:
             self.ctx.bus.emit(events.NAVIGATE, "team")
+            self.close_library()
             self._set_expanded(None)
             self._focus(None)
             self._update_self()

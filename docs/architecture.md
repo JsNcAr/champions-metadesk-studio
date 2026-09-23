@@ -47,7 +47,8 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      favourites, mega-capable, planned, tags, sort, cards/table), cached cards or a sortable
      table, multi-select bulk bar, detail panel with forms, stats, abilities, defensive type
      matrix, notes, tags.
-  2. **Teams**: team switcher, format chip and a health summary chip; six compact slot cards
+  2. **Teams**: a team library (every team as a tile, from one joined query on a worker; also
+     the empty state) and the editor: team switcher, format chip and a health summary chip; six compact slot cards
      in a responsive grid, one of which expands in place into the editor (form, ability and
      only the mechanics the team's format has, such as Tera; item with guardrails and stat
      deltas; moves; the stat-point spread inline; partners; notes); an analysis panel with

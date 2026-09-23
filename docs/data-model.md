@@ -145,6 +145,7 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `name: str` (Indexed)
 - `description: str`
 - `format_id: str | None` (a `domain/formats.py` format id; `None` follows the default format. Added in schema version 12)
+- `updated_at` is bumped by every slot change (assign, edit, clear, swap) as well as renames, so the team library can sort by last edit
 - `created_at: datetime`
 - `updated_at: datetime`
 

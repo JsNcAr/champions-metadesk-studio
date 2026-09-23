@@ -19,6 +19,7 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+Shift+A", "Select every visible box entry"),
     ("Delete", "Delete the selected box entries (with Undo)"),
     ("Escape", "Close the dialog, then collapse the slot editor or the side panel, then clear the selection"),
+    ("Ctrl+L", "All teams: the team library (Teams)"),
     ("Ctrl+N", "New team"),
     ("Ctrl+I", "Import a Showdown paste or Poképaste URL"),
     ("Ctrl+E", "Copy the active team as Showdown text"),
@@ -43,7 +44,8 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Mega forms use their base species' learnset; picking a Mega Stone switches the form automatically.",
         "The format chip next to the team name picks the rules the team is built for; the cards show only that format's mechanics (Champions: Mega Evolution, no Tera). Settings › Format & mechanics sets the default and creates custom formats, for example one with Terastallization.",
         "Spreads use Champions stat points: 0–32 per stat, 66 in total (level 50 and 31 IVs are fixed). The Presets menu has sweeper and bulky spreads, Trick Room and Min speed (0 points + a −Spe nature).",
-        "Compare teams… in the team menu shows two teams side by side, including uncovered types.",
+        "The team switcher (the six sprites next to the format) opens the library of every team: search by team or Pokémon, sort by last edit, name or completeness, and open, rename, duplicate, compare, copy or delete a team from its tile.",
+        "Compare teams… in the team menu (or Compare with… on a library tile) shows two teams side by side, including uncovered types.",
         "Import from Meta opens the preview pre-filled; illegal species block the import, illegal moves only warn.",
     ),
     "Meta": (

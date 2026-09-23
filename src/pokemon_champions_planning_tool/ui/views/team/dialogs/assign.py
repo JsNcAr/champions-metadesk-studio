@@ -33,6 +33,7 @@ class AssignDialog(ft.AlertDialog):
         self._on_pick = on_pick
         self._on_close = on_close
         self._include_planned = False
+        self.total_matches = 0
 
         self._search = ft.TextField(**SEARCH_FIELD_STYLE, hint_text="Search by name, type or tag…", prefix_icon=ft.Icons.SEARCH, autofocus=True, dense=True,
                                     on_change=lambda _e: self._refresh(), on_submit=lambda _e: self._pick_first())
@@ -64,6 +65,7 @@ class AssignDialog(ft.AlertDialog):
             if q and not (q in e.pokemon.display_name.lower() or any(q in t.lower() for t in e.pokemon.types) or any(q in t.lower() for t in e.tags)):
                 continue
             out.append(e)
+        self.total_matches = len(out)
         return out[:_MAX_ROWS]
 
     def _refresh(self) -> None:
@@ -88,6 +90,9 @@ class AssignDialog(ft.AlertDialog):
             )
         if not rows:
             rows.append(EmptyState(ft.Icons.SEARCH_OFF, "No matches", "Add the Pokémon to your box first, or include planned entries."))
+        elif self.total_matches > len(matches):
+            rows.append(ft.Text(f"Showing {len(matches)} of {self.total_matches}: search to narrow the list", theme_style=ft.TextThemeStyle.BODY_SMALL,
+                                color=Palette.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER))
         self._list.controls = rows
         if is_mounted(self._list):
             self._list.update()

@@ -18,11 +18,13 @@ SHORTCUTS: tuple[tuple[str, str], ...] = (
     ("Ctrl+K", "Add a Pokémon to the box"),
     ("Ctrl+Shift+A", "Select every visible box entry"),
     ("Delete", "Delete the selected box entries (with Undo)"),
-    ("Escape", "Close the dialog, then the side panel, then clear the selection"),
+    ("Escape", "Close the dialog, then collapse the slot editor or the side panel, then clear the selection"),
     ("Ctrl+N", "New team"),
     ("Ctrl+I", "Import a Showdown paste or Poképaste URL"),
     ("Ctrl+E", "Copy the active team as Showdown text"),
-    ("Alt+← / →", "Move the focused slot card"),
+    ("Alt+← / →", "Focus the previous or next slot card (Teams)"),
+    ("Alt+Shift+← / →", "Move the focused slot card left or right (Teams)"),
+    ("Enter", "Expand the focused slot card into the editor (Teams)"),
 )
 
 TIPS: dict[str, tuple[str, ...]] = {
@@ -34,11 +36,13 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Deleting is reversible for a few seconds through the toast's Undo; only entries on a team ask first.",
     ),
     "Teams": (
-        "Drag a slot card's header onto another card to swap them; the card menu offers the same and \"Move to lead\".",
+        "All six slots show as compact cards; click one (or focus it and press Enter) to expand it in place into the editor, and Escape collapses it. Drag a card by its ⠿ handle onto another to swap them; its menu has Move left / right and Move to lead.",
+        "The editor has three parts: build (form, ability, item and its checks), moves (× clears one) and the spread, edited inline and saved as you go. Common partners open their tournament teams in Meta.",
+        "The analysis panel has four tabs: Health (every check), Stats (level-50 stats; click Spe for the speed order), Types (defensive and offensive coverage) and Roles (speed control, Fake Out, Intimidate, redirection, Protect count…). The chip next to the format sums up the checks and opens Health.",
         "The move picker lists only the species' Champions-legal moves, ranked by tournament usage. \"Show all moves\" in the team menu lists the rest with a warning.",
         "Mega forms use their base species' learnset; picking a Mega Stone switches the form automatically.",
         "The format chip next to the team name picks the rules the team is built for; the cards show only that format's mechanics (Champions: Mega Evolution, no Tera). Settings › Format & mechanics sets the default and creates custom formats, for example one with Terastallization.",
-        "Edit spread uses Champions stat points: 0–32 per stat, 66 in total (level 50 and 31 IVs are fixed). Presets and a Min speed chip (0 points + a −Spe nature) cover Trick Room; the health chips explain each rule on hover.",
+        "Spreads use Champions stat points: 0–32 per stat, 66 in total (level 50 and 31 IVs are fixed). The Presets menu has sweeper and bulky spreads, Trick Room and Min speed (0 points + a −Spe nature).",
         "Compare teams… in the team menu shows two teams side by side, including uncovered types.",
         "Import from Meta opens the preview pre-filled; illegal species block the import, illegal moves only warn.",
     ),

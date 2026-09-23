@@ -7,14 +7,14 @@ from uuid import UUID
 
 import flet as ft
 
-from ....components import Sprite, StatusChip
+from ....components import Sprite
 from ....components.pokemon import StatBlock
 from ....tasks import is_mounted
 from ....theme import Palette, Radius, Space
+from ..status import check_chip
 from ..store import TeamStore
 from ..summary import EMPTY_SUMMARY, SlotModel, TeamSummary
 
-_TONE = {"ok": "success", "info": "info", "warn": "warning", "error": "error"}
 
 
 class _TeamColumn(ft.Container):
@@ -46,7 +46,7 @@ class _TeamColumn(ft.Container):
         self._stats.set_stats(summary.averages)
         for stat, bar in self._stats.bars.items():
             bar.tooltip = f"{stat}: total {getattr(summary.totals, stat)}"
-        self._checks.controls = [StatusChip(c.label, _TONE.get(c.status, "neutral"), tooltip=c.detail) for c in summary.checks]
+        self._checks.controls = [check_chip(c) for c in summary.checks]
         if not summary.has_moves:
             self._coverage.value = "Coverage: no damaging moves assigned"
         elif summary.uncovered:

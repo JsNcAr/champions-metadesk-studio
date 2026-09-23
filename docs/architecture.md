@@ -47,10 +47,12 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      favourites, mega-capable, planned, tags, sort, cards/table), cached cards or a sortable
      table, multi-select bulk bar, detail panel with forms, stats, abilities, defensive type
      matrix, notes, tags.
-  2. **Teams**: team switcher, format chip and health chips, six slot cards (form, ability and
-     only the mechanics the team's format has, such as Tera; item with
-     guardrails and stat deltas, moves, spread, partners, notes), summary panel (averages,
-     18×6 defensive grid, health), assign / item / spread / import / export dialogs.
+  2. **Teams**: team switcher, format chip and a health summary chip; six compact slot cards
+     in a responsive grid, one of which expands in place into the editor (form, ability and
+     only the mechanics the team's format has, such as Tera; item with guardrails and stat
+     deltas; moves; the stat-point spread inline; partners; notes); an analysis panel with
+     Health, level-50 Stats, Types (defensive and offensive grids) and Roles tabs, each built
+     when first shown; assign / item / move / import / export / compare dialogs.
   3. **Meta**: tournament teams as rows grouped by event with filters, paging and a
      lazily parsed sheet; Import hands the paste to the team builder.
   4. **Calc**: bi-directional damage calculator, one-click field strip (singles/doubles, weather,

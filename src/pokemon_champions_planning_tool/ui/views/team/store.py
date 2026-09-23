@@ -22,6 +22,7 @@ from uuid import UUID
 from sqlmodel import Session
 
 from ....domain.formats import Format, Mechanic
+from ....domain.team_roles import RoleMember
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.pokemon_move import PokemonMove
 from ....domain.entities.team import Team
@@ -352,8 +353,32 @@ class TeamStore:
         with self._sf() as s:
             changed = TeamRepository(s).swap_slots(self.active_team_id, a, b)
         if changed:
-            self.load(self.active_team_id)
+            # Swap the two resolved slots in memory: reloading the whole team (and its
+            # megas) for a reorder was the slowest edit in the view.
+            first, second = self.slot(a), self.slot(b)
+            for attr in ("member", "entry", "megas", "item", "moves"):
+                va, vb = getattr(first, attr), getattr(second, attr)
+                setattr(first, attr, vb)
+                setattr(second, attr, va)
+            for slot in (first, second):
+                if slot.member is not None:
+                    slot.member = replace(slot.member, slot_position=slot.position)
+            self._validate()
+            self._notify(("slot", a))
+            self._notify(("slot", b))
+            self._notify(("summary",))
         return changed
+
+    def role_members(self) -> list[RoleMember]:
+        """The filled slots as the role checklist reads them."""
+        out = []
+        for slot in self.slots:
+            if not slot.filled:
+                continue
+            name = slot.entry.pokemon.display_name
+            moves = tuple((m.info or m.name) for m in slot.moves if m is not None and m.name)
+            out.append(RoleMember(slot.position, name, moves, slot.active_ability or slot.member.ability, slot.item.display_name if slot.item else None))
+        return out
 
     def _update(self, position: int, **changes: Any) -> None:
         slot = self.slot(position)

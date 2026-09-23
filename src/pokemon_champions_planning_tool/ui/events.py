@@ -34,6 +34,8 @@ NAVIGATE = "navigate"
 CALC_REQUESTED = "calc.requested"
 # The default format or a custom format changed (Settings). Payload: None.
 FORMAT_CHANGED = "formats.changed"
+# Show Meta's teams matching a search (the view is shown first). Payload: query text.
+META_SEARCH = "meta.search"
 # Rival teams were saved or changed outside the calculator (Meta). Payload: team id or None.
 RIVALS_CHANGED = "rivals.changed"
 # Ask the calculator to show a rival team. Payload: rival team id.

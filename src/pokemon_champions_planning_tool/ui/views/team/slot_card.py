@@ -24,6 +24,7 @@ from ...components.banner import InlineBanner
 from ...components.item_icon import item_icon
 from ...components.pokemon import BstPill, TypeChip
 from ...components.spread_editor import SpreadEditor
+from ...format import shortcut
 from ...tasks import is_mounted
 from ...theme import IconSize, Motion, Palette, Radius, STAT_COLORS, STAT_LABELS, Space, alpha, type_color
 from .dialogs.spread import PRESETS
@@ -161,8 +162,8 @@ class SlotCard(ft.Container):
 
         # -- header ----------------------------------------------------------------------------
         # The pane header: step through the slots, the tournament set, the slot menu, close.
-        self._prev = ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, tooltip="Previous Pokémon (Alt+←)", on_click=lambda _e: self.cb.on_step(self.position, -1))
-        self._next = ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, tooltip="Next Pokémon (Alt+→)", on_click=lambda _e: self.cb.on_step(self.position, 1))
+        self._prev = ft.IconButton(icon=ft.Icons.CHEVRON_LEFT, tooltip=shortcut("Previous Pokémon (Alt+←)"), on_click=lambda _e: self.cb.on_step(self.position, -1))
+        self._next = ft.IconButton(icon=ft.Icons.CHEVRON_RIGHT, tooltip=shortcut("Next Pokémon (Alt+→)"), on_click=lambda _e: self.cb.on_step(self.position, 1))
         self._slot_label = ft.Text(f"Slot {position}", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT)
         self._build_line = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._build_menu = ft.PopupMenuButton(

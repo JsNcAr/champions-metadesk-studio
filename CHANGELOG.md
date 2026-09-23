@@ -71,8 +71,19 @@ for the headings and style.
 - Slot cards show the held item's sprite.
 - Settings' "Battle format" dropdown is now called **Tournament filter**: it filters
   tournament data (Doubles only, All, Singles only) and is separate from the formats above.
+- On macOS the keyboard shortcuts use Cmd instead of Ctrl (⌘1–4, ⌘F, ⌘K, ⇧⌘S…), and the
+  help dialog and tooltips show them the Mac way: ⌘, ⌥ and ⇧ in Apple's order. Windows and
+  Linux are unchanged.
+- The macOS app keeps its database, preferences and sprite cache in
+  `~/Library/Application Support/Champions MetaDesk Studio/`. A database made by running the
+  app from a terminal stays where it was; move it there, or point `PCPT_DATABASE` at it.
 
 ### Fixed
+- The macOS app closed right after opening when started from Finder: it tried to create its
+  database in `/`, which is read-only.
+- Pressing a shortcut repeatedly (Ctrl+/ for help, Ctrl+K…) opened one dialog on top of
+  another until the app crashed. While a dialog is open, only Escape works; it closes the
+  dialog.
 - Items lost their sprite, effect text and category after an item catalogue update: an
   unforced sync rewrote the items already stored without the PokéAPI data it had skipped
   fetching. Stored data is now kept, and items left without a sprite are fetched again on

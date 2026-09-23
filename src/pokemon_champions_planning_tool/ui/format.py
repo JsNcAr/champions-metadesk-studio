@@ -2,7 +2,28 @@
 
 from __future__ import annotations
 
+import re
+import sys
 from datetime import datetime, timezone
+
+# Shortcuts are written with Ctrl and Alt and read Cmd and Option on macOS (AppShell._on_key maps the keys).
+# ponytail: the host OS, so a browser on another OS served from a Mac shows ⌘; use
+# page.platform in both places if web mode across machines matters.
+MAC = sys.platform == "darwin"
+
+
+def shortcut(label: str) -> str:
+    """A shortcut label for this OS: "Ctrl+Shift+S" reads "⇧⌘S" and "Alt+←" reads "⌥←" on macOS.
+
+    Modifiers become symbols in Apple's order (⌥ ⇧ ⌘); Ctrl is the shortcut key, so ⌘.
+    """
+    if not MAC:
+        return label
+    return re.sub(
+        r"\b(?:(?:Ctrl|Alt|Shift)\+)+",
+        lambda m: "".join(sym for mod, sym in (("Alt+", "⌥"), ("Shift+", "⇧"), ("Ctrl+", "⌘")) if mod in m.group()),
+        label,
+    )
 
 
 def thousands(n: int | None) -> str:

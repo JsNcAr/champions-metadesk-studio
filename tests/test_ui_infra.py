@@ -2,6 +2,7 @@
 
 import asyncio
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 import flet as ft
@@ -39,8 +40,10 @@ class StubPage(SimpleNamespace):
 
 
 def _key(key: str, *, ctrl: bool) -> SimpleNamespace:
-    """The shell reads only .key/.ctrl; a stand-in avoids Flet's event constructor."""
-    return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=False)
+    """The shell reads only .key/.ctrl (.meta on macOS); a stand-in avoids Flet's event constructor.
+
+    ``ctrl`` means the shortcut modifier, so it presses Cmd too and passes on any host."""
+    return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=ctrl)
 
 
 def _in_event_context(fn):
@@ -199,6 +202,15 @@ class TestAppShell(unittest.TestCase):
         page.on_keyboard_event(_key(",", ctrl=True))
         self.assertEqual(opened, [1])
 
+    def test_shortcuts_use_cmd_on_macos(self):
+        page, ctx, shell, _ = self._shell()
+        shell.navigate("two")
+        with mock.patch("pokemon_champions_planning_tool.ui.shell.shell.MAC", True):
+            page.on_keyboard_event(SimpleNamespace(key="1", ctrl=True, shift=False, alt=False, meta=False))
+            self.assertEqual(shell.current, "two", "Ctrl is not the shortcut modifier on macOS")
+            page.on_keyboard_event(SimpleNamespace(key="1", ctrl=False, shift=False, alt=False, meta=True))
+            self.assertEqual(shell.current, "one")
+
     def test_register_view_requires_exactly_one_source(self):
         page, ctx, shell, _ = self._shell()
         with self.assertRaises(ValueError):
@@ -263,6 +275,21 @@ class TestShellEscape(unittest.TestCase):
         self.assertEqual(seen, [], "the view did not see the key while a dialog was open")
         shell._on_key(esc)
         self.assertEqual(seen, ["Escape"], "with no dialog open, Escape reaches the view")
+
+    def test_shortcuts_do_not_stack_dialogs(self):
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.context import AppContext
+        from pokemon_champions_planning_tool.ui.shell import AppShell
+
+        page = StubPage()
+        shell = AppShell(AppContext(page))
+        opened = []
+        shell.register_settings(lambda: opened.append(1))
+        for _ in range(3):
+            shell._on_key(_key("/", ctrl=True))
+        self.assertEqual(len(page.dialogs), 1, "repeating the help shortcut opens one dialog")
+        shell._on_key(_key(",", ctrl=True))
+        self.assertEqual(opened, [], "no shortcut runs behind an open dialog")
 
     def test_an_unhandled_key_skips_flets_auto_update(self):
         from types import SimpleNamespace

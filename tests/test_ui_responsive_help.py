@@ -15,7 +15,7 @@ from pokemon_champions_planning_tool.ui.theme import Layout
 
 
 def _key(key, ctrl=False):
-    return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=False)
+    return SimpleNamespace(key=key, ctrl=ctrl, shift=False, alt=False, meta=ctrl)  # ctrl = the shortcut modifier, Cmd on macOS
 
 
 class TestSplitPane(unittest.TestCase):

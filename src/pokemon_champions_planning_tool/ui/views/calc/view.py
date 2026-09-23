@@ -11,6 +11,7 @@ import flet as ft
 from ... import events
 from ...components import PageHeader
 from ...context import AppContext
+from ...format import shortcut
 from ...tasks import Debouncer, is_mounted
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
@@ -80,7 +81,7 @@ class CalcView(ft.Column):
         self.header = PageHeader(
             "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
-                ft.IconButton(icon=ft.Icons.SWAP_HORIZ, tooltip="Swap attacker and defender (Ctrl+Shift+S)", on_click=lambda _e: self.store.swap_sides()),
+                ft.IconButton(icon=ft.Icons.SWAP_HORIZ, tooltip=shortcut("Swap attacker and defender (Ctrl+Shift+S)"), on_click=lambda _e: self.store.swap_sides()),
                 ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, tooltip="Clear both Pokémon and the field", on_click=lambda _e: self._reset()),
             ],
         )

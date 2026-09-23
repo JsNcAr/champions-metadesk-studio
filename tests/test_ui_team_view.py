@@ -276,6 +276,8 @@ class TestTeamGrid(_TeamViewCase):
         self.assertEqual(list(self.view.grid.controls), cells, "no card moved or was replaced")
         self.assertEqual([c.content for c in cells], self.view.compacts)
         self.assertTrue(all(c._condensed for c in self.view.compacts), "the cards condense while editing")
+        self.assertTrue(self.view.compacts[1]._moves.visible, "moves stay visible while editing")
+        self.assertFalse(self.view.compacts[1]._spread_row.visible, "only the spread row hides")
         self.assertTrue(self.view.compacts[0]._editing.visible)
         self.assertEqual(self.view.cards[0]._slot_label.value, "1 / 2")
         self.check_layout(self.view)
@@ -313,6 +315,15 @@ class TestTeamGrid(_TeamViewCase):
         self.view._clear_move(1, 0)
         self.assertIsNone(self.store.slot(1).moves[0])
         self.assertEqual(self.store.slot(1).battle_stats.speed, int(self.view.compacts[0]._speed.value.split()[-1]))
+
+    def test_a_problem_shows_as_a_short_line_on_the_card(self):
+        card = self.view.compacts[1]
+        self.assertFalse(card._problem.visible)
+        self.store.set_item(2, "charizardite-x")            # a Charizard stone on Lucario
+        self.assertTrue(card._problem.visible)
+        self.assertIn("can only be held by Charizard", card._problem.value)
+        self.view._set_selected(1)
+        self.assertTrue(card._problem.visible, "still shown while the editor is open")
 
     def test_defense_block_and_weakness_line(self):
         card = self.view.cards[0]          # Charizard: Fire/Flying

@@ -11,6 +11,7 @@ from __future__ import annotations
 from . import (
     clear_showdown_cache,
     get_champions_legal_slugs,
+    get_item_spritenums,
     get_mega_stone_mappings,
 )
 
@@ -34,6 +35,10 @@ class ShowdownItemAdapter:
         hyphenated slugs when hydrating ItemRecord entries.
         """
         return get_champions_legal_slugs()
+
+    def fetch_item_spritenums(self) -> dict[str, int]:
+        """{showdown_slug: cell on Showdown's item sheet} (icons PokéAPI has no art for)."""
+        return get_item_spritenums()
 
     def fetch_mega_stone_mappings(self) -> dict[str, dict[str, str]]:
         """Returns {showdown_slug: {species, form, mega_stone_name}} for all Mega Stones."""

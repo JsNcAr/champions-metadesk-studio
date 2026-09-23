@@ -64,8 +64,20 @@ for the headings and style.
 - The team export dialog says "Stat points" instead of "EVs". Copy and Publish still write
   them on Showdown's `EVs:` line, which is what Showdown and Poképaste read, and pasting a
   "Stat points:" line back into the app works too.
+- While a slot's editor is open the other cards keep showing their moves, and a card with a
+  problem shows it in a short line ("⚠ Knock Off: not in the learnset") instead of only an icon.
+- Slot cards show the held item's sprite.
 - Settings' "Battle format" dropdown is now called **Tournament filter**: it filters
   tournament data (Doubles only, All, Singles only) and is separate from the formats above.
+
+### Fixed
+- Items lost their sprite, effect text and category after an item catalogue update: an
+  unforced sync rewrote the items already stored without the PokéAPI data it had skipped
+  fetching. Stored data is now kept, and items left without a sprite are fetched again on
+  the next start.
+- Items PokéAPI has no art for (the Champions-only Mega Stones such as Excadrite, Fairy
+  Feather…) now show their icon from Pokémon Showdown's item sheet. The sheet is cached with
+  the Pokémon sprites, so the browser build shows these icons from the second launch.
 
 ## [0.4.0] - 2026-09-21
 

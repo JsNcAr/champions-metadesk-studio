@@ -8,10 +8,11 @@ import flet as ft
 
 from .....infrastructure.database.models import ItemRecord
 from ....catalogs import Catalogs
+from ....components.item_icon import item_icon
 from ....components import EmptyState, StatusChip
 from ....components.inputs import SEARCH_FIELD_STYLE
 from ....tasks import is_mounted
-from ....theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
+from ....theme import STAT_COLORS, STAT_LABELS, Palette, Radius, Space
 
 _MAX_ROWS = 80
 
@@ -186,10 +187,7 @@ class ItemPickerDialog(ft.AlertDialog):
             chip = StatusChip(f"{round((mult - 1) * 100):+d}% {STAT_LABELS.get(stat, stat)}", "neutral")
             chip._label.color = STAT_COLORS.get(stat, Palette.ON_SURFACE_VARIANT)
             badges.append(chip)
-        leading = (
-            ft.Image(src=item.sprite_url, width=32, height=32, fit=ft.BoxFit.CONTAIN, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.DISABLED))
-            if item.sprite_url else ft.Icon(ft.Icons.BOLT if item.target_species else ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.ON_SURFACE_VARIANT)
-        )
+        leading = item_icon(item.sprite_url, size=32, fallback=ft.Icons.BOLT if item.target_species else ft.Icons.DIAMOND_OUTLINED)
         return ft.Container(
             content=ft.Row(
                 spacing=Space.MD,

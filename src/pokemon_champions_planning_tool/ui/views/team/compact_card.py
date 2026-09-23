@@ -13,13 +13,14 @@ from dataclasses import dataclass
 import flet as ft
 
 from ...components import Sprite
+from ...components.item_icon import item_icon
 from ...components.pokemon import TypeChip
 from ...tasks import is_mounted
 from ...theme import IconSize, Motion, OVERLAY_SHADOW, Palette, Radius, Space, alpha, type_color
 from .summary import SlotModel
 
-COMPACT_HEIGHT = 162
-CONDENSED_HEIGHT = 96     # while the editor pane is open: header, item and weaknesses
+COMPACT_HEIGHT = 180
+CONDENSED_HEIGHT = 160    # while the editor pane is open: the nature and spread row hides
 
 
 @dataclass
@@ -42,6 +43,21 @@ def _move_line(move) -> ft.Control:
         ft.Text(move.name, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.WARNING if flagged else Palette.ON_SURFACE, max_lines=1,
                 overflow=ft.TextOverflow.ELLIPSIS, expand=True, tooltip="Not in the Champions learnset" if flagged else None),
     ])
+
+
+def problem_line(slot: SlotModel) -> str:
+    """The card's most important problem in a few words: an error, a flagged move, a warning."""
+    v = slot.validation
+    if v is not None and v.error:
+        return v.error
+    flagged = slot.illegal_moves
+    if len(flagged) == 1:
+        return f"{flagged[0]}: not in the learnset"
+    if flagged:
+        return f"{len(flagged)} moves not in the learnset"
+    if v is not None and v.warning:
+        return v.warning
+    return ""
 
 
 class CompactSlot(ft.Container):
@@ -79,10 +95,11 @@ class CompactSlot(ft.Container):
                                           bgcolor=Palette.SURFACE_4, border_radius=Radius.MD, padding=Space.SM, shadow=OVERLAY_SHADOW),
         )
         self._item = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
-        self._item_icon = ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=14, color=Palette.ON_SURFACE_VARIANT)
+        self._item_icon = ft.Container(width=18, height=18, content=item_icon(None, size=18))
         self._ability = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._moves = ft.Column(spacing=2, tight=True)
         self._spread = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+        self._problem = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.WARNING, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, visible=False)
         self._weak = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._speed = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, tooltip="Speed at level 50, from the spread and nature")
         self._spread_row = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._speed])
@@ -92,6 +109,7 @@ class CompactSlot(ft.Container):
             ft.Container(padding=ft.Padding.symmetric(horizontal=Space.SM), content=ft.Column(spacing=Space.XS, tight=True, controls=[
                 ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item, self._ability]),
                 self._weak,
+                self._problem,
                 self._moves,
                 self._spread_row,
             ])),
@@ -129,6 +147,7 @@ class CompactSlot(ft.Container):
         self._name.value = form.label if form.is_mega else entry.pokemon.display_name
         self._drag_name.value = self._name.value
         self._types.controls = [TypeChip(t, size="sm") for t in form.types]
+        self._item_icon.content = item_icon(slot.item.sprite_url if slot.item else None, size=18)
         self._item.value = slot.item.display_name if slot.item else "No item"
         self._item.color = Palette.ON_SURFACE if slot.item else Palette.DISABLED
         self._ability.value = slot.active_ability or ""
@@ -148,6 +167,9 @@ class CompactSlot(ft.Container):
         problems = [x for x in ((v.error if v else None), (v.warning if v else None)) if x] + ([f"{len(slot.illegal_moves)} move(s) outside the learnset"] if slot.illegal_moves else [])
         self._warn.visible = bool(problems)
         self._warn.tooltip = "\n".join(problems) or None
+        self._problem.value = f"⚠ {problem_line(slot)}" if problems else ""
+        self._problem.tooltip = self._warn.tooltip
+        self._problem.visible = bool(problems)
         self._menu.items = self._menu_items()
         self._inner.content = self._filled_body
         self._inner.alignment = ft.Alignment.TOP_CENTER
@@ -174,7 +196,7 @@ class CompactSlot(ft.Container):
         if condensed == self._condensed:
             return
         self._condensed = condensed
-        self._moves.visible = self._spread_row.visible = not condensed
+        self._spread_row.visible = not condensed       # the moves and warnings stay
         self.height = CONDENSED_HEIGHT if condensed else COMPACT_HEIGHT
 
     def set_selected(self, selected: bool) -> None:

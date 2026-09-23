@@ -21,6 +21,7 @@ from ....domain.type_chart import TYPES
 from ....services.tournament_service import PartnerRecommendation
 from ...components import Sprite, StatusChip
 from ...components.banner import InlineBanner
+from ...components.item_icon import item_icon
 from ...components.pokemon import BstPill, TypeChip
 from ...components.spread_editor import SpreadEditor
 from ...tasks import is_mounted
@@ -210,13 +211,12 @@ class SlotCard(ft.Container):
         # Controls that exist only when the team's format has the mechanic. A new mechanic
         # registers its control here (and in domain.formats) and appears where the format allows it.
         self.mechanic_controls: dict[Mechanic, ft.Control] = {Mechanic.MEGA: self._form, Mechanic.TERA: self._tera}
-        self._item_sprite = ft.Image(src="", width=24, height=24, fit=ft.BoxFit.CONTAIN, visible=False, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=18, color=Palette.DISABLED))
-        self._item_icon = ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.ON_SURFACE_VARIANT)
+        self._item_icon = ft.Container(width=24, height=24, content=item_icon(None))    # the item's sprite (or sheet cell)
         self._item_name = ft.Text("Held item…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._item_clear = ft.IconButton(icon=ft.Icons.CLOSE, icon_size=16, width=28, height=28, padding=0, tooltip="Remove item", visible=False,
                                          on_click=lambda _e: self.cb.on_remove_item(self.position))
         self._item_button = ft.Container(
-            content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item_sprite, self._item_name, ft.Icon(ft.Icons.CHEVRON_RIGHT, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT)]),
+            content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_icon, self._item_name, ft.Icon(ft.Icons.CHEVRON_RIGHT, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT)]),
             height=40, padding=ft.Padding.symmetric(horizontal=Space.MD), border_radius=Radius.SM, bgcolor=Palette.SURFACE_3, border=ft.Border.all(1, Palette.OUTLINE),
             on_click=lambda _e: self.cb.on_item(self.position), ink=True, tooltip="Choose held item", expand=True,
         )
@@ -334,15 +334,12 @@ class SlotCard(ft.Container):
         if slot.item is not None:
             self._item_name.value = slot.item.display_name
             self._item_name.color = Palette.ON_SURFACE
-            self._item_sprite.src = slot.item.sprite_url or ""
-            self._item_sprite.visible = bool(slot.item.sprite_url)
-            self._item_icon.visible = not slot.item.sprite_url
+            self._item_icon.content = item_icon(slot.item.sprite_url, size=24)
             self._item_clear.visible = True
         else:
             self._item_name.value = "Held item…"
             self._item_name.color = Palette.ON_SURFACE_VARIANT
-            self._item_sprite.visible = False
-            self._item_icon.visible = True
+            self._item_icon.content = item_icon(None, size=24)
             self._item_clear.visible = False
 
         base, eff = slot.base_stats, slot.effective_stats

@@ -37,7 +37,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Deleting is reversible for a few seconds through the toast's Undo; only entries on a team ask first.",
     ),
     "Teams": (
-        "All six slots show as compact cards with their weaknesses; click one (or focus it and press Enter) to open it in the editor under the cards, ‹ › to step through the team, and Escape to close it. Drag a card by its ⠿ handle onto another to swap them; its menu has Move left / right and Move to lead.",
+        "All six slots show as compact cards with their item, weaknesses, moves and any problem (\"⚠ Knock Off: not in the learnset\"); click one (or focus it and press Enter) to open it in the editor under the cards, ‹ › to step through the team, and Escape to close it. Drag a card by its ⠿ handle onto another to swap them; its menu has Move left / right and Move to lead.",
         "The editor has three parts: build (form, ability, item and its effect, and the Defense block: 4×, 2×, ½, ¼ and immune, abilities such as Levitate included), moves (category, power, accuracy and STAB; × clears one) and the spread, edited inline and saved as you go. Common partners open their tournament teams in Meta.",
         "Tournament set in the editor's header applies the species' most used set (or only its moves), with Undo. The item picker lists the items the species holds in tournaments first.",
         "The analysis panel has four tabs: Health (every check), Stats (level-50 stats; click Spe for the speed order), Types (defensive and offensive coverage) and Roles (speed control, Fake Out, Intimidate, redirection, Protect count…). The chip next to the format sums up the checks and opens Health.",

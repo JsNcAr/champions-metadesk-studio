@@ -22,7 +22,6 @@ from pokemon_champions_planning_tool.ui.catalogs import Catalogs
 from pokemon_champions_planning_tool.ui.context import AppContext
 from pokemon_champions_planning_tool.ui.views.team import TeamStore
 from pokemon_champions_planning_tool.ui.views.team.dialogs.item_picker import ItemPickerDialog
-from pokemon_champions_planning_tool.ui.views.team.dialogs.spread import SpreadDialog
 from pokemon_champions_planning_tool.ui.views.team.view import TeamView
 
 
@@ -94,8 +93,9 @@ class TestTeamView(_TeamViewCase):
         self.assertEqual(card._name.value, "Charizard")
         self.assertEqual(card._ability.value, "Blaze")
         self.assertTrue(card._form.visible, "mega forms available")
-        self.assertIn("6/6", [c._label.value for c in self.view._health.controls] + ["1/6"]) if False else None
-        self.assertTrue(any("1/6" in c._label.value for c in self.view._health.controls))
+        self.assertEqual(self.view.compacts[0]._name.value, "Charizard")
+        self.assertIn("note", self.view._health_label.value, "one summary chip for the team's checks")
+        self.assertIn("1/6", self.view._health.tooltip)
         self.assertEqual(actives[-1], self.store.active_team_id)
         self.assertGreater(serialise(self.view), 200)
 
@@ -161,26 +161,20 @@ class TestTeamView(_TeamViewCase):
         new_dialogs = self.page.dialogs[dialog_count:]
         self.assertFalse(any(isinstance(d, ItemPickerDialog) for d in new_dialogs))
 
-    def test_spread_dialog_saves_and_rejects(self):
+    def test_inline_spread_saves_and_rejects(self):
         self.view.ensure_loaded()
         self.store.create_team("Sun")
         self.store.assign(1, self.charizard)
-        self.view._open_spread(1)
-        dialog = self.page.dialogs[-1]
-        self.assertIsInstance(dialog, SpreadDialog)
-        serialise(dialog)
-        dialog._apply_points({"attack": 32, "speed": 32, "hp": 2})
-        dialog._nature.value = "adamant"
-        dialog._recompute()
-        self.assertEqual(dialog._computed["attack"].value, "149", "84 base, 32 points, Adamant: floor((84+32+20)·1.1)")
-        dialog._save()
+        editor = self.view.cards[0]._spread_editor
+        editor._nature.value = "adamant"
+        editor.apply_points({"attack": 32, "speed": 32, "hp": 2})    # no page loop: saved at once
+        self.assertEqual(editor._computed["attack"].value, "149", "84 base, 32 points, Adamant: floor((84+32+20)·1.1)")
         self.assertEqual(self.store.slot(1).member.points, {"attack": 32, "speed": 32, "hp": 2})
-        self.assertIn("32 Atk", self.view.cards[0]._spread.value)
-        self.view._open_spread(1)
-        dialog = self.page.dialogs[-1]
-        dialog._editor._points["hp"] = 3  # past the 66 budget, bypassing the editor's clamp
-        dialog._save()
-        self.assertTrue(dialog._banner.visible)
+        self.assertEqual(self.store.slot(1).member.nature, "adamant")
+        self.assertIn("32 Atk", self.view.compacts[0]._spread.value)
+        self.view._spread_changed(1, "adamant", {"attack": 32, "speed": 32, "hp": 3})   # past the 66 budget
+        self.assertTrue(self.view.cards[0]._spread_banner.visible)
+        self.assertEqual(self.store.slot(1).member.points, {"attack": 32, "speed": 32, "hp": 2}, "an illegal spread is not saved")
 
     def test_clear_with_undo_swap_and_keyboard_focus(self):
         self.view.ensure_loaded()
@@ -234,9 +228,9 @@ class TestSlotDragAndDrop(_TeamViewCase):
         self.view.ensure_loaded()
         self.store.create_team("Sun")
         self.store.assign(1, self.charizard)
-        src = self.view.cards[0]
-        target = self.view.cards[3]
-        event = type("E", (), {"src": src._drag_handle})()
+        src = self.view.compacts[0]
+        target = self.view.compacts[3]
+        event = type("E", (), {"src": src.drag_handle})()
         target._on_will_accept(event)
         self.assertTrue(target._drop_hover)
         target._on_accept(event)
@@ -249,9 +243,115 @@ class TestSlotDragAndDrop(_TeamViewCase):
         self.view.ensure_loaded()
         self.store.create_team("Sun")
         self.store.assign(2, self.lucario)
-        card = self.view.cards[1]
-        card._on_accept(type("E", (), {"src": card._drag_handle})())
+        card = self.view.compacts[1]
+        card._on_accept(type("E", (), {"src": card.drag_handle})())
         self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Lucario")
+
+
+def _key(key, *, ctrl=False, alt=False, shift=False):
+    return type("K", (), {"key": key, "ctrl": ctrl, "alt": alt, "shift": shift})()
+
+
+class TestTeamGrid(_TeamViewCase):
+    def setUp(self):
+        super().setUp()
+        from _ui_stubs import check_layout
+
+        self.check_layout = check_layout
+        self.view.ensure_loaded()
+        self.store.create_team("Sun")
+        self.store.assign(1, self.charizard)
+        self.store.assign(2, self.lucario)
+
+    def test_cards_rest_compact_and_one_expands_in_place(self):
+        from pokemon_champions_planning_tool.ui.views.team.view import COMPACT_COL, EXPANDED_COL
+
+        self.assertEqual([c.content for c in self.view._cells], self.view.compacts, "all compact at first")
+        self.assertEqual(self.view.compacts[0]._name.value, "Charizard")
+        self.view.compacts[0].on_click(None)
+        self.assertEqual(self.view.expanded, 1)
+        self.assertIs(self.view._cells[0].content, self.view.cards[0])
+        self.assertEqual(self.view._cells[0].col, EXPANDED_COL)
+        self.assertIs(self.view.grid.controls[0], self.view._cells[0])
+        self.check_layout(self.view)
+        serialise(self.view)
+        self.view._set_expanded(2)
+        self.assertIs(self.view._cells[0].content, self.view.compacts[0], "one editor open at a time")
+        self.assertEqual(self.view._cells[0].col, COMPACT_COL)
+        self.assertIs(self.view._cells[1].content, self.view.cards[1])
+        self.view._set_expanded(4)
+        self.assertEqual(self.view.expanded, 2, "an empty slot does not expand")
+        self.view.compacts[3].on_click(None)
+        from pokemon_champions_planning_tool.ui.views.team.dialogs.assign import AssignDialog
+
+        self.assertIsInstance(self.page.dialogs[-1], AssignDialog, "clicking an empty card assigns")
+
+    def test_editor_edits_show_on_the_compact_card(self):
+        self.view._set_expanded(1)
+        self.view._open_item_picker(1)
+        self.page.dialogs[-1]._on_pick("choice-band")
+        self.assertEqual(self.view.compacts[0]._item.value, "Choice Band")
+        self.store.set_move(1, 0, "Flamethrower")
+        self.view._clear_move(1, 0)
+        self.assertIsNone(self.store.slot(1).moves[0])
+        self.assertEqual(self.store.slot(1).battle_stats.speed, int(self.view.compacts[0]._speed.value.split()[-1]))
+
+    def test_keyboard_expand_move_and_escape_order(self):
+        self.view._focus(1)
+        self.view.handle_key(_key("Enter"))
+        self.assertEqual(self.view.expanded, 1)
+        self.view.handle_key(_key("Arrow Right", alt=True, shift=True))
+        self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Charizard", "Alt+Shift+→ moves the card")
+        self.assertEqual(self.view.expanded, 2, "the editor follows the card")
+        self.assertTrue(self.view.summary.visible)
+        self.view.handle_key(_key("Escape"))
+        self.assertIsNone(self.view.expanded, "first Escape collapses the editor")
+        self.view.handle_key(_key("Escape"))
+        self.assertIsNone(self.view.focused, "then clears the focus")
+        self.view.handle_key(_key("Escape"))
+        self.assertFalse(self.view.summary.visible, "then closes the panel")
+
+    def test_compact_menu_moves_cards(self):
+        items = {getattr(i.content, "value", None): i for i in self.view.compacts[1]._menu.items}
+        self.assertNotIn(None, [k for k in items if k and k.startswith("Swap")], "no Swap-with-N list any more")
+        items["Move left"].on_click(None)
+        self.assertEqual(self.store.slot(1).entry.pokemon.display_name, "Lucario")
+        self.assertEqual(self.store.slot(2).entry.pokemon.display_name, "Charizard")
+        self.assertEqual(self.store.slot(2).member.slot_position, 2, "swapped in memory with the right positions")
+        self.store.load()
+        self.assertEqual(self.store.slot(1).entry.pokemon.display_name, "Lucario", "and saved")
+
+    def test_analysis_tabs_render_when_shown(self):
+        panel = self.view.summary
+        self.assertIn("stats", panel._stale, "Stats is built when first shown")
+        panel.show_tab("stats")
+        rows = panel.battle_rows()
+        self.assertEqual([r[0].position for r in rows], [1, 2])
+        self.assertEqual(rows[0][1], self.store.slot(1).battle_stats)
+        panel.sort_by("speed")
+        speeds = [r[1].speed for r in panel.battle_rows()]
+        self.assertEqual(speeds, sorted(speeds, reverse=True))
+        panel.sort_by("speed")
+        self.assertEqual([r[0].position for r in panel.battle_rows()], [1, 2], "clicking again restores slot order")
+        for tab in ("coverage", "roles", "overview"):
+            panel.show_tab(tab)
+            self.check_layout(panel)
+            serialise(panel)
+        self.assertTrue(panel._role_rows.controls)
+        self.view._health.on_click(None)
+        self.assertEqual(panel.tab, "overview", "the health chip opens the checks")
+
+    def test_partner_chip_opens_meta(self):
+        seen = []
+        self.ctx.bus.on(events.NAVIGATE, lambda v: seen.append(("nav", v)))
+        self.ctx.bus.on(events.META_SEARCH, lambda q: seen.append(("search", q)))
+        self.view._open_partner("Incineroar")
+        self.assertEqual(seen, [("nav", "meta"), ("search", "Incineroar")])
+
+    def test_team_menu_has_every_team_action(self):
+        labels = [getattr(i.content, "value", None) for i in self.view._more.items]
+        for label in ("New team", "Rename team…", "Duplicate team…", "Compare teams…", "Delete team…"):
+            self.assertIn(label, labels)
 
 
 if __name__ == "__main__":

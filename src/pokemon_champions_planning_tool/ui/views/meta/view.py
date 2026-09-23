@@ -170,6 +170,7 @@ class MetaView(ft.Column):
         self._relayout()
 
         ctx.bus.on(events.META_SYNCED, self._on_meta_synced)
+        ctx.bus.on(events.META_SEARCH, self._on_search_requested)
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.SYNC_PROGRESS, self._on_sync_progress)
         ctx.bus.on(events.BOX_CHANGED, self._on_box_changed)
@@ -217,6 +218,13 @@ class MetaView(ft.Column):
         if force:
             self.store.invalidate()
         self._reload()
+
+    def _on_search_requested(self, query) -> None:
+        """Another view asked for the teams with a species (Teams' partner chips)."""
+        text = str(query or "").strip()
+        if text:
+            self._search.value = text
+            self._apply(query=text, force=True)
 
     def _apply_source(self, source: str) -> None:
         """Leaving "official" drops the tier with it; the tier dropdown only shows there."""

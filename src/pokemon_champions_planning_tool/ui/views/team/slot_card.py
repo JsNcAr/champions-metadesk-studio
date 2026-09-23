@@ -1,4 +1,12 @@
-"""Team slot card: identity header, build controls, item, moves, spread, partners."""
+"""Slot editor: a compact card expanded in place, spanning the grid's width.
+
+Three zones side by side on wide windows (stacked when narrow):
+1. build: form (Mega), ability, the format's other mechanics (Tera), item and its guardrails;
+2. moves: four move buttons with a clear button each, and the types they hit;
+3. spread: the shared stat-point editor inline, with presets and live level-50 stats.
+Partners and notes run along the bottom. Controls for mechanics the team's format does
+not have are hidden (``MECHANIC_CONTROLS``).
+"""
 
 from __future__ import annotations
 
@@ -7,15 +15,20 @@ from dataclasses import dataclass
 
 import flet as ft
 
+from ....domain.entities.pokemon_stats import PokemonStats
 from ....domain.formats import BUILTIN_FORMATS, Format, Mechanic
 from ....domain.type_chart import TYPES
 from ....services.tournament_service import PartnerRecommendation
 from ...components import Sprite, StatusChip
 from ...components.banner import InlineBanner
 from ...components.pokemon import BstPill, TypeChip
+from ...components.spread_editor import SpreadEditor
 from ...tasks import is_mounted
-from ...theme import IconSize, Motion, OVERLAY_SHADOW, Palette, Radius, STAT_COLORS, STAT_LABELS, Space, alpha, type_color
+from ...theme import IconSize, Motion, Palette, Radius, STAT_COLORS, STAT_LABELS, Space, alpha, type_color
+from .dialogs.spread import PRESETS
 from .summary import SlotModel
+
+_EMPTY_STATS = PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)
 
 
 @dataclass
@@ -27,32 +40,28 @@ class SlotCallbacks:
     on_tera: Callable[[int, str | None], None]
     on_item: Callable[[int], None]
     on_remove_item: Callable[[int], None]
-    on_move: Callable[[int, int, str], None]
     on_notes: Callable[[int, str], None]
-    on_spread: Callable[[int], None]
     on_swap: Callable[[int, int], None]
     on_focus: Callable[[int], None]
     on_move_pick: Callable[[int, int], None] = lambda position, index: None
+    on_clear_move: Callable[[int, int], None] = lambda position, index: None
+    on_spread_change: Callable[[int, str, dict[str, int]], None] = lambda position, nature, points: None
+    on_collapse: Callable[[int], None] = lambda position: None
+    on_partner: Callable[[str], None] = lambda name: None
     on_calc: Callable[[int], None] = lambda position: None
 
 
-
-SLOT_CARD_MAX_EXTENT = 600      # 3 columns at 1440, 2 beside the summary, 1 below ~1200 with it open
-SLOT_CARD_HEIGHT = 432          # header + form/ability/tera row + item + 2×2 moves + coverage + footer
-SLOT_CARD_WRAP_WIDTH = 430      # narrower tiles wrap form/ability/tera onto extra lines…
-SLOT_CARD_HEIGHT_NARROW = 528   # …so the card grows to keep the footer visible
-
-
 class MoveButton(ft.Container):
-    """One move slot on the card: ``● Fake Out`` or ``Move 2…``; red when flagged."""
+    """One move slot: ``● Fake Out · Normal · 40`` or ``Move 2…``; amber when flagged."""
 
     def __init__(self, *, index: int, on_click: Callable[[], None]) -> None:
         super().__init__()
         self.index = index
         self._dot = ft.Container(width=8, height=8, border_radius=Radius.PILL, bgcolor=Palette.OUTLINE, visible=False)
         self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.DISABLED, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._meta = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._warn = ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=IconSize.SM, color=Palette.WARNING, visible=False)
-        self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._dot, self._name, self._warn])
+        self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._dot, self._name, self._meta, self._warn])
         self.height = 36
         self.expand = True
         self.padding = ft.Padding.symmetric(horizontal=Space.MD)
@@ -67,6 +76,7 @@ class MoveButton(ft.Container):
         if move is None or not move.name:
             self._name.value = f"Move {self.index + 1}…"
             self._name.color = Palette.DISABLED
+            self._meta.value = ""
             self._dot.visible = False
             self._warn.visible = False
             self.border = ft.Border.all(1, Palette.OUTLINE)
@@ -87,69 +97,72 @@ class MoveButton(ft.Container):
                 bits.append(f"{info.power} power")
             if info.accuracy:
                 bits.append(f"{info.accuracy}% accuracy")
+        category = (info.category or "").lower() if info is not None else ""
+        self._meta.value = "Status" if category == "status" else (str(info.power) if info is not None and info.power else "")
         self.tooltip = (f"Not in {species}'s Champions learnset" if flagged else "") + ("\n" if flagged and bits else "") + " · ".join(bits) or "Choose move"
 
 
 class SlotCard(ft.Container):
+    """The slot editor. ``update_from`` works whether or not it is on screen, so the view
+    keeps all six current and shows the expanded one."""
+
     def __init__(self, position: int, callbacks: SlotCallbacks) -> None:
         super().__init__()
         self.position = position
         self.cb = callbacks
         self._focused = False
         self._filled = False
+        self._spread_key: tuple | None = None
 
-        # -- empty state ------------------------------------------------------------------
+        # -- empty state --------------------------------------------------------------------
         self._empty = ft.Column(
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=Space.SM,
+            alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=Space.SM,
             controls=[
                 ft.Text(f"Slot {position}", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT),
-                ft.Icon(ft.Icons.ADD_CIRCLE_OUTLINE, size=IconSize.LG, color=Palette.SECONDARY),
                 ft.FilledTonalButton("Assign Pokémon", icon=ft.Icons.ADD, on_click=lambda _e: self.cb.on_assign(self.position)),
             ],
         )
 
-        # -- header ---------------------------------------------------------------------------
+        # -- header ----------------------------------------------------------------------------
         self._badge = ft.Container(content=ft.Text(str(position), theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE),
                                    width=22, height=22, border_radius=Radius.PILL, bgcolor=Palette.SURFACE_4, alignment=ft.Alignment.CENTER)
         self.sprite = Sprite(size=56)
-        self._name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._name = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_MEDIUM, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._form_caption = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False)
         self._types = ft.Row(spacing=Space.XS, tight=True)
         self._bst = BstPill()
         self._planned = StatusChip("Planned", "tertiary", icon=ft.Icons.EDIT_NOTE)
         self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="Slot actions", items=[])
+        self._collapse = ft.IconButton(icon=ft.Icons.UNFOLD_LESS, tooltip="Collapse (Esc)", on_click=lambda _e: self.cb.on_collapse(self.position))
         self._header = ft.Container(
-            content=ft.Row(
-                spacing=Space.SM,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    self._badge,
-                    self.sprite,
-                    ft.Column(spacing=2, tight=True, expand=True, controls=[self._name, self._form_caption, ft.Row(spacing=Space.SM, tight=True, controls=[self._types, self._bst, self._planned])]),
-                    self._menu,
-                ],
-            ),
+            content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                self._badge, self.sprite,
+                ft.Column(spacing=2, tight=True, expand=True, controls=[
+                    ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._name, self._form_caption]),
+                    ft.Row(spacing=Space.SM, tight=True, controls=[self._types, self._bst, self._planned]),
+                ]),
+                self._menu, self._collapse,
+            ]),
             padding=ft.Padding.symmetric(horizontal=Space.MD, vertical=Space.SM),
             border_radius=ft.BorderRadius.only(top_left=Radius.MD, top_right=Radius.MD),
         )
 
-        # -- build row --------------------------------------------------------------------------
+        # -- zone 1: build -----------------------------------------------------------------------
         self._form = ft.SegmentedButton(
             selected=["base"], allow_multiple_selection=False, allow_empty_selection=False, show_selected_icon=False,
             segments=[ft.Segment(value="base", label=ft.Text("Base"))], visible=False,
             on_change=lambda e: self.cb.on_form(self.position, next(iter(e.control.selected or ["base"]))),
         )
-        self._ability = ft.Dropdown(label="Ability", options=[], width=170, dense=True,
+        self._ability = ft.Dropdown(label="Ability", options=[], width=200, dense=True,
                                     on_select=lambda e: self.cb.on_ability(self.position, e.control.value or ""))
         self._tera = ft.Dropdown(
-            label="Tera", width=140, dense=True,
+            label="Tera", width=150, dense=True,
             options=[ft.DropdownOption(key="", text="None")] + [ft.DropdownOption(key=t, text=t.capitalize(), leading_icon=ft.Icon(ft.Icons.CIRCLE, size=12, color=type_color(t))) for t in TYPES],
             on_select=lambda e: self.cb.on_tera(self.position, e.control.value or None),
         )
-
-        # -- item ---------------------------------------------------------------------------------
+        # Controls that exist only when the team's format has the mechanic. A new mechanic
+        # registers its control here (and in domain.formats) and appears where the format allows it.
+        self.mechanic_controls: dict[Mechanic, ft.Control] = {Mechanic.MEGA: self._form, Mechanic.TERA: self._tera}
         self._item_sprite = ft.Image(src="", width=24, height=24, fit=ft.BoxFit.CONTAIN, visible=False, error_content=ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=18, color=Palette.DISABLED))
         self._item_icon = ft.Icon(ft.Icons.DIAMOND_OUTLINED, size=IconSize.MD, color=Palette.ON_SURFACE_VARIANT)
         self._item_name = ft.Text("Held item…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
@@ -160,84 +173,70 @@ class SlotCard(ft.Container):
             height=40, padding=ft.Padding.symmetric(horizontal=Space.MD), border_radius=Radius.SM, bgcolor=Palette.SURFACE_3, border=ft.Border.all(1, Palette.OUTLINE),
             on_click=lambda _e: self.cb.on_item(self.position), ink=True, tooltip="Choose held item", expand=True,
         )
-        self._item_field = ft.Row(
-            spacing=Space.XS,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self._item_button, self._item_clear],
-        )
+        self._item_field = ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._item_button, self._item_clear])
         self._deltas = ft.Row(spacing=Space.XS, wrap=True, tight=True)
         self._guardrail = InlineBanner(visible=False)
 
-        # -- moves ----------------------------------------------------------------------------------
-        # Four move buttons: type dot, name, warning when not in the Champions learnset.
-        # Clicking opens the move picker for that index.
+        # -- zone 2: moves ---------------------------------------------------------------------
         self._moves = [MoveButton(index=i, on_click=lambda i=i: self.cb.on_move_pick(self.position, i)) for i in range(4)]
-        self._move_values = ["", "", "", ""]
-        # Coverage caption: the defending types this slot hits super-effectively.
+        self._move_clears = [ft.IconButton(icon=ft.Icons.CLOSE, icon_size=14, width=28, height=28, padding=0, tooltip="Clear move", visible=False,
+                                           on_click=lambda _e, i=i: self.cb.on_clear_move(self.position, i)) for i in range(4)]
         self._coverage_label = ft.Text("Hits SE", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)
-        self._coverage_chips = ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True)
-        self._coverage = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._coverage_label, self._coverage_chips])
+        self._coverage_chips = ft.Row(spacing=Space.XS, tight=True, wrap=True)
+        self._coverage = ft.Column(spacing=Space.XS, tight=True, controls=[self._coverage_label, self._coverage_chips])
 
-        # -- footer: spread · partners · notes -------------------------------------------------------
-        self._spread = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self._spread_button = ft.TextButton("Edit spread", icon=ft.Icons.TUNE, on_click=lambda _e: self.cb.on_spread(self.position))
-        self._partners = ft.Row(spacing=Space.XS, tight=True, visible=False)
-        self._notes_toggle = ft.IconButton(icon=ft.Icons.NOTES, icon_size=IconSize.MD, tooltip="Notes", on_click=lambda _e: self._toggle_notes())
-        self._notes = ft.TextField(hint_text="Notes…", multiline=True, min_lines=2, max_lines=4, dense=True, visible=False,
-                                   on_blur=lambda e: self.cb.on_notes(self.position, e.control.value or ""))
-
-        self._filled_body = ft.Column(
-            spacing=Space.SM,
-            tight=True,
-            controls=[
-                self._header,
-                ft.Container(
-                    padding=ft.Padding.symmetric(horizontal=Space.MD),
-                    content=ft.Column(spacing=Space.SM, tight=True, controls=[
-                        ft.Row(spacing=Space.SM, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._form, self._ability, self._tera]),
-                        self._item_field,
-                        self._deltas,
-                        self._guardrail,
-                        ft.Row(spacing=Space.SM, controls=[self._moves[0], self._moves[1]]),
-                        ft.Row(spacing=Space.SM, controls=[self._moves[2], self._moves[3]]),
-                        self._coverage,
-                        ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spread, self._spread_button, self._partners, self._notes_toggle]),
-                        self._notes,
-                    ]),
-                ),
-                ft.Container(height=Space.SM),
+        # -- zone 3: spread ------------------------------------------------------------------------
+        self._spread_editor = SpreadEditor(base_stats=_EMPTY_STATS, nature=None, points=None, compact=True,
+                                           on_change=lambda nature, points: self.cb.on_spread_change(self.position, nature, points))
+        self._spread_banner = InlineBanner(visible=False)
+        self._presets = ft.PopupMenuButton(
+            tooltip="Spread presets",
+            content=ft.Row(spacing=Space.XS, tight=True, controls=[ft.Icon(ft.Icons.AUTO_FIX_HIGH, size=IconSize.SM, color=Palette.PRIMARY),
+                                                                   ft.Text("Presets", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.PRIMARY)]),
+            items=[
+                *[ft.PopupMenuItem(content=ft.Text(name), on_click=lambda _e, name=name, pts=pts: self._preset(name, pts)) for name, pts in PRESETS.items()],
+                ft.PopupMenuItem(),
+                ft.PopupMenuItem(content=ft.Text("Min speed (0 points, −Spe nature)"), on_click=lambda _e: self._spread_editor.set_min_speed()),
+                ft.PopupMenuItem(content=ft.Text("Reset"), on_click=lambda _e: self._spread_editor.apply_points({})),
             ],
         )
+        self._spread_caption = ft.Text("Level 50 · stat points (0–32, 66 in total)", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True)
 
-        # Drag the header onto another card to swap the two slots (or move into an empty one).
-        self._drag_name = ft.Text("", theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)
-        self._drag_handle = ft.Draggable(
-            group="team-slot",
-            data=position,
-            content=self._header,
-            content_feedback=ft.Container(
-                content=ft.Row(spacing=Space.SM, tight=True, controls=[self._badge_copy(), self._drag_name]),
-                bgcolor=Palette.SURFACE_4, border_radius=Radius.MD, padding=Space.SM, shadow=OVERLAY_SHADOW,
-            ),
-        )
-        self._filled_body.controls[0] = self._drag_handle
-        self._drop_hover = False
-        self._inner = ft.Container(content=self._empty, expand=True)
+        # -- footer: partners · notes ----------------------------------------------------------------
+        self._partners = ft.Row(spacing=Space.XS, wrap=True, visible=False)
+        self._partners_label = ft.Text("Common partners", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=False)
+        self._notes = ft.TextField(label="Notes", hint_text="Lead plans, damage benchmarks, what to watch for…", multiline=True, min_lines=1, max_lines=4, dense=True, expand=True,
+                                   on_blur=lambda e: self.cb.on_notes(self.position, e.control.value or ""))
 
-        self.content = ft.DragTarget(
-            group="team-slot",
-            content=self._inner,
-            on_will_accept=self._on_will_accept,
-            on_accept=self._on_accept,
-            on_leave=lambda _e: self._set_drop_hover(False),
-        )
+        def zone(title: str, controls: list[ft.Control], col: dict, trailing: ft.Control | None = None) -> ft.Container:
+            head: list[ft.Control] = [ft.Text(title, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True)]
+            if trailing is not None:
+                head.append(trailing)
+            return ft.Container(col=col, content=ft.Column(spacing=Space.SM, tight=True, controls=[ft.Row(spacing=Space.SM, controls=head), *controls]))
+
+        self._zones = ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.LG, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
+            zone("BUILD", [ft.Row(spacing=Space.SM, wrap=True, controls=[self._form, self._ability, self._tera]), self._item_field, self._deltas, self._guardrail],
+                 {"xs": 12, "md": 6, "xl": 4}),
+            zone("MOVES", [*(ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._moves[i], self._move_clears[i]]) for i in range(4)),
+                           self._coverage], {"xs": 12, "md": 6, "xl": 4}),
+            zone("SPREAD", [ft.Row(controls=[self._spread_caption]), self._spread_editor, self._spread_banner], {"xs": 12, "xl": 4}, trailing=self._presets),
+        ])
+        self._filled_body = ft.Column(spacing=Space.MD, tight=True, controls=[
+            self._header,
+            ft.Container(padding=ft.Padding.only(left=Space.LG, right=Space.LG, bottom=Space.LG), content=ft.Column(spacing=Space.MD, tight=True, controls=[
+                self._zones,
+                ft.Column(spacing=Space.XS, tight=True, controls=[self._partners_label, self._partners]),
+                ft.Row(controls=[self._notes]),
+            ])),
+        ])
+        self._inner = ft.Container(content=self._empty)
+        self.content = self._inner
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
-        self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
+        self.border = ft.Border.all(2, Palette.PRIMARY)
         self.animate = ft.Animation(Motion.FAST_MS, Motion.CURVE)
-        self.on_click = lambda _e: self.cb.on_focus(self.position)
 
-    # -- model -> controls ------------------------------------------------------------------------
+    # -- model -> controls -----------------------------------------------------------------------
 
     def update_from(self, slot: SlotModel, *, focused: bool = False, fmt: Format | None = None) -> None:
         self._focused = focused
@@ -245,8 +244,7 @@ class SlotCard(ft.Container):
         self._filled = slot.filled
         if not slot.filled or slot.form is None:
             self._inner.content = self._empty
-            self.padding = Space.LG
-            self._apply_frame()
+            self._inner.padding = Space.LG
             return
 
         entry, member, form = slot.entry, slot.member, slot.form
@@ -265,11 +263,11 @@ class SlotCard(ft.Container):
         self._menu.items = self._menu_items()
 
         choices = slot.form_choices()
-        # Mechanic controls show only when the team's format has the mechanic.
-        self._form.visible = len(choices) > 1 and fmt.has(Mechanic.MEGA)
-        self._tera.visible = fmt.has(Mechanic.TERA)
         self._form.segments = [ft.Segment(value=c.form_id, label=ft.Text(c.label if not c.is_mega else " ".join(c.label.replace(pokemon.display_name, "").split()) or c.label)) for c in choices]
         self._form.selected = [form.form_id]
+        for mechanic, control in self.mechanic_controls.items():
+            control.visible = fmt.has(mechanic)
+        self._form.visible = self._form.visible and len(choices) > 1
 
         abilities = slot.ability_options
         current = slot.active_ability or member.ability or (abilities[0] if abilities else "")
@@ -320,95 +318,74 @@ class SlotCard(ft.Container):
         for i, button in enumerate(self._moves):
             move = moves[i] if i < len(moves) else None
             button.update_from(move, species=pokemon.display_name)
+            self._move_clears[i].visible = move is not None and bool(move.name)
         hits = slot.super_effective_against
         has_any_move = any(m is not None and bool(m.name) for m in slot.moves)
         if not slot.damaging_types:
             self._coverage_label.value = "No damaging moves" if has_any_move else "Coverage"
-            self._coverage_chips.controls = [] if has_any_move else [ft.Text("pick moves to see what this slot hits", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.DISABLED)]
+            self._coverage_chips.controls = [] if has_any_move else [ft.Text("Pick moves to see what this slot hits", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.DISABLED)]
         else:
-            self._coverage_label.value = f"Hits SE · {len(hits)}"
-            shown = hits[:8]
-            self._coverage_chips.controls = [TypeChip(t, size="sm") for t in shown] + (
-                [ft.Text(f"+{len(hits) - len(shown)}", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, tooltip=", ".join(t.capitalize() for t in hits[len(shown):]))] if len(hits) > len(shown) else []
-            )
-        self._spread.value = slot.spread_summary
-        self._notes.value = member.notes or ""
-        self._notes_toggle.icon = ft.Icons.NOTES if not member.notes else ft.Icons.STICKY_NOTE_2
-        self._notes_toggle.icon_color = Palette.PRIMARY if member.notes else Palette.ON_SURFACE_VARIANT
+            self._coverage_label.value = f"Hits super-effectively · {len(hits)} types"
+            self._coverage_chips.controls = [TypeChip(t, size="sm") for t in hits]
 
-        self._drag_name.value = pokemon.qualified_name
+        # The spread editor is only reset when the slot's stored spread changed, so a
+        # debounced save does not fight the slider being dragged.
+        key = (form.form_id, member.nature, tuple(sorted((member.points or {}).items())))
+        if key != self._spread_key:
+            self._spread_key = key
+            self._spread_editor.set_base_stats(form.stats)
+            self._spread_editor.set_values(member.nature, member.points)
+        self._notes.value = member.notes or ""
         self._inner.content = self._filled_body
-        self.padding = 0
-        self._apply_frame()
+        self._inner.padding = 0
+
+    def show_spread_problems(self, problems: list[str]) -> None:
+        if problems:
+            self._spread_banner.show("; ".join(problems), "error")
+        else:
+            self._spread_banner.hide()
+        if is_mounted(self._spread_banner):
+            self._spread_banner.update()
 
     def set_partners(self, partners: list[PartnerRecommendation]) -> None:
         self._partners.controls = [
-            Sprite(p.sprite_url, size=24, tooltip=f"{p.display_name} · with this Pokémon in {p.co_occurrence_count} of {p.total_target_teams} tournament teams ({p.synergy_percentage:.0f}%)")
-            for p in partners[:3]
+            ft.Container(
+                content=ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    Sprite(p.sprite_url, size=24),
+                    ft.Text(p.display_name, theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE),
+                    ft.Text(f"{p.synergy_percentage:.0f}%", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS),
+                ]),
+                padding=ft.Padding.only(left=2, right=Space.SM, top=2, bottom=2), border_radius=Radius.PILL, bgcolor=Palette.SURFACE_3, ink=True,
+                tooltip=f"With this Pokémon in {p.co_occurrence_count} of {p.total_target_teams} tournament teams · click to see them in Meta",
+                on_click=lambda _e, name=p.display_name: self.cb.on_partner(name),
+            )
+            for p in partners[:5]
         ]
-        if partners:
-            self._partners.controls.append(ft.Text(f"{partners[0].synergy_percentage:.0f}%", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.SUCCESS, tooltip="Top partner co-occurrence"))
-        self._partners.visible = bool(partners)
+        self._partners.visible = self._partners_label.visible = bool(partners)
         if is_mounted(self._partners):
             self._partners.update()
+            self._partners_label.update()
 
     def set_focused(self, focused: bool) -> None:
         self._focused = focused
-        self._apply_frame()
 
     # -- interaction ------------------------------------------------------------------------------------
 
+    def _preset(self, name: str, points: dict[str, int]) -> None:
+        self._spread_editor.apply_points(points)
+        if name == "Trick Room":
+            self._spread_editor.set_min_speed()
+
     def _menu_items(self) -> list[ft.PopupMenuItem]:
-        others = [p for p in range(1, 7) if p != self.position]
-        return [
-            ft.PopupMenuItem(content=ft.Text("Open in damage calc"), icon=ft.Icons.CALCULATE_OUTLINED, on_click=lambda _e: self.cb.on_calc(self.position)),
-            ft.PopupMenuItem(content=ft.Text("Replace Pokémon…"), icon=ft.Icons.SWAP_HORIZ, on_click=lambda _e: self.cb.on_assign(self.position)),
-            *([ft.PopupMenuItem(content=ft.Text("Move to lead"), icon=ft.Icons.VERTICAL_ALIGN_TOP, on_click=lambda _e: self.cb.on_swap(self.position, 1))] if self.position != 1 else []),
-            *[ft.PopupMenuItem(content=ft.Text(f"Swap with slot {p}"), icon=ft.Icons.SWAP_VERT, on_click=lambda _e, p=p: self.cb.on_swap(self.position, p)) for p in others],
-            ft.PopupMenuItem(content=ft.Text("Clear slot"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.cb.on_clear(self.position)),
+        p = self.position
+        items = [
+            ft.PopupMenuItem(content=ft.Text("Open in damage calc"), icon=ft.Icons.CALCULATE_OUTLINED, on_click=lambda _e: self.cb.on_calc(p)),
+            ft.PopupMenuItem(content=ft.Text("Replace Pokémon…"), icon=ft.Icons.SWAP_HORIZ, on_click=lambda _e: self.cb.on_assign(p)),
         ]
+        if p != 1:
+            items.append(ft.PopupMenuItem(content=ft.Text("Move to lead"), icon=ft.Icons.VERTICAL_ALIGN_TOP, on_click=lambda _e: self.cb.on_swap(p, 1)))
+        items.append(ft.PopupMenuItem(content=ft.Text("Clear slot"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.cb.on_clear(p)))
+        return items
 
 
-    def _toggle_notes(self) -> None:
-        self._notes.visible = not self._notes.visible
-        if is_mounted(self._notes):
-            self._notes.update()
-
-    def _badge_copy(self) -> ft.Container:
-        return ft.Container(content=ft.Text(str(self.position), theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE),
-                            width=22, height=22, border_radius=Radius.PILL, bgcolor=Palette.SURFACE_3, alignment=ft.Alignment.CENTER)
-
-    # -- drag and drop -------------------------------------------------------------------------------
-
-    @staticmethod
-    def _source_position(e) -> int | None:
-        src = getattr(e, "src", None)
-        data = getattr(src, "data", None) if src is not None else getattr(e, "data", None)
-        try:
-            return int(data) if data is not None else None
-        except (TypeError, ValueError):
-            return None
-
-    def _on_will_accept(self, e) -> None:
-        src = self._source_position(e)
-        self._set_drop_hover(src is not None and src != self.position)
-
-    def _on_accept(self, e) -> None:
-        src = self._source_position(e)
-        self._set_drop_hover(False)
-        if src is not None and src != self.position:
-            self.cb.on_swap(src, self.position)
-
-    def _set_drop_hover(self, hovering: bool) -> None:
-        self._drop_hover = hovering
-        self._apply_frame()
-        if is_mounted(self):
-            self.update()
-
-    def _apply_frame(self) -> None:
-        if self._drop_hover:
-            self.border = ft.Border.all(2, Palette.PRIMARY)
-            self.bgcolor = Palette.SURFACE_3
-            return
-        self.bgcolor = Palette.SURFACE_2
-        self.border = ft.Border.all(2, Palette.PRIMARY) if self._focused else ft.Border.all(1, Palette.OUTLINE_VARIANT)
+__all__ = ["MoveButton", "SlotCallbacks", "SlotCard"]

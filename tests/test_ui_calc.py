@@ -616,7 +616,7 @@ def _walk(control):
 class TestEntryPoints(unittest.TestCase):
     def test_slot_callbacks_default_and_meta_row_menu(self):
         cb = SlotCallbacks(on_assign=lambda p: None, on_clear=lambda p: None, on_form=lambda p, f: None, on_ability=lambda p, a: None, on_tera=lambda p, t: None,
-                           on_item=lambda p: None, on_remove_item=lambda p: None, on_move=lambda p, i, n: None, on_notes=lambda p, n: None, on_spread=lambda p: None,
+                           on_item=lambda p: None, on_remove_item=lambda p: None, on_notes=lambda p, n: None,
                            on_swap=lambda a, b: None, on_focus=lambda p: None)
         self.assertIsNone(cb.on_calc(1))
         from pokemon_champions_planning_tool.services.tournament_service import MetaMemberRow, MetaTeamRow

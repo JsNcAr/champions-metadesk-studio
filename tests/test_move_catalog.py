@@ -354,7 +354,9 @@ class TestLegalityInTeamBuilder(unittest.TestCase):
         page = StubPage()
         view = TeamView(AppContext(page, catalogs=self.catalogs), self.store)
         view.ensure_loaded()
-        self.assertEqual(view.cards[0]._coverage_label.value, "Hits SE · 4")
+        self.assertEqual(view.cards[0]._coverage_label.value, "Hits super-effectively · 4 types")
+        self.assertEqual(view.summary._uncovered.value, "", "the Coverage tab is built when it is first shown")
+        view.summary.show_tab("coverage")
         self.assertIn("Not hit super-effectively", view.summary._uncovered.value)
         serialise(view)
 

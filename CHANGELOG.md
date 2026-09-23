@@ -24,7 +24,26 @@ for the headings and style.
   - Tera types are kept: export writes the `Tera Type:` line only when the team's format
     has Terastallization, and imports still read it.
 
+- **A reworked Teams view.** The six slots are compact cards that all fit on screen: sprite,
+  types, item, ability, moves, nature and spread, and level-50 Speed. Clicking one expands it
+  in place into the editor, with the build, the moves and the stat-point spread side by side.
+  The spread is edited inline and saved as you go, a move can be cleared with ×, notes are
+  always visible, and the common partners open their tournament teams in Meta.
+- **Team analysis in tabs.** Health (every check), Stats (level-50 stats of the six,
+  sortable, so Spe gives the team's speed order), Types (defensive and offensive coverage)
+  and a new **Roles** checklist: speed control, Fake Out, Intimidate, redirection, weather,
+  terrain, priority, spread moves, pivoting, setup, support and the Protect count. Doubles-only
+  roles are skipped for singles formats.
+
 ### Changed
+- The team bar is one line: the team, its format, and one chip that sums up the health checks
+  (it opens the Health tab). Rename moved into the team menu next to New, Duplicate, Compare
+  and Delete.
+- Slot cards move with a visible drag handle or Move left / right in their menu (instead of
+  five "Swap with slot N" entries); Alt+Shift+←/→ moves the focused card, Enter expands it,
+  and Escape collapses the editor, then clears the focus, then closes the panel.
+- Swapping two slots no longer reloads the whole team.
+- The box picker says when it shows only the first 60 matches.
 - The team export dialog says "Stat points" instead of "EVs". Copy and Publish still write
   them on Showdown's `EVs:` line, which is what Showdown and Poképaste read, and pasting a
   "Stat points:" line back into the app works too.

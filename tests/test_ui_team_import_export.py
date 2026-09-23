@@ -167,6 +167,11 @@ class TestImportExport(unittest.TestCase):
         dialog = self.page.dialogs[-1]
         self.assertIsInstance(dialog, ExportDialog)
         serialise(dialog)
+        copied = []
+        self.ctx.copy_to_clipboard = copied.append
+        dialog._paste = "Kingambit\nEVs: 32 Atk"   # what the store exports for pasting elsewhere
+        dialog._copy()
+        self.assertEqual(copied, ["Kingambit\nEVs: 32 Atk"], "Copy sends Showdown's EVs line, whatever the dialog shows")
         with patch.object(self.store, "publish", return_value=ShowdownExportResult(team_id="x", team_name="Sun", showdown_text="", pokepast_url="https://pokepast.es/abc")):
             dialog._do_publish()
         self.assertTrue(dialog._link.visible)

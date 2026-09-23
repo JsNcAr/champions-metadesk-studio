@@ -130,12 +130,18 @@ class ShowdownExportResult:
 def export_team_to_showdown_text(
     team_members: list,
     box_entries_by_id: dict[UUID, object],
+    *,
+    points_label: str = "EVs",
 ) -> str:
     """Serialize a list of TeamMember domain objects to Showdown paste format.
 
     Args:
         team_members: List of :class:`~domain.entities.team_member.TeamMember`.
         box_entries_by_id: Mapping of box_entry_id → :class:`~domain.entities.box_entry.BoxEntry`.
+        points_label: Label of the stat-points line. Showdown's Champions format (and
+            Poképaste) read stat points from the ``EVs:`` line, so text meant to be pasted
+            elsewhere keeps the default. "Stat points" is for display; this app's importer
+            reads either.
 
     Returns:
         Multi-block Showdown text string.  Blocks are separated by ``\\n\\n``.
@@ -173,7 +179,7 @@ def export_team_to_showdown_text(
         if points:
             spread = format_points(points)
             if spread:
-                lines.append(f"EVs: {spread}")
+                lines.append(f"{points_label}: {spread}")
 
         # --- Nature ---
         if member.nature:
@@ -306,7 +312,7 @@ def parse_showdown_text(paste_text: str) -> ParsedTeamResult:
     _moves: list[str] = []
 
     _PROPERTY_PREFIXES = (
-        "ability:", "level:", "evs:", "ivs:", "tera type:", "shiny:",
+        "ability:", "level:", "evs:", "stat points:", "sp:", "ivs:", "tera type:", "shiny:",
         "nature:",  # sometimes written as explicit "nature: jolly"
     )
     _NATURE_NAMES = {
@@ -396,7 +402,7 @@ def parse_showdown_text(paste_text: str) -> ParsedTeamResult:
             except ValueError:
                 warnings.append(f"Could not parse level from: {line!r}")
             continue
-        if ll.startswith("evs:"):
+        if ll.startswith(("evs:", "stat points:", "sp:")):   # the last two: this app's own display label
             _evs = _parse_spread_line(line.split(":", 1)[1])
             continue
         if ll.startswith("ivs:"):

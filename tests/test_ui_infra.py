@@ -291,6 +291,25 @@ class TestShellEscape(unittest.TestCase):
         shell._on_key(_key(",", ctrl=True))
         self.assertEqual(opened, [], "no shortcut runs behind an open dialog")
 
+    def test_a_toast_does_not_block_shortcuts(self):
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.context import AppContext
+        from pokemon_champions_planning_tool.ui.shell import AppShell
+
+        page = StubPage()
+        ctx = AppContext(page)
+        shell = AppShell(ctx)
+        opened = []
+        shell.register_settings(lambda: opened.append(1))
+        ctx.toast("Calculator reset", "info", action="Undo", on_action=lambda: None)
+        shell._on_key(_key(",", ctrl=True))
+        self.assertEqual(opened, [1], "an Undo toast is not a dialog: shortcuts still work")
+        shell._on_key(_key("/", ctrl=True))
+        shell._on_key(_key("/", ctrl=True))
+        self.assertEqual(sum(isinstance(d, ft.AlertDialog) for d in page.dialogs), 1, "with a toast showing, help still opens only once")
+        shell._on_key(_key("Escape", ctrl=False))
+        self.assertFalse(any(isinstance(d, ft.AlertDialog) and d.open for d in page.dialogs), "Escape closes the help dialog")
+
     def test_an_unhandled_key_skips_flets_auto_update(self):
         from types import SimpleNamespace
 

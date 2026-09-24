@@ -468,7 +468,9 @@ class AppShell(ft.Row):
         stack = getattr(getattr(page, "_dialogs", None), "controls", None)
         if stack is None:
             stack = getattr(page, "dialogs", None) or []
-        return any(getattr(dlg, "open", True) for dlg in stack)
+        # Toasts are SnackBars shown through the same stack, and one with an Undo action
+        # stays open until it is dismissed: counting it blocked every shortcut meanwhile.
+        return any(getattr(dlg, "open", True) for dlg in stack if not isinstance(dlg, ft.SnackBar))
 
     def _update_if_mounted(self) -> None:
         # Before page.add the controls have no page; Flet auto-updates after the

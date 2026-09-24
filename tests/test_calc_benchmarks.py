@@ -157,8 +157,10 @@ class TestInTheView(_Base):
         card.toggle()
         self.assertEqual(card._bench_state, "ready")
         self.assertIsNotNone(card.benchmarks)
-        texts = [c.controls[1].value for c in card._details.controls[-2].controls[1:]]
+        texts = [c.controls[0].value for c in card._details.controls[-2].controls[1:]]
         self.assertEqual(len(texts), 4, "OHKO, 2HKO, survives 1 hit, survives 2 hits")
+        self.assertTrue(texts[0].startswith("Kingambit: "), "the attacker's lines name it")
+        self.assertTrue(texts[2].startswith("Charizard-Mega-Y: "), "the target's lines name it")
         serialise(self.view)
         before = self.store.state
         self.view._apply_points("left", {"hp": 20, "special_defense": 12})

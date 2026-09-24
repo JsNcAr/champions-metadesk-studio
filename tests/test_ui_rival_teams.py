@@ -233,7 +233,7 @@ class TestRivalPanel(_ViewBase):
     def test_a_saved_plan_changes_only_on_request(self):
         members = [RivalMember(PokemonState(species="incineroar", moves=["Flare Blitz", None, None, None], ability="Intimidate"), frozenset({"item"}))]
         team = self.view.rivals.create("Wolfe", members)
-        self.view.set_right_mode("rival")
+        self.view.show_side("rivals")
         self.view.rivals_panel._list.controls[0].on_click(None)
         self.store.set_item("right", "Life Orb")
         self.assertIsNone(self.view.rivals.get(team.rival_team_id).members[0].pokemon.item, "browsing a plan never overwrites it")
@@ -312,7 +312,7 @@ class TestPresetsAndMyTeams(_ViewBase):
     def test_help_buttons_open_a_dialog(self):
         from pokemon_champions_planning_tool.ui.components.help_button import help_button
 
-        self.view.set_right_mode("rival")
+        self.view.show_side("rivals")
         for panel in (self.view.rivals_panel, self.view.sweep):
             button = next(c for c in _walk(panel) if isinstance(c, ft.IconButton) and c.icon == ft.Icons.HELP_OUTLINE)
             self.assertIsNotNone(button.on_click, "a click, not only a hover tooltip")
@@ -338,7 +338,7 @@ class TestPresetsAndMyTeams(_ViewBase):
     def test_a_preset_goes_into_the_current_battle_and_stays_as_saved(self):
         members = [RivalMember(PokemonState(species="incineroar", moves=["Flare Blitz", None, None, None], ability="Intimidate"), frozenset({"item"}))]
         preset = self.view.rivals.create("Wolfe", members)
-        self.view.set_right_mode("rival")
+        self.view.show_side("rivals")
         self.assertTrue(self.view.rival_strip._use.visible, "a preset on screen offers Use in battle")
         self.view._rival_action("use_preset")
         battle = self.view.rivals.battle

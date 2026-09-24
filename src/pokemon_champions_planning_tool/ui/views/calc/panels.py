@@ -20,9 +20,9 @@ from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
 from ...components.spread_editor import SpreadEditor
 from ...format import shortcut
-from ...tasks import Debouncer, is_mounted
+from ...tasks import Debouncer, is_mounted, safe_update
 from ...theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
-from .benchmarks import STAT_SHORT, ko_needs_points, ko_text, survive_needs_points, survive_text
+from . import bench_view
 from .chips import set_toggle, toggle_chip
 from .field_bar import SideConditionsRow
 from .move_card import MoveCard
@@ -116,8 +116,7 @@ class PokemonPanel(ft.Container):
         self._syncing = False
         self._head: tuple | None = None          # what the non-card part was last drawn from
         self._spread_later: Debouncer | None = None
-        self._searching = False     # the search row is showing (opened, or nothing loaded)
-        self._search_open = False   # the user opened it over a loaded Pokémon
+        self._search_open = False   # the user opened the search over a loaded Pokémon
         self._build_bench_key: tuple | None = None
 
         # -- header ---------------------------------------------------------------------------
@@ -257,7 +256,7 @@ class PokemonPanel(ft.Container):
             self._refresh_build_bench()
         if notify and self._on_tab is not None:
             self._on_tab(self.side, key)
-        self._safe_update(self)
+        safe_update(self)
 
     @property
     def tab(self) -> str:
@@ -266,16 +265,13 @@ class PokemonPanel(ft.Container):
     # -- species search ------------------------------------------------------------------------
 
     def _show_search(self, opened: bool) -> None:
+        """The search row shows when opened over a Pokémon (with ✕) or when nothing is loaded."""
         empty = self.store.species(self.side) is None
         self._search_open = opened and not empty
-        searching = opened or empty
-        was_searching = self._searching
-        self._searching = searching
-        self._search_row.visible = self._searching
-        self._search_close.visible = opened and not empty
-        self._identity.visible = not empty
-        self._loaded.visible = not empty
-        if was_searching and not self._searching:
+        self._search_row.visible = opened or empty
+        self._search_close.visible = self._search_open
+        self._identity.visible = self._loaded.visible = not empty
+        if not self._search_row.visible:
             self.search.value = ""
             self._suggestions.controls = []
             self._suggestions.visible = False
@@ -283,12 +279,12 @@ class PokemonPanel(ft.Container):
 
     def open_search(self) -> None:
         self._show_search(True)
-        self._safe_update(self)
+        safe_update(self)
         self.focus_search()
 
     def close_search(self) -> None:
         self._show_search(False)
-        self._safe_update(self)
+        safe_update(self)
 
     def _suggest(self, query: str) -> None:
         matches = self.store.search_species(query)
@@ -304,7 +300,7 @@ class PokemonPanel(ft.Container):
             for i, s in enumerate(matches)
         ]
         self._suggestions.visible = bool(matches)
-        self._safe_update(self._suggestions)
+        safe_update(self._suggestions)
 
     def _submit(self, query: str) -> None:
         matches = self.store.search_species(query)
@@ -319,7 +315,7 @@ class PokemonPanel(ft.Container):
             return
         self._no_match.visible = visible
         self._no_match.value = f"No Pokémon matches ‘{query.strip()}’" if visible else ""
-        self._safe_update(self._no_match)
+        safe_update(self._no_match)
 
     def _pick(self, canonical_id: str) -> None:
         self._search_open = False
@@ -329,7 +325,7 @@ class PokemonPanel(ft.Container):
         self._show_no_match(None)
         self.store.load_species(self.side, canonical_id, preset=self.side == "right" and self.store.sweep_presets)
         self._show_search(False)
-        self._safe_update(self)
+        safe_update(self)
 
     # -- edits ---------------------------------------------------------------------------------
 
@@ -348,7 +344,7 @@ class PokemonPanel(ft.Container):
         if not is_mounted(self):
             self.store.set_pokemon(self.side, nature=nature, points=dict(points))
             return
-        self._safe_update(self.editor)
+        safe_update(self.editor)
         if self._spread_later is None:
             self._spread_later = Debouncer(self.page, 150, lambda v: self.store.set_pokemon(self.side, nature=v[0], points=v[1]))
         self._spread_later((nature, dict(points)))
@@ -374,7 +370,7 @@ class PokemonPanel(ft.Container):
         except ValueError:
             max_hp = self.store.max_hp(self.side)
             self._hp_abs.value = str(self.store.cur_hp(self.side)) if max_hp else ""   # not a number: put it back
-            self._safe_update(self._hp_abs)
+            safe_update(self._hp_abs)
             return
         if hp != self.store.cur_hp(self.side):
             self.store.set_hp_abs(self.side, hp)
@@ -388,18 +384,23 @@ class PokemonPanel(ft.Container):
     def _card_expanded(self, index: int) -> None:
         self._request_card(self.cards[index])
 
+    def _names(self) -> tuple[str, str]:
+        me, other = self.store.species(self.side), self.store.species(self.other)
+        return (me.name if me else "You", other.name if other else "They")
+
     def _request_card(self, card: MoveCard) -> None:
         if self._on_bench is None:
             return
         key = self.store.benchmark_key(self.side, card.index)
-        if getattr(card, "bench_key", None) == key:
+        if card.bench_key == key:
             return
         card.bench_key = key
-        card.set_benchmarks(None, loading=True)
+        names = self._names()
+        card.set_benchmarks(None, loading=True, names=names)
 
         def answer(value, card=card, key=key) -> None:
-            if getattr(card, "bench_key", None) == key:
-                card.set_benchmarks(value)
+            if card.bench_key == key:
+                card.set_benchmarks(value, names=names)
         self._on_bench(self.side, card.index, answer)
 
     def _refresh_build_bench(self) -> None:
@@ -416,45 +417,22 @@ class PokemonPanel(ft.Container):
         if key == self._build_bench_key:
             return
         self._build_bench_key = key
-        other = self.store.species(self.other)
-        heading = ft.Text(f"BENCHMARKS · {best.name} vs {other.name if other else '?'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
-                          tooltip="Stat points for a guaranteed KO (lowest roll), or to survive the highest roll; everything else as set")
-        self._build_bench.controls = [heading, ft.Row(spacing=Space.SM, controls=[ft.ProgressRing(width=12, height=12, stroke_width=2),
-                                                                              ft.Text("Working out the numbers…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)])]
+        mine, theirs = self._names()
+        title = bench_view.heading(f"BENCHMARKS · {best.name} vs {theirs}")
+        self._build_bench.controls = [bench_view.loading(title)]
 
         def answer(value, key=key) -> None:
-            if key != self._build_bench_key:
-                return
-            rows: list[ft.Control] = [heading]
-            if value is None:
-                rows.append(ft.Text("Not available for this move", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
-            else:
-                me = self.store.species(self.side)
-                for k in value.ko:
-                    rows.append(self._bench_line(f"{me.name if me else 'You'} can {ko_text(k)}" if k.points is not None else f"{me.name if me else 'You'} {ko_text(k)}",
-                                                 ("mine", {k.stat: k.points}) if ko_needs_points(k) else None,
-                                                 f"Set {STAT_SHORT[k.stat]} to {k.points} (now {k.current})"))
-                for sv in value.survive:
-                    apply = ("theirs", {"hp": sv.hp, sv.stat: sv.defence}) if survive_needs_points(sv) else None
-                    rows.append(self._bench_line(f"{other.name if other else 'They'} can {survive_text(sv)}" if sv.hp is not None else f"{other.name if other else 'They'} {survive_text(sv)}",
-                                                 apply, f"Set their HP to {sv.hp} and {STAT_SHORT[sv.stat]} to {sv.defence} (now {sv.current_hp} / {sv.current_defence})"))
-            self._build_bench.controls = rows
-            self._safe_update(self._build_bench)
+            if key == self._build_bench_key:
+                self._build_bench.controls = [title, *bench_view.rows(value, mine=mine, theirs=theirs, on_apply=self._apply_bench)]
+                safe_update(self._build_bench)
         self._on_bench(self.side, best.index, answer)
-
-    def _bench_line(self, text: str, apply: tuple[str, dict[str, int]] | None, tip: str | None) -> ft.Control:
-        controls: list[ft.Control] = [ft.Text(text, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, expand=True)]
-        if apply is not None:
-            controls.append(ft.TextButton("Apply", tooltip=tip, style=ft.ButtonStyle(visual_density=ft.VisualDensity.COMPACT),
-                                          on_click=lambda _e: self._apply_bench(*apply)))
-        return ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
 
     # -- rendering -----------------------------------------------------------------------------
 
     def update_from(self) -> None:
         state = self.store.state.side(self.side)
         if self.conditions.update_from():
-            self._safe_update(self.conditions)
+            safe_update(self.conditions)
         # Everything outside the move cards depends on this. When only moves, crits, applied
         # effects or the results changed, just the affected cards are redrawn.
         head = (replace(state, moves=[], crit=[], active=[], single=[]), any(state.moves), self.store.speed_order(), self.store.speed(self.side), id(self.store.catalogs),
@@ -544,7 +522,7 @@ class PokemonPanel(ft.Container):
             self._refresh_build_bench()
         finally:
             self._syncing = False
-        self._safe_update(self)
+        safe_update(self)
 
     def _update_cards(self, state, *, redraw: bool) -> None:
         results = self.store.results.left_vs_right if self.side == "left" else self.store.results.right_vs_left
@@ -554,11 +532,9 @@ class PokemonPanel(ft.Container):
             info = self.store.catalogs.move_by_name(name) if name else None
             changed = card.update_from(name, info, by_index.get(index), active=bool(state.active[index]), effect=move_effect(name), crit=bool(state.crit[index]))
             if card.expanded:
-                if changed:
-                    card.bench_key = None
-                self._request_card(card)
+                self._request_card(card)   # asks again only when the state changed
             if redraw and changed:
-                self._safe_update(card)
+                safe_update(card)
 
     def expand_move(self, index: int) -> None:
         """Show a move's details (the versus bar's best hit was clicked)."""
@@ -581,7 +557,7 @@ class PokemonPanel(ft.Container):
     def focus_search(self) -> bool:
         if not self._search_row.visible:
             self._show_search(True)
-            self._safe_update(self)
+            safe_update(self)
         try:
             if self.search.page is not None:
                 # ``focus`` is a coroutine in Flet 0.85: called bare it never ran.
@@ -590,14 +566,6 @@ class PokemonPanel(ft.Container):
         except RuntimeError:
             pass
         return False
-
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass
 
 
 __all__ = ["PokemonPanel", "StageControl", "TABS", "TabBar", "modifiers_count", "modifiers_summary"]

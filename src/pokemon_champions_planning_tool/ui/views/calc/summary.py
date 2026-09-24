@@ -9,6 +9,7 @@ from collections.abc import Callable
 import flet as ft
 
 from ...theme import Palette, Radius, Space
+from ...tasks import safe_update
 from .move_card import damage_colour
 from .state import MoveResult
 from .store import CalcStore, best_of
@@ -95,11 +96,7 @@ class MatchupBar(ft.Container):
                 first = left.name if order == "left" else right.name
                 self._speed.value = f"{first} moves first{room}\n{a} vs {b}"
                 self._speed.color = Palette.SUCCESS if order == "left" else Palette.ERROR
-        try:
-            if self.page is not None:
-                self.update()
-        except RuntimeError:
-            pass
+        safe_update(self)
 
     def _open(self, side: str) -> None:
         best = self._best.get(side)

@@ -12,9 +12,10 @@ from ...components import Sprite, StatusChip
 from ...components.help_button import help_button
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.section import SectionHeader
-from ...tasks import Debouncer, is_mounted
+from ...tasks import Debouncer, is_mounted, safe_update
 from ...theme import Palette, Radius, Space
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
+from .hit import hit_text
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
 
@@ -34,8 +35,8 @@ class SweepCard(ft.Container):
     def __init__(self, entry: SweepEntry, *, on_pick: Callable[[SweepEntry], None]) -> None:
         super().__init__()
         e = entry
-        yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
-        theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
+        yours = hit_text(e.your_best, "no damage")
+        theirs_base = hit_text(e.their_best, "no damaging set" if e.preset else "moves unknown")
         theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
         # Same convention as the panels' speed chip: ▲ = you move first.
         speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
@@ -170,7 +171,7 @@ class SweepPanel(ft.Container):
         self._spinner.visible = busy
         if busy:
             self._status.value = "Computing every opponent…"
-        self._safe_update(self)
+        safe_update(self)
 
     def render(self) -> None:
         entries = self.store.sweep
@@ -212,12 +213,5 @@ class SweepPanel(ft.Container):
                         ),
                     )
                 )
-        self._safe_update(self)
+        safe_update(self)
 
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass

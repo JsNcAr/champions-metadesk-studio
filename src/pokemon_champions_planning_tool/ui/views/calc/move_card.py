@@ -15,7 +15,9 @@ import flet as ft
 
 from ...components import StatusChip
 from ...theme import IconSize, Palette, Radius, Space, alpha, type_color
-from .benchmarks import STAT_SHORT, Benchmarks, ko_needs_points, ko_text, survive_needs_points, survive_text
+from ...tasks import safe_update
+from . import bench_view
+from .benchmarks import Benchmarks
 from .state import MoveResult
 
 TARGETS_TIP = {
@@ -71,7 +73,9 @@ class MoveCard(ft.Container):
         self._on_expand = on_expand
         self._on_apply = on_apply          # ("mine" | "theirs", points) from a benchmark
         self.benchmarks: Benchmarks | None = None
+        self.bench_key: str | None = None  # the state the benchmarks were asked for
         self._bench_state = "idle"         # "idle" | "loading" | "ready"
+        self._bench_names = ("You", "They")
         muted = Palette.ON_SURFACE_VARIANT
         self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._category = ft.Icon(ft.Icons.ADD, size=IconSize.SM, color=Palette.DISABLED)
@@ -209,6 +213,7 @@ class MoveCard(ft.Container):
         self._details.controls = []
         self._bench_state = "idle"
         self.benchmarks = None
+        self.bench_key = None
 
     def _fill_details(self) -> None:
         r = self.result
@@ -229,51 +234,22 @@ class MoveCard(ft.Container):
 
     # -- benchmarks ----------------------------------------------------------------------------
 
-    def set_benchmarks(self, value: Benchmarks | None, *, loading: bool = False) -> None:
-        """The view's answer for this card (or that it is on its way); redraws the details."""
+    def set_benchmarks(self, value: Benchmarks | None, *, loading: bool = False, names: tuple[str, str] = ("You", "They")) -> None:
+        """The view's answer for this card (or that it is on its way); redraws the details.
+        ``names`` are the attacker's and the target's, for the lines."""
         self.benchmarks = value
         self._bench_state = "loading" if loading else "ready"
+        self._bench_names = names
         if self.expanded:
             self._fill_details()
-            try:
-                if self.page is not None:
-                    self._details.update()
-            except RuntimeError:
-                pass
+            safe_update(self._details)
 
     def _bench_block(self) -> ft.Control:
-        title = ft.Text("BENCHMARKS", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
-                        tooltip="Stat points for a guaranteed KO (lowest roll), or to survive the highest roll; everything else as set")
+        title = bench_view.heading()
         if self._bench_state != "ready":
-            return ft.Row(spacing=Space.SM, controls=[title, ft.ProgressRing(width=12, height=12, stroke_width=2),
-                                                      ft.Text("Working out the numbers…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)])
-        b = self.benchmarks
-        if b is None:
-            return ft.Row(controls=[title, ft.Text("Not available for this move", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)])
-        rows: list[ft.Control] = [title]
-        for k in b.ko:
-            apply = None
-            if ko_needs_points(k):
-                apply = ("mine", {k.stat: k.points}, f"Set {STAT_SHORT[k.stat]} to {k.points} (now {k.current})")
-            rows.append(self._bench_row("You", ko_text(k), apply))
-        for sv in b.survive:
-            apply = None
-            if survive_needs_points(sv):
-                apply = ("theirs", {"hp": sv.hp, sv.stat: sv.defence},
-                         f"Set their HP to {sv.hp} and {STAT_SHORT[sv.stat]} to {sv.defence} (now {sv.current_hp} / {sv.current_defence})")
-            rows.append(self._bench_row("They", survive_text(sv), apply))
-        return ft.Column(spacing=2, tight=True, controls=rows)
-
-    def _bench_row(self, who: str, text: str, apply: tuple[str, dict[str, int], str] | None) -> ft.Control:
-        controls: list[ft.Control] = [
-            ft.Text(who, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=34),
-            ft.Text(text, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, expand=True),
-        ]
-        if apply is not None and self._on_apply is not None:
-            target, points, tip = apply
-            controls.append(ft.TextButton("Apply", tooltip=tip, style=ft.ButtonStyle(visual_density=ft.VisualDensity.COMPACT),
-                                          on_click=lambda _e: self._on_apply(target, points)))
-        return ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
+            return bench_view.loading(title)
+        mine, theirs = self._bench_names
+        return ft.Column(spacing=2, tight=True, controls=[title, *bench_view.rows(self.benchmarks, mine=mine, theirs=theirs, on_apply=self._on_apply)])
 
     def toggle(self) -> None:
         self.expanded = not self.expanded
@@ -284,8 +260,4 @@ class MoveCard(ft.Container):
         else:
             self._details.controls = []
         self._details.visible = self.expanded
-        try:
-            if self.page is not None:
-                self.update()
-        except RuntimeError:
-            pass
+        safe_update(self)

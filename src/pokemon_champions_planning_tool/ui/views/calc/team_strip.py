@@ -17,6 +17,7 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite
 from ...format import shortcut
 from ...theme import Palette, Radius, Space
+from ...tasks import safe_update
 from .classes import CLASS_BG, CLASS_BORDER
 from .hit import rating_legend, rating_tooltip
 from .rival_store import RivalStore
@@ -85,14 +86,6 @@ def _label(text: str) -> ft.Text:
     return ft.Text(text, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)
 
 
-def _safe_update(control: ft.Control) -> None:
-    try:
-        if control.page is not None:
-            control.update()
-    except RuntimeError:
-        pass
-
-
 class TeamStrip(ft.Container):
     """Your active team, each member coloured against the Defender."""
 
@@ -148,18 +141,18 @@ class TeamStrip(ft.Container):
         if not avatars:
             avatars.append(ft.Text("No team yet — build one in Teams.", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
         self._row.controls = avatars
-        _safe_update(self)
+        safe_update(self)
 
     def apply_ratings(self, ratings: dict[str, TeamRating], rival_name: str) -> None:
         """Colour the members; only the ones whose rating changed are sent."""
         self._ratings, self._rival_name = ratings, rival_name
         for slot_key, avatar in self._team_cards.items():
             if avatar.set_rating(ratings.get(slot_key), rival_name):
-                _safe_update(avatar)
+                safe_update(avatar)
         rated = bool(ratings) and bool(rival_name)
         self._legend.visible = rated
         self._legend.tooltip = rating_legend(f"Coloured against {rival_name}:") if rated else None
-        _safe_update(self._legend)
+        safe_update(self._legend)
 
     def _load(self, side: str, pokemon: PokemonState | None) -> None:
         if pokemon is not None:
@@ -210,7 +203,7 @@ class RivalStrip(ft.Container):
     def set_busy(self, busy: bool) -> None:
         if busy != self._spinner.visible:
             self._spinner.visible = busy
-            _safe_update(self._spinner)
+            safe_update(self._spinner)
 
     def set_ratings(self, ratings: tuple[TeamRating | None, ...], attacker_name: str) -> None:
         self._ratings = ratings
@@ -223,7 +216,7 @@ class RivalStrip(ft.Container):
         if (name is not None) != self._update_member.visible or label != self._update_member.content:
             self._update_member.visible = name is not None
             self._update_member.content = label
-            _safe_update(self._update_member)
+            safe_update(self._update_member)
 
     def set_linked(self, slot: int | None) -> None:
         if slot != self._linked:
@@ -268,7 +261,7 @@ class RivalStrip(ft.Container):
                 avatar.set_rating(ratings[i] if ratings else None, self._attacker, highlight=i == self._linked, note=assumed_note(m))
                 self.avatars.append(avatar)
         self._row.controls = list(self.avatars)
-        _safe_update(self)
+        safe_update(self)
 
 
 __all__ = ["AVATAR", "Avatar", "RivalStrip", "TeamStrip"]

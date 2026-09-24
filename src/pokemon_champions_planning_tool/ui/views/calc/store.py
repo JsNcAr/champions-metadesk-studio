@@ -540,8 +540,8 @@ class CalcStore:
 
     # -- benchmarks --------------------------------------------------------------------------
 
-    def benchmark_key(self, side: str, index: int) -> str:
-        return f"{side}|{index}|{self.state.key()}"
+    def benchmark_key(self, side: str, index: int, state: CalcState | None = None) -> str:
+        return f"{side}|{index}|{(state or self.state).key()}"
 
     def cached_benchmarks(self, side: str, index: int) -> tuple[bool, Any]:
         """(found, value) from the cache, so the view knows whether to start a worker."""
@@ -559,7 +559,7 @@ class CalcStore:
         from .benchmarks import benchmarks
 
         state = state if state is not None else self.state
-        key = f"{side}|{index}|{state.key()}"
+        key = self.benchmark_key(side, index, state)
         if key in self._bench_cache:
             return self._bench_cache[key]
         value = benchmarks(state, side, index, self.catalogs, self._calc)

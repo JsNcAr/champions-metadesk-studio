@@ -13,6 +13,7 @@ from ...format import shortcut
 from ...components.help_button import help_button
 from ...components.section import SectionHeader
 from ...theme import IconSize, Palette, Radius, Space
+from ...tasks import safe_update
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
 from .rival_store import RivalStore
 from .hit import hit_text
@@ -145,7 +146,7 @@ class RivalsPanel(ft.Container):
     def set_busy(self, busy: bool) -> None:
         if busy != self._spinner.visible:
             self._spinner.visible = busy
-            self._safe_update(self._spinner)
+            safe_update(self._spinner)
 
     def set_ratings(self, ratings: tuple[TeamRating | None, ...], attacker_name: str) -> None:
         self._ratings = ratings
@@ -182,15 +183,7 @@ class RivalsPanel(ft.Container):
             if guessed:
                 parts.append(f"{guessed} guessed")
             self._status.value = " · ".join(parts)
-        self._safe_update(self)
-
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass
+        safe_update(self)
 
 
 __all__ = ["RivalCard", "RivalsPanel", "assumed_note"]

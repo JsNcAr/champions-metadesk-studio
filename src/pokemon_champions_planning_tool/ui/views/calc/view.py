@@ -14,7 +14,7 @@ from ... import events
 from ...components import PageHeader
 from ...context import AppContext
 from ...format import shortcut
-from ...tasks import Debouncer, is_mounted
+from ...tasks import Debouncer, is_mounted, safe_update
 from ...theme import Accent, Layout, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
@@ -264,10 +264,6 @@ class CalcView(ft.Column):
         if not self.side_panel.visible:
             self.set_side_open(True)
 
-    def set_right_mode(self, mode: str) -> None:
-        """The switch before the side panel: "rival" opens the Rivals tab, "all" Opponents."""
-        self.show_side("rivals" if mode == "rival" else "opponents")
-
     def set_side_open(self, open_: bool) -> None:
         self._side_auto = False
         self.side_panel.visible = open_
@@ -279,12 +275,8 @@ class CalcView(ft.Column):
         self._layout()
         if open_:
             self._side_tab_changed(self.side_panel.tab, save=False)
-        try:
-            if self.page is not None:
-                self._host.update()
-                self._side_toggle.update()
-        except RuntimeError:
-            pass
+        safe_update(self._host)
+        safe_update(self._side_toggle)
 
     def _side_tab_changed(self, tab: str, *, save: bool = True) -> None:
         if save:
@@ -720,11 +712,7 @@ class CalcView(ft.Column):
         if self._side_auto:
             self.side_panel.visible = self._side_toggle.selected = width >= Layout.BREAKPOINT_COMPACT
         self._layout()
-        try:
-            if self.page is not None:
-                self._host.update()
-        except RuntimeError:
-            pass
+        safe_update(self._host)
 
     def _layout(self) -> None:
         width = self._width

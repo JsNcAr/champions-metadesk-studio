@@ -13,6 +13,7 @@ from collections.abc import Callable
 import flet as ft
 
 from ...theme import TERRAIN_COLORS, WEATHER_COLORS, Palette, Radius, Space, alpha
+from ...tasks import safe_update
 from .state import DOUBLES_ONLY, SIDE_CONDITION_LABELS, TERRAINS, WEATHERS
 from .store import ABILITY_FIELD_EFFECTS, CalcStore
 
@@ -74,6 +75,7 @@ class FieldBar(ft.Container):
         self.terrain = ft.PopupMenuButton(tooltip="Terrain", items=[])
         self.rooms = ft.PopupMenuButton(tooltip="Trick Room, Gravity, Magic Room, Wonder Room", items=[])
         self._clear = ft.TextButton("Clear", icon=ft.Icons.CLEAR_ALL, tooltip=CLEAR_TOOLTIP, disabled=True, on_click=lambda _e: on_clear())
+        self._drawn: tuple | None = None
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             ft.Row(spacing=Space.SM, run_spacing=Space.XS, wrap=True, expand=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 ft.Text("FIELD", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
@@ -111,7 +113,14 @@ class FieldBar(ft.Container):
         return None
 
     def update_from(self) -> None:
-        f = self.store.state.field
+        # Every edit (a slider tick included) sends "state"; redraw only what this bar reads:
+        # the field, the abilities that name a weather or terrain, and whether Clear applies.
+        state = self.store.state
+        f = state.field
+        drawn = (f, state.left.ability, state.left.species, state.right.ability, state.right.species, self.store.has_conditions())
+        if drawn == self._drawn:
+            return
+        self._drawn = drawn
         self._format.selected = [f.game_type]
         weather = f.weather if f.weather != "none" else None
         terrain = f.terrain if f.terrain != "none" else None
@@ -133,11 +142,7 @@ class FieldBar(ft.Container):
                                              on_click=lambda _e, k=key: self.pick(k, None))
                             for key, label, tip in ROOMS]
         self._clear.disabled = not self.store.has_conditions()
-        try:
-            if self.page is not None:
-                self.update()
-        except RuntimeError:
-            pass
+        safe_update(self)
 
 
 class SideConditionsRow(ft.Row):

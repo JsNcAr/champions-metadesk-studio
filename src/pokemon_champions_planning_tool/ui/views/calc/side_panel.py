@@ -15,6 +15,7 @@ from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
 from ...format import shortcut
 from ...theme import Palette, Radius, Space
+from ...tasks import safe_update
 from .state import pokemon_from_species_id
 from .store import CalcStore
 
@@ -98,7 +99,7 @@ class BoxList(ft.Container):
         if not cards:
             cards.append(ft.Text("Nothing in the box" if not q else "No match", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
         self._list.controls = cards
-        _safe_update(self._list)
+        safe_update(self._list)
 
     def _more(self) -> None:
         self._limit += _BOX_LIMIT
@@ -149,15 +150,7 @@ class SidePanel(ft.Container):
         self._body.content = self.pages[key]
         if changed:
             self._on_tab(key)
-        _safe_update(self)
-
-
-def _safe_update(control: ft.Control) -> None:
-    try:
-        if control.page is not None:
-            control.update()
-    except RuntimeError:
-        pass
+        safe_update(self)
 
 
 __all__ = ["BoxCard", "BoxList", "SIDE_TABS", "SidePanel"]

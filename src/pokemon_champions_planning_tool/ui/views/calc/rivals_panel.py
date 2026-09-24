@@ -9,6 +9,7 @@ import flet as ft
 
 from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
+from ...format import shortcut
 from ...components.help_button import help_button
 from ...components.section import SectionHeader
 from ...theme import IconSize, Palette, Radius, Space
@@ -130,7 +131,7 @@ class RivalsPanel(ft.Container):
                                    on_select=lambda e: self.rivals.set_active(e.control.value or None))
         # An icon trigger leaves the team names the width of the column.
         self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="Rival team actions", items=[])
-        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip="Start a battle: enter the six Pokémon you see (Ctrl+B)",
+        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip=shortcut("Start a battle: enter the six Pokémon you see (Ctrl+B)"),
                                              on_click=lambda _e: on_action("battle"))
         self._load = ft.OutlinedButton("Load…", icon=ft.Icons.FOLDER_OPEN_OUTLINED,
                                        tooltip="Load a preset, one of your teams or a paste, into the battle or as a new preset",
@@ -163,7 +164,7 @@ class RivalsPanel(ft.Container):
         self._buttons_row = ft.Row(spacing=Space.SM, wrap=True, controls=[self._preview, self._load])
         self.content = ft.Column(spacing=Space.SM, controls=[
             self._switch_slot,
-            SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", HELP_LINES, tooltip="How rival teams work")),
+            SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", [shortcut(line) for line in HELP_LINES], tooltip="How rival teams work")),
             self._controls_row, self._use, self._buttons_row, self._update_member,
             ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
             self._empty,

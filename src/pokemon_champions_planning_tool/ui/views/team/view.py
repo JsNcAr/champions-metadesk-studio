@@ -14,6 +14,7 @@ from ... import events
 from ...components import PageHeader, Sprite, SplitPane
 from ...components.menu_button import menu_button
 from ...context import AppContext
+from ...format import shortcut
 from ...tasks import Debouncer, is_mounted
 from ...theme import Accent, Layout, Palette, Radius, Space
 from .compact_card import CompactCallbacks, CompactSlot
@@ -59,7 +60,7 @@ class TeamView(ft.Column):
                 self._switch_sprites, self._switch_name, self._switch_count, ft.Icon(ft.Icons.UNFOLD_MORE, size=18, color=Palette.ON_SURFACE_VARIANT),
             ]),
             padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS), border_radius=Radius.MD, bgcolor=Palette.SURFACE_2,
-            border=ft.Border.all(1, Palette.OUTLINE_VARIANT), ink=True, tooltip="All teams (Ctrl+L)", on_click=lambda _e: self.open_library(),
+            border=ft.Border.all(1, Palette.OUTLINE_VARIANT), ink=True, tooltip=shortcut("All teams (Ctrl+L)"), on_click=lambda _e: self.open_library(),
         )
         # The format the team is built for: its mechanics decide which controls the cards show.
         self._format_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_TERTIARY_CONTAINER, max_lines=1)
@@ -82,10 +83,10 @@ class TeamView(ft.Column):
             border_radius=Radius.PILL, padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=4), ink=True,
             on_click=lambda _e: self._show_analysis("overview"),
         )
-        self._import_button = ft.FilledTonalButton("Import", icon=ft.Icons.DOWNLOAD, tooltip="Import a Showdown paste (Ctrl+I)", on_click=lambda _e: self._import())
+        self._import_button = ft.FilledTonalButton("Import", icon=ft.Icons.DOWNLOAD, tooltip=shortcut("Import a Showdown paste (Ctrl+I)"), on_click=lambda _e: self._import())
         self._export_menu = ft.PopupMenuButton(
             content=menu_button("Export", ft.Icons.UPLOAD),
-            tooltip="Export (Ctrl+E)",
+            tooltip=shortcut("Export (Ctrl+E)"),
             items=[
                 ft.PopupMenuItem(content=ft.Text("Copy Showdown text"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._copy_export()),
                 ft.PopupMenuItem(content=ft.Text("Show export / publish…"), icon=ft.Icons.OPEN_IN_NEW, on_click=lambda _e: self._open_export()),

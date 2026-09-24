@@ -1,12 +1,14 @@
-"""Tests for UI formatting helpers: absolute_time, relative_time, thousands, plural."""
+"""Tests for UI formatting helpers: absolute_time, relative_time, thousands, plural, shortcut."""
 
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 
 from pokemon_champions_planning_tool.ui.format import (
     absolute_time,
     plural,
     relative_time,
+    shortcut,
     thousands,
 )
 
@@ -59,3 +61,12 @@ class TestUiFormat(unittest.TestCase):
         local_day = str(past.astimezone().day)
         self.assertEqual(result, f"{local_day} Sep 2026")
 
+    def test_shortcut_reads_cmd_on_macos_only(self):
+        with mock.patch("pokemon_champions_planning_tool.ui.format.MAC", True):
+            self.assertEqual(shortcut("Ctrl+Shift+S"), "⇧⌘S")
+            self.assertEqual(shortcut("F1 or Ctrl+/"), "F1 or ⌘/")
+            self.assertEqual(shortcut("Alt+Shift+← / →"), "⌥⇧← / →")
+            self.assertEqual(shortcut("Previous (Alt+←)"), "Previous (⌥←)")
+            self.assertEqual(shortcut("Shift+Alt+Ctrl+K"), "⌥⇧⌘K")
+        with mock.patch("pokemon_champions_planning_tool.ui.format.MAC", False):
+            self.assertEqual(shortcut("Ctrl+Shift+S"), "Ctrl+Shift+S")

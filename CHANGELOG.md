@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-24
+
 ### Added
 - **Formats and mechanics.** A team is built for a format, and the team builder shows only the
   mechanics that format has. Pokémon Champions (Regulations M-A to M-C) has Mega Evolution

@@ -17,6 +17,7 @@ import flet as ft
 from ..components.banner import InlineBanner
 from ..context import AppContext
 from ..events import NAVIGATE
+from ..format import MAC, shortcut
 from ..tasks import is_mounted, skip_auto_update
 from ..theme import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Motion, Palette, Radius, Space
 
@@ -68,7 +69,7 @@ class AppShell(ft.Row):
         self._settings_button = ft.IconButton(
             icon=ft.Icons.SETTINGS_OUTLINED,
             icon_size=IconSize.LG,
-            tooltip="Settings (Ctrl+,)",
+            tooltip=shortcut("Settings (Ctrl+,)"),
             on_click=lambda _e: self.open_settings(),
         )
         self._help_button = ft.IconButton(
@@ -393,7 +394,17 @@ class AppShell(ft.Row):
         page.show_dialog(HelpDialog(on_close=page.pop_dialog))
 
     def _on_key(self, e: ft.KeyboardEvent) -> None:
-        if e.key == "Escape" and self._close_top_dialog():
+        if MAC:
+            # Every shortcut here and in the views checks e.ctrl; on macOS that is Cmd.
+            e.ctrl = e.meta
+        if self._dialog_open():
+            # Shortcuts act on the view behind the dialog, and repeating one (Cmd+/,
+            # Ctrl+K...) stacked a new dialog per press until Flet crashed.
+            if e.key == "Escape":
+                # Modal dialogs ignore Escape on their own; close the topmost one here.
+                self.ctx.page.pop_dialog()
+            else:
+                skip_auto_update()
             return
         if e.key == "F1" or (e.ctrl and e.key == "/"):
             self.open_help()
@@ -452,15 +463,14 @@ class AppShell(ft.Row):
                 self._forward_size(entry.control)
                 self._update(entry.control)
 
-    def _close_top_dialog(self) -> bool:
-        """Modal dialogs ignore Escape on their own; close the topmost open one here."""
+    def _dialog_open(self) -> bool:
         page = self.ctx.page
         stack = getattr(getattr(page, "_dialogs", None), "controls", None)
         if stack is None:
             stack = getattr(page, "dialogs", None) or []
-        if not any(getattr(dlg, "open", True) for dlg in stack):
-            return False
-        return page.pop_dialog() is not None
+        # Toasts are SnackBars shown through the same stack, and one with an Undo action
+        # stays open until it is dismissed: counting it blocked every shortcut meanwhile.
+        return any(getattr(dlg, "open", True) for dlg in stack if not isinstance(dlg, ft.SnackBar))
 
     def _update_if_mounted(self) -> None:
         # Before page.add the controls have no page; Flet auto-updates after the

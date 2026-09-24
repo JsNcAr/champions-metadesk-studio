@@ -9,6 +9,7 @@ import flet as ft
 
 from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
+from ...format import shortcut
 from ...components.help_button import help_button
 from ...components.section import SectionHeader
 from ...theme import IconSize, Palette, Radius, Space
@@ -114,7 +115,7 @@ class RivalsPanel(ft.Container):
         self._attacker = ""
         self._linked: int | None = None
 
-        self._title = SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", HELP_LINES, tooltip="How rival teams work"))
+        self._title = SectionHeader("Rival team", accent=accent, action=help_button("Rival teams", [shortcut(line) for line in HELP_LINES], tooltip="How rival teams work"))
         self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])

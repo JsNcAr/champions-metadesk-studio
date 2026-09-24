@@ -15,6 +15,7 @@ import flet as ft
 
 from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite
+from ...format import shortcut
 from ...theme import Palette, Radius, Space
 from .classes import CLASS_BG, CLASS_BORDER
 from .hit import rating_legend, rating_tooltip
@@ -193,7 +194,7 @@ class RivalStrip(ft.Container):
         self._update_member = ft.TextButton("", icon=ft.Icons.SAVE_AS_OUTLINED, visible=False,
                                             tooltip="Keep the Defender's item, ability, moves, nature and stat points in this rival team",
                                             on_click=lambda _e: on_action("update_member"))
-        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip="Start a battle: enter the six Pokémon you see (Ctrl+B)",
+        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip=shortcut("Start a battle: enter the six Pokémon you see (Ctrl+B)"),
                                              on_click=lambda _e: on_action("battle"))
         self._load = ft.TextButton("Load team…", icon=ft.Icons.FOLDER_OPEN_OUTLINED, tooltip="A preset, one of your teams or a paste",
                                    on_click=lambda _e: on_action("load"))

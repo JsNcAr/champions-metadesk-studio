@@ -6,6 +6,7 @@ import flet as ft
 
 from ..config import DEFAULT_DATABASE_FILENAME, DEFAULT_PREFERENCES_FILENAME
 from .components import SectionHeader
+from .format import shortcut
 from .theme import Accent, Palette, Radius, Space
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
@@ -85,11 +86,11 @@ class HelpDialog(ft.AlertDialog):
         super().__init__(modal=False, scrollable=True)
         rows = [
             ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
-                ft.Container(content=ft.Text(keys, theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE), width=140,
+                ft.Container(content=ft.Text(shortcut(label), theme_style=ft.TextThemeStyle.LABEL_LARGE, color=Palette.ON_SURFACE), width=140,
                              bgcolor=Palette.SURFACE_3, border_radius=Radius.SM, padding=ft.Padding.symmetric(horizontal=Space.SM, vertical=2)),
                 ft.Text(what, theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True),
             ])
-            for keys, what in SHORTCUTS
+            for label, what in SHORTCUTS
         ]
         sections: list[ft.Control] = [SectionHeader("Keyboard shortcuts", accent=Accent.SETTINGS), ft.Column(spacing=Space.XS, tight=True, controls=rows)]
         accents = {"Box": Accent.BOX, "Teams": Accent.TEAMS, "Meta": Accent.META, "Calc": Accent.CALC, "Data & syncing": Accent.SETTINGS}
@@ -98,7 +99,7 @@ class HelpDialog(ft.AlertDialog):
             sections.append(ft.Column(spacing=Space.XS, tight=True, controls=[
                 ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
                     ft.Text("•", color=Palette.ON_SURFACE_VARIANT),
-                    ft.Text(tip, theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True),
+                    ft.Text(shortcut(tip), theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE_VARIANT, expand=True),
                 ])
                 for tip in tips
             ]))

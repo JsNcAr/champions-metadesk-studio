@@ -13,6 +13,7 @@ from ...components import Sprite
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
+from ...format import shortcut
 from ...theme import Palette, Radius, Space
 from .state import pokemon_from_species_id
 from .store import CalcStore
@@ -130,7 +131,7 @@ class SidePanel(ft.Container):
         self._body = ft.Container(content=pages[self.tab], expand=True)
         self.content = ft.Column(spacing=Space.SM, expand=True, controls=[
             ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-                self.tabs, ft.IconButton(icon=ft.Icons.CLOSE, icon_size=18, tooltip="Hide the side panel (Ctrl+\\)", on_click=lambda _e: on_close()),
+                self.tabs, ft.IconButton(icon=ft.Icons.CLOSE, icon_size=18, tooltip=shortcut("Hide the side panel (Ctrl+\\)"), on_click=lambda _e: on_close()),
             ]),
             self._body,
         ])

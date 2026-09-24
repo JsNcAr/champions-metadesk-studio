@@ -19,6 +19,7 @@ from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
 from ...components.section import SectionHeader
 from ...components.spread_editor import SpreadEditor
+from ...format import shortcut
 from ...tasks import Debouncer, is_mounted
 from ...theme import STAT_COLORS, STAT_LABELS, IconSize, Palette, Radius, Space
 from .benchmarks import STAT_SHORT, ko_needs_points, ko_text, survive_needs_points, survive_text
@@ -131,7 +132,7 @@ class PokemonPanel(ft.Container):
                              max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._name_button = ft.Container(content=ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             self._name, ft.Icon(ft.Icons.EDIT_OUTLINED, size=14, color=Palette.ON_SURFACE_VARIANT)]),
-            ink=True, border_radius=Radius.SM, tooltip="Change Pokémon (Ctrl+F on the attacker)", on_click=lambda _e: self.open_search())
+            ink=True, border_radius=Radius.SM, tooltip=shortcut("Change Pokémon (Ctrl+F on the attacker)"), on_click=lambda _e: self.open_search())
         self._types = ft.Row(spacing=Space.XS, tight=True)
         self._mega = StatusChip("Mega", "warning")
         self._mega.visible = False

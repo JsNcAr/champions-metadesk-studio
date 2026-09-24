@@ -1,9 +1,20 @@
 """Project-wide settings and storage defaults."""
 
 import os
+import sys
 from pathlib import Path
 
 APP_NAME = "Champions MetaDesk Studio"
+
+# A macOS .app launched from Finder runs with the working directory "/", which is
+# read-only, so the relative defaults below could not create the database and the app
+# died on startup. The packaged app keeps its files in Application Support instead.
+if getattr(sys, "frozen", False) and sys.platform == "darwin":
+    _DATA_DIR = Path.home() / "Library" / "Application Support" / APP_NAME
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+else:
+    _DATA_DIR = Path()
+
 # Shown in Settings › About; the README and NOTICE.md carry the same text.
 DISCLAIMER = (
     "Champions MetaDesk Studio is an unofficial fan-made tool. It is not affiliated with, "
@@ -11,10 +22,11 @@ DISCLAIMER = (
     "Pokémon and Pokémon character names are trademarks of their respective owners."
 )
 DEFAULT_CSV_FILENAME = "pokemon_team_stats.csv"
-# Where the SQLite file lives. Relative paths resolve against the working directory.
+# Where the SQLite file lives. Relative paths resolve against the working directory
+# (Application Support for the packaged macOS app).
 # Override with PCPT_DATABASE=/path/to/file.db; preferences.json sits beside it unless
 # PCPT_PREFERENCES points elsewhere.
-DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", "pokemon_champions.db")
+DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", str(_DATA_DIR / "pokemon_champions.db"))
 DEFAULT_PREFERENCES_FILENAME = os.environ.get(
     "PCPT_PREFERENCES", str(Path(DEFAULT_DATABASE_FILENAME).parent / "preferences.json")
 )
@@ -23,7 +35,7 @@ DEFAULT_PREFERENCES_FILENAME = os.environ.get(
 # src/pokemon_champions_planning_tool/assets — a path that does not exist, which makes
 # Flet serve no assets at all. The sprite cache meanwhile wrote to ./assets/sprites, so
 # nothing it downloaded was ever reachable. Resolving here keeps the two in step.
-DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", "assets")).resolve())
+DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", str(_DATA_DIR / "assets"))).resolve())
 DEFAULT_SPRITE_CACHE_DIR = str(
     Path(os.environ.get("PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites"))).resolve()
 )

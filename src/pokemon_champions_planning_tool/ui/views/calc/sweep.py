@@ -15,7 +15,7 @@ from ...components.inputs import SEARCH_FIELD_STYLE
 from ...tasks import Debouncer, is_mounted, safe_update
 from ...theme import Palette, Radius, Space
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_COLOR, CLASS_HELP, CLASS_TONES
-from .hit import hit_text
+from .damage_line import damage_line, speed_mark
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
 
@@ -35,26 +35,16 @@ class SweepCard(ft.Container):
     def __init__(self, entry: SweepEntry, *, on_pick: Callable[[SweepEntry], None]) -> None:
         super().__init__()
         e = entry
-        yours = hit_text(e.your_best, "no damage")
-        theirs_base = hit_text(e.their_best, "no damaging set" if e.preset else "moves unknown")
-        theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
-        # Same convention as the panels' speed chip: ▲ = you move first.
-        speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
-                        tooltip="You move first" if e.faster else "They move first")
-        # The class chip shares the name's line rather than taking a column of its own:
-        # on a 270px list that column left the name a few letters ("Incin…").
+        # Name, speed and class on one line; under it each side's best hit as a small gauge.
         self.name = ft.Text(e.name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
         self.klass_chip = StatusChip(dict(SWEEP_CLASSES)[e.klass], CLASS_TONES[e.klass], tooltip=CLASS_HELP[e.klass])  # type: ignore[arg-type]
         self.sprite = Sprite(get_pokemon_sprite_url(e.canonical_id), size=36)
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             self.sprite,
-            ft.Column(spacing=1, tight=True, expand=True, controls=[
-                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.name, self.klass_chip]),
-                ft.Row(spacing=Space.XS, controls=[
-                    speed,
-                    ft.Text(f"You: {yours}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
-                ]),
-                ft.Text(f"Them: {theirs}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+            ft.Column(spacing=2, tight=True, expand=True, controls=[
+                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.name, speed_mark(e.speed, e.faster), self.klass_chip]),
+                damage_line("you", e.your_best, "no damage"),
+                damage_line("them", e.their_best, "no damaging set" if e.preset else "moves unknown"),
             ]),
         ])
         self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)

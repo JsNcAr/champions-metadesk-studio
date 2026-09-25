@@ -176,6 +176,23 @@ class TestInTheView(_Base):
         self.assertEqual(self.store.state, before)
 
 
+class TestDamageLine(unittest.TestCase):
+    def test_ranges_fit_the_card(self):
+        from pokemon_champions_planning_tool.ui.views.calc.damage_line import damage_line, pct_range
+        from pokemon_champions_planning_tool.ui.views.calc.state import MoveResult
+
+        def hit(lo, hi, ko_hits=None):
+            return MoveResult(0, "Iron Head", "Steel", "Physical", 1, 2, lo, hi, (), "", "", ko_hits=ko_hits)
+
+        self.assertEqual(pct_range(hit(57.6, 68.3)), "58–68%")
+        self.assertEqual(pct_range(hit(90.2, 107.4)), "90%+", "a KO on the high rolls")
+        self.assertEqual(pct_range(hit(116.0, 139.5)), "OHKO", "every roll KOs")
+        line = damage_line("you", hit(57.6, 68.3, ko_hits=2), "no damage")
+        self.assertIn("57.6–68.3%", line.tooltip, "the exact range is one hover away")
+        self.assertIn("2HKO", line.tooltip)
+        self.assertIn("moves unknown", damage_line("them", None, "moves unknown").controls[1].value)
+
+
 class TestTeamStripSizes(unittest.TestCase):
     def test_all_six_fit_down_to_the_smallest_tier(self):
         from pokemon_champions_planning_tool.ui.views.calc.team_strip import TIERS, fit_tier, rival_width, team_width

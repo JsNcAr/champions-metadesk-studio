@@ -16,7 +16,7 @@ from ...theme import IconSize, Palette, Radius, Space
 from ...tasks import safe_update
 from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
 from .rival_store import RivalStore
-from .hit import hit_text
+from .damage_line import damage_line, speed_mark
 from .state import SWEEP_CLASSES, RivalMember, TeamRating
 
 HELP_LINES: tuple[str, ...] = (
@@ -66,18 +66,8 @@ class RivalCard(ft.Container):
         lines: list[ft.Control]
         if rating is not None:
             head.append(StatusChip(dict(SWEEP_CLASSES)[rating.klass], CLASS_TONES[rating.klass], tooltip=CLASS_HELP[rating.klass]))  # type: ignore[arg-type]
-            speed = ft.Text(f"Spe {rating.their_speed} {'▲' if rating.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL,
-                            color=Palette.SUCCESS if rating.faster else Palette.ERROR,
-                            tooltip="You move first" if rating.faster else ("Speed tie" if rating.your_speed == rating.their_speed else "They move first"))
-            lines = [
-                ft.Row(spacing=Space.XS, controls=[
-                    speed,
-                    ft.Text(f"You: {hit_text(rating.your_best, 'no damage')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
-                            max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
-                ]),
-                ft.Text(f"Them: {hit_text(rating.their_best, 'no damaging move')}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
-                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-            ]
+            head.insert(1, speed_mark(rating.their_speed, rating.faster, tie=rating.your_speed == rating.their_speed))
+            lines = [damage_line("you", rating.your_best, "no damage"), damage_line("them", rating.their_best, "no damaging move")]
             self.bgcolor = CLASS_BG.get(rating.klass, Palette.SURFACE_2)
             self.border = ft.Border.all(1, Palette.PRIMARY) if linked else CLASS_BORDER.get(rating.klass, ft.Border.all(1, Palette.OUTLINE_VARIANT))
         else:
@@ -86,7 +76,7 @@ class RivalCard(ft.Container):
             self.border = ft.Border.all(1, Palette.PRIMARY if linked else Palette.OUTLINE_VARIANT)
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             Sprite(get_pokemon_sprite_url(p.species or ""), size=36),
-            ft.Column(spacing=1, tight=True, expand=True, controls=[
+            ft.Column(spacing=2, tight=True, expand=True, controls=[
                 ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=head),
                 *lines,
             ]),

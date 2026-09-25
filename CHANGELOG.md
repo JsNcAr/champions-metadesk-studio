@@ -39,8 +39,9 @@ for the headings and style.
     opponents' controls take two short lines: search with a menu for the sort and tournament
     sets, and the classes (Threat, Wall…) as coloured count pills.
   - Opponent and rival cards show each side's best hit as a small damage gauge instead of a
-    line of text: → your move, ← theirs, a bar with a tick at half the HP, and "58–68%",
-    "90%+" (a KO on the high rolls) or "OHKO". The speed sits beside the name.
+    line of text: → your move in teal, ← theirs in orange (brighter the harder it hits), a
+    bar with a tick at half the HP, and "58–68%", "90%+" (a KO on the high rolls) or "OHKO".
+    The speed sits beside the name.
   - The team rows scale with the window: the sprites shrink, then the pickers, so all six
     members always show; when even that is too tight the two teams stack. The rival team's
     picker and every rival action (team preview, load, presets, Team vs team) moved to the

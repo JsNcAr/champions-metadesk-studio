@@ -192,6 +192,20 @@ class TestDamageLine(unittest.TestCase):
         self.assertIn("2HKO", line.tooltip)
         self.assertIn("moves unknown", damage_line("them", None, "moves unknown").controls[1].value)
 
+    def test_dealt_and_taken_read_apart(self):
+        from pokemon_champions_planning_tool.ui.theme import Palette
+        from pokemon_champions_planning_tool.ui.views.calc.damage_line import HUES, damage_line, hit_colour, strength
+        from pokemon_champions_planning_tool.ui.views.calc.state import MoveResult
+
+        self.assertEqual((HUES["you"], HUES["them"]), (Palette.HIT_DEALT, Palette.HIT_TAKEN))
+        self.assertNotEqual(hit_colour("you", 60), hit_colour("them", 60), "same damage, different colour by direction")
+        self.assertLess(strength(10), strength(40))
+        self.assertLess(strength(40), strength(80))
+        self.assertLess(strength(80), strength(120), "a KO is the brightest")
+        hit = MoveResult(0, "Iron Head", "Steel", "Physical", 1, 2, 56.0, 67.0, (), "", "")
+        mine, theirs = damage_line("you", hit, ""), damage_line("them", hit, "")
+        self.assertEqual((mine.controls[0].color, theirs.controls[0].color), (Palette.HIT_DEALT, Palette.HIT_TAKEN), "the arrows carry the colour too")
+
 
 class TestTeamStripSizes(unittest.TestCase):
     def test_all_six_fit_down_to_the_smallest_tier(self):

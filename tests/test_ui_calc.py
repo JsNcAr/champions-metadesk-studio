@@ -1171,5 +1171,5 @@ class TestTeamRatingsInTheStrip(_Base):
         before = self.store.team_rating_key()
         self.ctx.bus.emit(events.TEAMS_CHANGED, None)
         self.assertNotEqual(self.store.team_rating_key(), before)
-        self.assertEqual(self.view._rated_key, self.store.team_rating_key(), "and the strip caught up")
+        self.assertEqual(self.view.team_job.done_key, self.store.team_rating_key(), "and the strip caught up")
 

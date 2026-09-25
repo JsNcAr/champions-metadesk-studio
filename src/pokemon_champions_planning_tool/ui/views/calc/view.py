@@ -21,6 +21,7 @@ from ..team.dialogs.move_picker import MovePickerDialog
 from .benchmarks import STAT_SHORT
 from .field_bar import FieldBar
 from .panels import TABS, PokemonPanel
+from .refresh import BackgroundRefresh
 from .rival_store import RivalStore, rivals_from_team
 from .rivals_panel import RivalsPanel
 from .side_panel import SIDE_TABS, BoxList, SidePanel
@@ -50,17 +51,9 @@ class CalcView(ft.Column):
         self.rivals = rivals or RivalStore(self.store.session_factory)
         self._narrow = False
         self._width = 1440.0
-        self._sweep_running = False
         self._presets_warming = False
         self._strip_key: tuple | None = None
-        self._sweep_later: Debouncer | None = None
-        self._rate_later: Debouncer | None = None
-        self._rated_key: str | None = None
-        self._rating_running = False
-        self._rivals_later: Debouncer | None = None
         self._write_later: Debouncer | None = None
-        self._rivals_key: str | None = None
-        self._rivals_running = False
         tabs = self._pref(PREF_TABS, {})
         tabs = tabs if isinstance(tabs, dict) else {}
 
@@ -87,6 +80,25 @@ class CalcView(ft.Column):
         self._side_auto = self._pref(PREF_SIDE_OPEN, None) is None
         self.side_panel.visible = bool(self._pref(PREF_SIDE_OPEN, True))
         self.summary = MatchupBar(store=self.store, on_open=self._open_best)
+
+        # What is computed on a worker once edits pause (see refresh.py).
+        store = self.store
+        self.sweep_job = BackgroundRefresh(
+            ctx, name="Opponent sweep", key=store.sweep_key, fresh=lambda _key: not store.sweep_stale(),
+            idle=lambda: store.species("left") is None or not any(store.state.left.moves), clear=lambda: store.publish_sweep(()),
+            job=lambda progress: lambda: store.compute_sweep(on_progressive=progress),
+            apply=store.publish_sweep, on_progress=store.publish_progressive_sweep, busy=self.sweep.set_busy, on_error=self.sweep.render,
+        )
+        self.team_job = BackgroundRefresh(
+            ctx, name="Team rating", key=store.team_rating_key,
+            idle=lambda: store.species("right") is None or not store.team_slots(), clear=lambda: self.team_strip.apply_ratings({}, ""),
+            job=lambda _progress: store.rate_team, apply=self._show_team_ratings,
+        )
+        self.rivals_job = BackgroundRefresh(
+            ctx, name="Rival rating", key=self._rivals_rating_key, idle=self._no_rivals_to_rate, clear=lambda: self._show_rival_ratings(()),
+            job=self._rivals_job, apply=self._show_rival_ratings, busy=self._rivals_busy,
+        )
+        self._jobs = (self.sweep_job, self.team_job, self.rivals_job)
 
         self._strips = ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.team_strip, self.rival_strip])
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
@@ -120,8 +132,8 @@ class CalcView(ft.Column):
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.BOX_CHANGED, lambda _p: self._on_box_changed())
         ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self._on_teams_changed())
-        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
-        ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self._maybe_sweep()))
+        ctx.bus.on(events.BATTLE_FORMAT_CHANGED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self.sweep_job.request()))
+        ctx.bus.on(events.META_SYNCED, lambda _p: (self.store.invalidate_presets(), self._warm_presets(), self.sweep_job.request()))
 
     # -- lifecycle -----------------------------------------------------------------------------
 
@@ -132,17 +144,15 @@ class CalcView(ft.Column):
         self.store.defer_save = lambda: save_later(None)
         # The delayed save must not be lost when the app closes inside that window.
         self.ctx.on_shutdown(self.store.save_state)
-        self._sweep_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_sweep(), quiet_event=False)
-        self._rate_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_rating(), quiet_event=False)
-        self._rivals_later = Debouncer(page, SWEEP_DELAY_MS, lambda _v: self._start_rating_rivals(), quiet_event=False)
+        for job in self._jobs:
+            job.attach(page, SWEEP_DELAY_MS)
         self._write_later = Debouncer(page, SAVE_DELAY_MS, lambda _v: self._write_back(), quiet_event=False)
 
     def will_unmount(self) -> None:
         self.store.save_state()
         self.store.defer_save = None
-        self._sweep_later = None
-        self._rate_later = None
-        self._rivals_later = None
+        for job in self._jobs:
+            job.detach()
         if self._write_later is not None:
             self._write_back()      # a battle edit inside the save delay is not lost
         self._write_later = None
@@ -160,9 +170,9 @@ class CalcView(ft.Column):
         if self.side_panel.tab == "box":
             self.box.ensure()
         self._warm_presets()
-        self._maybe_sweep()
-        self._maybe_rate_team()
-        self._maybe_rate_rivals()
+        self.sweep_job.request()
+        self.team_job.request()
+        self.rivals_job.request()
 
     def _warm_presets(self) -> None:
         """Read the tournament builds on a worker while the view is merely open.
@@ -196,13 +206,13 @@ class CalcView(ft.Column):
                 self._strip_key = (left.species, left.source)
                 self.team_strip.refresh_team()
             self._sync_species_banner()
-            self._maybe_sweep()
-            self._maybe_rate_team()
+            self.sweep_job.request()
+            self.team_job.request()
             self._on_defender_changed()
-            self._maybe_rate_rivals()
+            self.rivals_job.request()
         elif event[0] == "sweep":
             self.sweep.render()
-            self._maybe_sweep()
+            self.sweep_job.request()
 
     def _sync_species_banner(self) -> None:
         # Cleared as well as set: the catalogue can arrive while this view is open.
@@ -286,12 +296,12 @@ class CalcView(ft.Column):
                 pass
         if tab == "rivals":
             self.rivals_panel.render()
-            self._maybe_rate_rivals()
+            self.rivals_job.request()
         elif tab == "box":
             self.box.ensure()
         else:
             self.sweep.render()
-            self._maybe_sweep()
+            self.sweep_job.request()
 
     def _tab_changed(self, side: str, tab: str) -> None:
         tabs = self._pref(PREF_TABS, {})
@@ -353,7 +363,7 @@ class CalcView(ft.Column):
         self._sync_link()
         self.rivals_panel.render()
         self.rival_strip.render()
-        self._maybe_rate_rivals()
+        self.rivals_job.request()
 
     def _pick_rival(self, slot: int) -> None:
         team = self.rivals.active
@@ -534,156 +544,38 @@ class CalcView(ft.Column):
         except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
             dialog.set_grid(self.store.team_matrix(rivals))
 
-    # -- rival cards against the attacker -------------------------------------------------------
+    # -- the results computed in the background ----------------------------------------------
+
+    def _show_team_ratings(self, ratings) -> None:
+        rival = self.store.species("right")
+        self.team_strip.apply_ratings(ratings, rival.name if rival else "")
 
     def _rivals_rating_key(self) -> str:
         team = self.rivals.active
         return "|".join((self.store.sweep_key(), str(team.rival_team_id if team else None), str(self.rivals.version)))
 
-    def _maybe_rate_rivals(self) -> None:
-        """Rate the rival team against the Attacker once edits pause (the strip always shows it)."""
-        if self._rivals_running:
-            return
-        key = self._rivals_rating_key()
-        if key == self._rivals_key:
-            return
+    def _no_rivals_to_rate(self) -> bool:
         team = self.rivals.active
-        if team is None or not team.members or self.store.species("left") is None:
-            self._rivals_key = key
-            self.rivals_panel.set_ratings((), "")
-            self.rival_strip.set_ratings((), "")
-            return
-        if self._rivals_later is not None:
-            self._rivals_later(None)
-        else:
-            self._start_rating_rivals()
+        return team is None or not team.members or self.store.species("left") is None
 
-    def _start_rating_rivals(self) -> None:
-        key = self._rivals_rating_key()
-        team = self.rivals.active
-        if key == self._rivals_key or self._rivals_running or team is None:
-            return
-        self._rivals_running = True
-        self.rivals_panel.set_busy(True)
-        self.rival_strip.set_busy(True)
-        members = [m.pokemon for m in team.members]
+    def _rivals_job(self, _progress):
+        members = [m.pokemon for m in self.rivals.active.members]   # taken now, on the UI loop
+        return lambda: self.store.rate_rivals(members)
 
-        def done(ratings) -> None:
-            self._rivals_running = False
-            self.rivals_panel.set_busy(False)
-            self.rival_strip.set_busy(False)
-            if self._rivals_rating_key() != key:
-                self._maybe_rate_rivals()
-                return
-            self._rivals_key = key
-            attacker = self.store.species("left")
-            self.rivals_panel.set_ratings(ratings, attacker.name if attacker else "")
-            self.rival_strip.set_ratings(ratings, attacker.name if attacker else "")
+    def _show_rival_ratings(self, ratings) -> None:
+        attacker = self.store.species("left")
+        name = attacker.name if attacker and ratings else ""
+        self.rivals_panel.set_ratings(ratings, name)
+        self.rival_strip.set_ratings(ratings, name)
 
-        def failed(exc: BaseException) -> None:
-            self._rivals_running = False
-            self.rivals_panel.set_busy(False)
-            self.rival_strip.set_busy(False)
-            print(f"⚠️ Rival rating failed: {exc}")
-
-        try:
-            self.ctx.run_in_background(lambda: self.store.rate_rivals(members), on_done=done, on_error=failed)
-        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
-            done(self.store.rate_rivals(members))
-
-    # -- opponent sweep ------------------------------------------------------------------------
-
-    def _maybe_sweep(self) -> None:
-        """Recompute the sweep in the background when the attacker or the field changed,
-        once edits pause for ``SWEEP_DELAY_MS`` on a live page."""
-        if self._sweep_running or not self.store.sweep_stale():
-            return
-        if self._sweep_later is not None:
-            self._sweep_later(None)
-        else:
-            self._start_sweep()
-
-    def _start_sweep(self) -> None:
-        if self._sweep_running or not self.store.sweep_stale():
-            return
-        if self.store.species("left") is None or not any(self.store.state.left.moves):
-            self.store.publish_sweep(())
-            return
-        self._sweep_running = True
-        self.sweep.set_busy(True)
-        key = self.store.sweep_key()
-
-        def prog(entries: tuple[SweepEntry, ...]) -> None:
-            if self._sweep_running and self.store.sweep_key() == key:
-                self.store.publish_progressive_sweep(entries)
-
-        def done(entries: tuple[SweepEntry, ...]) -> None:
-            self._sweep_running = False
-            self.sweep.set_busy(False)
-            if self.store.sweep_key() == key:
-                self.store.publish_sweep(entries)
-            else:
-                self._maybe_sweep()
-
-        def failed(exc: BaseException) -> None:
-            self._sweep_running = False
-            self.sweep.set_busy(False)
-            self.sweep.render()
-            print(f"⚠️ Opponent sweep failed: {exc}")
-
-        try:
-            self.ctx.run_in_background(
-                lambda: self.store.compute_sweep(on_progressive=lambda e: self.ctx.post(prog, e)),
-                on_done=done,
-                on_error=failed,
-            )
-        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
-            done(self.store.compute_sweep())
-
-    # -- team ratings ----------------------------------------------------------------------------
+    def _rivals_busy(self, busy: bool) -> None:
+        self.rivals_panel.set_busy(busy)
+        self.rival_strip.set_busy(busy)
 
     def _on_teams_changed(self) -> None:
         self.store.invalidate_team_ratings()
         self.team_strip.refresh_team()
-        self._maybe_rate_team()
-
-    def _maybe_rate_team(self) -> None:
-        """Colour the team strip against the Defender once edits pause, off the UI loop."""
-        key = self.store.team_rating_key()
-        if key == self._rated_key or self._rating_running:
-            return
-        if self.store.species("right") is None or not self.store.team_slots():
-            self._rated_key = key
-            self.team_strip.apply_ratings({}, "")   # nothing to rate: clear at once, no computing
-            return
-        if self._rate_later is not None:
-            self._rate_later(None)
-        else:
-            self._start_rating()
-
-    def _start_rating(self) -> None:
-        key = self.store.team_rating_key()
-        if key == self._rated_key or self._rating_running:
-            return
-        self._rating_running = True
-
-        def done(ratings) -> None:
-            self._rating_running = False
-            if self.store.team_rating_key() != key:
-                self._maybe_rate_team()   # the rival, field or team moved on meanwhile
-                return
-            self._rated_key = key
-            rival = self.store.species("right")
-            self.team_strip.apply_ratings(ratings, rival.name if rival else "")
-
-        def failed(exc: BaseException) -> None:
-            self._rating_running = False
-            print(f"⚠️ Team rating failed: {exc}")
-
-        try:
-            self.ctx.run_in_background(self.store.rate_team, on_done=done, on_error=failed)
-        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
-            done(self.store.rate_team())
+        self.team_job.request()
 
     def _pick_opponent(self, entry: SweepEntry) -> None:
         preset = self.store.sweep_presets

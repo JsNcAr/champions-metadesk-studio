@@ -83,7 +83,7 @@ ui/
                     build.py (ft.Theme from tokens)
   shell/            AppShell: NavigationRail, layered view deck, view registry, shortcuts
   components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
-  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep; benchmark cache), benchmarks (points to KO / to survive, Flet-free), team_strip (your team and the rival team, with the rival actions), field_bar (field menus + per-side condition rows), panels (header + Moves / Build / Stages tabs), move_card, summary (matchup bar), side_panel (tabs: sweep, rivals_panel, box list), hit (shared matchup text), rival_store (rival teams, Flet-free), dialogs/ (team preview and paste, Team vs team grid)
+  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep; benchmark cache), benchmarks (points to KO / to survive, Flet-free), team_strip (your team and the rival team, with the rival actions), field_bar (field menus + per-side condition rows), panels (header + Moves / Build / Stages tabs), move_card, summary (matchup bar), refresh (BackgroundRefresh: the opponents sweep and the team and rival ratings computed on a worker once edits pause), side_panel (tabs: sweep, rivals_panel, box list), hit (shared matchup text), rival_store (rival teams, Flet-free), dialogs/ (team preview and paste, Team vs team grid)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

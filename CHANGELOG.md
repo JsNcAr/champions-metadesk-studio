@@ -34,8 +34,12 @@ for the headings and style.
     menus. Weather or terrain set by an ability names it. Each side's conditions sit in that
     side's column above the tabs: **Tailwind** and **Helping Hand** (Doubles) are one-click
     toggles, the rest (screens, Protect, hazards…) are added with + Condition.
-  - Opponents, the rival team's details and the Box share one side panel with tabs; it
-    closes from its header or Ctrl+\ and starts closed on narrower windows. The rival team's
+  - Opponents, the rival team's details and the Box share one narrow side panel (300 px) with
+    tabs; it closes from its header or Ctrl+\ and starts closed on narrower windows. The
+    opponents' controls take two short lines: search with a menu for the sort and tournament
+    sets, and the classes (Threat, Wall…) as coloured count pills.
+  - The team rows scale with the window: the sprites shrink, then the pickers, so all six
+    members always show; when even that is too tight the two teams stack. The rival team's
     picker and every rival action (team preview, load, presets, Team vs team) moved to the
     strip above the Defender.
   - The matchup bar is gone: each Pokémon's header shows its best hit on the other ("Best:

@@ -12,7 +12,6 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
-from ...components.section import SectionHeader
 from ...format import shortcut
 from ...theme import Palette, Radius, Space
 from ...tasks import safe_update
@@ -57,11 +56,8 @@ class BoxList(ft.Container):
         self._entries = None
         self._limit = _BOX_LIMIT
         self._query = ""
-        self.content = ft.Column(spacing=Space.SM, controls=[
-            SectionHeader("Box", accent=accent), self._filter,
-            ft.Text("Box entries load as a plain set: first ability, no item, no stat points.", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
-            self._list,
-        ])
+        self._filter.tooltip = "Box entries load as a plain set: first ability, no item, no stat points"
+        self.content = ft.Column(spacing=Space.SM, controls=[self._filter, self._list])
 
     def set_scrolling(self, scrolling: bool) -> None:
         self._list.scroll = ft.ScrollMode.AUTO if scrolling else None
@@ -123,9 +119,9 @@ class SidePanel(ft.Container):
             page.padding = 0
             page.expand = True
         self.tabs = ft.SegmentedButton(
-            segments=[ft.Segment(value=key, label=ft.Text(label, max_lines=1)) for key, label in SIDE_TABS],
+            segments=[ft.Segment(value=key, label=ft.Text(label, size=12, max_lines=1)) for key, label in SIDE_TABS],
             selected=[tab if tab in pages else "opponents"], show_selected_icon=False, allow_empty_selection=False, expand=True,
-            style=ft.ButtonStyle(visual_density=ft.VisualDensity.COMPACT, padding=ft.Padding.symmetric(horizontal=Space.SM)),
+            style=ft.ButtonStyle(visual_density=ft.VisualDensity.COMPACT, padding=ft.Padding.symmetric(horizontal=4)),
             on_change=lambda e: self.select((e.control.selected or ["opponents"])[0]),
         )
         self.tab = self.tabs.selected[0]

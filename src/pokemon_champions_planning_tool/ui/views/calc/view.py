@@ -28,12 +28,12 @@ from .side_panel import SIDE_TABS, BoxList, SidePanel
 from .state import CalcRequest, RivalMember, SweepEntry, revealed_fields, rival_set
 from .store import CalcStore
 from .sweep import SweepPanel
-from .team_strip import RivalStrip, TeamStrip
+from .team_strip import STACK_BELOW, RivalStrip, TeamStrip, fit_tier
 
 SAVE_DELAY_MS = 500    # a burst of edits (a slider drag) writes preferences.json once
 SWEEP_DELAY_MS = 300   # the opponents sweep starts once the edits pause
-SIDE_WIDTH = 330
-SIDE_WIDTH_COMPACT = 310
+SIDE_WIDTH = 300
+SIDE_WIDTH_COMPACT = 280
 TWO_COLUMNS_MIN = 820       # the Pokémon columns sit side by side from this much room
 PREF_SIDE_TAB = "calc.side_tab"      # "opponents" | "rivals" | "box"
 PREF_SIDE_OPEN = "calc.side_open"
@@ -637,9 +637,18 @@ class CalcView(ft.Column):
         # The rail of the app and the page padding take about 130px.
         room = width - 130 - side
         cell = {"xs": 6} if room >= TWO_COLUMNS_MIN else {"xs": 12}
-        for control in (self.attacker, self.defender, self.team_strip, self.rival_strip):
-            control.col = dict(cell)
-        self._vs.visible = cell == {"xs": 6}       # only between the two, not over a stacked card
+        self.attacker.col = self.defender.col = dict(cell)
+        # Each team gets half the row: shrink its sprites, then its picker, so all six members
+        # always show. Below a readable size the two cards stack instead (the Pokémon stay
+        # side by side).
+        picker, sprite = fit_tier((room - Space.MD) / 2)
+        two = cell == {"xs": 6} and (picker, sprite) >= STACK_BELOW
+        if not two:
+            picker, sprite = fit_tier(room)
+        self.team_strip.col = self.rival_strip.col = {"xs": 6} if two else {"xs": 12}
+        self._vs.visible = two       # only between the two, not over a stacked card
+        self.team_strip.fit(picker, sprite, badge=two)
+        self.rival_strip.fit(picker, sprite, badge=two)
 
     def handle_key(self, e) -> bool:
         key = (e.key or "").lower()

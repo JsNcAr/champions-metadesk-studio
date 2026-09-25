@@ -176,5 +176,18 @@ class TestInTheView(_Base):
         self.assertEqual(self.store.state, before)
 
 
+class TestTeamStripSizes(unittest.TestCase):
+    def test_all_six_fit_down_to_the_smallest_tier(self):
+        from pokemon_champions_planning_tool.ui.views.calc.team_strip import TIERS, fit_tier, rival_width, team_width
+
+        self.assertEqual(fit_tier(2000), TIERS[0], "room to spare: the full picker and sprites")
+        for width in range(360, 700, 10):
+            picker, sprite = fit_tier(width)
+            if (picker, sprite) != TIERS[-1]:
+                self.assertLessEqual(max(team_width(picker, sprite), rival_width(picker, sprite)), width)
+        sizes = [fit_tier(w) for w in (700, 500, 450, 420)]
+        self.assertEqual(sizes, sorted(sizes, reverse=True), "narrower never means bigger")
+
+
 if __name__ == "__main__":
     unittest.main()

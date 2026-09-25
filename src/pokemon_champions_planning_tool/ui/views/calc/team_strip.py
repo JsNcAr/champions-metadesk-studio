@@ -26,7 +26,34 @@ from .state import PokemonState, RivalTeam, TeamRating, pokemon_from_slot
 from .store import CalcStore
 
 AVATAR = 32
-# The team pickers: compact, filled like the search fields; the icon says whose team it is.
+# (picker width, sprite size) from roomiest to tightest; the strips take the first that fits
+# so all six members always show. The sprites shrink first: a team name cut to "Sa…" helps
+# nobody, a 24 px sprite is still recognisable.
+TIERS: tuple[tuple[int, int], ...] = ((190, 32), (190, 28), (170, 28), (170, 24), (150, 24), (150, 20), (130, 20))
+STACK_BELOW = (150, 24)      # smaller than this, the view stacks the two cards instead
+_INNER = 20          # room kept free on the side facing the "VS" badge
+_PAD = 8 + 2         # card padding and border on the outer side
+_ICON = 32           # the rival strip's icon buttons
+_SMALL_ICON = {"icon_size": 18, "width": _ICON, "height": _ICON, "padding": 0}
+
+
+def team_width(picker: int, sprite: int, members: int = 6) -> int:
+    """What your strip needs: picker, the members, the colour legend."""
+    return _PAD + _INNER + picker + Space.SM + members * (sprite + 8) + Space.SM + 16
+
+
+def rival_width(picker: int, sprite: int, members: int = 6) -> int:
+    """What the rival strip needs: the members, one action icon, the picker and the menu."""
+    return _PAD + _INNER + members * (sprite + 8) + _ICON + picker + 2 * Space.XS + _ICON
+
+
+def fit_tier(width: float) -> tuple[int, int]:
+    """The roomiest (picker, sprite) both strips fit in ``width`` each."""
+    for picker, sprite in TIERS:
+        if max(team_width(picker, sprite), rival_width(picker, sprite)) <= width:
+            return picker, sprite
+    return TIERS[-1]
+# The team pickers: compact, filled like the search fields (the card's tint says whose team it is).
 PICKER_STYLE: dict = {"dense": True, "text_size": 13, "width": 190, "filled": True, "fill_color": Palette.SURFACE_3,
                       "border_color": Palette.OUTLINE_VARIANT, "focused_border_color": Palette.PRIMARY, "border_radius": Radius.SM,
                       "content_padding": ft.Padding.symmetric(horizontal=Space.SM, vertical=6)}
@@ -38,7 +65,13 @@ def side_card(control: ft.Container, side: str) -> None:
     control.bgcolor = alpha(SIDE_TINT[side], 0.07)
     control.border = ft.Border.all(1, alpha(SIDE_TINT[side], 0.35))
     control.border_radius = Radius.MD
-    control.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=6)
+    set_inner(control, side, True)
+
+
+def set_inner(control: ft.Container, side: str, badge: bool) -> None:
+    """Keep the side facing the "VS" badge clear while it shows."""
+    inner = _INNER if badge else Space.SM
+    control.padding = ft.Padding.only(left=Space.SM if side == "left" else inner, right=inner if side == "left" else Space.SM, top=6, bottom=6)
 
 
 _LOAD_HINT = {"left": "Click: load as attacker · right-click: as defender", "right": "Click: load as defender · right-click: as attacker"}
@@ -48,7 +81,7 @@ class Avatar(ft.GestureDetector):
     """One team member: its sprite on a tile coloured by its rating."""
 
     def __init__(self, *, sprite_url: str | None, name: str, types: tuple[str, ...] = (), mega: bool = False, side: str,
-                 on_primary: Callable[[], None], on_secondary: Callable[[], None] | None = None) -> None:
+                 on_primary: Callable[[], None], on_secondary: Callable[[], None] | None = None, size: int = AVATAR) -> None:
         self.name = name
         self.side = side
         self.rating: TeamRating | None = None
@@ -56,7 +89,7 @@ class Avatar(ft.GestureDetector):
         self._note = ""
         self._shown: tuple | None = None
         self.tile = ft.Container(
-            content=Sprite(sprite_url, size=AVATAR, ring="mega" if mega else "type", primary_type=types[0] if types else None),
+            content=Sprite(sprite_url, size=size, ring="mega" if mega else "type", primary_type=types[0] if types else None),
             padding=2, border_radius=Radius.MD,
         )
         super().__init__(content=self.tile, mouse_cursor=ft.MouseCursor.CLICK, on_tap=lambda _e: on_primary(),
@@ -100,7 +133,7 @@ class TeamStrip(ft.Container):
         super().__init__()
         self.store = store
         self._on_select_team = on_select_team
-        self._select = ft.Dropdown(**PICKER_STYLE, options=[], leading_icon=ft.Icons.GROUPS_OUTLINED, tooltip="Your team (also the active team in Teams)",
+        self._select = ft.Dropdown(**PICKER_STYLE, options=[], tooltip="Your team (also the active team in Teams)",
                                    on_select=lambda e: self._team_picked(e.control.value))
         self._legend = ft.Icon(ft.Icons.PALETTE_OUTLINED, size=16, color=Palette.ON_SURFACE_VARIANT, visible=False)
         self._row = ft.Row(spacing=Space.XS, tight=True, controls=[])
@@ -110,6 +143,15 @@ class TeamStrip(ft.Container):
         # One line: the picker, then the six members.
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._select, self._row, self._legend])
         side_card(self, "left")
+        self.sprite_size = AVATAR
+
+    def fit(self, picker: int, sprite: int, *, badge: bool) -> None:
+        """Size the picker and the members to the room the view measured."""
+        set_inner(self, "left", badge)
+        self._select.width = picker
+        if sprite != self.sprite_size:
+            self.sprite_size = sprite
+            self.refresh_team()
 
     def _team_picked(self, value: str | None) -> None:
         teams = getattr(self.store.team_store, "teams", None) or []
@@ -135,6 +177,7 @@ class TeamStrip(ft.Container):
             source = f"{name or 'Team'} · slot {slot.position}"
             label = form.label if (form is not None and form.is_mega) else slot.entry.pokemon.display_name
             avatar = Avatar(
+                size=self.sprite_size,
                 sprite_url=form.sprite_url if form is not None else get_pokemon_sprite_url(cid), name=label,
                 types=tuple(form.types) if form is not None else (), mega=bool(form and form.is_mega), side="left",
                 on_primary=lambda slot=slot, source=source: self._load("left", pokemon_from_slot(slot, self.store.catalogs, source=source)),
@@ -179,18 +222,17 @@ class RivalStrip(ft.Container):
         self._ratings: tuple[TeamRating | None, ...] = ()
         self._attacker = ""
         self._linked: int | None = None
-        self._select = ft.Dropdown(**PICKER_STYLE, options=[], leading_icon=ft.Icons.SPORTS_MMA_OUTLINED, tooltip="Rival team: the current battle or a saved preset",
+        self._select = ft.Dropdown(**PICKER_STYLE, options=[], tooltip="Rival team: the current battle or a saved preset",
                                    on_select=lambda e: self.rivals.set_active(e.control.value or None))
-        self._matrix = ft.IconButton(icon=ft.Icons.GRID_VIEW, icon_size=18, tooltip="Team vs team: your team against theirs, every pairing",
-                                     icon_color=Palette.PRIMARY, on_click=lambda _e: on_action("matrix"))
-        self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="Rival team actions", items=[])
+        # Every rival action, the Team vs team grid included, is in this menu.
+        self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_size=20, width=_ICON, tooltip="Rival team actions", items=[])
         self._spinner = ft.ProgressRing(width=14, height=14, stroke_width=2, visible=False)
-        self._use = ft.IconButton(icon=ft.Icons.PLAY_CIRCLE_OUTLINE, icon_size=18, icon_color=Palette.PRIMARY, visible=False,
+        self._use = ft.IconButton(icon=ft.Icons.PLAY_CIRCLE_OUTLINE, icon_color=Palette.PRIMARY, visible=False, **_SMALL_ICON,
                                   tooltip="Use in battle: load this preset as the “Current battle”; the preset itself stays as saved",
                                   on_click=lambda _e: on_action("use_preset"))
         # A saved plan is never changed by browsing it: edits to its member in the Defender
         # panel are kept only through this button (a battle team saves them by itself).
-        self._update_member = ft.IconButton(icon=ft.Icons.SAVE_AS_OUTLINED, icon_size=18, icon_color=Palette.WARNING, visible=False,
+        self._update_member = ft.IconButton(icon=ft.Icons.SAVE_AS_OUTLINED, icon_color=Palette.WARNING, visible=False, **_SMALL_ICON,
                                             on_click=lambda _e: on_action("update_member"))
         self._preview = ft.TextButton("Team preview", icon=ft.Icons.BOLT, tooltip=shortcut("Start a battle: enter the six Pokémon you see (Ctrl+B)"),
                                              on_click=lambda _e: on_action("battle"))
@@ -201,9 +243,17 @@ class RivalStrip(ft.Container):
         self.avatars: list[Avatar] = []
         # One line, mirroring yours: the members (or how to start), then the picker and actions.
         self.content = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.END, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
-            self._spinner, self._row, self._empty, self._update_member, self._use, self._select, self._matrix, self._menu,
+            self._spinner, self._row, self._empty, self._update_member, self._use, self._select, self._menu,
         ])
         side_card(self, "right")
+        self.sprite_size = AVATAR
+
+    def fit(self, picker: int, sprite: int, *, badge: bool) -> None:
+        set_inner(self, "right", badge)
+        self._select.width = picker
+        if sprite != self.sprite_size:
+            self.sprite_size = sprite
+            self.render()
 
     def set_busy(self, busy: bool) -> None:
         if busy != self._spinner.visible:
@@ -252,8 +302,6 @@ class RivalStrip(ft.Container):
         self._select.value = team.rival_team_id if team else None
         self._select.visible = bool(teams)
         self._menu.items = self.menu_items(team)
-        self._matrix.visible = team is not None
-        self._matrix.disabled = team is None or not team.members
         self._use.visible = team is not None and not team.is_battle and bool(team.members)
         self._empty.visible = team is None
         self.avatars = []
@@ -261,7 +309,7 @@ class RivalStrip(ft.Container):
             ratings = self._ratings if len(self._ratings) == len(team.members) else ()
             for i, m in enumerate(team.members):
                 p = m.pokemon
-                avatar = Avatar(sprite_url=get_pokemon_sprite_url(p.species or ""), name=self._species_name(p.species), side="right",
+                avatar = Avatar(sprite_url=get_pokemon_sprite_url(p.species or ""), name=self._species_name(p.species), side="right", size=self.sprite_size,
                                 on_primary=lambda i=i: self._on_pick(i), on_secondary=lambda i=i: self._on_pick_attacker(i))
                 avatar.set_rating(ratings[i] if ratings else None, self._attacker, highlight=i == self._linked, note=assumed_note(m))
                 self.avatars.append(avatar)
@@ -269,4 +317,4 @@ class RivalStrip(ft.Container):
         safe_update(self)
 
 
-__all__ = ["AVATAR", "Avatar", "RivalStrip", "TeamStrip"]
+__all__ = ["AVATAR", "Avatar", "RivalStrip", "STACK_BELOW", "TIERS", "TeamStrip", "fit_tier", "rival_width", "team_width"]

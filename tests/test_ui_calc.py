@@ -555,11 +555,17 @@ class TestCalcView(_Base):
         self.view.sweep._set_query("char")
         self.assertEqual(len(self.view.sweep._list.controls), 1)
         self.view.sweep._set_query("")
-        self.view.sweep._set_class("wall")
-        walls = [c for c in self.view.sweep._list.controls if hasattr(c, "klass_chip")]
+        sweep = self.view.sweep
+        self.assertEqual(sweep._chip_labels[None].value, "All")
+        walls_n = sum(1 for e in entries if e.klass == "wall")
+        self.assertEqual(sweep._chip_labels["wall"].value, str(walls_n), "a pill shows its count; its name is in the tooltip")
+        self.assertIn("Wall", sweep._chips["wall"].tooltip)
+        sweep._chips["wall"].on_click(None)
+        walls = [c for c in sweep._list.controls if hasattr(c, "klass_chip")]
         self.assertTrue(walls)
         self.assertTrue(all(c.klass_chip._label.value == "Wall" for c in walls))
-        self.view.sweep._set_class(None)
+        sweep._chips["wall"].on_click(None)
+        self.assertIsNone(sweep.klass, "a second click shows everyone again")
         card = self.view.sweep._list.controls[0]
         card.on_click(None)
         self.assertEqual(self.store.state.right.species, card.sprite.tooltip or self.store.state.right.species)
@@ -586,7 +592,8 @@ class TestCalcView(_Base):
         self.assertTrue(self.view.side_panel.visible, "Ctrl+\\ brings it back")
         self.view.handle_resize(1440, 900)
         self.assertIs(self.view._host.content, self.view._wide)
-        self.assertEqual(self.view.side_panel.width, 330)
+        self.assertEqual(self.view.side_panel.width, 300)
+        self.assertEqual(self.view.team_strip.sprite_size, self.view.rival_strip.sprite_size, "both teams scale alike")
         self.assertEqual(self.view.attacker.col, {"xs": 6}, "1440 fits both columns beside the panel")
         self.assertTrue(self.view.sweep._list.expand, "wide: the lists scroll on their own")
         self.assertIsNotNone(self.view._columns.scroll)
@@ -904,9 +911,12 @@ class TestFormSwitcher(_Base):
 
         ctx = AppContext(StubPage())
         view = CalcView(ctx, store=self.store)
-        self.assertEqual(view.sweep._sort.value, "usage:latest")
-        self.assertTrue(any(opt.key == "usage:latest" for opt in view.sweep._sort.options))
-        self.assertTrue(any(opt.key == "name" for opt in view.sweep._sort.options))
+        self.assertEqual(view.sweep.sort_value, "usage:latest")
+        keys = [key for key, _label in view.sweep.sort_options()]
+        self.assertIn("usage:latest", keys)
+        self.assertIn("name", keys)
+        checked = [i for i in view.sweep._options.items if i.icon == ft.Icons.CHECK]
+        self.assertEqual(checked[0].content.value.split(" (")[0], "Usage", "the menu ticks the current sort")
 
         view.sweep.render()
         cards = [c for c in view.sweep._list.controls if hasattr(c, "tooltip")]

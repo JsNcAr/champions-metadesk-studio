@@ -59,8 +59,8 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
   3. **Meta**: tournament teams as rows grouped by event with filters, paging and a
      lazily parsed sheet; Import hands the paste to the team builder.
   4. **Calc**: bi-directional damage calculator laid out as a versus screen: your team strip
-     over the Attacker and the rival team strip over the Defender, the matchup bar, a one-line
-     field bar (format, weather, terrain, rooms), then the two Pokémon, each with a fixed
+     and the rival team strip on one line, a one-line field bar (format, weather, terrain,
+     rooms), then the two Pokémon, each with its best hit on the other in its header, a fixed
      header and Moves / Build / Stages tabs and its side's conditions. Result-bearing move
      cards with status toggles, the spread-move target chip and bulk / power benchmarks. A
      closable side panel holds the opponents sweep (every species against the attacker), the
@@ -83,7 +83,7 @@ ui/
                     build.py (ft.Theme from tokens)
   shell/            AppShell: NavigationRail, layered view deck, view registry, shortcuts
   components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
-  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep; benchmark cache), benchmarks (points to KO / to survive, Flet-free), team_strip (your team and the rival team, with the rival actions), field_bar (field menus + per-side condition rows), panels (header + Moves / Build / Stages tabs), move_card, summary (matchup bar), refresh (BackgroundRefresh: the opponents sweep and the team and rival ratings computed on a worker once edits pause), side_panel (tabs: sweep, rivals_panel, box list), hit (shared matchup text), rival_store (rival teams, Flet-free), dialogs/ (team preview and paste, Team vs team grid)
+  views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep; benchmark cache), benchmarks (points to KO / to survive, Flet-free), team_strip (your team and the rival team, with the rival actions), field_bar (field menus + per-side condition rows), panels (header + Moves / Build / Stages tabs), move_card, summary (BestHit: a side's best hit, in its column header), refresh (BackgroundRefresh: the opponents sweep and the team and rival ratings computed on a worker once edits pause), side_panel (tabs: sweep, rivals_panel, box list), hit (shared matchup text), rival_store (rival teams, Flet-free), dialogs/ (team preview and paste, Team vs team grid)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

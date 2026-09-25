@@ -77,45 +77,45 @@ class MoveCard(ft.Container):
         self._bench_state = "idle"         # "idle" | "loading" | "ready"
         self._bench_names = ("You", "They")
         muted = Palette.ON_SURFACE_VARIANT
-        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._category = ft.Icon(ft.Icons.ADD, size=IconSize.SM, color=Palette.DISABLED)
         self._bp = StatusChip("", "neutral")
         self._bp.visible = False
         self._eff = StatusChip("", "neutral")
         self._eff.visible = False
         self._targets_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE, weight=ft.FontWeight.W_600)
+        self._targets_icon = ft.Icon(ft.Icons.GROUPS_2_OUTLINED, size=13, color=Palette.ON_SURFACE_VARIANT)
         self._targets = ft.Container(
-            content=ft.Row(spacing=2, tight=True, controls=[ft.Icon(ft.Icons.GROUPS_2_OUTLINED, size=13, color=Palette.ON_SURFACE_VARIANT), self._targets_label]),
+            content=ft.Row(spacing=2, tight=True, controls=[self._targets_icon, self._targets_label]),
             padding=ft.Padding.symmetric(horizontal=6, vertical=1), border_radius=Radius.PILL, border=ft.Border.all(1, Palette.OUTLINE),
             ink=True, visible=False, on_click=lambda _e: on_targets(self.index) if on_targets else None,
         )
         self._effect = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, visible=False, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self._pct = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.W_700, color=muted, text_align=ft.TextAlign.RIGHT)
-        self._ko = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, text_align=ft.TextAlign.RIGHT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, visible=False)
+        self._pct = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.W_700, color=muted, text_align=ft.TextAlign.RIGHT, max_lines=1)
+        self._ko = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=muted, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, visible=False)
         self._bar = DamageBar()
         self._bar.visible = False
         self._activate = ft.Chip(label=ft.Text("Activate"), selected=False, show_checkmark=True, visible=False, on_select=lambda _e: on_activate(self.index))
-        self._crit = ft.IconButton(icon=ft.Icons.FLASH_ON_OUTLINED, selected_icon=ft.Icons.FLASH_ON, icon_size=IconSize.SM, selected=False, tooltip="Critical hit",
-                                   icon_color=muted, selected_icon_color=Palette.PRIMARY, on_click=lambda _e: on_crit(self.index), visible=False)
-        self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=IconSize.SM, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index))
+        small = {"icon_size": 16, "width": 28, "height": 28, "padding": 0}
+        self._crit = ft.IconButton(icon=ft.Icons.FLASH_ON_OUTLINED, selected_icon=ft.Icons.FLASH_ON, selected=False, tooltip="Critical hit",
+                                   icon_color=muted, selected_icon_color=Palette.PRIMARY, on_click=lambda _e: on_crit(self.index), visible=False, **small)
+        self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index), **small)
         self._details = ft.Column(spacing=Space.SM, tight=True, visible=False, controls=[])
         self._name.expand = True
-        # The second line (BP, effectiveness, damage, KO) only exists for a filled slot, so an
-        # empty slot is a single slim "+ Move 1…" row.
-        # The KO text has a line of its own: beside the chips it squeezed them to nothing.
-        self._info = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, visible=False, controls=[
-            ft.Row(spacing=Space.XS, run_spacing=Space.XS, wrap=True, expand=True, controls=[self._bp, self._eff, self._targets, self._effect]),
-            self._pct,
-        ])
-        body = ft.Column(spacing=4, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
-            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._category, self._name, self._activate, self._crit, self._edit]),
-            self._info,
+        # One line carries the move and its result: name, BP / type / targets chips, damage,
+        # crit, edit. Under it the KO text and a thin bar; an empty slot is just "+ Move 1…".
+        self._info = ft.Row(spacing=Space.XS, tight=True, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[self._bp, self._eff, self._targets])
+        self._effect.expand = True
+        body = ft.Column(spacing=2, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+            ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                   controls=[self._category, self._name, self._info, self._effect, self._pct, self._activate, self._crit, self._edit]),
             self._ko,
             self._bar,
             self._details,
         ])
         self.content = body
-        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
+        self.padding = ft.Padding.only(left=Space.SM, right=Space.XS, top=2, bottom=Space.XS)
         self.border_radius = Radius.SM
         self.bgcolor = Palette.SURFACE_3
         self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
@@ -177,7 +177,8 @@ class MoveCard(ft.Container):
         targets = result.targets if result is not None else None
         self._targets.visible = targets is not None
         if targets is not None:
-            self._targets_label.value = "2 targets ×0.75" if targets == 2 else "1 target"
+            self._targets_label.value = "×0.75" if targets == 2 else "×1"
+            self._targets_icon.icon = ft.Icons.GROUPS_2_OUTLINED if targets == 2 else ft.Icons.PERSON_OUTLINE
             self._targets.tooltip = TARGETS_TIP[targets]
             self._targets.bgcolor = alpha(Palette.SECONDARY, 0.2) if targets == 2 else None
         if result is None or not result.ok:

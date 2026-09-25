@@ -143,10 +143,12 @@ class TestInTheView(_Base):
     def test_the_spread_chip_switches_targets(self):
         card = self.view.attacker.cards[0]
         self.assertTrue(card._targets.visible)
-        self.assertEqual(card._targets_label.value, "2 targets ×0.75")
+        self.assertEqual(card._targets_label.value, "×0.75")
+        self.assertIn("both foes", card._targets.tooltip)
         card._targets.on_click(None)
         self.assertTrue(self.store.state.left.single[0])
-        self.assertEqual(card._targets_label.value, "1 target")
+        self.assertEqual(card._targets_label.value, "×1")
+        self.assertIn("single target", card._targets.tooltip)
         self.assertFalse(self.view.defender.cards[0]._targets.visible, "single-target moves have no chip")
         self.view.field.pick("game_type", "singles")
         self.assertFalse(card._targets.visible, "Singles has no spread")

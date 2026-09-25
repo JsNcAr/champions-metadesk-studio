@@ -17,7 +17,6 @@ from ....services.sprite_cache_service import resolve_sprite_src
 from ...components import Sprite, StatusChip
 from ...components.inputs import SEARCH_FIELD_STYLE
 from ...components.pokemon import TypeChip
-from ...components.section import SectionHeader
 from ...components.spread_editor import SpreadEditor
 from ...format import shortcut
 from ...tasks import Debouncer, is_mounted, safe_update
@@ -29,6 +28,7 @@ from .move_card import MoveCard
 from .radar import RadarChart
 from .state import BOOST_STATS, STATUSES, TOGGLE_ABILITIES
 from .store import CalcStore, best_of, move_effect
+from .summary import BestHit
 
 _ZERO = PokemonStats(hp=1, attack=1, defense=1, sp_atk=1, sp_def=1, speed=1)
 TABS: tuple[tuple[str, str], ...] = (("moves", "Moves"), ("build", "Build"), ("stages", "Stages"))
@@ -223,6 +223,8 @@ class PokemonPanel(ft.Container):
         ])
         self._bodies = {"moves": self._moves_body, "build": self._build_body, "stages": self._stages_body}
         self.conditions = SideConditionsRow(side, store=store)
+        # This side's best hit on the other, in the header line; a click opens its card.
+        self.best_hit = BestHit(side, store=store, on_open=lambda _side, index: self.expand_move(index))
 
         self._loaded = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
             self._set_row, self._caption, self._hp_row,
@@ -230,7 +232,14 @@ class PokemonPanel(ft.Container):
             *self._bodies.values(),
         ])
         self.content = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
-            SectionHeader(title, accent=accent),
+            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                # The section overline (as SectionHeader draws it), kept tight so the best hit gets the rest.
+                ft.Row(spacing=Space.SM, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    ft.Container(width=3, height=12, border_radius=Radius.PILL, bgcolor=accent),
+                    ft.Text(title.upper(), theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
+                ]),
+                ft.Container(content=self.best_hit, expand=True, alignment=ft.Alignment.CENTER_RIGHT),
+            ]),
             self._identity,
             self._search_row, self._suggestions, self._no_match,
             self._loaded,
@@ -431,6 +440,7 @@ class PokemonPanel(ft.Container):
 
     def update_from(self) -> None:
         state = self.store.state.side(self.side)
+        self.best_hit.update_from()
         if self.conditions.update_from():
             safe_update(self.conditions)
         # Everything outside the move cards depends on this. When only moves, crits, applied

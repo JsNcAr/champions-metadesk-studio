@@ -299,22 +299,23 @@ class TestCalcView(_Base):
         panel._hp_typed("abc")
         self.assertEqual(panel._hp_abs.value, current)
 
-    def test_summary_bar_shows_both_directions_and_speed(self):
-        self.assertTrue(self.view.summary._hint.visible, "nothing to compare yet")
+    def test_each_column_shows_its_best_hit_and_who_moves_first(self):
+        mine, theirs = self.view.attacker.best_hit, self.view.defender.best_hit
+        self.assertFalse(mine.visible, "nothing to compare yet")
         self._load_pair()
-        bar = self.view.summary
-        self.assertFalse(bar._hint.visible)
-        self.assertEqual(bar._left._title.value, "Kingambit → Incineroar")
-        self.assertIn(bar._left._move.value, ("Kowtow Cleave", "Iron Head"))
-        self.assertIn("%", bar._left._pct.value)
-        self.assertEqual(bar._right._move.value, "Flare Blitz")
-        self.assertIn("Incineroar moves first", bar._speed.value)
+        self.assertTrue(mine.visible and theirs.visible)
+        self.assertIn(mine._move.value, ("Kowtow Cleave", "Iron Head"))
+        self.assertIn("%", mine._pct.value)
+        self.assertEqual(theirs._move.value, "Flare Blitz")
+        self.assertIn("▼", self.view.attacker._speed._label.value, "Incineroar moves first")
+        self.assertIn("▲", self.view.defender._speed._label.value)
         self.view.field.pick("trick_room", None)
-        self.assertIn("Kingambit moves first (Trick Room)", bar._speed.value)
+        self.assertIn("▲", self.view.attacker._speed._label.value, "Trick Room turns the order around")
         opened = []
         self.view.attacker.expand_move = opened.append
-        bar._open("left")
-        self.assertEqual(opened, [bar._best["left"].index], "clicking the best hit opens that move")
+        mine.open()
+        self.assertEqual(opened, [mine.best.index], "clicking the best hit opens that move")
+        serialise(self.view)
 
     def test_moves_first_then_build_and_stages_tabs(self):
         self._load_pair()

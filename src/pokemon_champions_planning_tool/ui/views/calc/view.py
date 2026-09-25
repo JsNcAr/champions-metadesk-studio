@@ -1,8 +1,8 @@
-"""Calc view, laid out as a versus screen: your team over the Attacker and the rival team over
-the Defender, the matchup bar and the field bar under them, then the two Pokémon side by
-side. The side panel (Opponents · Rivals · Box) sits on the right and can be closed. On wide
-windows the Pokémon and the side panel scroll on their own; narrow windows stack everything
-in one scroll."""
+"""Calc view, laid out as a versus screen: your team and the rival team on one line (yours on
+the Attacker's side, theirs on the Defender's), the field bar, then the two Pokémon side by
+side, each with its best hit on the other in its header. The side panel (Opponents · Rivals ·
+Box) sits on the right and can be closed. On wide windows the Pokémon and the side panel
+scroll on their own; narrow windows stack everything in one scroll."""
 
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from .rivals_panel import RivalsPanel
 from .side_panel import SIDE_TABS, BoxList, SidePanel
 from .state import CalcRequest, RivalMember, SweepEntry, revealed_fields, rival_set
 from .store import CalcStore
-from .summary import MatchupBar
 from .sweep import SweepPanel
 from .team_strip import RivalStrip, TeamStrip
 
@@ -79,7 +78,6 @@ class CalcView(ft.Column):
         # the two Pokémon still fit beside it, closed on narrower windows.
         self._side_auto = self._pref(PREF_SIDE_OPEN, None) is None
         self.side_panel.visible = bool(self._pref(PREF_SIDE_OPEN, True))
-        self.summary = MatchupBar(store=self.store, on_open=self._open_best)
 
         # What is computed on a worker once edits pause (see refresh.py).
         store = self.store
@@ -103,7 +101,7 @@ class CalcView(ft.Column):
         self._strips = ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.team_strip, self.rival_strip])
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
         self._columns = ft.Column(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO, controls=[self._pokemon_row])
-        self._main = ft.Column(spacing=Space.SM, expand=True, controls=[self._strips, self.summary, self.field, self._columns])
+        self._main = ft.Column(spacing=Space.SM, expand=True, controls=[self._strips, self.field, self._columns])
         self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.STRETCH, expand=True, controls=[self._main, self.side_panel])
         self._stack = ft.Column(spacing=Space.MD, scroll=ft.ScrollMode.AUTO, controls=[])
         self._host = ft.Container(content=self._wide, expand=True)
@@ -197,7 +195,6 @@ class CalcView(ft.Column):
         if event[0] == "state":
             self.field.update_from()
         elif event[0] == "results":
-            self.summary.update_from()
             self.attacker.update_from()
             self.defender.update_from()
             # The strip only marks which team member is loaded; TEAMS_CHANGED covers the rest.
@@ -324,10 +321,7 @@ class CalcView(ft.Column):
         team_store.select_team(team_id)
         self._on_teams_changed()
 
-    # -- the versus bar and the benchmarks ----------------------------------------------------------
-
-    def _open_best(self, side: str, index: int) -> None:
-        (self.attacker if side == "left" else self.defender).expand_move(index)
+    # -- the benchmarks ----------------------------------------------------------
 
     def _request_benchmarks(self, side: str, index: int, answer) -> None:
         found, value = self.store.cached_benchmarks(side, index)
@@ -620,13 +614,13 @@ class CalcView(ft.Column):
             for page in (self.sweep, self.rivals_panel, self.box):
                 page.set_scrolling(not narrow)
             if narrow:
-                self._stack.controls = [self._strips, self.summary, self.field, self._pokemon_row, self.side_panel]
+                self._stack.controls = [self._strips, self.field, self._pokemon_row, self.side_panel]
                 self._host.content = self._stack
                 self.side_panel.width = None
                 self.side_panel.expand = False
             else:
                 self._columns.controls = [self._pokemon_row]
-                self._main.controls = [self._strips, self.summary, self.field, self._columns]
+                self._main.controls = [self._strips, self.field, self._columns]
                 self._wide.controls = [self._main, self.side_panel]
                 self._host.content = self._wide
         side = 0

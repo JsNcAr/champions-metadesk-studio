@@ -20,12 +20,13 @@ for the headings and style.
   left. The opponents list and the ratings always use two targets.
 
 ### Changed
-- **The calculator is laid out as a versus screen.** Your team sits above the Attacker and the
-  rival team above the Defender, each member tinted by its matchup (click: load on its side,
-  right-click: the other side). The matchup bar and a one-line field bar follow, then the two
-  Pokémon side by side, now about 490 px wide each instead of 360, so damage and KO text are
-  no longer cut. The two stay side by side on laptop-sized windows instead of stacking below
-  1280 px.
+- **The calculator is laid out as a versus screen.** Your team and the rival team share one
+  line, yours on the Attacker's side and theirs on the Defender's, each member tinted by its
+  matchup (click: load on its side, right-click: the other side). A one-line field bar
+  follows, then the two Pokémon side by side, now about 490 px wide each instead of 360, so
+  damage and KO text are no longer cut. The two stay side by side on laptop-sized windows
+  instead of stacking below 1280 px, and at 1440×900 both show all four moves without
+  scrolling.
   - Each Pokémon has a fixed header (sprite, form, types, speed, ability, item, HP) and three
     tabs: Moves, Build (nature, stat points and a small radar) and Stages (the tab counts
     what is set). Alt+1 / 2 / 3 switch both columns; the search opens from the name (Ctrl+F).
@@ -36,7 +37,11 @@ for the headings and style.
     closes from its header or Ctrl+\ and starts closed on narrower windows. The rival team's
     picker and every rival action (team preview, load, presets, Team vs team) moved to the
     strip above the Defender.
-  - Clicking a hit in the matchup bar opens that move's card.
+  - The matchup bar is gone: each Pokémon's header shows its best hit on the other ("Best:
+    Knock Off 57.6–68.3% · guaranteed 2HKO", click to open the move), and the Spe chip beside
+    its name says who moves first.
+  - Move cards take one line (name, BP, type multiplier, targets, damage, crit, edit) with the
+    KO text and a thin damage bar under it: about half their old height.
 
 ## [0.4.1] - 2026-09-24
 

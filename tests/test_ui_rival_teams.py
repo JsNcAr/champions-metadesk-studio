@@ -238,7 +238,7 @@ class TestRivalPanel(_ViewBase):
         self.store.set_item("right", "Life Orb")
         self.assertIsNone(self.view.rivals.get(team.rival_team_id).members[0].pokemon.item, "browsing a plan never overwrites it")
         self.assertTrue(self.view.rival_strip._update_member.visible)
-        self.assertIn("Incineroar", self.view.rival_strip._update_member.content)
+        self.assertIn("Save Defender to Incineroar", self.view.rival_strip._update_member.tooltip)
         self.view._rival_action("update_member")
         saved = self.view.rivals.get(team.rival_team_id).members[0]
         self.assertEqual((saved.pokemon.item, saved.assumed), ("Life Orb", frozenset()))

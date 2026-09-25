@@ -25,9 +25,9 @@ from .rivals_panel import assumed_note
 from .state import PokemonState, RivalTeam, TeamRating, pokemon_from_slot
 from .store import CalcStore
 
-AVATAR = 40
-# The team pickers: compact, filled like the search fields.
-PICKER_STYLE: dict = {"dense": True, "text_size": 13, "width": 200, "filled": True, "fill_color": Palette.SURFACE_3,
+AVATAR = 32
+# The team pickers: compact, filled like the search fields; the icon says whose team it is.
+PICKER_STYLE: dict = {"dense": True, "text_size": 13, "width": 190, "filled": True, "fill_color": Palette.SURFACE_3,
                       "border_color": Palette.OUTLINE_VARIANT, "focused_border_color": Palette.PRIMARY, "border_radius": Radius.SM,
                       "content_padding": ft.Padding.symmetric(horizontal=Space.SM, vertical=6)}
 _LOAD_HINT = {"left": "Click: load as attacker · right-click: as defender", "right": "Click: load as defender · right-click: as attacker"}
@@ -46,7 +46,7 @@ class Avatar(ft.GestureDetector):
         self._shown: tuple | None = None
         self.tile = ft.Container(
             content=Sprite(sprite_url, size=AVATAR, ring="mega" if mega else "type", primary_type=types[0] if types else None),
-            padding=3, border_radius=Radius.MD,
+            padding=2, border_radius=Radius.MD,
         )
         super().__init__(content=self.tile, mouse_cursor=ft.MouseCursor.CLICK, on_tap=lambda _e: on_primary(),
                          on_secondary_tap=(lambda _e: on_secondary()) if on_secondary else None)
@@ -82,10 +82,6 @@ class Avatar(ft.GestureDetector):
         return True
 
 
-def _label(text: str) -> ft.Text:
-    return ft.Text(text, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT)
-
-
 class TeamStrip(ft.Container):
     """Your active team, each member coloured against the Defender."""
 
@@ -93,17 +89,15 @@ class TeamStrip(ft.Container):
         super().__init__()
         self.store = store
         self._on_select_team = on_select_team
-        self._select = ft.Dropdown(**PICKER_STYLE, options=[], tooltip="The team shown here (also the active team in Teams)",
+        self._select = ft.Dropdown(**PICKER_STYLE, options=[], leading_icon=ft.Icons.GROUPS_OUTLINED, tooltip="Your team (also the active team in Teams)",
                                    on_select=lambda e: self._team_picked(e.control.value))
         self._legend = ft.Icon(ft.Icons.PALETTE_OUTLINED, size=16, color=Palette.ON_SURFACE_VARIANT, visible=False)
-        self._row = ft.Row(spacing=Space.XS, wrap=True, controls=[])
+        self._row = ft.Row(spacing=Space.XS, tight=True, controls=[])
         self._team_cards: dict[str, Avatar] = {}
         self._ratings: dict[str, TeamRating] = {}
         self._rival_name = ""
-        self.content = ft.Column(spacing=Space.XS, tight=True, controls=[
-            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[_label("YOUR TEAM"), self._select, self._legend]),
-            self._row,
-        ])
+        # One line: the picker, then the six members.
+        self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._select, self._row, self._legend])
 
     def _team_picked(self, value: str | None) -> None:
         teams = getattr(self.store.team_store, "teams", None) or []
@@ -173,31 +167,29 @@ class RivalStrip(ft.Container):
         self._ratings: tuple[TeamRating | None, ...] = ()
         self._attacker = ""
         self._linked: int | None = None
-        self._select = ft.Dropdown(**PICKER_STYLE, options=[], tooltip="Current battle or a saved preset",
+        self._select = ft.Dropdown(**PICKER_STYLE, options=[], leading_icon=ft.Icons.SPORTS_MMA_OUTLINED, tooltip="Rival team: the current battle or a saved preset",
                                    on_select=lambda e: self.rivals.set_active(e.control.value or None))
         self._matrix = ft.IconButton(icon=ft.Icons.GRID_VIEW, icon_size=18, tooltip="Team vs team: your team against theirs, every pairing",
                                      icon_color=Palette.PRIMARY, on_click=lambda _e: on_action("matrix"))
         self._menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="Rival team actions", items=[])
         self._spinner = ft.ProgressRing(width=14, height=14, stroke_width=2, visible=False)
-        self._use = ft.TextButton("Use in battle", icon=ft.Icons.SPORTS_MMA, visible=False,
-                                  tooltip="Load this preset as the “Current battle”; the preset itself stays as saved",
+        self._use = ft.IconButton(icon=ft.Icons.PLAY_CIRCLE_OUTLINE, icon_size=18, icon_color=Palette.PRIMARY, visible=False,
+                                  tooltip="Use in battle: load this preset as the “Current battle”; the preset itself stays as saved",
                                   on_click=lambda _e: on_action("use_preset"))
         # A saved plan is never changed by browsing it: edits to its member in the Defender
         # panel are kept only through this button (a battle team saves them by itself).
-        self._update_member = ft.TextButton("", icon=ft.Icons.SAVE_AS_OUTLINED, visible=False,
-                                            tooltip="Keep the Defender's item, ability, moves, nature and stat points in this rival team",
+        self._update_member = ft.IconButton(icon=ft.Icons.SAVE_AS_OUTLINED, icon_size=18, icon_color=Palette.WARNING, visible=False,
                                             on_click=lambda _e: on_action("update_member"))
-        self._preview = ft.FilledTonalButton("Team preview", icon=ft.Icons.BOLT, tooltip=shortcut("Start a battle: enter the six Pokémon you see (Ctrl+B)"),
+        self._preview = ft.TextButton("Team preview", icon=ft.Icons.BOLT, tooltip=shortcut("Start a battle: enter the six Pokémon you see (Ctrl+B)"),
                                              on_click=lambda _e: on_action("battle"))
         self._load = ft.TextButton("Load team…", icon=ft.Icons.FOLDER_OPEN_OUTLINED, tooltip="A preset, one of your teams or a paste",
                                    on_click=lambda _e: on_action("load"))
-        self._empty = ft.Row(spacing=Space.SM, wrap=True, alignment=ft.MainAxisAlignment.END, controls=[self._preview, self._load])
-        self._row = ft.Row(spacing=Space.XS, wrap=True, alignment=ft.MainAxisAlignment.END, controls=[])
+        self._empty = ft.Row(spacing=0, tight=True, controls=[self._preview, self._load])
+        self._row = ft.Row(spacing=Space.XS, tight=True, controls=[])
         self.avatars: list[Avatar] = []
-        self.content = ft.Column(spacing=Space.XS, tight=True, horizontal_alignment=ft.CrossAxisAlignment.END, controls=[
-            ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.END, vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                   controls=[self._spinner, self._update_member, self._use, _label("RIVAL"), self._select, self._matrix, self._menu]),
-            self._row, self._empty,
+        # One line, mirroring yours: the members (or how to start), then the picker and actions.
+        self.content = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.END, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+            self._spinner, self._row, self._empty, self._update_member, self._use, self._select, self._matrix, self._menu,
         ])
 
     def set_busy(self, busy: bool) -> None:
@@ -212,10 +204,10 @@ class RivalStrip(ft.Container):
 
     def set_pending(self, name: str | None) -> None:
         """Offer "Save Defender to <name>" while a saved team's member was edited."""
-        label = f"Save Defender to {name}" if name else ""
-        if (name is not None) != self._update_member.visible or label != self._update_member.content:
+        label = f"Save Defender to {name}: keep its item, ability, moves, nature and stat points in this preset" if name else None
+        if (name is not None) != self._update_member.visible or label != self._update_member.tooltip:
             self._update_member.visible = name is not None
-            self._update_member.content = label
+            self._update_member.tooltip = label
             safe_update(self._update_member)
 
     def set_linked(self, slot: int | None) -> None:

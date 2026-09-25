@@ -10,6 +10,48 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Calc benchmarks.** An open move card, and the Build tab for the best move, say how many
+  stat points a guaranteed OHKO or 2HKO needs (the lowest roll) and how many HP and defence
+  points the other side needs to survive one or two hits (the highest roll), with the field,
+  items and stages as set. Apply sets them, with Undo.
+- **Spread moves on one target.** In Doubles a spread move's card says it hits two targets
+  (×0.75 each); a click on that chip calculates it on a single target, for when one foe is
+  left. The opponents list and the ratings always use two targets.
+
+### Changed
+- **The calculator is laid out as a versus screen.** Your team and the rival team share one
+  line, each on its own card over its Pokémon's column (green for yours, red for the rival's,
+  "VS" between them), each member tinted by its matchup (click: load on its side, right-click: the other side). A one-line field bar
+  follows, then the two Pokémon side by side, now about 490 px wide each instead of 360, so
+  damage and KO text are no longer cut. The two stay side by side on laptop-sized windows
+  instead of stacking below 1280 px, and at 1440×900 both show all four moves without
+  scrolling.
+  - Each Pokémon has a fixed header (sprite, form, types, speed, ability, item, HP) and three
+    tabs: Moves, Build (nature, stat points and a small radar) and Stages (the tab counts
+    what is set). Alt+1 / 2 / 3 switch both columns; the search opens from the name (Ctrl+F).
+  - The field bar shows only what is set: Singles/Doubles, then Weather, Terrain and Rooms
+    menus. Weather or terrain set by an ability names it. Each side's conditions sit in that
+    side's column above the tabs: **Tailwind** and **Helping Hand** (Doubles) are one-click
+    toggles, the rest (screens, Protect, hazards…) are added with + Condition.
+  - Opponents, the rival team's details and the Box share one narrow side panel (300 px) with
+    tabs; it closes from its header or Ctrl+\ and starts closed on narrower windows. The
+    opponents' controls take two short lines: search with a menu for the sort and tournament
+    sets, and the classes (Threat, Wall…) as coloured count pills.
+  - Opponent and rival cards show each side's best hit as a small damage gauge instead of a
+    line of text: → your move in teal, ← theirs in orange (brighter the harder it hits), a
+    bar with a tick at half the HP, and "58–68%", "90%+" (a KO on the high rolls) or "OHKO".
+    The speed sits beside the name.
+  - The team rows scale with the window: the sprites shrink, then the pickers, so all six
+    members always show; when even that is too tight the two teams stack. The rival team's
+    picker and every rival action (team preview, load, presets, Team vs team) moved to the
+    strip above the Defender.
+  - The matchup bar is gone: each Pokémon's header shows its best hit on the other ("Best:
+    Knock Off 57.6–68.3% · guaranteed 2HKO", click to open the move), and the Spe chip beside
+    its name says who moves first.
+  - Move cards take one line (name, BP, type multiplier, targets, damage, crit, edit) with the
+    KO text and a thin damage bar under it: about half their old height.
+
 ## [0.4.1] - 2026-09-24
 
 ### Added

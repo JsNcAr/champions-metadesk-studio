@@ -26,6 +26,8 @@ CLASS_BG = {
     "mitigated": alpha(Palette.SECONDARY, 0.15),
     "crushed": alpha(Palette.SUCCESS, 0.18),
 }
+# The class's own colour, for small marks (the opponents filter's dots).
+CLASS_COLOR = {"threat": Palette.ERROR, "wall": Palette.WARNING, "neutral": Palette.OUTLINE, "mitigated": Palette.SECONDARY, "crushed": Palette.SUCCESS}
 CLASS_BORDER = {
     "threat": ft.Border.all(1, alpha(Palette.ERROR, 0.40)),
     "wall": ft.Border.all(1, alpha(Palette.WARNING, 0.40)),
@@ -34,4 +36,4 @@ CLASS_BORDER = {
     "crushed": ft.Border.all(1, alpha(Palette.SUCCESS, 0.40)),
 }
 
-__all__ = ["CLASS_BG", "CLASS_BORDER", "CLASS_HELP", "CLASS_TONES"]
+__all__ = ["CLASS_BG", "CLASS_BORDER", "CLASS_COLOR", "CLASS_HELP", "CLASS_TONES"]

@@ -24,6 +24,8 @@ TOGGLE_ABILITIES: frozenset[str] = frozenset({
     "Analytic", "Electromorphosis", "Flash Fire", "Intimidate", "Minus", "Plus", "Slow Start", "Unburden",
 })
 SIDES: tuple[str, str] = ("left", "right")
+# Move targets the engine treats as spread moves in Doubles (×0.75 damage on each target).
+SPREAD_TARGETS: frozenset[str] = frozenset({"allAdjacent", "allAdjacentFoes"})
 
 
 @dataclass
@@ -41,6 +43,9 @@ class PokemonState:
     moves: list[str | None] = field(default_factory=lambda: [None, None, None, None])
     crit: list[bool] = field(default_factory=lambda: [False, False, False, False])
     active: list[bool] = field(default_factory=lambda: [False, False, False, False])   # status-move effect applied
+    # A spread move (Rock Slide, Heat Wave…) hits one target instead of two in Doubles: one
+    # foe fainted or protected, so no ×0.75 spread penalty.
+    single: list[bool] = field(default_factory=lambda: [False, False, False, False])
     source: str = ""                      # "Team slot 1 · Sun", "Paste", … for the panel caption
     assumptions: list[str] = field(default_factory=list)
 
@@ -57,6 +62,7 @@ class PokemonState:
             ability=d.get("ability") or None, ability_on=bool(d.get("ability_on")), item=d.get("item") or None, status=str(d.get("status") or "none"),
             boosts={k: int(v) for k, v in (d.get("boosts") or {}).items()}, hp_pct=float(d.get("hp_pct", 100.0)), allies_fainted=int(d.get("allies_fainted") or 0),
             moves=[m or None for m in four(d.get("moves"), None)], crit=[bool(c) for c in four(d.get("crit"), False)], active=[bool(a) for a in four(d.get("active"), False)],
+            single=[bool(a) for a in four(d.get("single"), False)],
             source=str(d.get("source") or ""), assumptions=[str(a) for a in (d.get("assumptions") or [])],
         )
 
@@ -162,6 +168,7 @@ class MoveResult:
     bp: int | float | None = None
     effectiveness: float | None = None    # type multiplier against the defender (after -ate changes)
     ko_hits: int | None = None            # hits to KO on the average roll (None when it never KOs)
+    targets: int | None = None            # a spread move in Doubles: 2 (×0.75) or 1 (one foe left); None otherwise
 
     @property
     def ok(self) -> bool:
@@ -255,7 +262,7 @@ class RivalTeam:
 def rival_set(p: PokemonState) -> PokemonState:
     """What a rival member keeps from the Defender panel: its set, HP and status, without
     this turn's stat stages, crits and applied move effects."""
-    return replace(p, boosts={}, crit=[False, False, False, False], active=[False, False, False, False], ability_on=False)
+    return replace(p, boosts={}, crit=[False, False, False, False], active=[False, False, False, False], single=[False, False, False, False], ability_on=False)
 
 
 def revealed_fields(old: PokemonState, new: PokemonState) -> set[str]:
@@ -361,7 +368,7 @@ def pokemon_from_parsed(parsed_slot: Any, canonical_id: str, catalogs: Any, *, s
 
 
 __all__ = [
-    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "STATUSES", "SWEEP_CLASSES", "RIVAL_FIELDS", "TERRAINS", "TOGGLE_ABILITIES", "RivalMember", "RivalTeam", "TeamRating", "revealed_fields", "rival_set", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
+    "BOOST_STATS", "DOUBLES_ONLY", "SIDES", "SIDE_CONDITION_LABELS", "SPREAD_TARGETS", "STATUSES", "SWEEP_CLASSES", "RIVAL_FIELDS", "TERRAINS", "TOGGLE_ABILITIES", "RivalMember", "RivalTeam", "TeamRating", "revealed_fields", "rival_set", "WEATHERS", "CalcRequest", "CalcResults", "CalcState",
     "FieldState", "MoveResult", "PokemonState", "SideConditions", "SweepEntry", "classify", "hits_to_ko", "pokemon_from_parsed", "pokemon_from_slot",
     "pokemon_from_species_id",
 ]

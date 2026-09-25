@@ -10,8 +10,10 @@ import flet as ft
 from .....domain.pokemon_identity import get_pokemon_sprite_url
 from ....components import Sprite
 from ....theme import Palette, Radius, Space
+from ....tasks import safe_update
 from ..classes import CLASS_BG, CLASS_BORDER, CLASS_HELP
-from ..state import SWEEP_CLASSES, MoveResult, PokemonState, TeamRating
+from ..hit import hit_text, speed_line
+from ..state import SWEEP_CLASSES, PokemonState, TeamRating
 
 CELL_W = 76
 CELL_H = 46
@@ -19,24 +21,13 @@ NAME_W = 132
 GOOD = frozenset({"crushed", "mitigated"})
 
 
-def _hit(result: MoveResult | None, fallback: str) -> str:
-    if result is None:
-        return fallback
-    ko = f" ({result.ko_text})" if result.ko_text else ""
-    return f"{result.name} {result.min_pct:g}–{result.max_pct:g}%{ko}"
-
-
 def cell_tooltip(rating: TeamRating, rival_name: str) -> str:
     label = dict(SWEEP_CLASSES).get(rating.klass, rating.klass)
-    if rating.your_speed == rating.their_speed:
-        speed = f"speed tie ({rating.your_speed})"
-    else:
-        speed = f"{'you move' if rating.faster else 'they move'} first ({rating.your_speed} vs {rating.their_speed})"
     return "\n".join((
         f"{rating.name} vs {rival_name}: {label} — {CLASS_HELP.get(rating.klass, '')}",
-        f"You: {_hit(rating.your_best, 'no damaging move')}",
-        f"Them: {_hit(rating.their_best, 'no damaging move')}",
-        speed.capitalize(),
+        f"You: {hit_text(rating.your_best, ko=True)}",
+        f"Them: {hit_text(rating.their_best, ko=True)}",
+        speed_line(rating),
         "Click to load both",
     ))
 
@@ -86,7 +77,7 @@ class TeamMatrixDialog(ft.AlertDialog):
 
     def set_error(self, exc: BaseException) -> None:
         self._grid.controls = [ft.Text(f"Could not compute the grid: {exc}", color=Palette.ERROR)]
-        self._safe_update(self)
+        safe_update(self)
 
     def set_grid(self, grid: dict[tuple[str, int], TeamRating]) -> None:
         keys = [key for key, _m in self._members]
@@ -118,7 +109,7 @@ class TeamMatrixDialog(ft.AlertDialog):
                                                        color=Palette.ERROR if beaten == 0 else Palette.ON_SURFACE)))
         rows.append(ft.Row(spacing=Space.XS, controls=footer))
         self._grid.controls = rows
-        self._safe_update(self)
+        safe_update(self)
 
     def _cell(self, rating: TeamRating | None, key: str, index: int, rival_name: str) -> ft.Control:
         if rating is None:
@@ -134,14 +125,6 @@ class TeamMatrixDialog(ft.AlertDialog):
                 _label(f"{best.max_pct:g}% {'▲' if rating.faster else '▼'}" if best else f"— {'▲' if rating.faster else '▼'}", width=CELL_W),
             ]),
         )
-
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass
 
 
 __all__ = ["TeamMatrixDialog", "cell_tooltip", "summarise"]

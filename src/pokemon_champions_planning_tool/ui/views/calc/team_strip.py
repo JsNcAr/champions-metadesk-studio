@@ -16,7 +16,7 @@ import flet as ft
 from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite
 from ...format import shortcut
-from ...theme import Palette, Radius, Space
+from ...theme import Palette, Radius, Space, alpha
 from ...tasks import safe_update
 from .classes import CLASS_BG, CLASS_BORDER
 from .hit import rating_legend, rating_tooltip
@@ -30,6 +30,17 @@ AVATAR = 32
 PICKER_STYLE: dict = {"dense": True, "text_size": 13, "width": 190, "filled": True, "fill_color": Palette.SURFACE_3,
                       "border_color": Palette.OUTLINE_VARIANT, "focused_border_color": Palette.PRIMARY, "border_radius": Radius.SM,
                       "content_padding": ft.Padding.symmetric(horizontal=Space.SM, vertical=6)}
+# Each team sits on its own card over its Pokémon's column, tinted by side: yours green, the rival's red.
+SIDE_TINT = {"left": Palette.SUCCESS, "right": Palette.ERROR}
+
+
+def side_card(control: ft.Container, side: str) -> None:
+    control.bgcolor = alpha(SIDE_TINT[side], 0.07)
+    control.border = ft.Border.all(1, alpha(SIDE_TINT[side], 0.35))
+    control.border_radius = Radius.MD
+    control.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=6)
+
+
 _LOAD_HINT = {"left": "Click: load as attacker · right-click: as defender", "right": "Click: load as defender · right-click: as attacker"}
 
 
@@ -98,6 +109,7 @@ class TeamStrip(ft.Container):
         self._rival_name = ""
         # One line: the picker, then the six members.
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._select, self._row, self._legend])
+        side_card(self, "left")
 
     def _team_picked(self, value: str | None) -> None:
         teams = getattr(self.store.team_store, "teams", None) or []
@@ -191,6 +203,7 @@ class RivalStrip(ft.Container):
         self.content = ft.Row(spacing=Space.XS, alignment=ft.MainAxisAlignment.END, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             self._spinner, self._row, self._empty, self._update_member, self._use, self._select, self._matrix, self._menu,
         ])
+        side_card(self, "right")
 
     def set_busy(self, busy: bool) -> None:
         if busy != self._spinner.visible:

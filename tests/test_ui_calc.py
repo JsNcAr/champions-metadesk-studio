@@ -448,7 +448,7 @@ class TestCalcView(_Base):
         field.pick("trick_room", None)
         self.assertEqual(self.store.speed_order(), "left")
         self.assertEqual(field.rooms.content.content.controls[1].value, "Trick Room")
-        self.view.attacker.conditions.toggle("tailwind")
+        self.view.attacker.conditions.quick["tailwind"].on_select(None)
         self.assertGreater(self.store.speed("left"), 102)
         self.store.set_pokemon("left", ability="Sand Stream")
         self.assertIn("Kingambit's Sand Stream", field.weather.tooltip, "an ability's weather says where it came from")
@@ -458,16 +458,40 @@ class TestCalcView(_Base):
         self._load_pair()
         self.store.set_side_conditions("left", helping_hand=True, friend_guard=True, reflect=True)
         mine = self.view.attacker.conditions
-        self.assertIn("helping_hand", mine.chips)
+        self.assertTrue(mine.quick["helping_hand"].selected)
+        self.assertIn(mine.quick["helping_hand"], mine.controls)
         self.view.field.pick("game_type", "singles")
         left = self.store.state.field.left
         self.assertEqual((left.helping_hand, left.friend_guard, left.reflect), (False, False, True), "only the doubles-only ones go")
-        self.assertNotIn("helping_hand", mine.chips)
+        self.assertNotIn(mine.quick["helping_hand"], mine.controls, "no Helping Hand toggle in Singles")
+        self.assertIn(mine.quick["tailwind"], mine.controls)
         self.assertIn("reflect", mine.chips)
         offered = [item.content.value for item in self.view.defender.conditions.add.items]
         self.assertNotIn("Friend Guard", offered, "Singles does not offer them")
         self.view.field.pick("game_type", "doubles")
-        self.assertIn("Helping Hand", [item.content.value for item in mine.add.items])
+        self.assertIn(mine.quick["helping_hand"], mine.controls)
+        self.assertIn("Friend Guard", [item.content.value for item in mine.add.items])
+
+    def test_tailwind_and_helping_hand_are_one_click(self):
+        self._load_pair()
+        mine, theirs = self.view.attacker.conditions, self.view.defender.conditions
+        offered = [item.content.value for item in mine.add.items]
+        self.assertNotIn("Tailwind", offered, "they are toggles, not in the + menu")
+        self.assertNotIn("Helping Hand", offered)
+        slow = self.store.speed("left")
+        mine.quick["tailwind"].on_select(None)
+        self.assertTrue(self.store.state.field.left.tailwind)
+        self.assertEqual(self.store.speed("left"), slow * 2)
+        self.assertTrue(mine.quick["tailwind"].selected)
+        self.assertFalse(theirs.quick["tailwind"].selected, "each side has its own")
+        before = self.store.results.left_vs_right[0].max_dmg
+        mine.quick["helping_hand"].on_select(None)
+        self.assertGreater(self.store.results.left_vs_right[0].max_dmg, before)
+        mine.quick["tailwind"].on_select(None)
+        self.assertFalse(self.store.state.field.left.tailwind, "a second click turns it off")
+        panel = self.view.attacker
+        rows = panel._loaded.controls
+        self.assertLess(rows.index(mine), rows.index(panel._moves_body), "above the tabs, whichever is open")
 
     def test_clear_resets_conditions_and_modifiers_but_keeps_the_pokemon(self):
         self._load_pair()

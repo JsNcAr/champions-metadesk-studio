@@ -1,8 +1,9 @@
 """Attacker / defender columns: a fixed header (sprite, name, form, types, speed, ability,
-item, HP), then three tabs — Moves (the four cards that carry the results), Build (nature
-and stat points with a small radar, and the benchmarks of the best move) and Stages (stat
-stages, status) — and this side's field conditions at the bottom. The results are always
-in the first tab; the tuning is one click away and never pushes them off screen."""
+item, HP) and this side's field conditions (Tailwind and Helping Hand one click away), then
+three tabs — Moves (the four cards that carry the results), Build (nature and stat points
+with a small radar, and the benchmarks of the best move) and Stages (stat stages, status).
+The results are always in the first tab; the tuning is one click away and never pushes them
+off screen."""
 
 from __future__ import annotations
 
@@ -228,6 +229,8 @@ class PokemonPanel(ft.Container):
 
         self._loaded = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
             self._set_row, self._caption, self._hp_row,
+            # This side's conditions sit above the tabs, in the same place whichever tab is open.
+            self.conditions,
             ft.Container(content=self.tab_bar, border=ft.Border(bottom=ft.BorderSide(1, Palette.OUTLINE_VARIANT))),
             *self._bodies.values(),
         ])
@@ -243,7 +246,6 @@ class PokemonPanel(ft.Container):
             self._identity,
             self._search_row, self._suggestions, self._no_match,
             self._loaded,
-            ft.Container(content=self.conditions, padding=ft.Padding.only(top=Space.XS), border=ft.Border(top=ft.BorderSide(1, Palette.OUTLINE_VARIANT))),
         ])
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD

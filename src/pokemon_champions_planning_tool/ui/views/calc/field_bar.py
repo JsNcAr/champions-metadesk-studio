@@ -145,8 +145,13 @@ class FieldBar(ft.Container):
         safe_update(self)
 
 
+# Set nearly every turn in Doubles, so they are one click away instead of in the "+" menu.
+QUICK: tuple[tuple[str, str, str], ...] = (("tailwind", "Tailwind", ft.Icons.AIR), ("helping_hand", "Helping Hand", ft.Icons.BACK_HAND_OUTLINED))
+
+
 class SideConditionsRow(ft.Row):
-    """One side's conditions: the active ones as chips (✕ removes), "+" adds the others."""
+    """One side's conditions: Tailwind and Helping Hand as one-click toggles, the other active
+    ones as chips (✕ removes), and "+" for the rest."""
 
     def __init__(self, side: str, *, store: CalcStore) -> None:
         super().__init__(spacing=Space.XS, run_spacing=Space.XS, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER)
@@ -159,9 +164,16 @@ class SideConditionsRow(ft.Row):
                                                                 ft.Text("Condition", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.PRIMARY)]),
                 height=28, padding=ft.Padding.symmetric(horizontal=Space.SM), border_radius=Radius.PILL, border=ft.Border.all(1, Palette.OUTLINE_VARIANT),
             ),
-            tooltip="Tailwind, screens, Helping Hand, hazards…", items=[],
+            tooltip="Screens, Protect, hazards, Leech Seed, Charge…", items=[],
         )
-        self.chips: dict[str, ft.Chip] = {}
+        self.chips: dict[str, ft.Chip] = {}      # the other active conditions
+        self.quick: dict[str, ft.Chip] = {}      # the always-there toggles
+        for key, label, icon in QUICK:
+            self.quick[key] = ft.Chip(
+                label=ft.Text(label, theme_style=ft.TextThemeStyle.LABEL_MEDIUM), leading=ft.Icon(icon, size=14), show_checkmark=False,
+                selected_color=alpha(Palette.SUCCESS if key == "tailwind" else Palette.SECONDARY, 0.3), visual_density=ft.VisualDensity.COMPACT,
+                tooltip=SIDE_TIPS[key], on_select=lambda _e, key=key: self.toggle(key),
+            )
         self._drawn: tuple | None = None
         self.update_from()
 
@@ -188,8 +200,20 @@ class SideConditionsRow(ft.Row):
             return False
         self._drawn = key
         self.chips = {}
+        quick: list[ft.Control] = []
+        for k, _label, _icon in QUICK:
+            chip = self.quick[k]
+            on = bool(getattr(c, k))
+            chip.selected = on
+            chip.label.color = Palette.ON_SURFACE if on else Palette.ON_SURFACE_VARIANT
+            chip.label.weight = ft.FontWeight.W_700 if on else ft.FontWeight.W_500
+            chip.leading.color = (Palette.SUCCESS if k == "tailwind" else Palette.SECONDARY) if on else Palette.ON_SURFACE_VARIANT
+            if any(k == key for key, _l in labels):     # Helping Hand only in Doubles
+                quick.append(chip)
         chips: list[ft.Control] = []
         for k, label in labels:
+            if k in self.quick:
+                continue
             if getattr(c, k):
                 chip = ft.Chip(label=ft.Text(label, theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE, weight=ft.FontWeight.W_600),
                                bgcolor=alpha(Palette.SUCCESS if k == "tailwind" else Palette.SECONDARY, 0.25), tooltip=SIDE_TIPS.get(k),
@@ -202,13 +226,14 @@ class SideConditionsRow(ft.Row):
                            on_click=lambda _e: self.add_spikes(), delete_icon_tooltip="Remove", on_delete=lambda _e: self.store.set_side_conditions(self.side, spikes=0))
             self.chips["spikes"] = chip
             chips.append(chip)
-        items = [ft.PopupMenuItem(content=ft.Text(label, tooltip=SIDE_TIPS.get(k)), on_click=lambda _e, k=k: self.toggle(k)) for k, label in labels if not getattr(c, k)]
+        items = [ft.PopupMenuItem(content=ft.Text(label, tooltip=SIDE_TIPS.get(k)), on_click=lambda _e, k=k: self.toggle(k))
+                 for k, label in labels if not getattr(c, k) and k not in self.quick]
         if c.spikes < 3:
             items.append(ft.PopupMenuItem(content=ft.Text("Spikes (add a layer)" if c.spikes else "Spikes"), on_click=lambda _e: self.add_spikes()))
         self.add.items = items
         self.add.visible = bool(items)
-        self.controls = [self._title, *chips, self.add]
+        self.controls = [self._title, *quick, *chips, self.add]
         return True
 
 
-__all__ = ["FieldBar", "ROOMS", "SideConditionsRow", "pill"]
+__all__ = ["FieldBar", "QUICK", "ROOMS", "SideConditionsRow", "pill"]

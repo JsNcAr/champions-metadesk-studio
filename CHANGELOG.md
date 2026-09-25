@@ -21,8 +21,8 @@ for the headings and style.
 
 ### Changed
 - **The calculator is laid out as a versus screen.** Your team and the rival team share one
-  line, yours on the Attacker's side and theirs on the Defender's, each member tinted by its
-  matchup (click: load on its side, right-click: the other side). A one-line field bar
+  line, each on its own card over its Pokémon's column (green for yours, red for the rival's,
+  "VS" between them), each member tinted by its matchup (click: load on its side, right-click: the other side). A one-line field bar
   follows, then the two Pokémon side by side, now about 490 px wide each instead of 360, so
   damage and KO text are no longer cut. The two stay side by side on laptop-sized windows
   instead of stacking below 1280 px, and at 1440×900 both show all four moves without
@@ -31,8 +31,9 @@ for the headings and style.
     tabs: Moves, Build (nature, stat points and a small radar) and Stages (the tab counts
     what is set). Alt+1 / 2 / 3 switch both columns; the search opens from the name (Ctrl+F).
   - The field bar shows only what is set: Singles/Doubles, then Weather, Terrain and Rooms
-    menus. Weather or terrain set by an ability names it. Each side's conditions (Tailwind,
-    screens, Helping Hand, hazards…) sit under that side's Pokémon, added with + Condition.
+    menus. Weather or terrain set by an ability names it. Each side's conditions sit in that
+    side's column above the tabs: **Tailwind** and **Helping Hand** (Doubles) are one-click
+    toggles, the rest (screens, Protect, hazards…) are added with + Condition.
   - Opponents, the rival team's details and the Box share one side panel with tabs; it
     closes from its header or Ctrl+\ and starts closed on narrower windows. The rival team's
     picker and every rival action (team preview, load, presets, Team vs team) moved to the

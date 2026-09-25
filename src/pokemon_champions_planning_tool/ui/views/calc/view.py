@@ -15,7 +15,7 @@ from ...components import PageHeader
 from ...context import AppContext
 from ...format import shortcut
 from ...tasks import Debouncer, is_mounted, safe_update
-from ...theme import Accent, Layout, Space
+from ...theme import Accent, Layout, Palette, Space
 from ..team.dialogs.item_picker import ItemPickerDialog
 from ..team.dialogs.move_picker import MovePickerDialog
 from .benchmarks import STAT_SHORT
@@ -98,10 +98,17 @@ class CalcView(ft.Column):
         )
         self._jobs = (self.sweep_job, self.team_job, self.rivals_job)
 
-        self._strips = ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.team_strip, self.rival_strip])
+        # The two teams on their cards over their Pokémon's columns, a "VS" badge between them.
+        self._strips = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.team_strip, self.rival_strip])
+        self._vs = ft.Container(
+            content=ft.Text("VS", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, weight=ft.FontWeight.W_800, color=Palette.ON_SURFACE),
+            width=34, height=34, alignment=ft.Alignment.CENTER, shape=ft.BoxShape.CIRCLE,
+            bgcolor=Palette.SURFACE_3, border=ft.Border.all(1, Palette.OUTLINE),
+        )
+        self._teams = ft.Stack(alignment=ft.Alignment.CENTER, controls=[self._strips, self._vs])
         self._pokemon_row = ft.ResponsiveRow(spacing=Space.MD, run_spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.START, controls=[self.attacker, self.defender])
         self._columns = ft.Column(spacing=Space.MD, expand=True, scroll=ft.ScrollMode.AUTO, controls=[self._pokemon_row])
-        self._main = ft.Column(spacing=Space.SM, expand=True, controls=[self._strips, self.field, self._columns])
+        self._main = ft.Column(spacing=Space.SM, expand=True, controls=[self._teams, self.field, self._columns])
         self._wide = ft.Row(spacing=Space.MD, vertical_alignment=ft.CrossAxisAlignment.STRETCH, expand=True, controls=[self._main, self.side_panel])
         self._stack = ft.Column(spacing=Space.MD, scroll=ft.ScrollMode.AUTO, controls=[])
         self._host = ft.Container(content=self._wide, expand=True)
@@ -614,13 +621,13 @@ class CalcView(ft.Column):
             for page in (self.sweep, self.rivals_panel, self.box):
                 page.set_scrolling(not narrow)
             if narrow:
-                self._stack.controls = [self._strips, self.field, self._pokemon_row, self.side_panel]
+                self._stack.controls = [self._teams, self.field, self._pokemon_row, self.side_panel]
                 self._host.content = self._stack
                 self.side_panel.width = None
                 self.side_panel.expand = False
             else:
                 self._columns.controls = [self._pokemon_row]
-                self._main.controls = [self._strips, self.field, self._columns]
+                self._main.controls = [self._teams, self.field, self._columns]
                 self._wide.controls = [self._main, self.side_panel]
                 self._host.content = self._wide
         side = 0
@@ -632,6 +639,7 @@ class CalcView(ft.Column):
         cell = {"xs": 6} if room >= TWO_COLUMNS_MIN else {"xs": 12}
         for control in (self.attacker, self.defender, self.team_strip, self.rival_strip):
             control.col = dict(cell)
+        self._vs.visible = cell == {"xs": 6}       # only between the two, not over a stacked card
 
     def handle_key(self, e) -> bool:
         key = (e.key or "").lower()

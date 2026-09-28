@@ -1,8 +1,10 @@
 """A move card: the move slot and its result in one type-coloured card.
 
 Damaging moves show base power, the type multiplier, the damage range with a bar and the KO
-text; clicking expands the description, the sixteen rolls, recoil/recovery and Copy. Status
-moves with a known effect get an "Activate" toggle that applies it to the calculation.
+text; clicking expands the description, the sixteen rolls, recoil/recovery, the bulk and power
+benchmarks and Copy. Status moves with a known effect get an "Activate" toggle that applies it
+to the calculation. In Doubles a spread move says it hits two targets (×0.75); one click
+switches it to a single target (one foe left).
 """
 
 from __future__ import annotations
@@ -13,7 +15,15 @@ import flet as ft
 
 from ...components import StatusChip
 from ...theme import IconSize, Palette, Radius, Space, alpha, type_color
+from ...tasks import safe_update
+from . import bench_view
+from .benchmarks import Benchmarks
 from .state import MoveResult
+
+TARGETS_TIP = {
+    2: "Spread move: hits both foes, ×0.75 damage each. Click for a single target (one foe fainted or protected).",
+    1: "Spread move on a single target: full damage. Click to hit both foes again (×0.75).",
+}
 
 CATEGORY_ICONS = {"physical": ft.Icons.FITNESS_CENTER, "special": ft.Icons.AUTO_AWESOME, "status": ft.Icons.CHANGE_CIRCLE_OUTLINED}
 
@@ -51,45 +61,61 @@ class DamageBar(ft.Stack):
 
 
 class MoveCard(ft.Container):
-    def __init__(self, index: int, *, on_pick: Callable[[int], None], on_crit: Callable[[int], None], on_activate: Callable[[int], None], on_copy: Callable[[str], None]) -> None:
+    def __init__(self, index: int, *, on_pick: Callable[[int], None], on_crit: Callable[[int], None], on_activate: Callable[[int], None], on_copy: Callable[[str], None],
+                 on_targets: Callable[[int], None] | None = None, on_expand: Callable[[int], None] | None = None,
+                 on_apply: Callable[[str, dict[str, int]], None] | None = None) -> None:
         super().__init__()
         self.index = index
         self.result: MoveResult | None = None
         self.expanded = False
         self._drawn: tuple | None = None
         self._on_copy = on_copy
+        self._on_expand = on_expand
+        self._on_apply = on_apply          # ("mine" | "theirs", points) from a benchmark
+        self.benchmarks: Benchmarks | None = None
+        self.bench_key: str | None = None  # the state the benchmarks were asked for
+        self._bench_state = "idle"         # "idle" | "loading" | "ready"
+        self._bench_names = ("You", "They")
         muted = Palette.ON_SURFACE_VARIANT
-        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_LARGE, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._name = ft.Text(f"Move {index + 1}…", theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.DISABLED, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._category = ft.Icon(ft.Icons.ADD, size=IconSize.SM, color=Palette.DISABLED)
         self._bp = StatusChip("", "neutral")
         self._bp.visible = False
         self._eff = StatusChip("", "neutral")
         self._eff.visible = False
+        self._targets_label = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE, weight=ft.FontWeight.W_600)
+        self._targets_icon = ft.Icon(ft.Icons.GROUPS_2_OUTLINED, size=13, color=Palette.ON_SURFACE_VARIANT)
+        self._targets = ft.Container(
+            content=ft.Row(spacing=2, tight=True, controls=[self._targets_icon, self._targets_label]),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=1), border_radius=Radius.PILL, border=ft.Border.all(1, Palette.OUTLINE),
+            ink=True, visible=False, on_click=lambda _e: on_targets(self.index) if on_targets else None,
+        )
         self._effect = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, visible=False, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self._pct = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.W_700, color=muted, text_align=ft.TextAlign.RIGHT)
-        self._ko = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=muted, text_align=ft.TextAlign.RIGHT, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        self._pct = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_SMALL, weight=ft.FontWeight.W_700, color=muted, text_align=ft.TextAlign.RIGHT, max_lines=1)
+        self._ko = ft.Text("", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=muted, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, visible=False)
         self._bar = DamageBar()
         self._bar.visible = False
         self._activate = ft.Chip(label=ft.Text("Activate"), selected=False, show_checkmark=True, visible=False, on_select=lambda _e: on_activate(self.index))
-        self._crit = ft.IconButton(icon=ft.Icons.FLASH_ON_OUTLINED, selected_icon=ft.Icons.FLASH_ON, icon_size=IconSize.SM, selected=False, tooltip="Critical hit",
-                                   icon_color=muted, selected_icon_color=Palette.PRIMARY, on_click=lambda _e: on_crit(self.index), visible=False)
-        self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, icon_size=IconSize.SM, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index))
+        small = {"icon_size": 16, "width": 28, "height": 28, "padding": 0}
+        self._crit = ft.IconButton(icon=ft.Icons.FLASH_ON_OUTLINED, selected_icon=ft.Icons.FLASH_ON, selected=False, tooltip="Critical hit",
+                                   icon_color=muted, selected_icon_color=Palette.PRIMARY, on_click=lambda _e: on_crit(self.index), visible=False, **small)
+        self._edit = ft.IconButton(icon=ft.Icons.EDIT_OUTLINED, tooltip="Choose move", icon_color=muted, on_click=lambda _e: on_pick(self.index), **small)
         self._details = ft.Column(spacing=Space.SM, tight=True, visible=False, controls=[])
         self._name.expand = True
-        # The second line (BP, effectiveness, damage, KO) only exists for a filled slot, so an
-        # empty slot is a single slim "+ Move 1…" row.
-        self._info = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, visible=False, controls=[
-            ft.Row(spacing=Space.XS, tight=True, wrap=True, expand=True, controls=[self._bp, self._eff, self._effect]),
-            ft.Column(spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.END, controls=[self._pct, self._ko]),
-        ])
-        body = ft.Column(spacing=4, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
-            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._category, self._name, self._activate, self._crit, self._edit]),
-            self._info,
+        # One line carries the move and its result: name, BP / type / targets chips, damage,
+        # crit, edit. Under it the KO text and a thin bar; an empty slot is just "+ Move 1…".
+        self._info = ft.Row(spacing=Space.XS, tight=True, visible=False, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[self._bp, self._eff, self._targets])
+        self._effect.expand = True
+        body = ft.Column(spacing=2, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+            ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                   controls=[self._category, self._name, self._info, self._effect, self._pct, self._activate, self._crit, self._edit]),
+            self._ko,
             self._bar,
             self._details,
         ])
         self.content = body
-        self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
+        self.padding = ft.Padding.only(left=Space.SM, right=Space.XS, top=2, bottom=Space.XS)
         self.border_radius = Radius.SM
         self.bgcolor = Palette.SURFACE_3
         self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
@@ -123,7 +149,9 @@ class MoveCard(ft.Container):
             self._name.color = Palette.DISABLED
             self._category.icon, self._category.color = ft.Icons.ADD, Palette.DISABLED
             self._info.visible = self._bp.visible = self._eff.visible = self._effect.visible = self._bar.visible = self._activate.visible = self._crit.visible = False
+            self._targets.visible = False
             self._pct.value = self._ko.value = ""
+            self._ko.visible = False
             self.bgcolor = Palette.SURFACE_3
             self._set_border(Palette.OUTLINE, Palette.OUTLINE_VARIANT)
             self._collapse()
@@ -146,6 +174,13 @@ class MoveCard(ft.Container):
         self._activate.label = ft.Text("Active" if active else "Activate")
         self._effect.visible = bool(effect) or (is_status and result is not None)
         self._effect.value = effect or ("Status move" if is_status else "")
+        targets = result.targets if result is not None else None
+        self._targets.visible = targets is not None
+        if targets is not None:
+            self._targets_label.value = "×0.75" if targets == 2 else "×1"
+            self._targets_icon.icon = ft.Icons.GROUPS_2_OUTLINED if targets == 2 else ft.Icons.PERSON_OUTLINE
+            self._targets.tooltip = TARGETS_TIP[targets]
+            self._targets.bgcolor = alpha(Palette.SECONDARY, 0.2) if targets == 2 else None
         if result is None or not result.ok:
             self._bp.visible = self._eff.visible = self._bar.visible = False
             if result is not None and result.error and not is_status and effect is None:
@@ -154,6 +189,7 @@ class MoveCard(ft.Container):
                 self._ko.value = result.error
             else:
                 self._pct.value = self._ko.value = ""
+            self._ko.visible = bool(self._ko.value)
             self._collapse()
             return
         self._bp.visible = result.bp is not None
@@ -166,6 +202,7 @@ class MoveCard(ft.Container):
         self._pct.color = damage_colour(result.max_pct)
         self._ko.value = result.ko_text or f"{result.min_dmg}–{result.max_dmg} HP"
         self._ko.color = Palette.ERROR if "OHKO" in (result.ko_text or "") else muted
+        self._ko.visible = True
         self._bar.visible = True
         self._bar.set_range(result.min_pct, result.max_pct)
         if self.expanded:
@@ -175,6 +212,9 @@ class MoveCard(ft.Container):
         self.expanded = False
         self._details.visible = False
         self._details.controls = []
+        self._bench_state = "idle"
+        self.benchmarks = None
+        self.bench_key = None
 
     def _fill_details(self) -> None:
         r = self.result
@@ -188,18 +228,37 @@ class MoveCard(ft.Container):
             lines.append(ft.Text(r.recoil, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.WARNING))
         if r.recovery:
             lines.append(ft.Text(r.recovery, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.SUCCESS))
+        if self._on_expand is not None:
+            lines.append(self._bench_block())
         lines.append(ft.Row(alignment=ft.MainAxisAlignment.END, controls=[ft.TextButton("Copy", icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: self._on_copy(r.description))]))
         self._details.controls = lines
+
+    # -- benchmarks ----------------------------------------------------------------------------
+
+    def set_benchmarks(self, value: Benchmarks | None, *, loading: bool = False, names: tuple[str, str] = ("You", "They")) -> None:
+        """The view's answer for this card (or that it is on its way); redraws the details.
+        ``names`` are the attacker's and the target's, for the lines."""
+        self.benchmarks = value
+        self._bench_state = "loading" if loading else "ready"
+        self._bench_names = names
+        if self.expanded:
+            self._fill_details()
+            safe_update(self._details)
+
+    def _bench_block(self) -> ft.Control:
+        title = bench_view.heading()
+        if self._bench_state != "ready":
+            return bench_view.loading(title)
+        mine, theirs = self._bench_names
+        return ft.Column(spacing=2, tight=True, controls=[title, *bench_view.rows(self.benchmarks, mine=mine, theirs=theirs, on_apply=self._on_apply)])
 
     def toggle(self) -> None:
         self.expanded = not self.expanded
         if self.expanded:
+            if self._on_expand is not None:
+                self._on_expand(self.index)     # may answer at once from the cache
             self._fill_details()
         else:
             self._details.controls = []
         self._details.visible = self.expanded
-        try:
-            if self.page is not None:
-                self.update()
-        except RuntimeError:
-            pass
+        safe_update(self)

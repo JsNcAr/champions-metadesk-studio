@@ -20,6 +20,7 @@ from .....services.sprite_cache_service import resolve_sprite_src
 from ....components import Sprite
 from ....components.banner import InlineBanner
 from ....theme import Palette, Radius, Space
+from ....tasks import safe_update
 from ..rival_store import MAX_MEMBERS, rival_from_species, rivals_from_text_or_url
 from ..rivals_panel import assumed_note
 from ..state import RivalMember, RivalTeam
@@ -220,7 +221,7 @@ class BattleDialog(ft.AlertDialog):
         self._save_row.visible = self._mode != "presets"      # a preset is already saved
         self._save.disabled = not has or not (self._name.value or "").strip()
         if update:
-            self._safe_update(self)
+            safe_update(self)
 
     def _suggest_name(self, name: str) -> None:
         if name and not (self._name.value or "").strip():
@@ -248,7 +249,7 @@ class BattleDialog(ft.AlertDialog):
             for i, s in enumerate(matches)
         ]
         self._suggestions.visible = bool(matches)
-        self._safe_update(self)
+        safe_update(self)
 
     def _submit(self, slot: _Slot, text: str) -> None:
         if slot.member is not None and text == slot.name:
@@ -318,7 +319,7 @@ class BattleDialog(ft.AlertDialog):
 
         def failed(exc: BaseException) -> None:
             self._banner.show(f"Could not read the team: {exc}", "error")
-            self._safe_update(self)
+            safe_update(self)
 
         self._run(lambda: loader(team_id), on_done=done, on_error=failed, spinner=self._spinner)
 
@@ -335,7 +336,7 @@ class BattleDialog(ft.AlertDialog):
         text = (self._paste.value or "").strip()
         if not text:
             self._banner.show("Paste a team or a Poképaste link first.", "info")
-            self._safe_update(self)
+            safe_update(self)
             return
         self._banner.hide()
 
@@ -345,7 +346,7 @@ class BattleDialog(ft.AlertDialog):
 
         def failed(exc: BaseException) -> None:
             self._banner.show(f"Could not read the team: {exc}", "error")
-            self._safe_update(self)
+            safe_update(self)
 
         catalogs = self.calc_store.catalogs
         self._run(lambda: rivals_from_text_or_url(text, catalogs), on_done=done, on_error=failed, busy=[self._read], spinner=self._spinner)
@@ -402,17 +403,9 @@ class BattleDialog(ft.AlertDialog):
             return
         if not name:
             self._name.error = "Name the preset first"
-            self._safe_update(self._name)
+            safe_update(self._name)
             return
         self._on_start(members, self._source(), name)
-
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass
 
 
 __all__ = ["BattleDialog", "MODES", "set_line"]

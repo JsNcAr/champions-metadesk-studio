@@ -1,5 +1,6 @@
-"""Right rail: every Champions species classified against the attacker (Threat, Wall, Neutral,
-Mitigated, Crushed), searchable, with tournament sets for their moves."""
+"""The side panel's Opponents tab: every Champions species classified against the attacker
+(Threat, Wall, Neutral, Mitigated, Crushed), searchable, with tournament sets for their moves.
+Its controls take two lines: search with an options menu, and the classes as count pills."""
 
 from __future__ import annotations
 
@@ -11,17 +12,17 @@ from ....domain.pokemon_identity import get_pokemon_sprite_url
 from ...components import Sprite, StatusChip
 from ...components.help_button import help_button
 from ...components.inputs import SEARCH_FIELD_STYLE
-from ...components.section import SectionHeader
-from ...tasks import Debouncer, is_mounted
+from ...tasks import Debouncer, is_mounted, safe_update
 from ...theme import Palette, Radius, Space
-from .classes import CLASS_BG, CLASS_BORDER, CLASS_HELP, CLASS_TONES
+from .classes import CLASS_BG, CLASS_BORDER, CLASS_COLOR, CLASS_HELP, CLASS_TONES
+from .damage_line import damage_line, speed_mark
 from .state import SWEEP_CLASSES, SweepEntry
 from .store import CalcStore
 
 SWEEP_HELP: tuple[str, ...] = (
     "Every Champions species against your Attacker, with their most used tournament set when \"Tournament sets\" is on. "
-    "Click one to load it as the Defender.",
-    "The colours, from your side:",
+    "Click one to load it as the Defender. The sliders menu beside the search sorts the list and switches tournament sets on or off.",
+    "The coloured pills filter by class (click again for everyone); the colours, from your side:",
     *(f"{label}: {CLASS_HELP[key]}." for key, label in SWEEP_CLASSES),
     "Spe ▲ means you move first (Tailwind and Trick Room included); ▼ that they do.",
 )
@@ -34,26 +35,16 @@ class SweepCard(ft.Container):
     def __init__(self, entry: SweepEntry, *, on_pick: Callable[[SweepEntry], None]) -> None:
         super().__init__()
         e = entry
-        yours = f"{e.your_best.name} {e.your_best.min_pct:g}–{e.your_best.max_pct:g}%" if e.your_best else "no damage"
-        theirs_base = f"{e.their_best.name} {e.their_best.min_pct:g}–{e.their_best.max_pct:g}%" if e.their_best else ("no damaging set" if e.preset else "moves unknown")
-        theirs = f"{theirs_base} · {e.usage_count} teams" if e.usage_count > 0 else theirs_base
-        # Same convention as the panels' speed chip: ▲ = you move first.
-        speed = ft.Text(f"Spe {e.speed} {'▲' if e.faster else '▼'}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.SUCCESS if e.faster else Palette.ERROR,
-                        tooltip="You move first" if e.faster else "They move first")
-        # The class chip shares the name's line rather than taking a column of its own:
-        # on a 270px list that column left the name a few letters ("Incin…").
+        # Name, speed and class on one line; under it each side's best hit as a small gauge.
         self.name = ft.Text(e.name, theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
         self.klass_chip = StatusChip(dict(SWEEP_CLASSES)[e.klass], CLASS_TONES[e.klass], tooltip=CLASS_HELP[e.klass])  # type: ignore[arg-type]
         self.sprite = Sprite(get_pokemon_sprite_url(e.canonical_id), size=36)
         self.content = ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
             self.sprite,
-            ft.Column(spacing=1, tight=True, expand=True, controls=[
-                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.name, self.klass_chip]),
-                ft.Row(spacing=Space.XS, controls=[
-                    speed,
-                    ft.Text(f"You: {yours}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
-                ]),
-                ft.Text(f"Them: {theirs}", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+            ft.Column(spacing=2, tight=True, expand=True, controls=[
+                ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.name, speed_mark(e.speed, e.faster), self.klass_chip]),
+                damage_line("you", e.your_best, "no damage"),
+                damage_line("them", e.their_best, "no damaging set" if e.preset else "moves unknown"),
             ]),
         ])
         self.padding = ft.Padding.symmetric(horizontal=Space.SM, vertical=Space.XS)
@@ -73,39 +64,45 @@ class SweepPanel(ft.Container):
         self.query = ""
         self.klass: str | None = None
         self._limit = _INITIAL_LIMIT
-        self._presets = ft.Switch(label="Tournament sets", value=store.sweep_presets, tooltip="Give each opponent its four most used moves from the stored rosters",
-                                  on_change=lambda e: store.set_sweep_presets(bool(e.control.value)))
-        self._sort = ft.Dropdown(
-            label="Sort by",
-            dense=True,
-            text_size=12,
-            options=self._sort_options(),
-            value=self._current_sort_value(),
-            tooltip="Sort rival opponents",
-            on_select=lambda e: self._on_sort_changed(e.control.value),
-        )
-        self._search = ft.TextField(hint_text="Search opponent…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, on_change=lambda e: self._query_typed(e.control.value or ""))
+        # One line of controls: search, then an options menu (sort, tournament sets) and help.
+        self.sort_value = self._current_sort_value()
+        self._options = ft.PopupMenuButton(icon=ft.Icons.TUNE, icon_size=20, tooltip="Sort and tournament sets", items=[])
+        self._search = ft.TextField(hint_text="Search…", dense=True, prefix_icon=ft.Icons.SEARCH, **SEARCH_FIELD_STYLE, expand=True,
+                                    on_change=lambda e: self._query_typed(e.control.value or ""))
         self._query_later: Debouncer | None = None
-        self._chips: dict[str | None, ft.Chip] = {}
-        chips: list[ft.Control] = []
+        # The classes as small count pills on one line; their names are in the tooltips (and
+        # on every card), the colours match the cards.
+        self._chips: dict[str | None, ft.Container] = {}
+        self._chip_labels: dict[str | None, ft.Text] = {}
         for key, label in ((None, "All"), *SWEEP_CLASSES):
-            chip = ft.Chip(label=ft.Text(label), selected=key is None, show_checkmark=False, on_select=lambda _e, key=key: self._set_class(key))
-            self._chips[key] = chip
-            chips.append(chip)
-        self._chip_row = ft.Row(spacing=Space.XS, wrap=True, controls=chips)
-        self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
-        self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
+            text = ft.Text(label if key is None else "", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE)
+            controls: list[ft.Control] = [text] if key is None else [
+                ft.Container(width=8, height=8, border_radius=4, bgcolor=CLASS_COLOR[key]), text]
+            self._chip_labels[key] = text
+            self._chips[key] = ft.Container(
+                content=ft.Row(spacing=4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls),
+                padding=ft.Padding.symmetric(horizontal=6, vertical=3), border_radius=Radius.PILL, ink=True,
+                tooltip="Every opponent" if key is None else f"{label}: {CLASS_HELP[key]}",
+                on_click=lambda _e, key=key: self._set_class(None if key == self.klass else key),
+            )
+        self._chip_row = ft.Row(spacing=3, run_spacing=Space.XS, wrap=True, controls=list(self._chips.values()))
+        self._status = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+        self._spinner = ft.ProgressRing(width=14, height=14, stroke_width=2, visible=False)
         self._list = ft.Column(spacing=Space.XS, tight=True, controls=[])
         self.content = ft.Column(spacing=Space.SM, controls=[
-            SectionHeader("Opponents", accent=accent, action=help_button("Opponents", SWEEP_HELP, tooltip="What the colours mean")),
-            self._presets, self._sort, self._search, self._chip_row,
-            ft.Row(spacing=Space.SM, controls=[self._spinner, self._status]),
+            ft.Row(spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                self._search, self._options, help_button("Opponents", SWEEP_HELP, tooltip="What the colours mean"),
+            ]),
+            self._chip_row,
+            ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self._spinner, self._status]),
             self._list,
         ])
         self.bgcolor = Palette.SURFACE_2
         self.border_radius = Radius.MD
         self.border = ft.Border.all(1, Palette.OUTLINE_VARIANT)
         self.padding = Space.MD
+        self._draw_options()
+        self._draw_chips()
 
     def set_scrolling(self, scrolling: bool) -> None:
         """In the wide layout the list scrolls under the fixed controls; stacked, it grows."""
@@ -114,21 +111,37 @@ class SweepPanel(ft.Container):
         self._list.tight = not scrolling
         self.content.tight = not scrolling
 
-    def _sort_options(self) -> list[ft.DropdownOption]:
+    def sort_options(self) -> list[tuple[str, str]]:
+        """(key, label) of every sort: usage per regulation, then name, speed and threat."""
         latest = self.store.latest_regulation()
-        regs = self.store.available_regulations()
-        opts = [
-            ft.DropdownOption(key="usage:latest", text=f"Usage (Latest: {latest})"),
-        ]
-        for r in regs:
-            if r != latest:
-                opts.append(ft.DropdownOption(key=f"usage:{r}", text=f"Usage ({r})"))
-        opts.extend([
-            ft.DropdownOption(key="name", text="Name (A–Z)"),
-            ft.DropdownOption(key="speed", text="Speed (Fastest)"),
-            ft.DropdownOption(key="threat", text="Threat Level"),
-        ])
-        return opts
+        opts = [("usage:latest", f"Usage (Latest: {latest})")]
+        opts += [(f"usage:{r}", f"Usage ({r})") for r in self.store.available_regulations() if r != latest]
+        return opts + [("name", "Name (A–Z)"), ("speed", "Speed (Fastest)"), ("threat", "Threat Level")]
+
+    def _draw_options(self) -> None:
+        def item(label: str, checked: bool, on_click) -> ft.PopupMenuItem:
+            return ft.PopupMenuItem(content=ft.Text(label, weight=ft.FontWeight.W_700 if checked else None),
+                                    icon=ft.Icons.CHECK if checked else None, on_click=lambda _e: on_click())
+
+        items = [ft.PopupMenuItem(content=ft.Text("SORT BY", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT), disabled=True)]
+        items += [item(label, key == self.sort_value, lambda key=key: self._on_sort_changed(key)) for key, label in self.sort_options()]
+        items += [ft.PopupMenuItem(), item("Tournament sets: each opponent's most used moves", self.store.sweep_presets,
+                                           lambda: self.store.set_sweep_presets(not self.store.sweep_presets))]
+        self._options.items = items
+        label = dict(self.sort_options()).get(self.sort_value, "")
+        self._options.tooltip = f"Sorted by {label}" + (" · tournament sets" if self.store.sweep_presets else " · no tournament sets")
+
+    def _draw_chips(self, counts: dict[str | None, int] | None = None) -> None:
+        for key, chip in self._chips.items():
+            on = key == self.klass
+            n = None if counts is None else counts.get(key, 0)
+            if key is None:
+                self._chip_labels[key].value = "All"      # the total is in the status line below
+            else:
+                self._chip_labels[key].value = str(n) if n is not None else "–"
+            chip.bgcolor = Palette.SURFACE_4 if on else Palette.SURFACE_3
+            chip.border = ft.Border.all(1, Palette.PRIMARY if on else Palette.OUTLINE_VARIANT)
+            self._chip_labels[key].weight = ft.FontWeight.W_700 if on else ft.FontWeight.W_500
 
     def _current_sort_value(self) -> str:
         if self.store.sweep_sort == "usage":
@@ -139,6 +152,7 @@ class SweepPanel(ft.Container):
         if not value:
             return
         self._limit = _INITIAL_LIMIT
+        self.sort_value = value
         if value.startswith("usage:"):
             reg = value.split(":", 1)[1]
             self.store.set_sweep_sort("usage", reg)
@@ -160,31 +174,26 @@ class SweepPanel(ft.Container):
         self.render()
 
     def _set_class(self, key: str | None) -> None:
+        """Show one class (a second click on it shows all again)."""
         self.klass = key
         self._limit = _INITIAL_LIMIT
-        for k, chip in self._chips.items():
-            chip.selected = k == key
         self.render()
 
     def set_busy(self, busy: bool) -> None:
         self._spinner.visible = busy
         if busy:
             self._status.value = "Computing every opponent…"
-        self._safe_update(self)
+        safe_update(self)
 
     def render(self) -> None:
         entries = self.store.sweep
-        self._presets.value = self.store.sweep_presets
-        cur_val = self._current_sort_value()
-        if self._sort.value != cur_val:
-            self._sort.value = cur_val
-        counts = {k: 0 for k, _l in SWEEP_CLASSES}
+        self.sort_value = self._current_sort_value()
+        self._draw_options()
+        counts: dict[str | None, int] = {k: 0 for k, _l in SWEEP_CLASSES}
         for e in entries:
             counts[e.klass] += 1
-        for key, chip in self._chips.items():
-            label = "All" if key is None else dict(SWEEP_CLASSES)[key]
-            n = len(entries) if key is None else counts[key]
-            chip.label = ft.Text(f"{label} {n}" if entries else label)
+        counts[None] = len(entries)
+        self._draw_chips(counts if entries else None)
         q = self.query.strip().lower()
         shown = [e for e in entries if (self.klass is None or e.klass == self.klass) and (not q or q in e.name.lower())]
         attacker = self.store.species("left")
@@ -212,12 +221,5 @@ class SweepPanel(ft.Container):
                         ),
                     )
                 )
-        self._safe_update(self)
+        safe_update(self)
 
-    @staticmethod
-    def _safe_update(control: ft.Control) -> None:
-        try:
-            if control.page is not None:
-                control.update()
-        except RuntimeError:
-            pass

@@ -43,6 +43,7 @@ from .state import (
     FieldState,
     MoveResult,
     PokemonState,
+    SPREAD_TARGETS,
     SideConditions,
     SweepEntry,
     TeamRating,
@@ -59,7 +60,6 @@ PREF_STATE = "calc.state"
 PREF_PRESETS = "calc.sweep_presets"
 PREF_SWEEP_SORT = "calc.sweep_sort"
 PREF_SWEEP_REGULATION = "calc.sweep_regulation"
-PREF_SECTIONS = "calc.sections"
 
 # Status moves the "Activate" toggle knows: stat stages on the user, field or side conditions,
 # or a status on the opponent. Values are applied on activation and reverted on deactivation.
@@ -160,9 +160,17 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
         (build_calc_move(name, catalogs, attacker_ability=a.ability or (a.abilities[0] if a.abilities else None), is_crit=bool(attacker.crit[index])) if name else None, name)
         for index, name in enumerate(attacker.moves)
     ]
+    spread = field.game_type == "Doubles"
     for index, (move, name) in enumerate(moves_iter):
         if not name:
             continue
+        targets = None
+        if spread and move is not None and move.target in SPREAD_TARGETS:
+            # The ratings and the sweep (``fast``) always assume both foes are on the field.
+            single = not fast and bool(attacker.single[index])
+            targets = 1 if single else 2
+            if single:
+                move = replace(move, target="normal")
         if move is None:
             out.append(MoveResult(index, name, None, None, 0, 0, 0.0, 0.0, (), "", "", error="Not in the move catalogue"))
             continue
@@ -174,7 +182,7 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
             eff = defensive_multiplier(result.move.type.lower(), [t.lower() for t in result.defender.types]) if result.move.type != "???" else 1.0
             lo, hi = result.range()
             if hi == 0:
-                out.append(MoveResult(index, name, result.move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error="No effect", bp=result.move_bp, effectiveness=eff))
+                out.append(MoveResult(index, name, result.move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error="No effect", bp=result.move_bp, effectiveness=eff, targets=targets))
                 continue
             if fast:
                 # The sweep shows a percentage range and a threat class, nothing else.
@@ -196,7 +204,7 @@ def run_side(attacker: PokemonState, defender: PokemonState, field: Field, catal
                 recoil = result.recoil()[1] or None
                 recovery = result.recovery()[1] or None
             mr = MoveResult(index, name, result.move.type, move.category, lo, hi, result.min_pct, result.max_pct, tuple(result.rolls), description, ko_text,
-                            recoil, recovery, bp=result.move_bp, effectiveness=eff)
+                            recoil, recovery, bp=result.move_bp, effectiveness=eff, targets=targets)
             out.append(replace(mr, ko_hits=hits_to_ko(mr)))
         except Exception as exc:  # noqa: BLE001 - one bad move must not hide the others
             out.append(MoveResult(index, name, move.type, move.category, 0, 0, 0.0, 0.0, (), "", "", error=f"{type(exc).__name__}: {exc}"))
@@ -279,6 +287,7 @@ class CalcStore:
         # Rival teams: which member the Defender came from, and matchups cached per pair.
         self.rival_link: tuple[str, int] | None = None
         self._pair_cache: dict[str, TeamRating] = {}
+        self._bench_cache: OrderedDict[str, Any] = OrderedDict()
 
     @property
     def format(self) -> Format:
@@ -490,7 +499,7 @@ class CalcStore:
         d_species = self.species(other)
         if a_species is None or d_species is None:
             return None
-        attacker = replace(self.state.side(side), moves=[move_name, None, None, None], crit=[False, False, False, False])
+        attacker = replace(self.state.side(side), moves=[move_name, None, None, None], crit=[False, False, False, False], single=[False, False, False, False])
         field = engine_field(self.state.field, attacker_is_left=(side == "left"))
         results = run_side(attacker, self.state.side(other), field, self.catalogs, self._calc, a_species, d_species)
         return results[0] if results else None
@@ -529,20 +538,49 @@ class CalcStore:
             self.set_pokemon(side, moves=moves)
         return filled
 
-    def section_open(self, name: str, default: bool = True) -> bool:
-        sections = self._prefs.get(PREF_SECTIONS, {}) if self._prefs is not None else {}
-        return bool(sections.get(name, default)) if isinstance(sections, dict) else default
+    # -- benchmarks --------------------------------------------------------------------------
 
-    def set_section_open(self, name: str, value: bool) -> None:
-        if self._prefs is None:
-            return
-        sections = self._prefs.get(PREF_SECTIONS, {})
-        sections = dict(sections) if isinstance(sections, dict) else {}
-        sections[name] = bool(value)
-        try:
-            self._prefs.set(PREF_SECTIONS, sections)
-        except Exception:  # noqa: BLE001 - a layout preference is a convenience
-            pass
+    def benchmark_key(self, side: str, index: int, state: CalcState | None = None) -> str:
+        return f"{side}|{index}|{(state or self.state).key()}"
+
+    def cached_benchmarks(self, side: str, index: int) -> tuple[bool, Any]:
+        """(found, value) from the cache, so the view knows whether to start a worker."""
+        key = self.benchmark_key(side, index)
+        if key in self._bench_cache:
+            return True, self._bench_cache[key]
+        return False, None
+
+    def benchmarks(self, side: str, index: int, state: CalcState | None = None) -> Any:
+        """KO and survival benchmarks for one move (``benchmarks.Benchmarks`` or None).
+
+        A few hundred fast engine calls: run it on a worker, passing the ``state`` taken on
+        the UI thread so a later edit cannot mix in. The answer is cached by that state.
+        """
+        from .benchmarks import benchmarks
+
+        state = state if state is not None else self.state
+        key = self.benchmark_key(side, index, state)
+        if key in self._bench_cache:
+            return self._bench_cache[key]
+        value = benchmarks(state, side, index, self.catalogs, self._calc)
+        self._bench_cache[key] = value
+        if len(self._bench_cache) > 32:
+            self._bench_cache.popitem(last=False)
+        return value
+
+    def apply_points(self, side: str, **points: int) -> CalcState:
+        """Set some stat points (a benchmark's answer), keeping the others; returns the
+        previous state for Undo."""
+        previous = self.state
+        new = dict(self.state.side(side).points)
+        for stat, value in points.items():
+            value = max(0, min(MAX_POINTS_PER_STAT, int(value)))
+            if value:
+                new[stat] = value
+            else:
+                new.pop(stat, None)
+        self.set_pokemon(side, points=new)
+        return previous
 
     def points_left(self, side: str) -> int:
         return MAX_POINTS_TOTAL - points_total(self.state.side(side).points)
@@ -652,6 +690,7 @@ class CalcStore:
         self.catalogs = catalogs
         self._cache.clear()
         self._pair_cache.clear()
+        self._bench_cache.clear()
         self._sweep_key = None
         self.invalidate_presets()
         self.invalidate_team_ratings()
@@ -761,12 +800,20 @@ class CalcStore:
             p = self.state.side(side)
         moves = list(p.moves)
         moves[index] = (name or "").strip() or None
-        self.set_pokemon(side, moves=moves)
+        single = list(p.single)
+        single[index] = False       # a new move starts on both targets
+        self.set_pokemon(side, moves=moves, single=single)
 
     def toggle_crit(self, side: str, index: int) -> None:
         crit = list(self.state.side(side).crit)
         crit[index] = not crit[index]
         self.set_pokemon(side, crit=crit)
+
+    def toggle_single_target(self, side: str, index: int) -> None:
+        """A spread move in Doubles: hit one target (full damage) or both (×0.75)."""
+        single = list(self.state.side(side).single)
+        single[index] = not single[index]
+        self.set_pokemon(side, single=single)
 
     def toggle_move_effect(self, side: str, index: int) -> bool:
         """Apply (or revert) a status move's known effect. Returns True when the move has one."""
@@ -889,7 +936,7 @@ class CalcStore:
     # PokemonState fields the sweep never reads: where the attacker came from, the notes on
     # its assumptions, and which status-move effects are applied (their result is already in
     # the boosts and the field). Changing only these must not re-run every opponent.
-    _SWEEP_IGNORES = ("source", "assumptions", "active")
+    _SWEEP_IGNORES = ("source", "assumptions", "active", "single")
 
     def sweep_key(self) -> str:
         d = self.state.to_dict()
@@ -1012,7 +1059,7 @@ class CalcStore:
     # -- team ratings ------------------------------------------------------------------------
 
     # The rival's fields that no rating reads (see ``_SWEEP_IGNORES``).
-    _RATING_IGNORES = ("source", "assumptions", "active")
+    _RATING_IGNORES = ("source", "assumptions", "active", "single")
 
     def team_rating_key(self) -> str:
         """What the team ratings depend on: the rival as set up, the field and the team."""
@@ -1235,4 +1282,4 @@ class CalcStore:
         self._notify(("results",))
 
 
-__all__ = ["CalcStore", "PREF_PRESETS", "PREF_SECTIONS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "matchup", "move_effect", "run", "run_side"]
+__all__ = ["CalcStore", "PREF_PRESETS", "PREF_STATE", "PREF_SWEEP_REGULATION", "PREF_SWEEP_SORT", "SELF_BOOSTS", "best_of", "engine_field", "engine_pokemon", "final_speed", "matchup", "move_effect", "run", "run_side"]

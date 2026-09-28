@@ -41,7 +41,7 @@ def is_mounted(control: ft.Control | None) -> bool:
         return False
 
 
-def _safe_update(control: ft.Control | None) -> None:
+def safe_update(control: ft.Control | None) -> None:
     """Update a control if it is mounted; a no-op otherwise."""
     if not is_mounted(control):
         return
@@ -69,18 +69,18 @@ def run_in_background(
     """
     for control in busy:
         control.disabled = True
-        _safe_update(control)
+        safe_update(control)
     if spinner is not None:
         spinner.visible = True
-        _safe_update(spinner)
+        safe_update(spinner)
 
     async def _finish(result: Any, exc: BaseException | None) -> None:
         for control in busy:
             control.disabled = False
-            _safe_update(control)
+            safe_update(control)
         if spinner is not None:
             spinner.visible = False
-            _safe_update(spinner)
+            safe_update(spinner)
         if exc is not None:
             if on_error is not None:
                 on_error(exc)

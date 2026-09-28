@@ -63,6 +63,11 @@ class Palette:
     SUCCESS_CONTAINER = "#0B3A24"
     ON_SUCCESS_CONTAINER = "#BBF7D0"
 
+    # The calculator's side panel: the damage you deal (teal) and the damage you take (orange),
+    # two hues apart from the class tints (green Crushed, red Threat, sky Mitigated).
+    HIT_DEALT = "#2DD4BF"
+    HIT_TAKEN = WARNING
+
     INFO = SECONDARY
     INFO_CONTAINER = SECONDARY_CONTAINER
     ON_INFO_CONTAINER = ON_SECONDARY_CONTAINER

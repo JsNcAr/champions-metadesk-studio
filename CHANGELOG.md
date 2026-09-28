@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
 ### Added
 - **Calc benchmarks.** An open move card, and the Build tab for the best move, say how many
   stat points a guaranteed OHKO or 2HKO needs (the lowest roll) and how many HP and defence

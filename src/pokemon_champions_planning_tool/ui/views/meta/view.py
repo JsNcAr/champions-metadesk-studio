@@ -19,8 +19,8 @@ from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Sp
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
 from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
-from .top_teams import TopTeam, consensus_paste
-from .top_teams_view import TopTeamsActions, TopTeamsPanel
+from .top_teams import TopTeam, TopTeamEntry, consensus_paste
+from .top_teams_view import TeamPreviewDialog, TopTeamsActions, TopTeamsPanel
 
 _SEARCH_DEBOUNCE_MS = 400
 # With groups collapsed (or as cards) a 20-team page shows only two or three events, so
@@ -579,7 +579,13 @@ class MetaView(ft.Column):
             save_rival_entry=self._save_rival,
             calc_vs_member=self._calc_vs_top_member,
             copy_team=self._copy_top_team,
+            preview_entry=self._preview_top_entry,
         )
+
+    def _preview_top_entry(self, entry: TopTeamEntry) -> None:
+        page = self.ctx.page
+        dialog = TeamPreviewDialog(entry, catalogs=self.ctx.catalogs, on_close=page.pop_dialog)
+        page.show_dialog(dialog)
 
     def _species_name(self, key: str) -> str:
         species = self.ctx.catalogs.species_for(key)

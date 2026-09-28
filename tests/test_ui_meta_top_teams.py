@@ -115,6 +115,26 @@ class TestRankedList(_Base):
         card.toggle()
         self.assertFalse(card._expanded)
 
+    def test_expanding_shows_the_most_common_moves_too(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        card.toggle()
+        spread_column = card._body.content.controls[0]
+        tyranitar_row = spread_column.controls[1]   # controls[0] is the "MOST COMMON SET" header row
+        moves_text = tyranitar_row.controls[1].controls[-1].value
+        self.assertIn("Rock Slide", moves_text)
+        self.assertIn("100%", moves_text, "run by every team in the seed")
+
+    def test_preview_shows_one_players_own_set_not_the_consensus(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        entry = card.team.teams[0]
+        card._actions.preview_entry(entry)
+        self.assertEqual(len(self.page.dialogs), 1)
+        dialog = self.page.dialogs[-1]
+        self.assertIn(entry.player_name, dialog.title.value)
+        serialise(dialog)
+        dialog.actions[0].on_click(None)
+        self.assertEqual(len(self.page.dialogs), 0)
+
     def test_import_the_most_common_set(self):
         card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
         got = []

@@ -15,7 +15,7 @@ from ...components import EmptyState, Sprite, StatusChip, skeleton_rows
 from ...format import absolute_time, plural
 from ...tasks import is_mounted, open_url
 from ...theme import IconSize, Motion, Palette, Radius, Space
-from .top_teams import TopTeam, TopTeamEntry
+from .top_teams import TopTeam, TopTeamEntry, TopTeamMember
 
 _PAGE_SIZE = 20
 _TEAM_LIST_LIMIT = 12
@@ -31,6 +31,7 @@ class TopTeamsActions:
     save_rival_entry: Callable[[TopTeamEntry], None]        # one player's team as a rival preset
     calc_vs_member: Callable[[TopTeam, int], None]          # the most common set's slot `index` as the Defender
     copy_team: Callable[[TopTeam], None]                    # the most common set as Showdown text
+    preview_entry: Callable[[TopTeamEntry], None]           # open one player's team in a read-only preview dialog
 
 
 def _member_sprite(key: str, catalogs) -> Sprite:
@@ -136,15 +137,18 @@ class TopTeamCard(ft.Container):
         spread_rows: list[ft.Control] = []
         for key in team.members:
             spread = team.spread.get(key)
-            caption_bits = [f"{name} {pct:.0%}" for name, pct in (spread.items if spread else ())]
-            caption = " · ".join(caption_bits) or "No item"
+            item_caption = " · ".join(f"{name} {pct:.0%}" for name, pct in (spread.items if spread else ())) or "No item"
             below = " · ".join(x for x in ((spread.ability if spread else None), (spread.nature if spread else None)) if x)
+            moves_caption = " · ".join(f"{name} {pct:.0%}" for name, pct in (spread.moves if spread else ()))
             spread_rows.append(ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 _member_sprite(key, self._catalogs),
                 ft.Column(spacing=1, tight=True, expand=True, controls=[
                     ft.Text(_member_name(key, self._catalogs), theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE),
-                    ft.Text(caption, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    ft.Text(below, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, visible=bool(below)),
+                    ft.Text(item_caption, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT,
+                            italic=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Text(below, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, italic=True, visible=bool(below)),
+                    ft.Text(moves_caption, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT,
+                            italic=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, visible=bool(moves_caption)),
                 ]),
             ]))
 
@@ -157,7 +161,11 @@ class TopTeamCard(ft.Container):
             padding=ft.Padding.only(left=Space.MD, right=Space.MD, bottom=Space.MD, top=Space.XS),
             content=ft.ResponsiveRow(spacing=Space.LG, run_spacing=Space.MD, controls=[
                 ft.Column(spacing=Space.XS, tight=True, col={"xs": 12, "lg": 6}, controls=[
-                    ft.Text("ITEM SPREAD", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
+                    ft.Row(spacing=4, tight=True, controls=[
+                        ft.Text("MOST COMMON SET", theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
+                        ft.Icon(ft.Icons.INFO_OUTLINE, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT,
+                                tooltip="The most used item, ability, nature and moves per slot across this group's teams — not necessarily how any single team built it. Italics mark a pick, not a rule."),
+                    ]),
                     *spread_rows,
                 ]),
                 ft.Column(spacing=Space.XS, tight=True, col={"xs": 12, "lg": 6}, controls=[
@@ -175,9 +183,50 @@ class TopTeamCard(ft.Container):
         ]
         if entry.pokepast_url:
             controls.append(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_size=IconSize.SM, tooltip="Open Poképaste", on_click=lambda e, url=entry.pokepast_url: open_url(e.control.page, url)))
+        controls.append(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED, icon_size=IconSize.SM, tooltip=f"Preview {entry.player_name}'s team", on_click=lambda _e: self._actions.preview_entry(entry)))
         controls.append(ft.IconButton(icon=ft.Icons.DOWNLOAD, icon_size=IconSize.SM, tooltip=f"Import {entry.player_name}'s team", on_click=lambda _e: self._actions.import_entry(entry)))
         controls.append(ft.IconButton(icon=ft.Icons.SPORTS_MMA_OUTLINED, icon_size=IconSize.SM, tooltip="Save as rival preset", on_click=lambda _e: self._actions.save_rival_entry(entry)))
         return ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
+
+
+def _member_preview_card(m: TopTeamMember, catalogs) -> ft.Control:
+    lines: list[ft.Control] = [ft.Text(_member_name(m.key, catalogs), theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE)]
+    bits = [x for x in (f"@ {m.item}" if m.item else None, m.ability, f"{m.nature.strip().title()} Nature" if m.nature else None) if x]
+    if bits:
+        lines.append(ft.Text(" · ".join(bits), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT))
+    if m.moves:
+        lines.append(ft.Text(" / ".join(m.moves), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=2))
+    return ft.Container(
+        content=ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.START, controls=[
+            _member_sprite(m.key, catalogs), ft.Column(spacing=2, tight=True, controls=lines, expand=True),
+        ]),
+        bgcolor=Palette.SURFACE_2, border_radius=Radius.SM, padding=Space.SM, col={"xs": 12, "sm": 6, "lg": 4},
+    )
+
+
+class TeamPreviewDialog(ft.AlertDialog):
+    """Read-only roster of one team in a lineup group: sprite, item, ability, nature and
+    moves per slot, straight from its own stored member rows — this is exactly what that
+    one player brought, not the group's most common set."""
+
+    def __init__(self, entry: TopTeamEntry, *, catalogs, on_close: Callable[[], None]) -> None:
+        super().__init__(modal=False, scrollable=False)
+        header_bits = [entry.standing_label, absolute_time(entry.event_date).split(",")[0]]
+        header_controls: list[ft.Control] = [
+            ft.Text(" · ".join(x for x in header_bits if x), theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT, expand=True),
+        ]
+        if entry.pokepast_url:
+            header_controls.append(ft.TextButton("Open Poképaste", icon=ft.Icons.OPEN_IN_NEW, on_click=lambda e, url=entry.pokepast_url: open_url(e.control.page, url)))
+        self.title = ft.Text(f"{entry.player_name} · {entry.tournament_name}", max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
+        self.content = ft.Container(
+            width=720,
+            content=ft.Column(spacing=Space.SM, tight=True, controls=[
+                ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=header_controls),
+                ft.ResponsiveRow(controls=[_member_preview_card(m, catalogs) for m in entry.members], spacing=Space.SM, run_spacing=Space.SM),
+            ]),
+        )
+        self.actions = [ft.TextButton("Close", on_click=lambda _e: on_close())]
+        self.actions_alignment = ft.MainAxisAlignment.END
 
 
 class TopTeamsPanel(ft.Column):
@@ -258,4 +307,4 @@ class TopTeamsPanel(ft.Column):
             self.update()
 
 
-__all__ = ["TopTeamCard", "TopTeamsActions", "TopTeamsPanel"]
+__all__ = ["TeamPreviewDialog", "TopTeamCard", "TopTeamsActions", "TopTeamsPanel"]

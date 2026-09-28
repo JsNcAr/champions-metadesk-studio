@@ -102,6 +102,7 @@ class MemberSpread:
     items: tuple[tuple[str, float], ...]      # (item name or "No item", share), most used first
     ability: str | None
     nature: str | None
+    moves: tuple[tuple[str, float], ...]      # up to 4 moves, most used first, (name, share of teams running it)
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,11 @@ def _spread(teams: Sequence[TopTeamEntry]) -> dict[str, MemberSpread]:
         items = tuple(sorted(((name, count / n) for name, count in item_counts.items()), key=lambda t: -t[1]))
         ability = Counter(m.ability for m in members if m.ability).most_common(1)
         nature = Counter(m.nature for m in members if m.nature).most_common(1)
-        out[key] = MemberSpread(key=key, items=items, ability=ability[0][0] if ability else None, nature=nature[0][0] if nature else None)
+        move_counts: Counter = Counter()
+        for m in members:
+            move_counts.update(m.moves)
+        moves = tuple((name, count / n) for name, count in move_counts.most_common(4))
+        out[key] = MemberSpread(key=key, items=items, ability=ability[0][0] if ability else None, nature=nature[0][0] if nature else None, moves=moves)
     return out
 
 

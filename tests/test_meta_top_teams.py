@@ -186,6 +186,16 @@ class TestGrouping(_RepoBase):
         self.assertEqual((team.best.placement, team.best.player_name), (1, "Winner"))
         self.assertAlmostEqual(team.top_cut, 0.5, msg="only the 1st-place finish is top 8")
 
+    def test_the_spread_carries_the_most_used_moves_with_their_share(self):
+        self.add_team(tyranitar_item="Choice Scarf", move_overrides=("Rock Slide", "Knock Off", "Ice Punch", "Low Kick"))
+        self.add_team(tyranitar_item="Choice Scarf", player="P2", move_overrides=("Rock Slide", "Knock Off", "Ice Punch", "Stone Edge"))
+        self.add_team(tyranitar_item="Life Orb", player="P3", move_overrides=("Rock Slide", "Knock Off", "Superpower", "Low Kick"))
+        result = group_teams(self.rows(), CATALOGS)
+        moves = dict(result.teams[0].spread["tyranitar"].moves)
+        self.assertAlmostEqual(moves["Rock Slide"], 1.0, msg="run by all 3 teams")
+        self.assertAlmostEqual(moves["Knock Off"], 1.0)
+        self.assertNotIn("Stone Edge", moves, "not among the top 4 moves by frequency")
+
     def test_trend_is_none_below_the_sample_floor(self):
         # A tournament's event_date is shared by every team recorded under it, so a
         # different date needs a different tournament id.

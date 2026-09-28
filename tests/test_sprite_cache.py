@@ -29,6 +29,13 @@ class TestSpriteCacheService(unittest.TestCase):
         self.assertIsNone(self.service.filename_for_url(""))
         self.assertIsNone(self.service.filename_for_url(None))
 
+    def test_filename_for_url_keeps_a_gif_extension(self) -> None:
+        # A Champions Mega with no gen5 icon falls back to the ani (.gif) sprite; the cache
+        # must not force a .png suffix onto it (that would save the wrong bytes under the
+        # wrong name and break matching it back up on the next launch).
+        ani_url = "https://play.pokemonshowdown.com/sprites/ani/staraptor-mega.gif"
+        self.assertEqual(self.service.filename_for_url(ani_url), "staraptor-mega.gif")
+
     def test_resolve_sprite_src_uncached_returns_url_and_enqueues(self) -> None:
         url = "https://play.pokemonshowdown.com/sprites/gen5/pikachu.png"
         with patch.object(self.service, "enqueue_download") as mock_enqueue:
@@ -102,6 +109,38 @@ class TestSpriteCacheService(unittest.TestCase):
         files_after, bytes_after = self.service.cache_stats()
         self.assertEqual(files_after, 0)
         self.assertEqual(bytes_after, 0)
+
+    def test_a_404ing_gen5_icon_self_heals_via_the_ani_fallback(self) -> None:
+        # No hard-coded species list: any gen5 URL that 404s automatically retries the
+        # ani directory in the background and, if that works, caches it under its own
+        # filename — ready to be served starting the *next* launch.
+        gen5_resp = MagicMock(status_code=404, content=b"")
+        ani_resp = MagicMock(status_code=200, content=b"gif-bytes")
+
+        def fake_get(url, **kwargs):
+            return ani_resp if "/sprites/ani/" in url else gen5_resp
+
+        with patch("requests.get", side_effect=fake_get):
+            self.service._download_worker(
+                "https://play.pokemonshowdown.com/sprites/gen5/staraptor-mega.png",
+                "staraptor-mega.png",
+            )
+
+        self.assertFalse((self.cache_path / "staraptor-mega.png").exists())
+        dest = self.cache_path / "staraptor-mega.gif"
+        self.assertTrue(dest.exists())
+        self.assertEqual(dest.read_bytes(), b"gif-bytes")
+        self.assertTrue(self.service.is_cached("staraptor-mega.gif"))
+
+    def test_a_self_healed_fallback_is_served_from_the_next_launch(self) -> None:
+        self.cache_path.mkdir(parents=True, exist_ok=True)
+        (self.cache_path / "staraptor-mega.gif").write_bytes(b"gif-bytes")
+        service = SpriteCacheService(cache_dir=self.cache_path, assets_dir=self.tmpdir.name)
+
+        url = "https://play.pokemonshowdown.com/sprites/gen5/staraptor-mega.png"
+        with patch.object(service, "enqueue_download") as mock_enqueue:
+            self.assertEqual(service.resolve_sprite_src(url), "/sprites/staraptor-mega.gif")
+            mock_enqueue.assert_not_called()
 
     def test_only_sprites_count_and_get_cleared(self) -> None:
         # A fresh checkout has only the tracked .gitkeep: Settings showed "1 sprite (0 KB)".

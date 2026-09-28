@@ -33,6 +33,12 @@ for the headings and style.
   options were only ever fetched by an Events reload, so a session remembering Top teams as
   the active tab left it stuck on "All regulations" — unpickable — until a visit to Events
   happened to run. It's now filled as soon as Meta opens, regardless of the active tab.
+- **Some official Pokémon Champions Megas showed no sprite.** Showdown's icon sprite set is
+  hand-drawn and lags behind newly added forms (Raichu-Mega-Y, Staraptor-Mega and others),
+  so those requests 404'd with nothing to fall back to. A failed sprite download now
+  automatically retries Showdown's `ani` directory (already has a static render for most of
+  these) and self-heals the local cache from the next launch — no hard-coded species list,
+  so it also covers whichever new Mega Champions adds next.
 
 ## [0.5.0] - 2026-09-28
 

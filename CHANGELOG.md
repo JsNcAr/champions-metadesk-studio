@@ -10,6 +10,17 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Meta › Top teams.** A second tab beside Events, ranking tournament teams by lineup: two
+  teams count as the same when they field the same six Pokémon and the same Mega Evolutions
+  (a Choice Scarf and a Life Orb Tyranitar are one team; a Mega Tyranitar is another). Each
+  row shows usage share, team count, best finish, top-cut rate and a 30-day trend arrow;
+  expanding it shows each slot's item/ability/nature spread and the teams behind it. Import
+  loads the group's most common set through the usual import flow, Save as rival adds it as
+  a rival preset, and the ⋮ menu offers a damage calc against any member or the raw Showdown
+  text. Shares Meta's filter bar and Box filtering; only lineups with at least two teams are
+  listed (one-offs still count toward the total).
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

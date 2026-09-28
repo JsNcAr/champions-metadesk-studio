@@ -115,6 +115,30 @@ class MetaSummary:
     synced_at: datetime | None
 
 
+@dataclass(frozen=True)
+class TopTeamMemberRow:
+    """One roster slot of a tournament team, detached — the raw material for grouping
+    teams by lineup (Top teams). Unlike ``MetaMemberRow`` this carries the held item,
+    ability, nature and moves, so a Mega can be told from its base species and a
+    group's most common set can be built without a second query."""
+
+    team_id: UUID
+    tournament_id: str
+    tournament_name: str
+    event_date: datetime
+    player_name: str
+    placement: int
+    standing_label: str
+    pokepast_url: str | None
+    showdown_text: str
+    slot: int
+    canonical_id: str
+    item: str | None
+    ability: str | None
+    nature: str | None
+    moves: tuple[str, ...]
+
+
 def _legal_lookup(names: list[str]) -> set[str]:
     """Species names and their base species, lowercased, for O(1) legality checks."""
     lookup: set[str] = set()
@@ -330,6 +354,33 @@ class TournamentService:
 
     def count_teams(self, **filters: Any) -> int:
         return self.repo.count_teams(**filters)
+
+    def team_members_for_filters(self, **filters: Any) -> list[TopTeamMemberRow]:
+        """Every roster slot of every team matching the same filters as
+        ``search_team_rows``, for Top teams to group by lineup."""
+        return [
+            TopTeamMemberRow(
+                team_id=team_id,
+                tournament_id=tournament_id,
+                tournament_name=tournament_name or tournament_id,
+                event_date=event_date,
+                player_name=player_name,
+                placement=placement,
+                standing_label=standing_label,
+                pokepast_url=pokepast_url,
+                showdown_text=showdown_text,
+                slot=slot,
+                canonical_id=canonical_id,
+                item=item or None,
+                ability=ability or None,
+                nature=nature or None,
+                moves=tuple(m for m in (moves or ()) if m),
+            )
+            for (
+                team_id, tournament_id, tournament_name, event_date, player_name, placement, standing_label,
+                pokepast_url, showdown_text, slot, canonical_id, item, ability, nature, moves,
+            ) in self.repo.team_members_for_filters(**filters)
+        ]
 
     def list_regulations(self) -> list[str]:
         return self.repo.list_regulations()

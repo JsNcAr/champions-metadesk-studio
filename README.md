@@ -59,7 +59,10 @@ Pokémon Company ([details](#license-and-disclaimer)).*
   custom formats (Settings) can switch on Terastallization.
 - **Meta.** Tournament teams synced in the background from Limitless and Victory Road, grouped
   by event, filterable by species, player, regulation, placement and how many of the members
-  you already own. Any team imports into the builder in one click.
+  you already own. Any team imports into the builder in one click. A **Top teams** tab ranks
+  lineups by usage share (same six Pokémon and Mega Evolutions counts as the same team), with
+  best finish, top-cut rate, a trend arrow and each slot's item spread; import the group's
+  most common set, save it as a rival preset, or damage-calc against any member.
 - **Calc.** Both directions at once, with each side's best hit and who moves first always in
   view. It covers the field (weather, terrain, rooms, screens, hazards and more), stat stages,
   statuses and critical hits, and classifies every Champions species against your attacker

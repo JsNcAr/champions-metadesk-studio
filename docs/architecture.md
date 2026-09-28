@@ -57,7 +57,11 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      Health, level-50 Stats, Types (defensive and offensive grids) and Roles tabs, each built
      when first shown; assign / item / move / import / export / compare dialogs.
   3. **Meta**: tournament teams as rows grouped by event with filters, paging and a
-     lazily parsed sheet; Import hands the paste to the team builder.
+     lazily parsed sheet; Import hands the paste to the team builder. A **Top teams** tab
+     shares the same filter bar and ranks lineups (six species plus Mega form) by usage
+     share, best finish, top-cut rate and a 30-day trend, with each slot's item spread and
+     the teams behind it; its most common set can be imported, saved as a rival preset,
+     damage-calced against or copied.
   4. **Calc**: bi-directional damage calculator laid out as a versus screen: your team strip
      and the rival team strip on one line, a one-line field bar (format, weather, terrain,
      rooms), then the two Pokémon, each with its best hit on the other in its header, a fixed
@@ -102,6 +106,7 @@ ui/
 - `ui/components/layout.py` (`SplitPane`): a view's main content beside its side panel above 1024px, the panel overlaid on the right below it; the shell compacts the rail to icons and tightens page padding below 1280px and forwards every resize to every built view (`handle_resize(width, height)`) and updates each one, since views are isolated; they also recompute their grid tile heights.
 - `ui/help.py`: the Help dialog (F1, Ctrl+/, the rail's "?" button) — keyboard shortcuts and the features that are not self-evident.
 - `ui/views/meta/store.py` also holds the owned box species (base ids, refreshed on BOX_CHANGED) and passes them with every query, so rows carry in-box marks and the Box filter counts against them in SQL.
+- `ui/views/meta/top_teams.py` (Flet-free): groups `TournamentService.team_members_for_filters` rows into lineups (`Catalogs.mega_for_item` decides whether a held item makes a slot count as its Mega) and builds each group's most common Showdown set; `store.top_teams()` caches the result by filters and catalogue.
 - `ui/preferences.py`: layout preferences (box layout and stats-on-cards, team summary panel and show-all-moves, meta layout and collapsed state) in `preferences.json` next to the database; in-memory in tests.
 - `ui/catalogs.py` also holds the move catalogue (`moves_by_id`, `learnsets`) with `move_legality()` used by the slot cards, the health checks, the move picker and the import preview.
 

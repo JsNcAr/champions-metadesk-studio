@@ -29,6 +29,10 @@ for the headings and style.
   while on the Top teams tab used to reach for the Events-only reload, briefly making the
   (empty or stale) events list or grid visible underneath it. The sync's "new teams" banner
   and its Refresh action now target whichever tab is actually on screen.
+- **The regulation filter now works from a straight landing on Top teams.** Its dropdown
+  options were only ever fetched by an Events reload, so a session remembering Top teams as
+  the active tab left it stuck on "All regulations" — unpickable — until a visit to Events
+  happened to run. It's now filled as soon as Meta opens, regardless of the active tab.
 
 ## [0.5.0] - 2026-09-28
 

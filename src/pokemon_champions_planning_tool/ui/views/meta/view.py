@@ -36,6 +36,7 @@ class MetaView(ft.Column):
         self.store = store or MetaStore()
         self._sync_store = SettingsStore()
         self._loading = False
+        self._header_loaded = False   # regulation options + the header count/caption: shared by both tabs
         self._groups: dict[str, EventGroup] = {}
         self._cards: dict[str, EventCard] = {}
         self.view_mode = "cards" if ctx.prefs.get("meta.view_mode") == "cards" else "rows"
@@ -206,6 +207,12 @@ class MetaView(ft.Column):
 
     def ensure_loaded(self) -> None:
         """Load on first visit or after invalidation; otherwise reuse the built rows."""
+        if not self._header_loaded:
+            # The regulation dropdown's options (and the header count/caption) are only
+            # ever filled here or by an events _reload() — without this, landing straight
+            # on Top teams (a remembered tab) leaves the dropdown showing "All regulations"
+            # alone, unable to pick anything else until an events reload happens to run.
+            self._refresh_header()
         if self._tab == "top_teams":
             self.top_teams_panel.reload()
             return
@@ -213,6 +220,7 @@ class MetaView(ft.Column):
             self._reload()
 
     def _refresh_header(self) -> None:
+        self._header_loaded = True
         summary = self.store.summary()
         self.header.set_count(summary.team_count)
         self.header.set_caption(f"{plural(summary.event_count, 'event')} · synced {relative_time(summary.synced_at)}")
@@ -222,6 +230,7 @@ class MetaView(ft.Column):
         ]
         if self.store.filters.regulation not in {"All", *regs}:
             self._regulation.value = "All"
+        self._update_self()
 
     # -- filters ------------------------------------------------------------------------
 

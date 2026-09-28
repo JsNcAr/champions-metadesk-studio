@@ -99,6 +99,21 @@ class TestTabSwitch(_Base):
         self.assertFalse(self.view._grid.visible)
         self.assertTrue(self.view.top_teams_panel.visible)
 
+    def test_landing_straight_on_top_teams_still_fills_the_regulation_dropdown(self):
+        # Regression: the regulation dropdown's options were only ever fetched from the
+        # events-only _reload(), so a session remembering "top_teams" as the active tab
+        # left it stuck on "All regulations" — unpickable — until a visit to Events ran.
+        _seed(self.sf, teams=2)
+        self.ctx.prefs.set("meta.tab", "top_teams")
+        view = MetaView(self.ctx, MetaStore(self.sf))   # starts on Top teams, never visited Events
+        self.assertEqual(view._tab, "top_teams")
+        keys = {o.key for o in view._regulation.options}
+        self.assertEqual(keys, {"All"}, "not fetched yet")
+
+        view.ensure_loaded()
+        keys = {o.key for o in view._regulation.options}
+        self.assertIn("Regulation M-C", keys)
+
     def test_the_tab_choice_is_remembered(self):
         self.view._set_tab("top_teams")
         self.assertEqual(self.ctx.prefs.get("meta.tab"), "top_teams")

@@ -79,6 +79,26 @@ class TestTabSwitch(_Base):
         self.view._set_tab("events")
         self.assertFalse(self.view.top_teams_panel.visible)
 
+    def test_a_background_sync_while_on_top_teams_never_reveals_the_events_list(self):
+        # Regression: a sync landing (META_SYNCED) used to reach for the events-only
+        # _reload(), which set _list.visible/_grid.visible unconditionally — surfacing a
+        # sliver of the Events tab under the Top teams panel.
+        _seed(self.sf, teams=2)
+        self.view._set_tab("top_teams")
+        self.view.ensure_loaded()
+        self.assertTrue(self.view.top_teams_panel.has_result)
+
+        self.ctx.bus.emit(events.META_SYNCED, {"limitless": {"added": 3}, "victory_road": {"added": 0}})
+        self.assertTrue(self.view.banner.visible, "a loaded tab still offers a Refresh, just not a forced one")
+        self.assertFalse(self.view._list.visible)
+        self.assertFalse(self.view._grid.visible)
+        self.assertTrue(self.view.top_teams_panel.visible)
+
+        self.view.banner._on_action()   # "Refresh" must reload the tab actually on screen
+        self.assertFalse(self.view._list.visible)
+        self.assertFalse(self.view._grid.visible)
+        self.assertTrue(self.view.top_teams_panel.visible)
+
     def test_the_tab_choice_is_remembered(self):
         self.view._set_tab("top_teams")
         self.assertEqual(self.ctx.prefs.get("meta.tab"), "top_teams")

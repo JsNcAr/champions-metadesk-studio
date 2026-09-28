@@ -24,6 +24,12 @@ for the headings and style.
   text. Shares Meta's filter bar and Box filtering; only lineups with at least two teams are
   listed (one-offs still count toward the total).
 
+### Fixed
+- **Top teams no longer flashes the Events list.** A background tournament sync finishing
+  while on the Top teams tab used to reach for the Events-only reload, briefly making the
+  (empty or stale) events list or grid visible underneath it. The sync's "new teams" banner
+  and its Refresh action now target whichever tab is actually on screen.
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

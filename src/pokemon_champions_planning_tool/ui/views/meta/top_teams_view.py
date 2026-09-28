@@ -250,6 +250,10 @@ class TopTeamsPanel(ft.Column):
         self._list = ft.ListView(expand=True, spacing=0, padding=ft.Padding.only(bottom=Space.XL))
         self.controls = [self._caption, self._progress, self._list]
 
+    @property
+    def has_result(self) -> bool:
+        return self._result is not None
+
     def reload(self) -> None:
         """Recompute from the current filters. A cache hit inside the store answers almost
         at once, so the skeleton only shows on the very first load — revisiting the tab

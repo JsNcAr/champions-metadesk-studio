@@ -305,8 +305,9 @@ class MetaView(ft.Column):
         self._fill_pages = 0
         self.banner.hide()
         self._list.controls = [skeleton_rows(8)]
-        self._list.visible = True
-        self._grid.visible = False
+        if self._tab == "events":   # a sync landing while on Top teams must not surface the events skeleton
+            self._list.visible = True
+            self._grid.visible = False
         self._more_button.visible = False
         self._render_active_chips()
         self._update_self()
@@ -359,8 +360,9 @@ class MetaView(ft.Column):
         if not rows:
             self._list.controls = [self._empty_state()]
             self._grid.controls = []
-            self._list.visible = True
-            self._grid.visible = False
+            if self._tab == "events":
+                self._list.visible = True
+                self._grid.visible = False
             self._more_button.visible = False
             self._order_caption.value = ""
             return
@@ -377,9 +379,10 @@ class MetaView(ft.Column):
                 self._grid.controls.append(card)
             group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs, on_rival=self._save_rival))
             self._cards[row.tournament_id].set_shown(len(group.rows))
-        self._list.visible = self.view_mode == "rows"
-        self._grid.visible = self.view_mode == "cards"
-        self._collapse_button.visible = self.view_mode == "rows"
+        if self._tab == "events":
+            self._list.visible = self.view_mode == "rows"
+            self._grid.visible = self.view_mode == "cards"
+            self._collapse_button.visible = self.view_mode == "rows"
         self._more_button.visible = not self.store.exhausted
         self._more_button.content = f"Show more · {self.store.loaded:,} of {self.store.total:,}"
         self._render_caption_only()
@@ -706,17 +709,20 @@ class MetaView(ft.Column):
         self.ctx.page.run_task(_hide)
 
     def _on_meta_synced(self, result: Any) -> None:
-        """Background sync finished. Never reshuffle rows under the user: offer a refresh."""
+        """Background sync finished. Never reshuffle rows under the user: offer a refresh of
+        whichever tab is actually on screen (an events reload while on Top teams would only
+        repopulate hidden controls, never the thing the user is looking at)."""
         self.store.invalidate()
         added = 0
         if isinstance(result, dict):
             for key in ("limitless", "victory_road"):
                 added += int((result.get(key) or {}).get("added", 0) or 0)
-        if self.store.loaded and added:
-            self.banner.show(f"{plural(added, 'new team')} synced", "info", action_label="Refresh", on_action=self._reload)
+        active_loaded = self.store.loaded if self._tab == "events" else self.top_teams_panel.has_result
+        if active_loaded and added:
+            self.banner.show(f"{plural(added, 'new team')} synced", "info", action_label="Refresh", on_action=self._reload_active_tab)
             self._update_self()
-        elif is_mounted(self) and not self.store.loaded:
-            self._reload()
+        elif is_mounted(self) and not active_loaded:
+            self._reload_active_tab()
 
     def _on_box_changed(self, _payload) -> None:
         """The box changed: marks and the Box filter must be recomputed on the next load."""

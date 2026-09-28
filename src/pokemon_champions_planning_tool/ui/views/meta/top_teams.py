@@ -101,7 +101,7 @@ class MemberSpread:
     key: str
     items: tuple[tuple[str, float], ...]      # (item name or "No item", share), most used first
     ability: str | None
-    nature: str | None
+    nature: tuple[str, float] | None          # (nature, share of teams running it), most used
     moves: tuple[tuple[str, float], ...]      # up to 4 moves, most used first, (name, share of teams running it)
 
 
@@ -161,7 +161,8 @@ def _spread(teams: Sequence[TopTeamEntry]) -> dict[str, MemberSpread]:
         for m in members:
             move_counts.update(m.moves)
         moves = tuple((name, count / n) for name, count in move_counts.most_common(4))
-        out[key] = MemberSpread(key=key, items=items, ability=ability[0][0] if ability else None, nature=nature[0][0] if nature else None, moves=moves)
+        nature_spread = (nature[0][0], nature[0][1] / n) if nature else None
+        out[key] = MemberSpread(key=key, items=items, ability=ability[0][0] if ability else None, nature=nature_spread, moves=moves)
     return out
 
 
@@ -265,7 +266,7 @@ def consensus_paste(team: TopTeam, catalogs: Any) -> str | None:
             if spread_text:
                 lines.append(f"EVs: {spread_text}")
         if spread and spread.nature:
-            lines.append(f"{spread.nature.strip().title()} Nature")
+            lines.append(f"{spread.nature[0].strip().title()} Nature")
         for name, _n in move_counts.get(key, Counter()).most_common(4):
             lines.append(f"- {name}")
         blocks.append("\n".join(lines))

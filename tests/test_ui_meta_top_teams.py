@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import flet as ft
 from sqlmodel import Session, SQLModel, create_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -26,10 +27,10 @@ from pokemon_champions_planning_tool.ui.views.meta import MetaStore, MetaView  #
 from pokemon_champions_planning_tool.ui.views.meta.top_teams_view import TopTeamCard  # noqa: E402
 
 
-def _seed(sf, *, teams: int = 3, tyranitar_item: str = "Choice Scarf", tid: str = "t1") -> None:
+def _seed(sf, *, teams: int = 3, tyranitar_item: str = "Choice Scarf", tid: str = "t1", nature: str | None = None, name: str = "Top Teams Cup") -> None:
     with sf() as s:
         if s.get(TournamentRecord, tid) is None:
-            s.add(TournamentRecord(tournament_id=tid, name="Top Teams Cup", format_regulation="Regulation M-C", battle_format="doubles"))
+            s.add(TournamentRecord(tournament_id=tid, name=name, format_regulation="Regulation M-C", battle_format="doubles"))
             s.commit()
         for p in range(1, teams + 1):
             text = f"Tyranitar @ {tyranitar_item}\n- Rock Slide\n- Knock Off\n- Ice Punch\n- Low Kick"
@@ -38,7 +39,7 @@ def _seed(sf, *, teams: int = 3, tyranitar_item: str = "Choice Scarf", tid: str 
             s.add(team)
             s.commit()
             members = [TournamentTeamMemberRecord(tournament_team_id=team.tournament_team_id, slot_position=1, canonical_id="tyranitar", species_name="Tyranitar",
-                                                   item=tyranitar_item, moves=["Rock Slide", "Knock Off", "Ice Punch", "Low Kick"])]
+                                                   item=tyranitar_item, nature=nature, moves=["Rock Slide", "Knock Off", "Ice Punch", "Low Kick"])]
             members += [TournamentTeamMemberRecord(tournament_team_id=team.tournament_team_id, slot_position=i, canonical_id=cid, species_name=cid.title())
                        for i, cid in enumerate(CORE, start=2)]
             for m in members:
@@ -95,8 +96,8 @@ class TestTabSwitch(_Base):
 class TestRankedList(_Base):
     def setUp(self):
         super().setUp()
-        _seed(self.sf, teams=3, tyranitar_item="Choice Scarf")
-        _seed(self.sf, teams=1, tyranitar_item="Choice Scarf", tid="t2")   # a second event, same lineup
+        _seed(self.sf, teams=3, tyranitar_item="Choice Scarf", nature="Adamant")
+        _seed(self.sf, teams=1, tyranitar_item="Choice Scarf", tid="t2", nature="Adamant", name="Second Regional")   # a second event, same lineup
         self.view._set_tab("top_teams")
         self.view.ensure_loaded()
 
@@ -123,6 +124,26 @@ class TestRankedList(_Base):
         moves_text = tyranitar_row.controls[1].controls[-1].value
         self.assertIn("Rock Slide", moves_text)
         self.assertIn("100%", moves_text, "run by every team in the seed")
+
+    def test_expanding_shows_the_natures_share_too(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        card.toggle()
+        spread_column = card._body.content.controls[0]
+        tyranitar_row = spread_column.controls[1]   # controls[0] is the "MOST COMMON SET" header row
+        below_text = tyranitar_row.controls[1].controls[2].value
+        self.assertIn("Adamant", below_text)
+        self.assertIn("100%", below_text, "run by every team in the seed")
+
+    def test_the_teams_in_this_group_show_their_own_tournament_name(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        card.toggle()
+        teams_column = card._body.content.controls[1]
+        names = {
+            row.controls[1].controls[1].value
+            for row in teams_column.controls[1:]
+            if isinstance(row, ft.Row)
+        }
+        self.assertEqual(names, {"Top Teams Cup", "Second Regional"})
 
     def test_preview_shows_one_players_own_set_not_the_consensus(self):
         card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))

@@ -17,7 +17,8 @@ for the headings and style.
   row shows usage share, team count, best finish, top-cut rate and a 30-day trend arrow;
   expanding it shows each slot's most used item, ability, nature and moves (in italics, with
   their share, to read as "most common" rather than a fixed build) and the teams behind it —
-  each with a Preview of that one player's own set, alongside Import and Save as rival. Import
+  each with its own tournament name, and a Preview of that one player's own set alongside
+  Import and Save as rival. Import
   loads the group's most common set through the usual import flow, Save as rival adds it as
   a rival preset, and the ⋮ menu offers a damage calc against any member or the raw Showdown
   text. Shares Meta's filter bar and Box filtering; only lineups with at least two teams are

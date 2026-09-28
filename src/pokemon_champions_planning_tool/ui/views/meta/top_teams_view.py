@@ -138,7 +138,8 @@ class TopTeamCard(ft.Container):
         for key in team.members:
             spread = team.spread.get(key)
             item_caption = " · ".join(f"{name} {pct:.0%}" for name, pct in (spread.items if spread else ())) or "No item"
-            below = " · ".join(x for x in ((spread.ability if spread else None), (spread.nature if spread else None)) if x)
+            nature_bit = f"{spread.nature[0]} {spread.nature[1]:.0%}" if spread and spread.nature else None
+            below = " · ".join(x for x in ((spread.ability if spread else None), nature_bit) if x)
             moves_caption = " · ".join(f"{name} {pct:.0%}" for name, pct in (spread.moves if spread else ()))
             spread_rows.append(ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
                 _member_sprite(key, self._catalogs),
@@ -178,7 +179,10 @@ class TopTeamCard(ft.Container):
     def _team_row(self, entry: TopTeamEntry) -> ft.Control:
         controls: list[ft.Control] = [
             ft.Text(entry.standing_label, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, width=56),
-            ft.Text(entry.player_name, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
+            ft.Column(spacing=0, tight=True, expand=True, controls=[
+                ft.Text(entry.player_name, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Text(entry.tournament_name, theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, tooltip=entry.tournament_name),
+            ]),
             ft.Text(absolute_time(entry.event_date).split(",")[0], theme_style=ft.TextThemeStyle.LABEL_SMALL, color=Palette.ON_SURFACE_VARIANT),
         ]
         if entry.pokepast_url:

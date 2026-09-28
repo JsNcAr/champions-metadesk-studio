@@ -196,6 +196,15 @@ class TestGrouping(_RepoBase):
         self.assertAlmostEqual(moves["Knock Off"], 1.0)
         self.assertNotIn("Stone Edge", moves, "not among the top 4 moves by frequency")
 
+    def test_the_spread_carries_the_most_used_nature_with_its_share(self):
+        self.add_team(tyranitar_item="Choice Scarf", nature="Adamant")
+        self.add_team(tyranitar_item="Choice Scarf", player="P2", nature="Adamant")
+        self.add_team(tyranitar_item="Life Orb", player="P3", nature="Jolly")
+        result = group_teams(self.rows(), CATALOGS)
+        nature = result.teams[0].spread["tyranitar"].nature
+        self.assertEqual(nature[0], "Adamant")
+        self.assertAlmostEqual(nature[1], 2 / 3, msg="run by 2 of 3 teams")
+
     def test_trend_is_none_below_the_sample_floor(self):
         # A tournament's event_date is shared by every team recorded under it, so a
         # different date needs a different tournament id.

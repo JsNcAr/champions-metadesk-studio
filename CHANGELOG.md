@@ -39,6 +39,14 @@ for the headings and style.
   automatically retries Showdown's `ani` directory (already has a static render for most of
   these) and self-heals the local cache from the next launch — no hard-coded species list,
   so it also covers whichever new Mega Champions adds next.
+- **Mega sprites in Top teams are now actually cached.** Tournament rosters store the base
+  species, so neither the startup prefetch (box only) nor Settings › Pre-cache ever asked
+  for the Mega forms Top teams draws. Both now also cache tournament species and every
+  legal Mega form.
+- **Pre-cache no longer looks stuck.** A sprite found nowhere was re-queued on every click,
+  so the toast repeated the same "Pre-caching 7 sprites" forever. It is now tried once per
+  launch and reported as unavailable, the toast says when downloads show up (the next
+  launch), and a long status line wraps instead of pushing the button off the card.
 
 ## [0.5.0] - 2026-09-28
 

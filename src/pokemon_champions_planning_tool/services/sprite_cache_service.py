@@ -86,6 +86,9 @@ class SpriteCacheService:
         self._lock = threading.Lock()
         self._in_flight: set[str] = set()
         self._known_local: set[str] = set()
+        # Found nowhere this session (primary and fallback both failed): not re-queued on
+        # every render or Pre-cache click. In memory only, so the next launch tries again.
+        self._failed: set[str] = set()
         # Filenames already on disk when the app started. Only these are served from
         # ``/sprites/``: a file downloaded mid-session is already on screen from the CDN,
         # so switching its src would gain nothing, and whether every Flet runtime picks up
@@ -164,6 +167,11 @@ class SpriteCacheService:
             return True
         return False
 
+    def is_cached_or_healed(self, filename: str) -> bool:
+        """``is_cached``, or a self-healed fallback (``<stem>.gif``) already stands in for
+        it — so a healed sprite isn't queued, and its fallback re-downloaded, every launch."""
+        return self.is_cached(filename) or self.is_cached(f"{Path(filename).stem}.gif")
+
     def get_local_src(self, filename: str) -> str:
         """Returns the local asset path for Flet controls."""
         return f"/sprites/{filename}"
@@ -205,7 +213,7 @@ class SpriteCacheService:
 
         # Not served locally this session: show the CDN copy now and cache it for the next
         # launch, when ``_present_at_start`` will contain it.
-        if background_download and not self.is_cached(filename):
+        if background_download and not self.is_cached_or_healed(filename):
             self.enqueue_download(src, filename)
 
         return src
@@ -213,38 +221,45 @@ class SpriteCacheService:
     def enqueue_download(self, url: str, filename: str) -> None:
         """Asynchronously downloads a sprite into the local cache."""
         with self._lock:
-            if filename in self._known_local or filename in self._in_flight:
+            if filename in self._known_local or filename in self._in_flight or filename in self._failed:
                 return
             self._in_flight.add(filename)
 
         self._executor.submit(self._download_worker, url, filename)
 
     def _download_worker(self, url: str, filename: str) -> None:
+        ok = False
         try:
-            if not self.download_sprite_sync(url, filename):
-                self._try_fallback_download(url, filename)
+            ok = self.download_sprite_sync(url, filename)
         except Exception:  # noqa: BLE001 - background downloads are best-effort
             pass
-        finally:
-            with self._lock:
-                self._in_flight.discard(filename)
+        if not ok:   # a network error on the primary still gets the fallback a try
+            try:
+                ok = self._try_fallback_download(url, filename)
+            except Exception:  # noqa: BLE001
+                pass
+        with self._lock:
+            self._in_flight.discard(filename)
+            if not ok:
+                self._failed.add(filename)
 
-    def _try_fallback_download(self, url: str, filename: str) -> None:
+    def unavailable_count(self) -> int:
+        """Sprites found nowhere this session (see ``_failed``)."""
+        return len(self._failed)
+
+    def _try_fallback_download(self, url: str, filename: str) -> bool:
         """A gen5 icon can 404 for a form too new to have hand-drawn art yet (a
         just-added Pokémon Champions Mega, say); the ``ani`` directory (auto-generated per
         dex entry) often already has a static render under the same slug. This self-heals
         the cache for the *next* launch — like any newly-discovered sprite, this session
         still shows the CDN copy or the fallback icon (see ``_present_at_start``)."""
         if "pokemonshowdown.com" not in urlparse(url).netloc:
-            return
+            return False
         stem = Path(filename).stem
         ani_url = get_showdown_ani_sprite_url(stem)
         if not ani_url or ani_url == url:
-            return
-        try:
-            self.download_sprite_sync(ani_url, f"{stem}.gif")
-        except Exception:  # noqa: BLE001 - best-effort
-            pass
+            return False
+        return self.download_sprite_sync(ani_url, f"{stem}.gif")
 
     def download_sprite_sync(self, url: str, filename: str) -> bool:
         """Downloads a sprite synchronously and saves it to the cache directory."""
@@ -275,7 +290,9 @@ class SpriteCacheService:
                 continue
             url = get_pokemon_sprite_url(mon)
             filename = self.filename_for_url(url)
-            if filename and not self.is_cached(filename):
+            if not filename or filename in self._failed or filename in self._in_flight:
+                continue
+            if not self.is_cached_or_healed(filename):
                 self.enqueue_download(url, filename)
                 count += 1
         return count

@@ -132,6 +132,45 @@ class TestSpriteCacheService(unittest.TestCase):
         self.assertEqual(dest.read_bytes(), b"gif-bytes")
         self.assertTrue(self.service.is_cached("staraptor-mega.gif"))
 
+    def test_a_sprite_found_nowhere_is_not_requeued_this_session(self) -> None:
+        missing = MagicMock(status_code=404, content=b"")
+        url = "https://play.pokemonshowdown.com/sprites/gen5/zeraora-mega.png"
+        with patch("requests.get", return_value=missing):
+            self.service._download_worker(url, "zeraora-mega.png")
+        self.assertEqual(self.service.unavailable_count(), 1)
+
+        with patch.object(self.service._executor, "submit") as submit:
+            self.service.enqueue_download(url, "zeraora-mega.png")
+            self.assertEqual(self.service.prefetch(["zeraora-mega"]), 0)
+            submit.assert_not_called()
+
+        # A new launch (a fresh service) gets to try again.
+        fresh = SpriteCacheService(cache_dir=self.cache_path, assets_dir=self.tmpdir.name)
+        self.assertEqual(fresh.unavailable_count(), 0)
+
+    def test_a_network_error_on_the_primary_still_tries_the_fallback(self) -> None:
+        import requests as _requests
+
+        def fake_get(url, **kwargs):
+            if "/sprites/gen5/" in url:
+                raise _requests.ConnectionError("flaky")
+            return MagicMock(status_code=200, content=b"gif-bytes")
+
+        with patch("requests.get", side_effect=fake_get):
+            self.service._download_worker(
+                "https://play.pokemonshowdown.com/sprites/gen5/raichu-megay.png", "raichu-megay.png",
+            )
+        self.assertTrue((self.cache_path / "raichu-megay.gif").exists())
+        self.assertEqual(self.service.unavailable_count(), 0)
+
+    def test_a_healed_sprite_is_not_queued_again_on_later_launches(self) -> None:
+        self.cache_path.mkdir(parents=True, exist_ok=True)
+        (self.cache_path / "staraptor-mega.gif").write_bytes(b"gif-bytes")
+        service = SpriteCacheService(cache_dir=self.cache_path, assets_dir=self.tmpdir.name)
+        with patch.object(service, "enqueue_download") as mock_enqueue:
+            self.assertEqual(service.prefetch(["staraptor-mega"]), 0)
+            mock_enqueue.assert_not_called()
+
     def test_a_self_healed_fallback_is_served_from_the_next_launch(self) -> None:
         self.cache_path.mkdir(parents=True, exist_ok=True)
         (self.cache_path / "staraptor-mega.gif").write_bytes(b"gif-bytes")

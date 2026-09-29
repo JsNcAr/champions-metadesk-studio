@@ -42,6 +42,7 @@ class SyncRow(ft.Container):
                         ft.Row(
                             spacing=Space.MD,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            expand=True,   # a long status line wraps instead of pushing the button off the card
                             controls=[
                                 ft.Container(
                                     content=ft.Icon(icon, size=IconSize.LG, color=Palette.ON_SURFACE_VARIANT),
@@ -54,9 +55,10 @@ class SyncRow(ft.Container):
                                 ft.Column(
                                     spacing=2,
                                     tight=True,
+                                    expand=True,
                                     controls=[
                                         ft.Text(title, theme_style=ft.TextThemeStyle.BODY_LARGE, color=Palette.ON_SURFACE),
-                                        ft.Row(spacing=Space.SM, controls=[self._status, self._result]),
+                                        ft.Row(spacing=Space.SM, run_spacing=0, wrap=True, controls=[self._status, self._result]),
                                     ],
                                 ),
                             ],
@@ -341,6 +343,16 @@ def _status_line(counts: str, synced_at, count: int) -> str:
     return f"{counts} · synced {relative_time(synced_at)}"
 
 
+def _unavailable_tail(result: dict[str, Any], *, short: bool = False) -> str:
+    """Sprites found neither as Showdown's icon nor its fallback render: not retried again
+    this session, so a repeat Pre-cache doesn't look stuck re-queuing them. ``short`` for
+    the row's inline summary, which shares its line with the Pre-cache button."""
+    n = result.get("unavailable", 0)
+    if not n:
+        return ""
+    return f" · {n} unavailable" if short else f" · {n} not available on Showdown yet"
+
+
 def _result_summary(kind: str, result: dict[str, Any]) -> str:
     if kind == "megas":
         return f"+{result.get('added', 0)} forms"
@@ -351,7 +363,7 @@ def _result_summary(kind: str, result: dict[str, Any]) -> str:
     if kind == "health":
         return f"{result.get('repaired', 0)} of {result.get('stubs', 0)} repaired"
     if kind == "sprites":
-        return f"{result.get('enqueued', 0)} queued · {result.get('cached', 0)} cached"
+        return f"{result.get('enqueued', 0)} queued · {result.get('cached', 0)} cached{_unavailable_tail(result, short=True)}"
     limitless = result.get("limitless", {})
     victory = result.get("victory_road", {})
     added = int(limitless.get("added", 0)) + int(victory.get("added", 0))
@@ -366,7 +378,9 @@ def _toast_text(kind: str, result: dict[str, Any]) -> str:
     if kind == "items":
         return f"Items synced — {result.get('total', 0):,} catalogued"
     if kind == "sprites":
-        return f"Pre-caching {result.get('enqueued', 0)} sprites in the background"
+        enqueued = result.get("enqueued", 0)
+        head = f"Downloading {plural(enqueued, 'sprite')} in the background — shown from the next launch" if enqueued else "Every sprite that can be downloaded is cached"
+        return head + _unavailable_tail(result)
     if kind == "health":
         stubs, repaired = result.get("stubs", 0), result.get("repaired", 0)
         return "Nothing to repair" if not stubs else (f"Repaired {repaired} Pokémon" if repaired == stubs else f"Repaired {repaired} of {stubs} — PokéAPI unreachable for the rest")

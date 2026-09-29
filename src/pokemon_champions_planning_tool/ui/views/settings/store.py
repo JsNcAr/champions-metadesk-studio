@@ -37,6 +37,22 @@ from ....services.tournament_service import TournamentService
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
 
+def sprite_prefetch_targets(session: Session) -> list[str]:
+    """Every species id the app draws: the box, tournament rosters and each legal Mega form.
+
+    Rosters store the base species; the Mega a slot counts as (Top teams) is only worked
+    out from its held stone, so the Mega forms come from the species catalogue instead.
+    """
+    from ....infrastructure.database.models import SpeciesRecord, TournamentTeamMemberRecord
+
+    box = [r.pokemon_canonical_id for r in BoxRepository(session).list_all(include_planned=True) if r.pokemon_canonical_id]
+    tourney = list(session.exec(select(TournamentTeamMemberRecord.canonical_id).distinct().limit(300)).all())
+    megas = list(session.exec(
+        select(SpeciesRecord.canonical_id).where(SpeciesRecord.is_mega == True, SpeciesRecord.is_legal == True)  # noqa: E712
+    ).all())
+    return list(dict.fromkeys(box + tourney + megas))
+
+
 @dataclass(frozen=True)
 class SettingsStatus:
     mega_count: int
@@ -104,20 +120,13 @@ class SettingsStore:
     # -- sync operations (run on a worker thread) ---------------------------------------
 
     def sync_sprites(self) -> dict[str, Any]:
-        from ....infrastructure.database.models import TournamentTeamMemberRecord
         from ....services.sprite_cache_service import sprite_cache
         with self._sf() as s:
-            repo = BoxRepository(s)
-            # list_all returns raw records (pokemon_canonical_id, no hydrated .pokemon),
-            # which is all a prefetch needs — planned entries included, they are drawn too.
-            box_cids = [r.pokemon_canonical_id for r in repo.list_all(include_planned=True) if r.pokemon_canonical_id]
-            tourney_cids = list(s.exec(
-                select(TournamentTeamMemberRecord.canonical_id).distinct().limit(300)
-            ).all())
-        targets = list(dict.fromkeys(box_cids + tourney_cids))
+            targets = sprite_prefetch_targets(s)
         enqueued = sprite_cache.prefetch(targets)
         count, total_bytes = sprite_cache.cache_stats()
-        return {"targets": len(targets), "enqueued": enqueued, "cached": count, "bytes": total_bytes}
+        return {"targets": len(targets), "enqueued": enqueued, "cached": count, "bytes": total_bytes,
+                "unavailable": sprite_cache.unavailable_count()}
 
     def sync_megas(self) -> dict[str, Any]:
         with self._sf() as s:

@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-29
+
 ### Added
 - **Meta › Top teams.** A second tab beside Events, ranking tournament teams by lineup: two
   teams count as the same when they field the same six Pokémon and the same Mega Evolutions

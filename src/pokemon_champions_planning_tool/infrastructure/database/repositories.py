@@ -1482,6 +1482,70 @@ class TournamentRepository:
         )
         return int(self.session.exec(select(func.count()).select_from(stmt.subquery())).one() or 0)
 
+    def team_members_for_filters(
+        self,
+        query: str | None = None,
+        regulation_filter: str | None = None,
+        placement_filter: int | None = None,
+        species_filter: str | None = None,
+        game_platform_filter: str | None = None,
+        max_age_days: int | None = None,
+        event_tiers: Sequence[str] | None = None,
+        tournament_id_filter: str | None = None,
+        owned_species: Sequence[str] | None = None,
+        max_missing: int | None = None,
+        battle_format_filter: str | None = "doubles",
+    ) -> list[Any]:
+        """One row per roster slot of every team matching the same filters as
+        ``search_teams``, for grouping teams by lineup (Top teams).
+
+        Unpaged: the caller groups the whole filtered set in Python. The team ids are
+        resolved once with the shared filter clauses, then every member row for those
+        teams is joined to its team and tournament in a single query — the same shape
+        as ``move_usage_all``, which reads faster than probing the team/tournament
+        tables per roster row.
+        """
+        team_ids = self._apply_search_filters(
+            self._joined_teams(),
+            query=query,
+            regulation_filter=regulation_filter,
+            placement_filter=placement_filter,
+            species_filter=species_filter,
+            game_platform_filter=game_platform_filter,
+            max_age_days=max_age_days,
+            event_tiers=event_tiers,
+            tournament_id_filter=tournament_id_filter,
+            owned_species=owned_species,
+            max_missing=max_missing,
+            battle_format_filter=battle_format_filter,
+        ).with_only_columns(TournamentTeamRecord.tournament_team_id)
+
+        stmt = (
+            select(
+                TournamentTeamRecord.tournament_team_id,
+                TournamentTeamRecord.tournament_id,
+                TournamentRecord.name,
+                TournamentRecord.event_date,
+                TournamentTeamRecord.player_name,
+                TournamentTeamRecord.placement,
+                TournamentTeamRecord.standing_label,
+                TournamentTeamRecord.pokepast_url,
+                TournamentTeamRecord.showdown_text,
+                TournamentTeamMemberRecord.slot_position,
+                TournamentTeamMemberRecord.canonical_id,
+                TournamentTeamMemberRecord.item,
+                TournamentTeamMemberRecord.ability,
+                TournamentTeamMemberRecord.nature,
+                TournamentTeamMemberRecord.moves,
+            )
+            .select_from(TournamentTeamMemberRecord)
+            .join(TournamentTeamRecord, TournamentTeamMemberRecord.tournament_team_id == TournamentTeamRecord.tournament_team_id)
+            .join(TournamentRecord, TournamentTeamRecord.tournament_id == TournamentRecord.tournament_id)
+            .where(TournamentTeamMemberRecord.tournament_team_id.in_(team_ids))
+            .order_by(TournamentTeamRecord.tournament_team_id, TournamentTeamMemberRecord.slot_position)
+        )
+        return list(self.session.exec(stmt).all())
+
     def move_usage(self, canonical_id: str, *, include_megas: bool = True, battle_format: str | None = "doubles") -> list[tuple[str, int]]:
         """(move name, rosters using it) for a species across every stored team, most used first.
 

@@ -188,6 +188,11 @@ _FALLBACK_SPRITE_URL = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png"
 )
 _SHOWDOWN_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/gen5"
+# ``gen5`` icons are hand-drawn and lag behind newly added forms — a Pokémon Champions
+# Mega too new to have one yet usually already has a static render here (auto-generated
+# per dex entry). ``services.sprite_cache_service`` tries this as a background fallback
+# whenever the primary URL 404s, rather than this module hard-coding which ids need it.
+SHOWDOWN_ANI_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/ani"
 
 
 @lru_cache(maxsize=4096)
@@ -225,6 +230,15 @@ def get_pokemon_sprite_url(pokemon_name_or_id: str) -> str:
         return _FALLBACK_SPRITE_URL
 
     return f"{_SHOWDOWN_SPRITE_BASE}/{slug}.png"
+
+
+@lru_cache(maxsize=4096)
+def get_showdown_ani_sprite_url(pokemon_name_or_id: str) -> str | None:
+    """The ``ani`` directory's static render for a species/form, or ``None`` when the id
+    doesn't resolve to a slug at all. A background-download fallback, not the primary URL:
+    see ``SHOWDOWN_ANI_SPRITE_BASE``."""
+    slug = get_showdown_sprite_slug(pokemon_name_or_id)
+    return f"{SHOWDOWN_ANI_SPRITE_BASE}/{slug}.gif" if slug else None
 
 
 @lru_cache(maxsize=4096)

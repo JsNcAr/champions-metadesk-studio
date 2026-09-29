@@ -10,6 +10,44 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Meta › Top teams.** A second tab beside Events, ranking tournament teams by lineup: two
+  teams count as the same when they field the same six Pokémon and the same Mega Evolutions
+  (a Choice Scarf and a Life Orb Tyranitar are one team; a Mega Tyranitar is another). Each
+  row shows usage share, team count, best finish, top-cut rate and a 30-day trend arrow;
+  expanding it shows each slot's most used item, ability, nature and moves (in italics, with
+  their share, to read as "most common" rather than a fixed build) and the teams behind it —
+  each with its own tournament name, and a Preview of that one player's own set alongside
+  Import and Save as rival. Import
+  loads the group's most common set through the usual import flow, Save as rival adds it as
+  a rival preset, and the ⋮ menu offers a damage calc against any member or the raw Showdown
+  text. Shares Meta's filter bar and Box filtering; only lineups with at least two teams are
+  listed (one-offs still count toward the total).
+
+### Fixed
+- **Top teams no longer flashes the Events list.** A background tournament sync finishing
+  while on the Top teams tab used to reach for the Events-only reload, briefly making the
+  (empty or stale) events list or grid visible underneath it. The sync's "new teams" banner
+  and its Refresh action now target whichever tab is actually on screen.
+- **The regulation filter now works from a straight landing on Top teams.** Its dropdown
+  options were only ever fetched by an Events reload, so a session remembering Top teams as
+  the active tab left it stuck on "All regulations" — unpickable — until a visit to Events
+  happened to run. It's now filled as soon as Meta opens, regardless of the active tab.
+- **Some official Pokémon Champions Megas showed no sprite.** Showdown's icon sprite set is
+  hand-drawn and lags behind newly added forms (Raichu-Mega-Y, Staraptor-Mega and others),
+  so those requests 404'd with nothing to fall back to. A failed sprite download now
+  automatically retries Showdown's `ani` directory (already has a static render for most of
+  these) and self-heals the local cache from the next launch — no hard-coded species list,
+  so it also covers whichever new Mega Champions adds next.
+- **Mega sprites in Top teams are now actually cached.** Tournament rosters store the base
+  species, so neither the startup prefetch (box only) nor Settings › Pre-cache ever asked
+  for the Mega forms Top teams draws. Both now also cache tournament species and every
+  legal Mega form.
+- **Pre-cache no longer looks stuck.** A sprite found nowhere was re-queued on every click,
+  so the toast repeated the same "Pre-caching 7 sprites" forever. It is now tried once per
+  launch and reported as unavailable, the toast says when downloads show up (the next
+  launch), and a long status line wraps instead of pushing the button off the card.
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

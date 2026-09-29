@@ -5,6 +5,13 @@ served instantly by Flet at 0ms latency with zero network requests and full offl
 readiness. When a sprite is not yet cached locally, the remote URL is returned so
 the UI displays immediately, while a background thread downloads the sprite to disk
 for subsequent views.
+
+A species' primary (``gen5``) sprite can 404 for a form too new to have hand-drawn art
+yet — every newly added Pokémon Champions Mega starts this way. Rather than hard-coding
+which ids currently need a workaround, a failed download automatically retries the
+``ani`` directory (auto-generated per dex entry, usually already there) and, if that
+works, caches it under its own filename — self-healing for the *next* launch, the same
+one-launch delay any newly-discovered sprite already has. See ``_try_fallback_download``.
 """
 
 from __future__ import annotations
@@ -22,7 +29,11 @@ from urllib.parse import urlparse
 import requests
 
 from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, TOURNAMENT_USER_AGENT
-from ..domain.pokemon_identity import get_pokemon_sprite_url, get_showdown_sprite_slug
+from ..domain.pokemon_identity import (
+    get_pokemon_sprite_url,
+    get_showdown_ani_sprite_url,
+    get_showdown_sprite_slug,
+)
 
 
 # What counts as a cached sprite. Anything else in the folder (the tracked .gitkeep, a
@@ -75,15 +86,24 @@ class SpriteCacheService:
         self._lock = threading.Lock()
         self._in_flight: set[str] = set()
         self._known_local: set[str] = set()
+        # Found nowhere this session (primary and fallback both failed): not re-queued on
+        # every render or Pre-cache click. In memory only, so the next launch tries again.
+        self._failed: set[str] = set()
         # Filenames already on disk when the app started. Only these are served from
         # ``/sprites/``: a file downloaded mid-session is already on screen from the CDN,
         # so switching its src would gain nothing, and whether every Flet runtime picks up
         # a file that appeared after launch is not something this project can verify.
         self._present_at_start: frozenset[str] = frozenset()
+        # stem ("raichu-megay") -> filename ("raichu-megay.gif"), for every sprite present
+        # at start. Lets a species/form whose primary (gen5 .png) URL 404s but whose
+        # self-healed fallback (ani .gif) was cached on a previous launch resolve locally
+        # even though that fallback's filename differs from what the primary URL implies.
+        self._stem_at_start: dict[str, str] = {}
         self._executor = _DaemonThreadPoolExecutor(max_workers=2, thread_name_prefix="sprite-cache")
         atexit.register(self.shutdown)
         self._scan_existing()
         self._present_at_start = frozenset(self._known_local)
+        self._stem_at_start = {Path(name).stem: name for name in self._known_local}
 
     def shutdown(self) -> None:
         """Immediately release executor resources and cancel queued futures."""
@@ -117,10 +137,12 @@ class SpriteCacheService:
         if not path:
             return None
 
-        # Showdown sprite: /sprites/gen5/slug.png -> slug.png
+        # Showdown sprite: /sprites/gen5/slug.png -> slug.png (or /sprites/ani/slug.gif ->
+        # slug.gif — the fallback _try_fallback_download saves under, when the primary
+        # gen5 icon 404s).
         if "pokemonshowdown.com" in parsed.netloc:
             name = Path(path).name
-            return name if name.endswith(".png") else f"{name}.png"
+            return name if "." in name else f"{name}.png"
 
         # PokeAPI item: .../sprites/items/item-name.png -> item-item-name.png
         if "items" in path:
@@ -144,6 +166,11 @@ class SpriteCacheService:
                 self._known_local.add(filename)
             return True
         return False
+
+    def is_cached_or_healed(self, filename: str) -> bool:
+        """``is_cached``, or a self-healed fallback (``<stem>.gif``) already stands in for
+        it — so a healed sprite isn't queued, and its fallback re-downloaded, every launch."""
+        return self.is_cached(filename) or self.is_cached(f"{Path(filename).stem}.gif")
 
     def get_local_src(self, filename: str) -> str:
         """Returns the local asset path for Flet controls."""
@@ -178,9 +205,15 @@ class SpriteCacheService:
         if self.is_servable(filename):
             return self.get_local_src(filename)
 
+        # A previous launch's self-heal (see _try_fallback_download) may have cached this
+        # species/form under a different extension than the primary URL implies.
+        fallback = self._stem_at_start.get(Path(filename).stem)
+        if fallback is not None:
+            return self.get_local_src(fallback)
+
         # Not served locally this session: show the CDN copy now and cache it for the next
         # launch, when ``_present_at_start`` will contain it.
-        if background_download and not self.is_cached(filename):
+        if background_download and not self.is_cached_or_healed(filename):
             self.enqueue_download(src, filename)
 
         return src
@@ -188,20 +221,45 @@ class SpriteCacheService:
     def enqueue_download(self, url: str, filename: str) -> None:
         """Asynchronously downloads a sprite into the local cache."""
         with self._lock:
-            if filename in self._known_local or filename in self._in_flight:
+            if filename in self._known_local or filename in self._in_flight or filename in self._failed:
                 return
             self._in_flight.add(filename)
 
         self._executor.submit(self._download_worker, url, filename)
 
     def _download_worker(self, url: str, filename: str) -> None:
+        ok = False
         try:
-            self.download_sprite_sync(url, filename)
+            ok = self.download_sprite_sync(url, filename)
         except Exception:  # noqa: BLE001 - background downloads are best-effort
             pass
-        finally:
-            with self._lock:
-                self._in_flight.discard(filename)
+        if not ok:   # a network error on the primary still gets the fallback a try
+            try:
+                ok = self._try_fallback_download(url, filename)
+            except Exception:  # noqa: BLE001
+                pass
+        with self._lock:
+            self._in_flight.discard(filename)
+            if not ok:
+                self._failed.add(filename)
+
+    def unavailable_count(self) -> int:
+        """Sprites found nowhere this session (see ``_failed``)."""
+        return len(self._failed)
+
+    def _try_fallback_download(self, url: str, filename: str) -> bool:
+        """A gen5 icon can 404 for a form too new to have hand-drawn art yet (a
+        just-added Pokémon Champions Mega, say); the ``ani`` directory (auto-generated per
+        dex entry) often already has a static render under the same slug. This self-heals
+        the cache for the *next* launch — like any newly-discovered sprite, this session
+        still shows the CDN copy or the fallback icon (see ``_present_at_start``)."""
+        if "pokemonshowdown.com" not in urlparse(url).netloc:
+            return False
+        stem = Path(filename).stem
+        ani_url = get_showdown_ani_sprite_url(stem)
+        if not ani_url or ani_url == url:
+            return False
+        return self.download_sprite_sync(ani_url, f"{stem}.gif")
 
     def download_sprite_sync(self, url: str, filename: str) -> bool:
         """Downloads a sprite synchronously and saves it to the cache directory."""
@@ -228,12 +286,13 @@ class SpriteCacheService:
         """
         count = 0
         for mon in species_or_cids:
-            slug = get_showdown_sprite_slug(mon)
-            if not slug:
+            if not get_showdown_sprite_slug(mon):
                 continue
-            filename = f"{slug}.png"
-            if not self.is_cached(filename):
-                url = get_pokemon_sprite_url(mon)
+            url = get_pokemon_sprite_url(mon)
+            filename = self.filename_for_url(url)
+            if not filename or filename in self._failed or filename in self._in_flight:
+                continue
+            if not self.is_cached_or_healed(filename):
                 self.enqueue_download(url, filename)
                 count += 1
         return count

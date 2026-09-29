@@ -129,6 +129,35 @@ class TestSyncSprites(unittest.TestCase):
              patch.object(sprite_cache, "cache_stats", lambda: (0, 0)):
             self.assertEqual(self.store.sync_sprites()["targets"], 0)
 
+    def test_legal_mega_forms_are_prefetched_too(self):
+        # Rosters store the base species; Top teams draws the Mega a held stone makes, so
+        # those forms must come from the species catalogue or they are never cached.
+        from pokemon_champions_planning_tool.infrastructure.database.models import SpeciesRecord
+        from pokemon_champions_planning_tool.services.sprite_cache_service import sprite_cache
+
+        with self.db.session() as s:
+            s.add(SpeciesRecord(showdown_id="staraptormega", canonical_id="staraptor-mega", name="Staraptor-Mega", is_mega=True, is_legal=True))
+            s.add(SpeciesRecord(showdown_id="raichumegay", canonical_id="raichu-mega-y", name="Raichu-Mega-Y", is_mega=True, is_legal=True))
+            s.add(SpeciesRecord(showdown_id="beedrillmega", canonical_id="beedrill-mega", name="Beedrill-Mega", is_mega=True, is_legal=False))
+            s.add(SpeciesRecord(showdown_id="staraptor", canonical_id="staraptor", name="Staraptor", is_legal=True))
+            s.commit()
+        asked = []
+        with patch.object(sprite_cache, "prefetch", lambda targets: asked.extend(targets) or len(targets)), \
+             patch.object(sprite_cache, "cache_stats", lambda: (0, 0)):
+            self.store.sync_sprites()
+        self.assertEqual(sorted(asked), ["raichu-mega-y", "staraptor-mega"])
+
+    def test_unavailable_sprites_are_reported_not_requeued_forever(self):
+        from pokemon_champions_planning_tool.ui.views.settings.view import _result_summary, _toast_text
+
+        first = {"enqueued": 7, "cached": 100, "unavailable": 0}
+        again = {"enqueued": 0, "cached": 104, "unavailable": 3}
+        self.assertIn("Downloading 7 sprites", _toast_text("sprites", first))
+        self.assertIn("Downloading 1 sprite in", _toast_text("sprites", {"enqueued": 1}))
+        self.assertNotIn("Downloading", _toast_text("sprites", again))
+        self.assertIn("3 not available on Showdown yet", _toast_text("sprites", again))
+        self.assertIn("3 unavailable", _result_summary("sprites", again))   # short: shares the row with the button
+
 
 class TestRelativeTime(unittest.TestCase):
     def test_buckets(self):

@@ -5,6 +5,7 @@ from pokemon_champions_planning_tool.domain.pokemon_identity import (
     format_api_name,
     format_display_name,
     get_pokemon_sprite_url,
+    get_showdown_ani_sprite_url,
     get_showdown_sprite_slug,
     normalize_format_regulation,
 )
@@ -102,6 +103,21 @@ class TestShowdownSpriteSlug(unittest.TestCase):
             "https://play.pokemonshowdown.com/sprites/gen5/lycanroc-dusk.png",
         )
         self.assertIn("poke-ball", get_pokemon_sprite_url(""))
+
+    def test_ani_sprite_url_mirrors_the_same_slug(self):
+        # A new form with no hand-drawn gen5 icon yet (e.g. a Pokémon Champions Mega) is
+        # not special-cased here — services.sprite_cache_service tries this URL as a
+        # background fallback whenever the primary one 404s, so this module only needs to
+        # build the URL, not know which ids currently require it.
+        self.assertEqual(
+            get_showdown_ani_sprite_url("staraptor-mega"),
+            "https://play.pokemonshowdown.com/sprites/ani/staraptor-mega.gif",
+        )
+        self.assertEqual(
+            get_showdown_ani_sprite_url("raichu-mega-y"),
+            "https://play.pokemonshowdown.com/sprites/ani/raichu-megay.gif",
+        )
+        self.assertIsNone(get_showdown_ani_sprite_url(""))
 
 
 class TestDefaultFormLabels(unittest.TestCase):

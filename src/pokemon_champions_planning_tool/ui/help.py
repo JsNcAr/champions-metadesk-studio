@@ -54,6 +54,7 @@ TIPS: dict[str, tuple[str, ...]] = {
     ),
     "Meta": (
         "Events show their winner only; \"Show N more\" or Expand all reveals the rest. The cards layout opens a full standings dialog per event.",
+        "Top teams ranks lineups by usage share: two teams count as the same when they field the same six Pokémon and the same Mega Evolutions (a Choice Scarf and a Life Orb Tyranitar are one team; a Mega Tyranitar is another). Only lineups with two or more teams are listed. Expand a row for its most used item, ability, nature and moves per slot — shown in italics with their share, since it's the most common pick, not a single exact build — and the teams behind it (each with its tournament name, and a Preview of that player's own set alongside Import and Save as rival). Import and Save as rival on the row itself use the group's most common set, and the ⋮ menu has a damage calc per member and Copy as Showdown text.",
         "Official (Play! Pokémon) and Community are separate sources; under Official you can pick Worlds, Internationals, Regionals or Special Events.",
         "Search matches species, players and event names; the Search button re-queries even when nothing changed.",
         "Search matches species, players and event names. Exclude Pokémon by prefixing with - or ! (e.g. \"pelipper -archaludon\", \"dondozo -tatsugiri\", or \"-incineroar\"); quotes work for multi-word names (e.g. -\"iron hands\"). The Search button re-queries even when nothing changed.",

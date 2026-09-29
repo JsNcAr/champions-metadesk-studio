@@ -83,7 +83,8 @@ def _start_catalogue_refresh(ctx: AppContext, shell: AppShell) -> None:
 
 
 def _start_sprite_prefetch(ctx: AppContext) -> None:
-    """Cache the roster's sprites for the next launch, quietly.
+    """Cache the sprites the app draws (box, tournament rosters, Mega forms) for the next
+    launch, quietly.
 
     Sprites are served from ``/sprites/`` only once they were on disk at startup, so this
     is what makes the second launch instant. It also matters for correctness on the web
@@ -92,11 +93,11 @@ def _start_sprite_prefetch(ctx: AppContext) -> None:
     """
 
     def work() -> int:
-        from ..infrastructure.database.repositories import BoxRepository
         from ..services.sprite_cache_service import sprite_cache
+        from .views.settings.store import sprite_prefetch_targets
 
         with get_session() as session:
-            species = [e.pokemon.canonical_id for e in BoxRepository(session).list_entries(include_planned=True)]
+            species = sprite_prefetch_targets(session)
         # Showdown's item sheet: the icons of the items PokéAPI has no art for (the
         # Champions Mega Stones…). Cached like the sprites, so the web build can show them.
         from ..domain.item_sprites import ITEM_SHEET_URL

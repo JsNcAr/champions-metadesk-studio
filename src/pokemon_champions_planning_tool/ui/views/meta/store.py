@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
+from typing import Any
 
 from sqlmodel import Session
 
@@ -19,6 +20,7 @@ from ....domain.search import parse_search_query, remove_query_token
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.repositories import BoxRepository
 from ....services.tournament_service import MetaSummary, MetaTeamRow, TournamentService
+from .top_teams import MIN_TEAMS_DEFAULT, TopTeamsResult, group_teams
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
 
@@ -154,6 +156,8 @@ class MetaStore:
         # rows are marked, and the Box filter counts against them.
         self.box_species: frozenset[str] = frozenset()
         self._box_loaded = False
+        # (filters, catalogue id, min_teams) -> the grouped result; cleared by invalidate().
+        self._top_teams_cache: tuple[tuple, TopTeamsResult] | None = None
 
     def load_preference(self) -> str:
         """Load stored battle format preference."""
@@ -207,6 +211,7 @@ class MetaStore:
     def invalidate(self) -> None:
         """New data landed; the next load re-queries even with unchanged filters."""
         self._stale = True
+        self._top_teams_cache = None
 
     # -- loading (each call is one session) ---------------------------------------------
 
@@ -245,3 +250,17 @@ class MetaStore:
     def regulation_options(self) -> list[str]:
         with self._sf() as s:
             return TournamentService(s).list_regulations()
+
+    def top_teams(self, *, catalogs: Any, min_teams: int = MIN_TEAMS_DEFAULT) -> TopTeamsResult:
+        """Group every team matching the current filters by lineup (same six species and
+        Mega forms). Cached by the filters, the catalogue in use and ``min_teams``;
+        cleared by ``invalidate()`` (a tournament sync) or a new catalogue object (a
+        catalogue reload changes ``id(catalogs)`` on its own)."""
+        key = (self.filters, id(catalogs), min_teams)
+        if self._top_teams_cache is not None and self._top_teams_cache[0] == key:
+            return self._top_teams_cache[1]
+        with self._sf() as s:
+            rows = TournamentService(s).team_members_for_filters(**self._query_kwargs())
+        result = group_teams(rows, catalogs, min_teams=min_teams)
+        self._top_teams_cache = (key, result)
+        return result

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import flet as ft
@@ -18,6 +19,8 @@ from ...theme import Accent, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Palette, Sp
 from ..settings.store import SettingsStore
 from .row import EVENT_CARD_HEIGHT, EVENT_CARD_MAX_EXTENT, EventCard, EventDialog, EventGroup, EventHeader, TeamRow
 from .store import BOX_OPTIONS, FORMAT_OPTIONS, TIER_OPTIONS, GAME_OPTIONS, PLACEMENT_OPTIONS, RECENCY_OPTIONS, MetaFilters, MetaStore
+from .top_teams import TopTeam, TopTeamEntry, consensus_paste
+from .top_teams_view import TeamPreviewDialog, TopTeamsActions, TopTeamsPanel
 
 _SEARCH_DEBOUNCE_MS = 400
 # With groups collapsed (or as cards) a 20-team page shows only two or three events, so
@@ -33,12 +36,14 @@ class MetaView(ft.Column):
         self.store = store or MetaStore()
         self._sync_store = SettingsStore()
         self._loading = False
+        self._header_loaded = False   # regulation options + the header count/caption: shared by both tabs
         self._groups: dict[str, EventGroup] = {}
         self._cards: dict[str, EventCard] = {}
         self.view_mode = "cards" if ctx.prefs.get("meta.view_mode") == "cards" else "rows"
         self.collapsed = bool(ctx.prefs.get("meta.collapsed", True))   # rows mode: only the winner of each event until expanded
         self._fill_pages = 0
         self._page_width = float(getattr(ctx.page, "width", None) or DEFAULT_WINDOW_WIDTH)
+        self._tab = "top_teams" if ctx.prefs.get("meta.tab") == "top_teams" else "events"
 
         # -- header -------------------------------------------------------------------
         self._sync_button = ft.IconButton(
@@ -142,6 +147,17 @@ class MetaView(ft.Column):
             ],
             on_change=lambda e: self._set_view_mode(next(iter(e.control.selected or ["rows"]))),
         )
+        self._tab_switch = ft.SegmentedButton(
+            selected=[self._tab],
+            allow_multiple_selection=False,
+            allow_empty_selection=False,
+            show_selected_icon=False,
+            segments=[
+                ft.Segment(value="events", icon=ft.Icon(ft.Icons.EMOJI_EVENTS_OUTLINED), label=ft.Text("Events")),
+                ft.Segment(value="top_teams", icon=ft.Icon(ft.Icons.LEADERBOARD_OUTLINED), label=ft.Text("Top teams"), tooltip="The most used teams, grouped by the same six Pokémon and Mega forms"),
+            ],
+            on_change=lambda e: self._set_tab(next(iter(e.control.selected or ["events"]))),
+        )
 
         # -- results ------------------------------------------------------------------
         self.banner = InlineBanner(visible=False)
@@ -151,22 +167,27 @@ class MetaView(ft.Column):
         self._more_ring = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
         self._more_button = ft.FilledTonalButton("Show more", icon=ft.Icons.EXPAND_MORE, visible=False, on_click=lambda _e: self._load_more())
         self._more_row = ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=Space.SM, controls=[self._more_ring, self._more_button])
+        self._events_toolbar = ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[self._order_caption, ft.Row(spacing=Space.SM, tight=True, controls=[self._collapse_button, self._layout_toggle])],
+        )
+        self.top_teams_panel = TopTeamsPanel(ctx=ctx, store=self.store, actions=self._top_teams_actions())
 
         self.controls = [
             self.header,
+            ft.Row(controls=[self._tab_switch]),
             self.filter_bar,
             self._active_chips,
             self.banner,
             self._progress,
-            ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[self._order_caption, ft.Row(spacing=Space.SM, tight=True, controls=[self._collapse_button, self._layout_toggle])],
-            ),
+            self._events_toolbar,
             self._list,
             self._grid,
             self._more_row,
+            self.top_teams_panel,
         ]
+        self._apply_tab_visibility()
         self._relayout()
 
         ctx.bus.on(events.META_SYNCED, self._on_meta_synced)
@@ -186,10 +207,20 @@ class MetaView(ft.Column):
 
     def ensure_loaded(self) -> None:
         """Load on first visit or after invalidation; otherwise reuse the built rows."""
+        if not self._header_loaded:
+            # The regulation dropdown's options (and the header count/caption) are only
+            # ever filled here or by an events _reload() — without this, landing straight
+            # on Top teams (a remembered tab) leaves the dropdown showing "All regulations"
+            # alone, unable to pick anything else until an events reload happens to run.
+            self._refresh_header()
+        if self._tab == "top_teams":
+            self.top_teams_panel.reload()
+            return
         if not self.store.loaded or self.store.needs_load:
             self._reload()
 
     def _refresh_header(self) -> None:
+        self._header_loaded = True
         summary = self.store.summary()
         self.header.set_count(summary.team_count)
         self.header.set_caption(f"{plural(summary.event_count, 'event')} · synced {relative_time(summary.synced_at)}")
@@ -199,6 +230,7 @@ class MetaView(ft.Column):
         ]
         if self.store.filters.regulation not in {"All", *regs}:
             self._regulation.value = "All"
+        self._update_self()
 
     # -- filters ------------------------------------------------------------------------
 
@@ -217,7 +249,7 @@ class MetaView(ft.Column):
         self._battle_format.visible = new_filters.battle_format != "doubles"
         if force:
             self.store.invalidate()
-        self._reload()
+        self._reload_active_tab()
 
     def _on_search_requested(self, query) -> None:
         """Another view asked for the teams with a species (Teams' partner chips)."""
@@ -233,14 +265,14 @@ class MetaView(ft.Column):
     def _remove_filter(self, field: str) -> None:
         self.store.set_filters(self.store.filters.without(field))
         self._sync_filter_controls()
-        self._reload()
+        self._reload_active_tab()
 
     def _clear_filters(self) -> None:
         self.store.set_filters(MetaFilters())
         pref = self.store.load_preference()
         self.store.set_filters(MetaFilters(battle_format=pref))
         self._sync_filter_controls()
-        self._reload()
+        self._reload_active_tab()
 
     def _sync_filter_controls(self) -> None:
         f = self.store.filters
@@ -259,7 +291,13 @@ class MetaView(ft.Column):
     def _on_battle_format_changed(self, _val: Any = None) -> None:
         self.store.reload_preference()
         self._sync_filter_controls()
-        self._reload()
+        self._reload_active_tab()
+
+    def _reload_active_tab(self) -> None:
+        if self._tab == "events":
+            self._reload()
+        else:
+            self.top_teams_panel.reload()
 
     def _render_active_chips(self) -> None:
         active = self.store.filters.active()
@@ -276,8 +314,9 @@ class MetaView(ft.Column):
         self._fill_pages = 0
         self.banner.hide()
         self._list.controls = [skeleton_rows(8)]
-        self._list.visible = True
-        self._grid.visible = False
+        if self._tab == "events":   # a sync landing while on Top teams must not surface the events skeleton
+            self._list.visible = True
+            self._grid.visible = False
         self._more_button.visible = False
         self._render_active_chips()
         self._update_self()
@@ -330,8 +369,9 @@ class MetaView(ft.Column):
         if not rows:
             self._list.controls = [self._empty_state()]
             self._grid.controls = []
-            self._list.visible = True
-            self._grid.visible = False
+            if self._tab == "events":
+                self._list.visible = True
+                self._grid.visible = False
             self._more_button.visible = False
             self._order_caption.value = ""
             return
@@ -348,9 +388,10 @@ class MetaView(ft.Column):
                 self._grid.controls.append(card)
             group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs, on_rival=self._save_rival))
             self._cards[row.tournament_id].set_shown(len(group.rows))
-        self._list.visible = self.view_mode == "rows"
-        self._grid.visible = self.view_mode == "cards"
-        self._collapse_button.visible = self.view_mode == "rows"
+        if self._tab == "events":
+            self._list.visible = self.view_mode == "rows"
+            self._grid.visible = self.view_mode == "cards"
+            self._collapse_button.visible = self.view_mode == "rows"
         self._more_button.visible = not self.store.exhausted
         self._more_button.content = f"Show more · {self.store.loaded:,} of {self.store.total:,}"
         self._render_caption_only()
@@ -359,6 +400,8 @@ class MetaView(ft.Column):
 
     def _maybe_fill(self) -> None:
         """Collapsed rows and cards show one line per event; keep paging until enough events are visible."""
+        if self._tab != "events":
+            return
         if self.view_mode == "rows" and not self.collapsed:
             return
         if self.store.exhausted or self._loading or self._fill_pages >= _MAX_FILL_PAGES:
@@ -398,14 +441,37 @@ class MetaView(ft.Column):
         self.view_mode = "cards" if mode == "cards" else "rows"
         self.ctx.prefs.set("meta.view_mode", self.view_mode)
         self._layout_toggle.selected = [self.view_mode]
-        has_rows = bool(self.store.rows)
-        self._list.visible = self.view_mode == "rows" or not has_rows
-        self._grid.visible = self.view_mode == "cards" and has_rows
-        self._collapse_button.visible = self.view_mode == "rows"
-        if has_rows:
+        self._apply_tab_visibility()
+        if self.store.rows:
             self._render_caption_only()
         self._update_self()
         self._maybe_fill()
+
+    def _set_tab(self, tab: str) -> None:
+        """"Events" (tournament teams grouped by event) or "Top teams" (teams grouped by
+        lineup, ranked by usage). Both share the filter bar above them."""
+        new_tab = "top_teams" if tab == "top_teams" else "events"
+        if new_tab == self._tab:
+            return
+        self._tab = new_tab
+        self.ctx.prefs.set("meta.tab", self._tab)
+        self._tab_switch.selected = [self._tab]
+        self._apply_tab_visibility()
+        self._update_self()
+        if self._tab == "top_teams":
+            self.top_teams_panel.reload()
+        elif not self.store.loaded or self.store.needs_load:
+            self._reload()
+
+    def _apply_tab_visibility(self) -> None:
+        is_events = self._tab == "events"
+        self._events_toolbar.visible = is_events
+        has_rows = bool(self.store.rows)
+        self._list.visible = is_events and (self.view_mode == "rows" or not has_rows)
+        self._grid.visible = is_events and self.view_mode == "cards" and has_rows
+        self._collapse_button.visible = is_events and self.view_mode == "rows"
+        self._more_row.visible = is_events
+        self.top_teams_panel.visible = not is_events
 
     def handle_resize(self, width: float, height: float) -> None:
         self._page_width = width
@@ -509,6 +575,104 @@ class MetaView(ft.Column):
         title = f"{row.player_name} — {row.tournament_name}"
         self.ctx.bus.emit(events.IMPORT_REQUESTED, (row.showdown_text, title))
 
+    # -- Top teams: the most common set (one lineup, not one player's paste) ------------------
+    #
+    # A single team belonging to a lineup group (``TopTeamEntry``) duck-types as a
+    # ``MetaTeamRow`` — it carries the same ``showdown_text``/``player_name``/
+    # ``tournament_name``, and its members answer ``.canonical_id`` — so it reaches
+    # ``_import``, ``_save_rival`` and ``_calc_vs`` above unchanged; only the *consensus*
+    # set (no single team's paste) needs its own building, wired up here.
+
+    def _top_teams_actions(self) -> TopTeamsActions:
+        return TopTeamsActions(
+            import_team=self._import_top_team,
+            import_entry=self._import,
+            save_rival_team=self._save_rival_top_team,
+            save_rival_entry=self._save_rival,
+            calc_vs_member=self._calc_vs_top_member,
+            copy_team=self._copy_top_team,
+            preview_entry=self._preview_top_entry,
+        )
+
+    def _preview_top_entry(self, entry: TopTeamEntry) -> None:
+        page = self.ctx.page
+        dialog = TeamPreviewDialog(entry, catalogs=self.ctx.catalogs, on_close=page.pop_dialog)
+        page.show_dialog(dialog)
+
+    def _species_name(self, key: str) -> str:
+        species = self.ctx.catalogs.species_for(key)
+        return species.name if species else key.replace("-", " ").title()
+
+    def _top_team_title(self, team: TopTeam) -> str:
+        names = [self._species_name(k) for k in team.members]
+        shown = ", ".join(names[:3])
+        return f"Top team · {shown}{'…' if len(names) > 3 else ''}"
+
+    def _with_consensus(self, team: TopTeam, on_text: Callable[[str], None]) -> None:
+        """Build the lineup's most common set (parsing every team's paste in the group,
+        cheap but unbounded) on a worker, then hand the Showdown text to ``on_text``; a
+        toast explains it when no member is in the species catalogue."""
+        def work() -> str | None:
+            return consensus_paste(team, self.ctx.catalogs)
+
+        def done(text: str | None) -> None:
+            if not text:
+                self.ctx.toast("None of this lineup's Pokémon are in the species catalogue", "warning")
+                return
+            on_text(text)
+
+        def failed(exc: BaseException) -> None:
+            self.ctx.toast(f"Couldn't build the set: {exc}", "error")
+
+        try:
+            self.ctx.run_in_background(work, on_done=done, on_error=failed)
+        except Exception:  # noqa: BLE001 - no page loop (tests): compute inline
+            done(work())
+
+    def _import_top_team(self, team: TopTeam) -> None:
+        self._with_consensus(team, lambda text: self.ctx.bus.emit(events.IMPORT_REQUESTED, (text, self._top_team_title(team))))
+
+    def _save_rival_top_team(self, team: TopTeam) -> None:
+        from ..calc.rival_store import RivalStore, rivals_from_paste
+
+        def save(text: str) -> None:
+            members, _skipped = rivals_from_paste(text, self.ctx.catalogs, source="Top teams")
+            if not members:
+                self.ctx.toast("None of this lineup's Pokémon are in the species catalogue", "warning")
+                return
+            name = self._top_team_title(team)
+            saved = RivalStore(self.store.session_factory).create(name, members, source="Meta · Top teams")
+            self.ctx.bus.emit(events.RIVALS_CHANGED, saved.rival_team_id)
+            self.ctx.toast(f"Saved “{saved.name}” as a rival preset", "success", action="Open in Calc",
+                           on_action=lambda: self.ctx.bus.emit(events.RIVAL_OPEN, saved.rival_team_id))
+
+        self._with_consensus(team, save)
+
+    def _calc_vs_top_member(self, team: TopTeam, index: int) -> None:
+        from ....services.showdown_service import parse_showdown_text
+        from ..calc.state import CalcRequest, pokemon_from_parsed
+
+        if index >= len(team.members):
+            return
+        key = team.members[index]
+
+        def send(text: str) -> None:
+            try:
+                slots = parse_showdown_text(text).slots
+            except Exception:  # noqa: BLE001 - a paste that does not parse just means defaults
+                slots = []
+            parsed = slots[index] if index < len(slots) else None
+            pokemon = pokemon_from_parsed(parsed, key, self.ctx.catalogs, source=self._top_team_title(team))
+            if pokemon is None:
+                self.ctx.toast(f"{self._species_name(key)} is not in the species catalogue", "warning")
+                return
+            self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))
+
+        self._with_consensus(team, send)
+
+    def _copy_top_team(self, team: TopTeam) -> None:
+        self._with_consensus(team, lambda text: (self.ctx.copy_to_clipboard(text), self.ctx.toast("Copied", "success")))
+
     # -- sync -----------------------------------------------------------------------------
 
     def _sync_now(self) -> None:
@@ -554,29 +718,32 @@ class MetaView(ft.Column):
         self.ctx.page.run_task(_hide)
 
     def _on_meta_synced(self, result: Any) -> None:
-        """Background sync finished. Never reshuffle rows under the user: offer a refresh."""
+        """Background sync finished. Never reshuffle rows under the user: offer a refresh of
+        whichever tab is actually on screen (an events reload while on Top teams would only
+        repopulate hidden controls, never the thing the user is looking at)."""
         self.store.invalidate()
         added = 0
         if isinstance(result, dict):
             for key in ("limitless", "victory_road"):
                 added += int((result.get(key) or {}).get("added", 0) or 0)
-        if self.store.loaded and added:
-            self.banner.show(f"{plural(added, 'new team')} synced", "info", action_label="Refresh", on_action=self._reload)
+        active_loaded = self.store.loaded if self._tab == "events" else self.top_teams_panel.has_result
+        if active_loaded and added:
+            self.banner.show(f"{plural(added, 'new team')} synced", "info", action_label="Refresh", on_action=self._reload_active_tab)
             self._update_self()
-        elif is_mounted(self) and not self.store.loaded:
-            self._reload()
+        elif is_mounted(self) and not active_loaded:
+            self._reload_active_tab()
 
     def _on_box_changed(self, _payload) -> None:
         """The box changed: marks and the Box filter must be recomputed on the next load."""
         before = self.store.box_species
         if self.store.refresh_box() != before or not self.store.loaded:
             self.store.invalidate()
-            if is_mounted(self) and self.store.loaded:
-                self._reload()
+            if is_mounted(self) and (self.store.loaded or self._tab == "top_teams"):
+                self._reload_active_tab()
 
     def _on_catalogs_reloaded(self, kind: str) -> None:
         if kind == "tournaments" and is_mounted(self):
-            self._reload()
+            self._reload_active_tab()
 
     # -- helpers --------------------------------------------------------------------------
 

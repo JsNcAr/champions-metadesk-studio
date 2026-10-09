@@ -262,6 +262,14 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - Its own table rather than a list in the plan row, so a pin added from the calculator is one insert and cannot race the Plans editor's save of the plan
 - `data_version: int`, `created_at`
 
+### `PlanScenarioRecord` (Table: `plan_scenarios`)
+- A plan's battle flow, one row per scenario: `scenario_id: UUID` (Primary Key), `plan_id: UUID` (indexed), `position: int`, `data_version: int`, `created_at`, `updated_at`
+- `body: dict` (JSON), see `ui/views/plans/flow.py`: `their_lead` (two `{"index", "species"}` refs into the plan's opponent; empty is the "Any other lead" fallback), `rating` (`favourable` / `even` / `unfavourable` / empty), your `lead` and `back` (`{"box_entry_id", "species"}`; empty means the plan's), `note`, `turns` and `branches`
+- A turn: `actions` (your left Pokémon's, your right one's: `{"kind": "move" | "switch", "move", "target": "foe" | "foes" | "ally", "foe", "mega", "switch_to"}`), optional `their_field` (two opponent refs; otherwise inherited) and a `note`
+- A branch ("If…", one level only): `after_turn`, `kind` (`ko`: `ko` and `replacement` refs; `other`: free `text`) and its own `turns`
+- Who is on your field at each turn is never stored: it is replayed from the lead, the switches and the branch's KO
+- Deleted with its plan or team, copied with them; a new table (`create_all`)
+
 ---
 
 ## Formats (preferences, not tables)

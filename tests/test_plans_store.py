@@ -148,6 +148,60 @@ class TestPinnedCalcs(_PlansCase):
         self.assertEqual([p.label for p in self.plans.pins(plan.plan_id)], ["from Calc"])
 
 
+class TestBattleFlowStore(_PlansCase):
+    def _opp(self, i, species):
+        from pokemon_champions_planning_tool.ui.views.plans.flow import OppRef
+        return OppRef(i, species)
+
+    def test_scenarios_are_added_saved_reordered_and_deleted(self):
+        from pokemon_champions_planning_tool.ui.views.plans.flow import Action, set_action
+
+        plan = self.plans.create_from_draft(self.team_id, _draft())
+        a = self.plans.add_scenario(plan.plan_id, (self._opp(0, "kingambit"), self._opp(1, "incineroar")))
+        fallback = self.plans.add_scenario(plan.plan_id)
+        self.assertEqual(len(a.turns), 1, "starts with an empty T1")
+        self.assertTrue(fallback.is_fallback)
+        with self.assertRaises(ValueError):
+            self.plans.add_scenario(plan.plan_id, (self._opp(1, "incineroar"), self._opp(0, "kingambit")))
+        with self.assertRaises(ValueError):
+            self.plans.add_scenario(plan.plan_id)
+        edited = set_action(a, None, 0, 0, Action("move", "Heat Wave", "foes"))
+        self.plans.save_scenario(edited)
+        self.assertEqual(self.plans.scenarios(plan.plan_id)[0].turns[0].actions[0].move, "Heat Wave")
+        self.plans.move_scenario(fallback.scenario_id, -1)
+        self.assertEqual([s.is_fallback for s in self.plans.scenarios(plan.plan_id)], [True, False])
+        self.assertTrue(self.plans.delete_scenario(a.scenario_id))
+        restored = self.plans.restore_scenario(edited)
+        self.assertEqual(restored.turns[0].actions[0].move, "Heat Wave", "undo brings it back")
+        self.assertEqual(len(self.plans.scenarios(plan.plan_id)), 2)
+
+    def test_scenarios_go_with_their_plan_and_team(self):
+        plan = self.plans.create_from_draft(self.team_id, _draft())
+        self.plans.add_scenario(plan.plan_id, (self._opp(0, "kingambit"), self._opp(1, "incineroar")))
+        copy = self.plans.duplicate(plan.plan_id)
+        self.assertEqual(len(self.plans.scenarios(copy.plan_id)), 1)
+        new_team = str(self.store.duplicate_team("Sun (copy)"))
+        self.assertEqual(len(self.plans.scenarios(self.plans.list_plans(new_team)[0].plan_id)), 1)
+        self.plans.delete(copy.plan_id)
+        from pokemon_champions_planning_tool.infrastructure.database.models import PlanScenarioRecord
+        self.assertEqual(self._count(PlanScenarioRecord), 3, "the original plan, plus the duplicated team's two plans")
+        self.store.load(UUID(new_team))
+        self.store.delete_team()
+        self.assertEqual(self._count(PlanScenarioRecord), 1)
+
+    def test_the_flow_is_in_the_markdown(self):
+        from pokemon_champions_planning_tool.ui.views.plans.flow import Action, set_action
+
+        plan = self.plans.create_from_draft(self.team_id, _draft())
+        self.plans.update(plan.plan_id, lead=[self._ref(self.charizard, "charizard"), self._ref(self.lucario, "lucario")])
+        sc = self.plans.add_scenario(plan.plan_id, (self._opp(0, "kingambit"), self._opp(1, "incineroar")))
+        self.plans.save_scenario(set_action(sc, None, 0, 0, Action("move", "Heat Wave", "foes")))
+        md = self.plans.plan_markdown(plan.plan_id)
+        self.assertIn("### Battle flow\n\n#### If they lead Kingambit + Incineroar", md)
+        self.assertIn("Lead: Charizard + Lucario", md)
+        self.assertIn("- T1: Charizard: Heat Wave → both foes", md)
+
+
 class TestTeamDeleteAndDuplicate(_PlansCase):
     def test_deleting_a_team_deletes_its_plans_and_pins(self):
         plan = self.plans.create_from_draft(self.team_id, _draft())

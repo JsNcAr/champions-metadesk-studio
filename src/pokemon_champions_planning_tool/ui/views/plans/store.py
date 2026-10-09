@@ -17,10 +17,11 @@ from sqlmodel import Session
 
 from ....domain.formats import Mechanic
 from ....infrastructure.database.database import get_session
-from ....infrastructure.database.models import MatchupPlanRecord, PlanCalcRecord
+from ....infrastructure.database.models import MatchupPlanRecord, PlanCalcRecord, PlanScenarioRecord
 from ....infrastructure.database.repositories import MatchupPlanRepository, TeamRepository
 from ..calc.state import CalcState, FieldState, PokemonState, RivalMember, pokemon_from_slot
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinLink, PinnedCalc, Plan, PlanDraft
+from .flow import Names, OppRef, Scenario, Turn, scenario_markdown
 from .pins import PinView, view_pin
 from .report import PinLine, PlanText, plan_markdown, team_markdown
 
@@ -308,6 +309,75 @@ class PlanStore:
         with self._sf() as s:
             return MatchupPlanRepository(s).delete_calc(UUID(calc_id))
 
+    # -- battle flow ----------------------------------------------------------------------
+
+    def scenarios(self, plan_id: str) -> list[Scenario]:
+        with self._sf() as s:
+            return [Scenario.from_body(r.body, scenario_id=str(r.scenario_id), plan_id=str(r.plan_id), position=r.position)
+                    for r in MatchupPlanRepository(s).scenarios(UUID(plan_id))]
+
+    def add_scenario(self, plan_id: str, their_lead: Sequence[OppRef] = ()) -> Scenario:
+        """A new scenario with one empty turn. One per opposing lead pair, one fallback (no pair)."""
+        lead = tuple(their_lead)[:2]
+        if lead and len(lead) != 2:
+            raise ValueError("Pick two of their Pokémon")
+        wanted = frozenset(o.index for o in lead)
+        for existing in self.scenarios(plan_id):
+            if frozenset(o.index for o in existing.their_lead) == wanted:
+                raise ValueError("There is already a fallback for any other lead" if not lead else "There is already a scenario for that lead")
+        sc = Scenario(their_lead=lead, turns=(Turn(),))
+        with self._sf() as s:
+            r = MatchupPlanRepository(s).add_scenario(PlanScenarioRecord(plan_id=UUID(plan_id), body=sc.body()))
+            return Scenario.from_body(r.body, scenario_id=str(r.scenario_id), plan_id=plan_id, position=r.position)
+
+    def save_scenario(self, sc: Scenario) -> Scenario:
+        with self._sf() as s:
+            repo = MatchupPlanRepository(s)
+            record = repo.get_scenario(UUID(sc.scenario_id))
+            if record is None:
+                raise KeyError(sc.scenario_id)
+            record.body = sc.body()
+            r = repo.update_scenario(record)
+            return Scenario.from_body(r.body, scenario_id=str(r.scenario_id), plan_id=str(r.plan_id), position=r.position)
+
+    def delete_scenario(self, scenario_id: str) -> bool:
+        with self._sf() as s:
+            return MatchupPlanRepository(s).delete_scenario(UUID(scenario_id))
+
+    def restore_scenario(self, sc: Scenario) -> Scenario:
+        """Undo a delete: the same scenario back, at the end of the list."""
+        with self._sf() as s:
+            r = MatchupPlanRepository(s).add_scenario(PlanScenarioRecord(plan_id=UUID(sc.plan_id), body=sc.body()))
+            return Scenario.from_body(r.body, scenario_id=str(r.scenario_id), plan_id=sc.plan_id, position=r.position)
+
+    def move_scenario(self, scenario_id: str, delta: int) -> None:
+        with self._sf() as s:
+            repo = MatchupPlanRepository(s)
+            record = repo.get_scenario(UUID(scenario_id))
+            if record is None:
+                return
+            ids = [r.scenario_id for r in repo.scenarios(record.plan_id)]
+            i = ids.index(record.scenario_id)
+            j = max(0, min(len(ids) - 1, i + delta))
+            if i != j:
+                ids.insert(j, ids.pop(i))
+                repo.reorder_scenarios(record.plan_id, ids)
+
+    def names(self, plan: Plan) -> Names:
+        """How the flow names your Pokémon (from the team, or the species it had) and theirs."""
+        def opp(ref: OppRef) -> str:
+            if 0 <= ref.index < len(plan.opponent):
+                return self.species_name(plan.opponent[ref.index].pokemon.species)
+            return self.species_name(ref.species) or f"their #{ref.index + 1}"
+        return Names(member=lambda ref: self.ref_label(ref, plan.team_id)[0], opp=opp)
+
+    def flow_lines(self, plan: Plan, hits: dict | None = None) -> list[str]:
+        names = self.names(plan)
+        out: list[str] = []
+        for sc in self.scenarios(plan.plan_id):
+            out += scenario_markdown(plan, sc, names, level=4, hits=(hits or {}).get(sc.scenario_id)) + [""]
+        return out[:-1] if out else out
+
     # -- export ---------------------------------------------------------------------------
 
     def member_line(self, pokemon: PokemonState) -> str:
@@ -326,7 +396,7 @@ class PlanStore:
             lead=tuple(self.ref_label(r, plan.team_id)[0] for r in plan.lead),
             back=tuple(self.ref_label(r, plan.team_id)[0] for r in plan.back),
             opponent=tuple(self.member_line(m.pokemon) for m in plan.opponent),
-            threats=threats, pins=tuple(pins),
+            threats=threats, pins=tuple(pins), flow=tuple(self.flow_lines(plan)),
         )
 
     def pin_views(self, plan: Plan) -> list[PinView]:

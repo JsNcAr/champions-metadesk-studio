@@ -27,6 +27,7 @@ from .models import (
     MatchupPlanRecord,
     MegaCheckedSpeciesRecord,
     PlanCalcRecord,
+    PlanScenarioRecord,
     SpeciesCatalogMetaRecord,
     SpeciesRecord,
     MegaEvolutionRecord,
@@ -689,6 +690,7 @@ class MatchupPlanRepository:
         if record is None:
             return False
         self.session.exec(delete(PlanCalcRecord).where(PlanCalcRecord.plan_id == plan_id))
+        self.session.exec(delete(PlanScenarioRecord).where(PlanScenarioRecord.plan_id == plan_id))
         self.session.delete(record)
         self.session.commit()
         return True
@@ -698,6 +700,7 @@ class MatchupPlanRepository:
         if not plan_ids:
             return 0
         self.session.exec(delete(PlanCalcRecord).where(PlanCalcRecord.plan_id.in_(plan_ids)))
+        self.session.exec(delete(PlanScenarioRecord).where(PlanScenarioRecord.plan_id.in_(plan_ids)))
         self.session.exec(delete(MatchupPlanRecord).where(MatchupPlanRecord.team_id == team_id))
         self.session.commit()
         return len(plan_ids)
@@ -712,6 +715,8 @@ class MatchupPlanRepository:
         self.session.add(copy)
         for calc in self.calcs(plan_id):
             self.session.add(self._clone_calc(calc, plan_id=copy.plan_id))
+        for scenario in self.scenarios(plan_id):
+            self.session.add(self._clone_scenario(scenario, plan_id=copy.plan_id))
         self.session.commit()
         self.session.refresh(copy)
         return copy
@@ -724,6 +729,8 @@ class MatchupPlanRepository:
             self.session.add(copy)
             for calc in self.calcs(plan.plan_id):
                 self.session.add(self._clone_calc(calc, plan_id=copy.plan_id))
+            for scenario in self.scenarios(plan.plan_id):
+                self.session.add(self._clone_scenario(scenario, plan_id=copy.plan_id))
         self.session.commit()
         return len(plans)
 
@@ -743,6 +750,11 @@ class MatchupPlanRepository:
             state=json.loads(json.dumps(source.state)), focus=dict(source.focus) if source.focus else None,
             link=dict(source.link), data_version=source.data_version,
         )
+
+    @staticmethod
+    def _clone_scenario(source: PlanScenarioRecord, *, plan_id: UUID) -> PlanScenarioRecord:
+        return PlanScenarioRecord(plan_id=plan_id, position=source.position, body=json.loads(json.dumps(source.body)),
+                                  data_version=source.data_version)
 
     def reorder(self, team_id: UUID, plan_ids: Sequence[UUID]) -> None:
         """Give the team's plans the order of ``plan_ids``; plans not named keep their place after them."""
@@ -791,6 +803,54 @@ class MatchupPlanRepository:
         self.session.delete(record)
         self.session.commit()
         return True
+
+    # -- battle-flow scenarios --------------------------------------------------------------
+
+    def scenarios(self, plan_id: UUID) -> list[PlanScenarioRecord]:
+        stmt = (
+            select(PlanScenarioRecord)
+            .where(PlanScenarioRecord.plan_id == plan_id)
+            .order_by(PlanScenarioRecord.position, PlanScenarioRecord.created_at)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def get_scenario(self, scenario_id: UUID) -> PlanScenarioRecord | None:
+        return self.session.get(PlanScenarioRecord, scenario_id)
+
+    def add_scenario(self, record: PlanScenarioRecord) -> PlanScenarioRecord:
+        """Append a scenario at the end of its plan's list."""
+        current = self.session.exec(
+            select(func.max(PlanScenarioRecord.position)).where(PlanScenarioRecord.plan_id == record.plan_id)
+        ).one()
+        record.position = 0 if current is None else int(current) + 1
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
+    def update_scenario(self, record: PlanScenarioRecord) -> PlanScenarioRecord:
+        record.updated_at = _utc_now()
+        merged = self.session.merge(record)
+        self.session.commit()
+        self.session.refresh(merged)
+        return merged
+
+    def delete_scenario(self, scenario_id: UUID) -> bool:
+        record = self.session.get(PlanScenarioRecord, scenario_id)
+        if record is None:
+            return False
+        self.session.delete(record)
+        self.session.commit()
+        return True
+
+    def reorder_scenarios(self, plan_id: UUID, scenario_ids: Sequence[UUID]) -> None:
+        order = {sid: i for i, sid in enumerate(scenario_ids)}
+        rows = self.scenarios(plan_id)
+        rows.sort(key=lambda r: (order.get(r.scenario_id, len(order)), r.position))
+        for i, row in enumerate(rows):
+            row.position = i
+            self.session.add(row)
+        self.session.commit()
 
 
 class ChampionsCatalogRepository:

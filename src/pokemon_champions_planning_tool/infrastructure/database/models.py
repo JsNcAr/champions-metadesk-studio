@@ -615,3 +615,22 @@ class PlanCalcRecord(SQLModel, table=True):
     link: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     data_version: int = 1
     created_at: datetime = Field(default_factory=_utc_now)
+
+
+class PlanScenarioRecord(SQLModel, table=True):
+    """One battle-flow scenario of a matchup plan: what you do if they lead a given pair.
+
+    ``body`` holds the scenario (their lead, a rating, your lead/back, turns and "If…"
+    branches; see ``ui.views.plans.flow``). Its own table, one row per scenario, so each
+    edit is a single-row write that cannot race the editor's saves of the plan.
+    """
+
+    __tablename__: ClassVar[str] = "plan_scenarios"
+
+    scenario_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    plan_id: UUID = Field(index=True)
+    position: int = 0
+    body: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    data_version: int = 1
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)

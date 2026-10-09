@@ -33,6 +33,7 @@ class PlanText:
     opponent: tuple[str, ...] = ()           # one line per opposing Pokémon, "Kingambit @ Black Glasses"
     threats: tuple[tuple[str, str], ...] = ()   # (name, note) for each opponent with a note
     pins: tuple[PinLine, ...] = ()
+    flow: tuple[str, ...] = ()                  # the battle flow, already laid out (flow.scenario_markdown)
 
 
 def _bullets(text: str) -> list[str]:
@@ -69,6 +70,8 @@ def plan_markdown(text: PlanText, *, level: int = 2) -> str:
     plan_bullets = _bullets(plan.game_plan)
     if plan_bullets:
         lines += ["", f"{h}# Game plan", "", *plan_bullets]
+    if text.flow:
+        lines += ["", f"{h}# Battle flow", "", *text.flow]
     if text.threats:
         lines += ["", f"{h}# Threats", ""]
         for name, note in text.threats:

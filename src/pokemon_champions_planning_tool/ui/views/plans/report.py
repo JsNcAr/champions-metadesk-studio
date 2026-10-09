@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ....domain.stat_calc import format_points
+from ..calc.state import PokemonState
 from .model import Plan
 
 _BULLETS = ("- ", "* ", "• ", "+ ")
@@ -81,6 +83,20 @@ def plan_markdown(text: PlanText, *, level: int = 2) -> str:
     return "\n".join(lines) + "\n"
 
 
+def pokemon_to_showdown(pokemon: PokemonState, name: str) -> str:
+    """One calculator set as a Showdown paste block (for "Edit as paste…")."""
+    lines = [f"{name} @ {pokemon.item}" if pokemon.item else name]
+    if pokemon.ability:
+        lines.append(f"Ability: {pokemon.ability}")
+    points = format_points(pokemon.points)
+    if points:
+        lines.append(f"EVs: {points}")
+    if pokemon.nature and pokemon.nature.lower() != "hardy":
+        lines.append(f"{pokemon.nature.strip().title()} Nature")
+    lines += [f"- {m}" for m in pokemon.moves if m]
+    return "\n".join(lines)
+
+
 def team_markdown(team_name: str, plans: Sequence[PlanText]) -> str:
     head = f"# {team_name} — matchup plans\n" if team_name else "# Matchup plans\n"
     if not plans:
@@ -88,4 +104,4 @@ def team_markdown(team_name: str, plans: Sequence[PlanText]) -> str:
     return head + "\n" + "\n".join(plan_markdown(p) for p in plans)
 
 
-__all__ = ["PinLine", "PlanText", "plan_markdown", "team_markdown"]
+__all__ = ["PinLine", "PlanText", "plan_markdown", "pokemon_to_showdown", "team_markdown"]

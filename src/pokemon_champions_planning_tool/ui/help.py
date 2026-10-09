@@ -10,7 +10,7 @@ from .format import shortcut
 from .theme import Accent, Palette, Radius, Space
 
 SHORTCUTS: tuple[tuple[str, str], ...] = (
-    ("Ctrl+1 / 2 / 3 / 4", "Box · Teams · Meta · Calc"),
+    ("Ctrl+1 / 2 / 3 / 4 / 5", "Box · Teams · Meta · Calc · Plans"),
     ("Ctrl+,", "Settings"),
     ("F1 or Ctrl+/", "This help"),
     ("Ctrl+F", "Focus the search or filter field (Box, Meta); change the Attacker (Calc)"),
@@ -72,6 +72,12 @@ TIPS: dict[str, tuple[str, ...]] = {
         "HP scaling moves (Eruption, Flail, Hard Press), weight moves (Heavy Slam, Low Kick) and abilities such as Multiscale read the HP sliders and each species' weight; the Spe chip shows who moves first under Tailwind and Trick Room.",
         "Open in damage calc from a team slot's menu, Damage calc vs… on a Meta team, or Damage calc in the Box detail panel; the last calculation is remembered. The numbers come from a port of the Smogon calculator's Champions module and are checked against it; Terastallization is not in Champions and is not modelled.",
     ),
+    "Plans": (
+        "A plan is your team's entry against one common opposing team, like a team report's matchup section: how hard it is, the two you lead with and the two you keep in the back, a game plan and a note on each threat. Pick the team at the top; each team keeps its own list.",
+        "Add plan takes their six from Meta (Top teams or a team in Events: Add to plan…), a paste or Poképaste link, or one of your Calc rival presets. The plan keeps its own copy, so deleting the preset or a tournament resync never changes it; Edit as paste… replaces their sets and keeps each note with its slot.",
+        "The game plan is one step per line; indent a line for a sub-point. Copy as Markdown turns a plan (or every plan of the team) into report-style text with bullets, ready to paste into a document or a message.",
+        "Lead and Back follow the Pokémon, not the slot: reordering the team keeps them, and one that leaves the team stays listed as \"not in team\". Duplicating a team copies its plans; deleting it deletes them.",
+    ),
     "Data & syncing": (
         "Tournaments sync at launch when the last sync is older than six hours or a backlog is waiting; Settings › Sync now always runs.",
         "Limitless allows 50 requests per 5 minutes, so a sync fetches standings in slices and continues next time.",
@@ -94,7 +100,7 @@ class HelpDialog(ft.AlertDialog):
             for label, what in SHORTCUTS
         ]
         sections: list[ft.Control] = [SectionHeader("Keyboard shortcuts", accent=Accent.SETTINGS), ft.Column(spacing=Space.XS, tight=True, controls=rows)]
-        accents = {"Box": Accent.BOX, "Teams": Accent.TEAMS, "Meta": Accent.META, "Calc": Accent.CALC, "Data & syncing": Accent.SETTINGS}
+        accents = {"Box": Accent.BOX, "Teams": Accent.TEAMS, "Meta": Accent.META, "Calc": Accent.CALC, "Plans": Accent.PLANS, "Data & syncing": Accent.SETTINGS}
         for title, tips in TIPS.items():
             sections.append(SectionHeader(title, accent=accents.get(title, Palette.SECONDARY)))
             sections.append(ft.Column(spacing=Space.XS, tight=True, controls=[

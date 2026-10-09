@@ -200,6 +200,17 @@ class PlanStore:
             )
             return plan_from_record(repo.upsert(record))
 
+    def replace_opponent(self, plan_id: str, members: Sequence[RivalMember]) -> Plan:
+        """New sets for the opposing six ("Edit as paste…"). A note stays with its slot;
+        notes past the new team's size are dropped."""
+        plan = self.get(plan_id)
+        if plan is None:
+            raise KeyError(plan_id)
+        fmt = self._team_format(plan.team_id)
+        members = self.normalise_megas(list(members)[:6], enabled=fmt.has(Mechanic.MEGA) if fmt is not None else True)
+        notes = {i: n for i, n in plan.threat_notes.items() if i < len(members)}
+        return self.update(plan_id, opponent=members, threat_notes=notes)
+
     # -- reading and editing plans --------------------------------------------------------
 
     def list_plans(self, team_id: str) -> list[Plan]:

@@ -59,10 +59,10 @@ The project uses Python's standard `unittest` library for automated test executi
 ```bash
 poetry run python -m unittest discover -s tests
 ```
-The test suite executes **730 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
+The test suite executes **749 automated unit, service, repository, and UI tests** using temporary in-memory/isolated SQLite databases.
 
 ### Running Headless UI Smoke Test
 ```bash
 poetry run python scripts/ui_smoke.py --db pokemon_champions.db
 ```
-Serializes all 5 views (Box, Teams, Meta, Calc, Settings) through Flet's control diff pipeline and checks database foreign-key integrity.
+Serializes all 6 views (Box, Teams, Meta, Calc, Plans, Settings) through Flet's control diff pipeline and checks database foreign-key integrity.

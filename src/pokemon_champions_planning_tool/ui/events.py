@@ -42,6 +42,8 @@ RIVALS_CHANGED = "rivals.changed"
 RIVAL_OPEN = "rivals.open"
 # The team builder's active team changed. Payload: team id (UUID) or None.
 ACTIVE_TEAM = "team.active"
+# A team's matchup plans were added, changed or deleted. Payload: team id (str).
+PLANS_CHANGED = "plans.changed"
 
 
 class EventBus:

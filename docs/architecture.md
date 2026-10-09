@@ -70,7 +70,12 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      closable side panel holds the opponents sweep (every species against the attacker), the
      rival team in detail (saved plans and the "Current battle" entered at team preview, with
      battle reveals written back and a Team vs team grid) and the box.
-  5. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
+  5. **Plans**: matchup plans per team, like a team report's matchup section. A team picker,
+     the team's plan list, and an editor for one plan: difficulty, Lead and Back picked from
+     the team (by box entry, so reordering the team keeps them), a game plan, the plan's own
+     copy of the opposing six with a note on each, and Copy as Markdown. A plan's opponent
+     comes from a paste or Poképaste link, a Calc rival preset, or Meta.
+  6. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
 - Package layout:
 
 ```text
@@ -88,6 +93,9 @@ ui/
   shell/            AppShell: NavigationRail, layered view deck, view registry, shortcuts
   components/       PageHeader, SectionHeader, Panel, Sprite, TypeChip, StatBar, SpreadEditor, chips, banner…
   views/calc/       state (Flet-free, JSON round-trippable; sweep classification), store (mutations → recompute → persist; status-move effects; opponent sweep; benchmark cache), benchmarks (points to KO / to survive, Flet-free), team_strip (your team and the rival team, with the rival actions), field_bar (field menus + per-side condition rows), panels (header + Moves / Build / Stages tabs), move_card, summary (BestHit: a side's best hit, in its column header), refresh (BackgroundRefresh: the opponents sweep and the team and rival ratings computed on a worker once edits pause), side_panel (tabs: sweep, rivals_panel, box list), hit (shared matchup text), rival_store (rival teams, Flet-free), dialogs/ (team preview and paste, Team vs team grid)
+  views/plans/      model (Plan, PinnedCalc, PlanDraft), store (PlanStore: plans and pinned calcs, your team's members read live, Mega
+                    forms resolved from held stones), report (Markdown, Showdown text of a set; pure), view (team picker, plan
+                    list), editor (overview, game plan, their team with notes), dialogs (paste, rival preset picker)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

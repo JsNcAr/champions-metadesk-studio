@@ -8,6 +8,7 @@ plan is yours to write, and Copy as Markdown turns it into a report-style entry.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import flet as ft
@@ -20,7 +21,7 @@ from ...tasks import is_mounted
 from ...theme import DEFAULT_WINDOW_WIDTH, Accent, IconSize, Layout, Palette, Radius, Space
 from ..calc.state import CalcRequest, FieldState, PokemonState, RivalTeam
 from .components import PlanRow
-from .dialogs import PasteDialog, PresetPickerDialog
+from .dialogs import AddPlanDialog, PasteDialog, PresetPickerDialog
 from .editor import EditorActions, PlanEditor
 from .grid import compute_grid, with_ko_text
 from .model import Plan, PlanDraft
@@ -94,6 +95,9 @@ class PlansView(ft.Column):
         ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._mark_stale())
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.FORMAT_CHANGED, lambda _p: self._mark_stale())
+        ctx.bus.on(events.PLAN_ADD_REQUESTED, self.request_add)
+        ctx.bus.on(events.PLAN_OPEN, self._on_plan_open)
+        ctx.bus.on(events.PLANS_CHANGED, self._on_plans_changed)
 
     # -- lifecycle ------------------------------------------------------------------------
 
@@ -316,6 +320,48 @@ class PlansView(ft.Column):
         self.ctx.prefs.set(PREF_PLAN, plan.plan_id)
         self.ctx.bus.emit(events.PLANS_CHANGED, target)
         return plan
+
+    def request_add(self, draft: PlanDraft) -> None:
+        """A team from Meta or Calc: ask which of your teams the plan is for, then save it
+        without leaving the view you are in (a toast offers to open it)."""
+        self._load_teams()
+        if not self._teams:
+            self.ctx.toast("Build a team first: plans are made for one of your teams", "warning",
+                           action="Go to Teams", on_action=lambda: self.ctx.bus.emit(events.NAVIGATE, "team"))
+            return
+        ids = [t for t, _ in self._teams]
+        active = str(self.team_store.active_team_id) if self.team_store.active_team_id else None
+        default = self.team_id if self.team_id in ids else (active if active in ids else ids[0])
+        draft = replace(draft, members=self.store.normalise_megas(draft.members))   # the preview shows Mega forms
+
+        def save(team_id: str, name: str) -> None:
+            self._close_dialog()
+            plan = self.store.create_from_draft(team_id, replace(draft, name=name or draft.name))
+            self.ctx.bus.emit(events.PLANS_CHANGED, team_id)
+            team_name = next((n for t, n in self._teams if t == team_id), "")
+            self.ctx.toast(f"Added “{plan.name}” to {team_name}'s plans", "success", action="Open",
+                           on_action=lambda: self.ctx.bus.emit(events.PLAN_OPEN, (team_id, plan.plan_id)))
+
+        self._open_dialog(AddPlanDialog(draft.members, self.store.catalogs, teams=self._teams, team_id=default, name=draft.name,
+                                        source=draft.source, on_save=save, on_cancel=self._close_dialog))
+
+    def _on_plan_open(self, payload: tuple[str, str]) -> None:
+        team_id, plan_id = payload
+        # Remembered first: if Plans has not been opened yet, showing it loads from these.
+        self.ctx.prefs.set(PREF_TEAM, team_id)
+        self.ctx.prefs.set(PREF_PLAN, plan_id)
+        if self._loaded:
+            self._load_teams()
+            if team_id != self.team_id:
+                self.select_team(team_id)
+            else:
+                self._reload_plans(keep=plan_id)
+        self.ctx.bus.emit(events.NAVIGATE, "plans")
+
+    def _on_plans_changed(self, team_id: Any) -> None:
+        """A plan was added from elsewhere: refresh the list if it is the team on show."""
+        if self._loaded and team_id == self.team_id:
+            self._reload_plans(keep=self.plan_id)
 
     def _add_from_meta(self) -> None:
         self.ctx.bus.emit(events.NAVIGATE, "meta")

@@ -443,6 +443,11 @@ class CalcView(ft.Column):
                 self.ctx.toast(f"{self._species_name(linked[2].pokemon.species)} updated in the rival team", "success")
         elif team is None:
             return
+        elif key == "plan":
+            from ..plans.model import PlanDraft
+
+            source = "Calc · current battle" if team.is_battle else (f"Calc · {team.source}" if team.source else "Calc · rival preset")
+            self.ctx.bus.emit(events.PLAN_ADD_REQUESTED, PlanDraft(name=team.name, members=tuple(team.members), source=source))
         elif key == "use_preset":
             self._use_preset(team.rival_team_id)
         elif key == "end_battle":

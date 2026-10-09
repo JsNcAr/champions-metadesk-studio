@@ -32,6 +32,8 @@ class TopTeamsActions:
     calc_vs_member: Callable[[TopTeam, int], None]          # the most common set's slot `index` as the Defender
     copy_team: Callable[[TopTeam], None]                    # the most common set as Showdown text
     preview_entry: Callable[[TopTeamEntry], None]           # open one player's team in a read-only preview dialog
+    add_plan_team: Callable[[TopTeam], None]                # a matchup plan against the most common set
+    add_plan_entry: Callable[[TopTeamEntry], None]          # a matchup plan against one player's team
 
 
 def _member_sprite(key: str, catalogs) -> Sprite:
@@ -86,6 +88,7 @@ class TopTeamCard(ft.Container):
         ]
         menu = ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, tooltip="More actions", items=[
             *calc_items, ft.PopupMenuItem(), ft.PopupMenuItem(content=ft.Text("Copy as Showdown text"), icon=ft.Icons.CONTENT_COPY, on_click=lambda _e: actions.copy_team(team)),
+            ft.PopupMenuItem(content=ft.Text("Add to plan…"), icon=ft.Icons.ASSIGNMENT_ADD, on_click=lambda _e: actions.add_plan_team(team)),
         ])
         self._chevron = ft.Icon(ft.Icons.EXPAND_MORE, size=IconSize.SM, color=Palette.ON_SURFACE_VARIANT)
 
@@ -190,6 +193,7 @@ class TopTeamCard(ft.Container):
         controls.append(ft.IconButton(icon=ft.Icons.VISIBILITY_OUTLINED, icon_size=IconSize.SM, tooltip=f"Preview {entry.player_name}'s team", on_click=lambda _e: self._actions.preview_entry(entry)))
         controls.append(ft.IconButton(icon=ft.Icons.DOWNLOAD, icon_size=IconSize.SM, tooltip=f"Import {entry.player_name}'s team", on_click=lambda _e: self._actions.import_entry(entry)))
         controls.append(ft.IconButton(icon=ft.Icons.SPORTS_MMA_OUTLINED, icon_size=IconSize.SM, tooltip="Save as rival preset", on_click=lambda _e: self._actions.save_rival_entry(entry)))
+        controls.append(ft.IconButton(icon=ft.Icons.ASSIGNMENT_ADD, icon_size=IconSize.SM, tooltip="Add to plan…", on_click=lambda _e: self._actions.add_plan_entry(entry)))
         return ft.Row(spacing=Space.XS, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
 
 

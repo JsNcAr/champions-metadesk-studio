@@ -78,7 +78,11 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      Trick Room, each side's Tailwind and Stealth Rock): fast mode for every pairing, then the
      full calculation for the best hit each way only (the KO text), cached by both sets and
      the field; a cell opens the pair in Calc with that field (`CalcRequest.field`). A plan's
-     opponent comes from a paste or Poképaste link, a Calc rival preset, or Meta.
+     opponent comes from a paste or Poképaste link or a rival preset (in Plans), or from
+     "Add to plan…" in Meta (a Top teams lineup's most common set, one team of the group, an
+     Events row) and Calc's rival menu: those send a `PlanDraft` on `PLAN_ADD_REQUESTED`, the
+     Plans view (built at start-up) asks which of your teams it is for, saves it and offers
+     to open it (`PLAN_OPEN`).
   6. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
 - Package layout:
 

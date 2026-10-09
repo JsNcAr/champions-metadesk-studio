@@ -19,7 +19,7 @@ from pokemon_champions_planning_tool.ui.help import SHORTCUTS, TIPS  # noqa: E40
 from pokemon_champions_planning_tool.ui.views.calc.rival_store import RivalStore  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.state import FieldState, SideConditions  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans import MemberRef, PlanStore  # noqa: E402
-from pokemon_champions_planning_tool.ui.views.plans.dialogs import PasteDialog, PresetPickerDialog  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.plans.dialogs import AddPlanDialog, PasteDialog, PresetPickerDialog  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans.view import PREF_TEAM, PlansView  # noqa: E402
 
 
@@ -313,6 +313,55 @@ class TestAddingPlans(_ViewCase):
         self.view.ensure_loaded()
         self.view._add_from_meta()
         self.assertEqual(navigated, ["meta"])
+
+
+class TestAddFromElsewhere(_ViewCase):
+    """Meta and Calc send a draft through the bus; Plans asks which team and saves it."""
+
+    def test_a_draft_from_meta_asks_for_a_team_and_is_saved(self):
+        self.store.create_team("Rain")
+        rain = str(self.store.active_team_id)
+        draft = _draft("Raichu + Staraptor")
+        draft = replace(draft, members=(_rival("charizard", "Charizardite Y", "Blaze"),) + draft.members)
+        self.ctx.bus.emit(events.PLAN_ADD_REQUESTED, draft)
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, AddPlanDialog)
+        self.assertEqual(dialog._team.value, rain, "the active team by default")
+        self.assertEqual(dialog._name.value, "Raichu + Staraptor")
+        self.assertIn("Charizard-Mega-Y", serialise_text(dialog) + str([c.tooltip for c in dialog.content.content.controls[1].controls]))
+        dialog._team.value = self.team_id
+        dialog._name.value = "Sun vs Big Six"
+        dialog._fire()
+        plans = self.plans.list_plans(self.team_id)
+        self.assertEqual([p.name for p in plans], ["Sun vs Big Six"])
+        self.assertEqual(plans[0].opponent[0].pokemon.species, "charizard-mega-y")
+        self.assertEqual(self._toast_text(), "Added “Sun vs Big Six” to Sun's plans")
+
+    def test_open_from_the_toast_shows_the_plan(self):
+        navigated = []
+        self.ctx.bus.on(events.NAVIGATE, navigated.append)
+        plan = self.plans.create_from_draft(self.team_id, _draft("A"))
+        b = self.plans.create_from_draft(self.team_id, _draft("B"))
+        self.ctx.bus.emit(events.PLAN_OPEN, (self.team_id, b.plan_id))
+        self.assertEqual(navigated, ["plans"])
+        self.view.ensure_loaded()   # what showing the view does
+        self.assertEqual((self.view.team_id, self.view.plan_id), (self.team_id, b.plan_id))
+        self.ctx.bus.emit(events.PLAN_OPEN, (self.team_id, plan.plan_id))
+        self.assertEqual(self.view.plan_id, plan.plan_id, "already loaded: switches straight away")
+
+    def test_a_plan_added_elsewhere_shows_up_in_the_list(self):
+        self.view.ensure_loaded()
+        self.plans.create_from_draft(self.team_id, _draft("From Calc"))
+        self.ctx.bus.emit(events.PLANS_CHANGED, self.team_id)
+        self.assertEqual([p.name for p in self.view.plans], ["From Calc"])
+
+    def test_without_a_team_it_says_so(self):
+        with self.db.session() as s:
+            from pokemon_champions_planning_tool.infrastructure.database.repositories import TeamRepository
+            TeamRepository(s).delete(self.store.active_team_id)
+        self.ctx.bus.emit(events.PLAN_ADD_REQUESTED, _draft())
+        self.assertNotIsInstance(self.page.dialogs[-1], AddPlanDialog)
+        self.assertIn("Build a team first", self._toast_text())
 
 
 class TestHelp(unittest.TestCase):

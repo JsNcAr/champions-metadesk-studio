@@ -75,6 +75,36 @@ class PasteDialog(ft.AlertDialog):
             self.update()
 
 
+class AddPlanDialog(ft.AlertDialog):
+    """A team from Meta or Calc becomes a plan: which of your teams it is for, and its name."""
+
+    def __init__(self, members: Sequence[Any], catalogs: Any, *, teams: Sequence[tuple[str, str]], team_id: str | None, name: str,
+                 source: str, on_save: Callable[[str, str], None], on_cancel: Callable[[], None]) -> None:
+        super().__init__(modal=True, scrollable=True)
+        self._on_save = on_save
+        self._team = ft.Dropdown(label="Plan for your team", value=team_id, leading_icon=ft.Icons.GROUPS_OUTLINED,
+                                 options=[ft.DropdownOption(key=t, text=n) for t, n in teams])
+        self._name = ft.TextField(label="Plan name", value=name, hint_text="e.g. Big Six, Raptor (Sand)…", autofocus=True,
+                                  on_submit=lambda _e: self._fire())
+        self._error = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ERROR, visible=False)
+        sprites = ft.Row(spacing=Space.XS, wrap=True, controls=[species_sprite(getattr(m, "pokemon", m).species, catalogs, size=36) for m in members[:6]])
+        self.title = ft.Text("Add to a plan")
+        self.content = ft.Container(width=520, content=ft.Column(spacing=Space.MD, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+            ft.Text(f"Their team · {source}" if source else "Their team", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT),
+            sprites, self._team, self._name, self._error,
+        ]))
+        self.actions = [ft.TextButton("Cancel", on_click=lambda _e: on_cancel()), ft.FilledButton("Add plan", on_click=lambda _e: self._fire())]
+        self.actions_alignment = ft.MainAxisAlignment.END
+
+    def _fire(self) -> None:
+        if not self._team.value:
+            self._error.value, self._error.visible = "Pick one of your teams", True
+            if is_mounted(self):
+                self.update()
+            return
+        self._on_save(str(self._team.value), (self._name.value or "").strip())
+
+
 class PresetPickerDialog(ft.AlertDialog):
     """Your saved rival presets (Calc); clicking one makes a plan against it."""
 
@@ -113,4 +143,4 @@ def _hover(e: ft.ControlEvent) -> None:
         e.control.update()
 
 
-__all__ = ["PASTE_HINT", "PasteDialog", "PresetPickerDialog"]
+__all__ = ["PASTE_HINT", "AddPlanDialog", "PasteDialog", "PresetPickerDialog"]

@@ -185,6 +185,63 @@ class PinDialog(ft.AlertDialog):
         self._on_save(str(self._team.value), str(self._plan.value), (self._label.value or "").strip(), self.mine, box_id, opp_index)
 
 
+class LeadPairDialog(ft.AlertDialog):
+    """Pick two of their six: the lead a scenario plans for, or their field on a turn.
+    ``on_pick(indices)``; ``allow_clear`` adds "Same as before" (an empty pick)."""
+
+    def __init__(self, members: Sequence[Any], catalogs: Any, *, title: str, on_pick: Callable[[tuple[int, ...]], None],
+                 on_cancel: Callable[[], None], selected: Sequence[int] = (), allow_clear: bool = False, max_pick: int = 2) -> None:
+        super().__init__(modal=True, scrollable=True)
+        self._on_pick = on_pick
+        self._max = max_pick
+        self._picked: list[int] = [i for i in selected if 0 <= i < len(members)][:max_pick]
+        self._members = list(members)
+        self._catalogs = catalogs
+        self._chips = ft.Row(spacing=Space.SM, wrap=True, run_spacing=Space.SM)
+        self._ok = ft.FilledButton("Use these two", on_click=lambda _e: self._on_pick(tuple(self._picked)))
+        actions: list[ft.Control] = [ft.TextButton("Cancel", on_click=lambda _e: on_cancel())]
+        if allow_clear:
+            actions.append(ft.TextButton("Same as before", on_click=lambda _e: self._on_pick(())))
+        actions.append(self._ok)
+        self.title = ft.Text(title)
+        self.content = ft.Container(width=520, content=ft.Column(spacing=Space.MD, tight=True, controls=[
+            ft.Text("Pick two of their Pokémon.", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
+            self._chips,
+        ]))
+        self.actions = actions
+        self.actions_alignment = ft.MainAxisAlignment.END
+        self._render()
+
+    def toggle(self, index: int) -> None:
+        if index in self._picked:
+            self._picked.remove(index)
+        else:
+            self._picked.append(index)
+            self._picked = self._picked[-self._max:]
+        self._render()
+        if is_mounted(self):
+            self.update()
+
+    def _render(self) -> None:
+        chips: list[ft.Control] = []
+        for i, member in enumerate(self._members):
+            p = getattr(member, "pokemon", member)
+            on = i in self._picked
+            species = self._catalogs.species_for(p.species) if p.species else None
+            chips.append(ft.Container(
+                content=ft.Row(spacing=Space.XS, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    species_sprite(p.species, self._catalogs, size=32),
+                    ft.Text(species.name if species else (p.species or "?"), theme_style=ft.TextThemeStyle.BODY_SMALL,
+                            weight=ft.FontWeight.W_600 if on else None, color=Palette.ON_SURFACE if on else Palette.ON_SURFACE_VARIANT),
+                ]),
+                padding=ft.Padding.only(left=Space.XS, right=Space.SM, top=2, bottom=2), border_radius=Radius.PILL,
+                bgcolor=alpha(Accent.PLANS, 0.16) if on else None, border=ft.Border.all(1, Accent.PLANS if on else Palette.OUTLINE_VARIANT),
+                ink=True, on_click=lambda _e, i=i: self.toggle(i), data={"opp": i, "on": on},
+            ))
+        self._chips.controls = chips
+        self._ok.disabled = len(self._picked) != self._max
+
+
 class PresetPickerDialog(ft.AlertDialog):
     """Your saved rival presets (Calc); clicking one makes a plan against it."""
 
@@ -223,4 +280,4 @@ def _hover(e: ft.ControlEvent) -> None:
         e.control.update()
 
 
-__all__ = ["PASTE_HINT", "AddPlanDialog", "PasteDialog", "PinDialog", "PresetPickerDialog"]
+__all__ = ["PASTE_HINT", "AddPlanDialog", "LeadPairDialog", "PasteDialog", "PinDialog", "PresetPickerDialog"]

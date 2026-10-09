@@ -21,8 +21,11 @@ from ...tasks import is_mounted
 from ...theme import DEFAULT_WINDOW_WIDTH, Accent, IconSize, Layout, Palette, Radius, Space
 from ..calc.state import CalcRequest, CalcState, FieldState, PokemonState, RivalTeam
 from .components import PlanRow
-from .dialogs import AddPlanDialog, PasteDialog, PinDialog, PresetPickerDialog
+from .dialogs import AddPlanDialog, LeadPairDialog, PasteDialog, PinDialog, PresetPickerDialog
 from .editor import EditorActions, PlanEditor
+from .flow import OppRef, Scenario, board_at
+from .flow_calc import HitKey, attacker_at, can_mega
+from .flow_view import FlowActions, FlowContext
 from .grid import compute_grid, with_ko_text
 from .model import PinLink, PinnedCalc, PinRequest, Plan, PlanDraft
 from .pins import PinView
@@ -83,7 +86,10 @@ class PlansView(ft.Column):
             copy=self.copy_plan, rename=self._rename, duplicate=self._duplicate, delete=self._delete,
             set_field=self._set_field, open_pair=self._open_pair,
             pin_pair=self._pin_pair, open_pin=self._open_pin, rename_pin=self._rename_pin, delete_pin=self._delete_pin, pin_note=self._pin_note,
+            flow=FlowActions(add=self._flow_add, save=self._flow_save, delete=self._flow_delete, move=self._flow_move,
+                             pick_pair=self._pick_pair, open_hit=self._open_hit, pin_hit=self._pin_hit),
         ))
+        self._flow_version = 0
         self._pins_version = 0
         self._grid_cache: dict = {}     # pairings by both sets and the field (grid.py)
         self._grid_version = 0          # a newer request wins over a slower older one
@@ -177,6 +183,7 @@ class PlansView(ft.Column):
             self._update()
             self.refresh_grid(plan)
             self.refresh_pins(plan)
+            self.refresh_flow(plan)
             return
         self._update()
 
@@ -214,6 +221,8 @@ class PlansView(ft.Column):
             self.ctx.toast(str(exc), "error")
             return None
         self._replace(saved)
+        if "lead" in changes or "back" in changes:   # scenarios that follow the plan's picks change too
+            self.refresh_flow(saved)
         return saved
 
     def _set_note(self, plan_id: str, index: int, text: str) -> Plan | None:
@@ -259,6 +268,7 @@ class PlansView(ft.Column):
             self.editor.plan = saved
             self.editor.grid.set_field(saved.field)
             self.refresh_grid(saved)
+            self.refresh_flow(saved)   # the flow's damage is under the same field
 
     def _open_pair(self, box_id: str, index: int) -> None:
         plan = next((p for p in self.plans if p.plan_id == self.plan_id), None)
@@ -268,6 +278,141 @@ class PlansView(ft.Column):
         if you is None:
             return
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=you, defender=plan.opponent[index].pokemon, field=plan.field))
+
+    # -- battle flow ----------------------------------------------------------------------
+
+    def _flow_context(self, plan: Plan) -> FlowContext:
+        members = self.store.my_members(plan.team_id)
+        mine = dict(members)
+        catalogs = self.store.catalogs
+
+        def target(move: str) -> str | None:
+            info = catalogs.move_by_name(move)
+            return info.target if info is not None else None
+
+        return FlowContext(plan=plan, mine=mine, order=[box for box, _ in members], names=self.store.names(plan),
+                           can_mega=lambda box: can_mega(mine.get(box), catalogs), move_target=target, catalogs=catalogs)
+
+    def refresh_flow(self, plan: Plan) -> None:
+        """Show the plan's scenarios now; their damage follows from a worker."""
+        self._flow_version += 1
+        version = self._flow_version
+        scenarios = self.store.scenarios(plan.plan_id)
+        self.editor.flow.show(self._flow_context(plan), scenarios)
+
+        def done(hits: dict) -> None:
+            if version == self._flow_version and self.plan_id == plan.plan_id:
+                for scenario_id, h in hits.items():
+                    self.editor.flow.set_hits(scenario_id, h)
+
+        self.ctx.run_in_background(lambda: {sc.scenario_id: self.store.flow_hits(plan, sc) for sc in scenarios}, on_done=done,
+                                   on_error=lambda exc: self.ctx.toast(f"Couldn't calculate the battle flow: {exc}", "error"))
+
+    def _flow_save(self, sc: Scenario) -> None:
+        plan = self._current()
+        try:
+            saved = self.store.save_scenario(sc)
+        except KeyError:
+            return
+        self.editor.flow.updated(saved)
+        if plan is None:
+            return
+        version = self._flow_version
+
+        def done(hits: dict) -> None:
+            if version == self._flow_version and self.plan_id == plan.plan_id:
+                self.editor.flow.set_hits(saved.scenario_id, hits)
+
+        self.ctx.run_in_background(lambda: self.store.flow_hits(plan, saved), on_done=done, on_error=lambda _exc: None)
+
+    def _flow_add(self, fallback: bool) -> None:
+        plan = self._current()
+        if plan is None:
+            return
+
+        def add(lead: tuple[OppRef, ...]) -> None:
+            try:
+                sc = self.store.add_scenario(plan.plan_id, lead)
+            except ValueError as exc:
+                self.ctx.toast(str(exc), "warning")
+                return
+            self.editor.flow.open(sc.scenario_id)
+            self.refresh_flow(plan)
+
+        if fallback:
+            add(())
+            return
+        if len(plan.opponent) < 2:
+            self.ctx.toast("Add their team first (Their team › Edit as paste…)", "warning")
+            return
+        self._pick_pair("If they lead…", (), False,
+                        lambda idx: add(tuple(OppRef(i, plan.opponent[i].pokemon.species or "") for i in idx)))
+
+    def _flow_delete(self, sc: Scenario) -> None:
+        plan = self._current()
+        self.store.delete_scenario(sc.scenario_id)
+        if plan is not None:
+            self.refresh_flow(plan)
+
+        def undo() -> None:
+            self.store.restore_scenario(sc)
+            current = self._current()
+            if current is not None and current.plan_id == sc.plan_id:
+                self.refresh_flow(current)
+
+        self.ctx.toast("Scenario deleted", "info", action="Undo", on_action=undo)
+
+    def _flow_move(self, sc: Scenario, delta: int) -> None:
+        self.store.move_scenario(sc.scenario_id, delta)
+        plan = self._current()
+        if plan is not None:
+            self.refresh_flow(plan)
+
+    def _pick_pair(self, title: str, selected: Any, allow_clear: bool, on_pick: Any) -> None:
+        plan = self._current()
+        if plan is None:
+            return
+
+        def picked(indices: tuple[int, ...]) -> None:
+            self._close_dialog()
+            on_pick(indices)
+
+        self._open_dialog(LeadPairDialog(plan.opponent, self.store.catalogs, title=title, on_pick=picked, on_cancel=self._close_dialog,
+                                         selected=list(selected), allow_clear=allow_clear))
+
+    def _hit_pair(self, sc: Scenario, key: HitKey, foe: int) -> tuple[Plan, PokemonState, PokemonState] | None:
+        plan = self._current()
+        if plan is None or not 0 <= foe < len(plan.opponent):
+            return None
+        attacker = attacker_at(plan, sc, key, dict(self.store.my_members(plan.team_id)), self.store.catalogs)
+        return (plan, attacker, plan.opponent[foe].pokemon) if attacker is not None else None
+
+    def _open_hit(self, sc: Scenario, key: HitKey, foe: int) -> None:
+        pair = self._hit_pair(sc, key, foe)
+        if pair is not None:
+            plan, attacker, defender = pair
+            self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=attacker, defender=defender, field=plan.field))
+
+    def _pin_hit(self, sc: Scenario, key: HitKey, foe: int) -> None:
+        pair = self._hit_pair(sc, key, foe)
+        if pair is None:
+            return
+        plan, attacker, defender = pair
+        where, i, slot = key
+        move = sc.turns_of(where)[i].actions[slot].move
+        if move not in attacker.moves:
+            return
+        on_slot = board_at(plan, sc, i, where).slot(slot)
+        who = on_slot.box_entry_id if on_slot is not None else None
+        saved = dict(self.store.my_members(plan.team_id)).get(who) if who else None
+        # Following the team member would bring back its saved form: only link when the form is the same.
+        same_form = saved is not None and saved.species == attacker.species
+        name = self.store.species_name
+        label = f"{name(attacker.species)} {move} → {name(defender.species)}"
+        self.store.add_pin(plan.plan_id, CalcState(left=attacker, right=defender, field=plan.field), label=label, mine="left",
+                           focus=("left", attacker.moves.index(move)), link=PinLink(who if same_form else None, foe))
+        self.ctx.toast(f"Pinned “{label}”", "success")
+        self.refresh_pins(plan)
 
     # -- pinned calcs ---------------------------------------------------------------------
 

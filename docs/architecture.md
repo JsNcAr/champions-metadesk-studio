@@ -87,6 +87,12 @@ The application is structured into a clean **3-Layer Architecture** (UI, Service
      and the plan's opponent (index), whose current sets replace the stored ones while the
      situation (boosts, HP, status, crits, field) stays. Calc's Pin to plan… sends a
      `PinRequest` on `PLAN_PIN_REQUESTED`; the Plans view's dialog picks the plan and links.
+     Battle flow (`plan_scenarios`, one row per scenario): what you do for each opposing lead
+     pair (plus an "Any other lead" fallback), turn by turn, with one level of "If…" branches.
+     Only your two actions are stored; who is on the field (`board_at` / `foes_at`) is always
+     replayed from the turns, and `validate` lists problems as warning chips without raising.
+     Each picked attack gets a single-move full calc per target (×0.75 when a spread move
+     hits both) in the attacker's form at that turn, computed on a worker and cached.
   6. **Settings** (rail trailing slot): catalogue syncs with status and an About section.
 - Package layout:
 
@@ -108,7 +114,9 @@ ui/
   views/plans/      model (Plan, PinnedCalc, PlanDraft), store (PlanStore: plans and pinned calcs, your team's members read live, Mega
                     forms resolved from held stones), report (Markdown, Showdown text of a set; pure), grid (fast pass + KO pass, cached;
                     pure), pins (resolve links, recompute, the lines; pure), view (team picker, plan list), editor (overview, game plan, grid, their team with notes),
-                    grid_view (field bar + 7×7 table), dialogs (paste, add from elsewhere, pin, rival preset picker)
+                    grid_view (field bar + 7×7 table), dialogs (paste, add from elsewhere, pin, rival preset picker,
+                    lead pair), flow (battle flow model, board replay, checks, Markdown; pure), flow_calc (damage of
+                    each picked attack; pure), flow_view (Battle flow section: scenario cards, turn rows, branches)
   views/<name>/     store.py (Flet-free data + mutations, one session per call),
                     view.py (controls; subscribes to its store), dialogs/
 ```

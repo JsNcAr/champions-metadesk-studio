@@ -15,6 +15,7 @@ from ...tasks import is_mounted
 from ...theme import Accent, IconSize, Palette, Radius, Space, alpha
 from ..calc.state import FieldState, PokemonState, RivalMember
 from .components import section, species_sprite
+from .flow_view import FLOW_TIP, FlowActions, FlowSection
 from .grid_view import GRID_TIP, GridSection
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinnedCalc, Plan
 from .pins import PinView
@@ -45,6 +46,7 @@ class EditorActions:
     rename_pin: Callable[[PinnedCalc], None]
     delete_pin: Callable[[PinnedCalc], None]
     pin_note: Callable[[PinnedCalc, str], None]
+    flow: FlowActions
 
 PINS_TIP = (
     "Calcs you keep with this plan, recomputed every time: a side that follows your team member or their Pokémon "
@@ -114,7 +116,10 @@ class PlanEditor(ft.Column):
         self._pins = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
         pins = section("Key calcs", self._pins, tip=PINS_TIP)
 
-        self.controls = [header, overview, game_plan, grid, pins, self._opponent_section]
+        self.flow = FlowSection(actions=actions.flow)
+        flow = section("Battle flow", self.flow, trailing=[self.flow.add_menu], tip=FLOW_TIP)
+
+        self.controls = [header, overview, game_plan, flow, grid, pins, self._opponent_section]
 
     # -- showing a plan -------------------------------------------------------------------
 

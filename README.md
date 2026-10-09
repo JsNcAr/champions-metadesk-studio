@@ -80,7 +80,10 @@ Pokémon Company ([details](#license-and-disclaimer)).*
   and the two you keep in the back, your game plan, a note on each threat, a matchup grid of
   your six against theirs under a field you set (Tailwind, Stealth Rock, weather, Trick
   Room…), and pinned calcs that stay up to date as your sets change. The app runs the calcs;
-  the plan is yours to write. Copy a plan, or all of a team's plans, as Markdown.
+  the plan is yours to write. A battle flow per plan says what you do for each lead they
+  might show, turn by turn, with the damage of each attack and "If…" branches for when it
+  goes wrong (lose your Mega on turn 1, and so on). Copy a plan, or all of a team's plans,
+  as Markdown.
 
 ## Download
 

@@ -28,8 +28,15 @@ for the headings and style.
   - Add a plan from Meta (Add to plan… on a Top teams lineup, on one team of its group or on
     an Events team), from Calc's rival menu, from one of your rival presets, or from a paste
     or Poképaste link. It asks which of your teams the plan is for.
+  - Battle flow: for each lead pair they might show (plus "Any other lead"), what you do
+    turn by turn: each of your two Pokémon picks a move and target, a switch, or Mega
+    Evolution, and who is on the field next turn follows. Each attack shows its damage and
+    KO chance under the plan's field; click it to open in Calc or pin it. One level of
+    "If…" branches covers the game going wrong ("If Tyranitar is KO'd after T1 → bring
+    Incineroar") with their own turns. Problems (a member that left the team, a move no
+    longer in the moveset, a second Mega) show as warning chips.
   - Copy a plan, or every plan of a team, as Markdown: difficulty, Lead/Back, the game plan
-    as bullets, threat notes and the key calcs.
+    and battle flow as bullets, threat notes and the key calcs.
   - Duplicating a team copies its plans; deleting it deletes them. Lead and Back follow the
     Pokémon, so reordering the team keeps them.
 

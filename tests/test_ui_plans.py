@@ -2,6 +2,7 @@
 Lead/Back, game plan, threat notes), and adding a plan from a paste or a rival preset."""
 
 import sys
+from types import SimpleNamespace
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -20,7 +21,8 @@ from pokemon_champions_planning_tool.ui.help import SHORTCUTS, TIPS  # noqa: E40
 from pokemon_champions_planning_tool.ui.views.calc.rival_store import RivalStore  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.state import CalcState, FieldState, PokemonState, SideConditions  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans import MemberRef, PinLink, PinRequest, PlanStore  # noqa: E402
-from pokemon_champions_planning_tool.ui.views.plans.dialogs import AddPlanDialog, PasteDialog, PinDialog, PresetPickerDialog  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.plans.dialogs import AddPlanDialog, LeadPairDialog, PasteDialog, PinDialog, PresetPickerDialog  # noqa: E402
+from pokemon_champions_planning_tool.ui.components import StatusChip  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans.view import PREF_TEAM, PlansView  # noqa: E402
 
 
@@ -361,6 +363,159 @@ class TestPinnedCalcs(_ViewCase):
         self.plans.delete(self.plan.plan_id)
         self.view.request_pin(PinRequest(state=CalcState(left=PokemonState(species="kingambit"), right=PokemonState(species="charizard"))))
         self.assertIn("Make a plan first", self._toast_text())
+
+
+def _find(control, pred):
+    """Every control under ``control`` (content/controls/items) matching ``pred``."""
+    out = []
+
+    def walk(c):
+        if c is None:
+            return
+        if pred(c):
+            out.append(c)
+        for attr in ("content", "controls", "items"):
+            child = getattr(c, attr, None)
+            for x in (child if isinstance(child, list) else [child] if isinstance(child, ft.Control) else []):
+                walk(x)
+    walk(control)
+    return out
+
+
+def _data(key):
+    return lambda c: isinstance(getattr(c, "data", None), dict) and key in c.data
+
+
+class TestBattleFlow(_ViewCase):
+    def setUp(self):
+        super().setUp()
+        self.store.set_move(1, 0, "Heat Wave")
+        self.store.assign(3, self.ghost)
+        self.plans.invalidate()
+        self.plan = self.plans.create_from_draft(self.team_id, _draft())
+        self.plans.update(self.plan.plan_id, lead=[MemberRef(str(self.charizard), "charizard"), MemberRef(str(self.lucario), "lucario")],
+                          back=[MemberRef(str(self.ghost), "gengar")])
+        self.view.ensure_loaded()
+        self.flow = self.view.editor.flow
+
+    def _add(self):
+        self.flow.actions.add(False)
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, LeadPairDialog)
+        dialog.toggle(0)
+        dialog.toggle(1)
+        dialog._ok.on_click(None)
+        return self.plans.scenarios(self.plan.plan_id)[-1]
+
+    def _card(self, sc):
+        return self.flow.cards[sc.scenario_id]
+
+    def _pick(self, card, key, label):
+        menu = _find(card, lambda c: isinstance(c, ft.PopupMenuButton) and getattr(c, "data", None) == {"action": key})[0]
+        item = next(i for i in menu.items if isinstance(getattr(i, "content", None), ft.Text) and i.content.value == label)
+        item.on_click(None)
+
+    def test_a_scenario_for_their_lead(self):
+        sc = self._add()
+        self.assertEqual([o.index for o in sc.their_lead], [0, 1])
+        card = self._card(sc)
+        self.assertTrue(card.opened, "a new scenario opens")
+        self.assertIn("If they lead Kingambit + Incineroar", serialise_text(card))
+        self.assertIn("Lead Charizard + Lucario · Back Gengar", serialise_text(card))
+        self.flow.actions.add(False)
+        dialog = self.page.dialogs[-1]
+        dialog.toggle(1)
+        dialog.toggle(0)
+        dialog._ok.on_click(None)
+        self.assertIn("already a scenario for that lead", self._toast_text())
+        serialise(self.view)
+        check_layout(self.view)
+
+    def test_any_other_lead_only_once(self):
+        self.flow.actions.add(True)
+        self.assertTrue(self.plans.scenarios(self.plan.plan_id)[0].is_fallback)
+        self.assertTrue(self.flow._fallback.disabled)
+        self.flow.actions.add(True)
+        self.assertIn("already a fallback", self._toast_text())
+
+    def test_picking_a_move_saves_it_and_shows_its_damage(self):
+        sc = self._add()
+        self._pick(self._card(sc), (None, 0, 0), "Heat Wave")
+        saved = self.plans.scenarios(self.plan.plan_id)[0]
+        action = saved.turns[0].actions[0]
+        self.assertEqual((action.kind, action.move, action.target), ("move", "Heat Wave", "foes"))
+        hit = _find(self._card(saved), _data("hit"))
+        self.assertEqual(len(hit), 1, "the damage line is there")
+        self.assertIn("Kingambit", serialise_text(hit[0]))
+        self.assertIn("%", serialise_text(hit[0]))
+
+    def test_a_switch_puts_the_back_pokemon_in_next_turn(self):
+        sc = self._add()
+        self._pick(self._card(sc), (None, 0, 1), "Switch → Gengar")
+        from pokemon_champions_planning_tool.ui.views.plans.flow import add_turn
+
+        self._card(sc)._save(add_turn(self._card(sc).sc))
+        card = self._card(sc)
+        second = _find(card, lambda c: getattr(c, "data", None) == {"picker": (None, 1, 1)})[0]
+        self.assertIn("Gengar", serialise_text(second))
+
+    def test_no_mega_toggle_without_a_stone(self):
+        sc = self._add()
+        self.assertEqual(_find(self._card(sc), _data("mega")), [])
+
+    def test_an_if_block_after_a_turn(self):
+        sc = self._add()
+        self._card(sc)._add_if(0)
+        saved = self.plans.scenarios(self.plan.plan_id)[0]
+        self.assertEqual((saved.branches[0].kind, saved.branches[0].ko.box_entry_id), ("ko", str(self.charizard)))
+        block = _find(self._card(saved), _data("branch"))[0]
+        dropdowns = _find(block, lambda c: isinstance(c, ft.Dropdown))
+        self.assertEqual(len(dropdowns), 2, "who is KO'd, and who comes in")
+        rep = dropdowns[1]
+        rep.value = str(self.ghost)
+        rep.on_select(SimpleNamespace(control=rep))
+        self.assertEqual(self.plans.scenarios(self.plan.plan_id)[0].branches[0].replacement.box_entry_id, str(self.ghost))
+        self.assertIn("If Charizard is KO'd after T1: bring Gengar", self.plans.plan_markdown(self.plan.plan_id))
+
+    def test_a_changed_opponent_is_flagged(self):
+        sc = self._add()
+        from pokemon_champions_planning_tool.ui.views.calc.rival_store import rivals_from_paste
+        members, _ = rivals_from_paste("Charizard\n- Heat Wave\n\nIncineroar\n- Fake Out", self.catalogs, source="Paste")
+        self.plans.replace_opponent(self.plan.plan_id, members)
+        self.view._reload_plans(keep=self.plan.plan_id)
+        chips = [c for c in _find(self._card(sc), lambda c: isinstance(c, StatusChip)) if "to check" in c._label.value]
+        self.assertEqual(len(chips), 1)
+        self.assertIn("Their slot 1 changed", chips[0].tooltip)
+
+    def test_open_and_pin_a_damage_line(self):
+        sc = self._add()
+        self._pick(self._card(sc), (None, 0, 0), "Heat Wave")
+        saved = self.plans.scenarios(self.plan.plan_id)[0]
+        got = []
+        self.ctx.bus.on(events.CALC_REQUESTED, got.append)
+        _find(self._card(saved), _data("hit"))[0].on_click(None)
+        self.assertEqual((got[0].attacker.species, got[0].defender.species), ("charizard", "kingambit"))
+        self.assertEqual(got[0].field, self.plans.get(self.plan.plan_id).field)
+        self.view._pin_hit(saved, (None, 0, 0), 1)
+        pin = self.plans.pins(self.plan.plan_id)[0]
+        self.assertEqual((pin.label, pin.focus, pin.link), ("Charizard Heat Wave → Incineroar", ("left", 0), PinLink(str(self.charizard), 1)))
+
+    def test_delete_and_undo(self):
+        sc = self._add()
+        toasts = []
+        self.ctx.toast = lambda message, kind="info", **kw: toasts.append((message, kw))
+        self.flow.actions.delete(sc)
+        self.assertEqual(self.plans.scenarios(self.plan.plan_id), [])
+        toasts[-1][1]["on_action"]()
+        self.assertEqual(len(self.plans.scenarios(self.plan.plan_id)), 1)
+        self.assertEqual(len(self.flow.cards), 1)
+
+    def test_narrow_window(self):
+        sc = self._add()
+        self._card(sc)._add_if(0)
+        self.view.handle_resize(900, 800)
+        check_layout(self.view)
+        serialise(self.view)
 
 
 class TestAddingPlans(_ViewCase):

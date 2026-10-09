@@ -103,6 +103,21 @@ def action_hits(plan: Plan, sc: Scenario, mine: dict[str, PokemonState], catalog
     return out
 
 
+def attacker_at(plan: Plan, sc: Scenario, key: HitKey, mine: dict[str, PokemonState], catalogs: Any) -> PokemonState | None:
+    """The attacker of a picked attack, in its form at that turn (to open it in Calc or pin it)."""
+    where, i, slot = key
+    turns = sc.turns_of(where)
+    if not 0 <= i < len(turns):
+        return None
+    board = board_at(plan, sc, i, where)
+    who = board.slot(slot)
+    state = mine.get(who.box_entry_id) if who is not None else None
+    if state is None:
+        return None
+    action = turns[i].actions[slot]
+    return form_for(state, mega_now=action.mega or board.mega_by == who.box_entry_id, catalogs=catalogs)
+
+
 def hit_text(hits: tuple[Hit, ...], foe_name: Any) -> str:
     """"92–109% · 50% chance to OHKO", or one part per foe for a spread move."""
     def one(hit: Hit) -> str:
@@ -113,4 +128,4 @@ def hit_text(hits: tuple[Hit, ...], foe_name: Any) -> str:
     return " / ".join(f"{foe_name(h.foe_index)} {one(h)}" for h in hits)
 
 
-__all__ = ["Hit", "HitKey", "action_hits", "can_mega", "form_for", "hit_text"]
+__all__ = ["Hit", "HitKey", "action_hits", "attacker_at", "can_mega", "form_for", "hit_text"]

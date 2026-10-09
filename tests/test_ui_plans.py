@@ -17,6 +17,7 @@ from pokemon_champions_planning_tool.ui import events  # noqa: E402
 from pokemon_champions_planning_tool.ui.context import AppContext  # noqa: E402
 from pokemon_champions_planning_tool.ui.help import SHORTCUTS, TIPS  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.rival_store import RivalStore  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.calc.state import FieldState, SideConditions  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans import MemberRef, PlanStore  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans.dialogs import PasteDialog, PresetPickerDialog  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans.view import PREF_TEAM, PlansView  # noqa: E402
@@ -183,6 +184,68 @@ class TestListAndEditor(_ViewCase):
         self.assertEqual(self.view._list_panel.width, 240)
         check_layout(self.view)
         serialise(self.view)
+
+
+class TestMatchupGrid(_ViewCase):
+    def setUp(self):
+        super().setUp()
+        self.plan = self.plans.create_from_draft(self.team_id, _draft())
+        self.view.ensure_loaded()
+        self.grid = self.view.editor.grid
+
+    def _cells(self):
+        out = []
+
+        def walk(c):
+            if isinstance(getattr(c, "data", None), dict) and "cell" in c.data:
+                out.append(c)
+            for attr in ("content", "controls"):
+                child = getattr(c, attr, None)
+                for x in (child if isinstance(child, list) else [child] if child is not None else []):
+                    walk(x)
+        walk(self.grid._table)
+        return out
+
+    def test_the_grid_rates_your_team_against_theirs(self):
+        cells = self._cells()
+        # Charizard (in the species catalogue) against Kingambit and Incineroar; Lucario is not.
+        self.assertEqual(sorted(c.data["cell"] for c in cells), [(str(self.charizard), 0), (str(self.charizard), 1)])
+        self.assertFalse(self.grid._status.visible)
+        serialise(self.view)
+        check_layout(self.view)
+
+    def test_a_cell_opens_both_in_calc_with_the_plans_field(self):
+        self.view._set_field(self.plan.plan_id, FieldState(weather="Sun", left=SideConditions(tailwind=True)))
+        got = []
+        self.ctx.bus.on(events.CALC_REQUESTED, got.append)
+        cell = self._cells()[0]
+        cell.on_click(None)
+        req = got[0]
+        self.assertEqual((req.attacker.species, req.defender.species), ("charizard", "kingambit"))
+        self.assertEqual(req.field.weather, "Sun")
+        self.assertTrue(req.field.left.tailwind)
+
+    def test_a_field_toggle_is_saved_and_recomputes(self):
+        computed = []
+        real = self.view.refresh_grid
+        self.view.refresh_grid = lambda plan: (computed.append(plan.field), real(plan))
+        self.grid._side("right", stealth_rock=True)
+        self.assertTrue(self.plans.get(self.plan.plan_id).field.right.stealth_rock)
+        self.assertTrue(computed and computed[-1].right.stealth_rock)
+        toggle = next(c for c in self.grid._bar.controls if isinstance(getattr(c, "data", None), dict) and c.data.get("toggle") == "Rocks on their side")
+        self.assertTrue(toggle.data["on"])
+        self.grid._change(game_type="singles", left=SideConditions(helping_hand=True))
+        saved = self.plans.get(self.plan.plan_id).field
+        self.assertEqual(saved.game_type, "singles")
+        self.assertFalse(saved.left.helping_hand, "Doubles-only conditions are dropped in Singles")
+
+    def test_the_grid_follows_the_team(self):
+        before = len(self._cells())
+        self.store.load(self.store.active_team_id)
+        self.store.clear_slot(1)   # Charizard leaves: no row in the catalogue is left
+        self.view.ensure_loaded()
+        self.assertEqual(len(self._cells()), 0)
+        self.assertGreater(before, 0)
 
 
 class TestAddingPlans(_ViewCase):

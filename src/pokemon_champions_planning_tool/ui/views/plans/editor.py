@@ -12,8 +12,9 @@ import flet as ft
 
 from ...tasks import is_mounted
 from ...theme import Accent, IconSize, Palette, Radius, Space, alpha
-from ..calc.state import PokemonState, RivalMember
+from ..calc.state import FieldState, PokemonState, RivalMember
 from .components import section, species_sprite
+from .grid_view import GRID_TIP, GridSection
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, Plan
 
 GAME_PLAN_HINT = (
@@ -35,6 +36,8 @@ class EditorActions:
     rename: Callable[[Plan], None]
     duplicate: Callable[[Plan], None]
     delete: Callable[[Plan], None]
+    set_field: Callable[[str, FieldState], None]         # (plan_id, field) for the matchup grid
+    open_pair: Callable[[str, int], None]                # (your box entry id, their index) in Calc
 
 
 class PlanEditor(ft.Column):
@@ -90,7 +93,11 @@ class PlanEditor(ft.Column):
             tip="The plan keeps its own copy of their six. Italic fields were filled from tournament data, not seen.",
         )
 
-        self.controls = [header, overview, game_plan, self._opponent_section]
+        self.grid = GridSection(catalogs=catalogs, on_field=lambda f: self.plan and self.actions.set_field(self.plan.plan_id, f),
+                                on_cell=lambda box_id, j: self.actions.open_pair(box_id, j))
+        grid = section("Matchup grid", self.grid, tip=GRID_TIP)
+
+        self.controls = [header, overview, game_plan, grid, self._opponent_section]
 
     # -- showing a plan -------------------------------------------------------------------
 
@@ -103,6 +110,7 @@ class PlanEditor(ft.Column):
         self._source.value = f"From {plan.source}" if plan.source else ""
         self._source.visible = bool(plan.source)
         self._difficulty.selected = [str(plan.difficulty)]
+        self.grid.set_field(plan.field)
         if not same or (self._game_plan.value or "") != plan.game_plan:
             self._game_plan.value = plan.game_plan
         self._render_picks()

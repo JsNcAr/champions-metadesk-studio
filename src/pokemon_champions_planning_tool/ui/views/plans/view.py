@@ -18,10 +18,11 @@ from ...components import EmptyState, PageHeader
 from ...context import AppContext
 from ...tasks import is_mounted
 from ...theme import DEFAULT_WINDOW_WIDTH, Accent, IconSize, Layout, Palette, Radius, Space
-from ..calc.state import CalcRequest, PokemonState, RivalTeam
+from ..calc.state import CalcRequest, FieldState, PokemonState, RivalTeam
 from .components import PlanRow
 from .dialogs import PasteDialog, PresetPickerDialog
 from .editor import EditorActions, PlanEditor
+from .grid import compute_grid, with_ko_text
 from .model import Plan, PlanDraft
 from .report import pokemon_to_showdown
 from .store import PlanStore
@@ -78,7 +79,10 @@ class PlansView(ft.Column):
         self.editor = PlanEditor(catalogs=store.catalogs, actions=EditorActions(
             update=self._update_plan, set_note=self._set_note, open_in_calc=self._open_in_calc, edit_paste=self.open_edit_paste,
             copy=self.copy_plan, rename=self._rename, duplicate=self._duplicate, delete=self._delete,
+            set_field=self._set_field, open_pair=self._open_pair,
         ))
+        self._grid_cache: dict = {}     # pairings by both sets and the field (grid.py)
+        self._grid_version = 0          # a newer request wins over a slower older one
         self._editor_host = ft.Container(expand=True, content=self.editor, padding=ft.Padding.only(left=Space.LG))
         self._body = ft.Row(expand=True, spacing=0, vertical_alignment=ft.CrossAxisAlignment.STRETCH, controls=[self._list_panel, self._editor_host])
         self._empty = ft.Container(expand=True, visible=False)
@@ -162,6 +166,9 @@ class PlansView(ft.Column):
             plan = next(p for p in self.plans if p.plan_id == self.plan_id)
             self._editor_host.content = self.editor
             self.editor.show(plan, self.store.my_members(self.team_id))
+            self._update()
+            self.refresh_grid(plan)
+            return
         self._update()
 
     def _row(self, plan: Plan) -> PlanRow:
@@ -211,6 +218,47 @@ class PlansView(ft.Column):
         self._list.controls = [self._row(p) for p in self.plans]
         if is_mounted(self._list):
             self._list.update()
+
+    # -- the matchup grid -----------------------------------------------------------------
+
+    def refresh_grid(self, plan: Plan) -> None:
+        """Fast pass first (classes, damage ranges, speed), then the KO text, both on a worker."""
+        self._grid_version += 1
+        version = self._grid_version
+        mine = self.store.my_members(plan.team_id)
+        opponent = [m.pokemon for m in plan.opponent]
+        field, catalogs, grid = plan.field, self.store.catalogs, self.editor.grid
+        grid.set_loading(True)
+
+        def current() -> bool:
+            return version == self._grid_version and self.plan_id == plan.plan_id
+
+        def fast_done(fast) -> None:
+            if not current():
+                return
+            grid.set_grid(fast, mine, opponent)
+            self.ctx.run_in_background(lambda: with_ko_text(fast, mine, opponent, field, catalogs, cache=self._grid_cache),
+                                       on_done=lambda full: grid.set_grid(full, mine, opponent) if current() else None,
+                                       on_error=lambda _exc: None)   # the fast grid stays: KO text is a refinement
+
+        self.ctx.run_in_background(lambda: compute_grid(mine, opponent, field, catalogs, cache=self._grid_cache),
+                                   on_done=fast_done, on_error=lambda exc: grid.set_error(exc) if current() else None)
+
+    def _set_field(self, plan_id: str, field: FieldState) -> None:
+        saved = self._update_plan(plan_id, field=field)
+        if saved is not None:
+            self.editor.plan = saved
+            self.editor.grid.set_field(saved.field)
+            self.refresh_grid(saved)
+
+    def _open_pair(self, box_id: str, index: int) -> None:
+        plan = next((p for p in self.plans if p.plan_id == self.plan_id), None)
+        if plan is None or index >= len(plan.opponent):
+            return
+        you = dict(self.store.my_members(plan.team_id)).get(box_id)
+        if you is None:
+            return
+        self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=you, defender=plan.opponent[index].pokemon, field=plan.field))
 
     def _open_in_calc(self, pokemon: PokemonState) -> None:
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))
@@ -376,7 +424,9 @@ class PlansView(ft.Column):
     def _on_catalogs_reloaded(self, _kind: Any) -> None:
         self.store.catalogs = self.ctx.catalogs
         self.editor.catalogs = self.ctx.catalogs
+        self.editor.grid.catalogs = self.ctx.catalogs
         self.store.invalidate()
+        self._grid_cache.clear()
         self._stale = True
 
     def _update(self) -> None:

@@ -63,7 +63,7 @@ FLOW_TIP = (
 @dataclass
 class FlowActions:
     add: Callable[[bool], None]                       # True: "Any other lead"; False: asks for their lead pair
-    save: Callable[[Scenario], None]
+    save: Callable[[Scenario, bool], None]   # (scenario, its damage changes: False for a note)
     delete: Callable[[Scenario], None]
     move: Callable[[Scenario, int], None]
     pick_pair: Callable[..., None]                    # (title, selected, allow_clear, on_pick)
@@ -231,7 +231,7 @@ class ScenarioCard(ft.Container):
 
     def _turn_row(self, where: Where, i: int, turn: Turn) -> ft.Control:
         sc, plan = self.sc, self.ctx.plan
-        board = board_at(plan, sc, i, where)
+        board = board_at(plan, sc, i, where, can_mega=self.ctx.can_mega)
         foes = foes_at(sc, i, where)
         menu = [ft.PopupMenuItem(content=ft.Text("Their field…"), icon=ft.Icons.GROUPS_OUTLINED, on_click=lambda _e: self._their_field(where, i))]
         if where is None:
@@ -250,7 +250,7 @@ class ScenarioCard(ft.Container):
             self._picker(where, i, slot, board, foes, turn.actions[slot]) for slot in (0, 1)])
         note = ft.TextField(value=turn.note, hint_text="Note (what you expect from them, what to watch for…)", dense=True, text_size=13,
                             on_blur=lambda e: self._save(set_turn(self.sc, where, i, note=e.control.value or ""), redraw=False)
-                            if (e.control.value or "") != turn.note else None)
+                            if (e.control.value or "") != self.sc.turns_of(where)[i].note else None)
         return ft.Container(
             content=ft.Column(spacing=Space.XS, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[head, pickers, note]),
             border=ft.Border.only(top=ft.BorderSide(1, Palette.OUTLINE_VARIANT)), padding=ft.Padding.only(top=Space.XS),
@@ -374,7 +374,7 @@ class ScenarioCard(ft.Container):
             head = [ft.TextField(value=br.text, label=f"If… (after T{br.after_turn})", hint_text="they set Trick Room, Kingambit is still up…", dense=True,
                                  text_size=13, width=380,   # a wrapping row: children keep their own width
                                  on_blur=lambda e: self._save(set_branch(self.sc, b, text=e.control.value or ""), redraw=False)
-                                 if (e.control.value or "") != br.text else None)]
+                                 if (e.control.value or "") != self.sc.branches[b].text else None)]
         head.append(ft.PopupMenuButton(icon=ft.Icons.MORE_HORIZ, icon_size=IconSize.SM, tooltip="“If…” actions", items=[
             ft.PopupMenuItem(content=ft.Text("One of yours is KO'd"), on_click=lambda _e: self._save(set_branch(self.sc, b, kind="ko"))),
             ft.PopupMenuItem(content=ft.Text("Something else (write it)"), on_click=lambda _e: self._save(set_branch(self.sc, b, kind="other"))),
@@ -411,7 +411,7 @@ class ScenarioCard(ft.Container):
 
     def _save(self, sc: Scenario, *, redraw: bool = True) -> None:
         self.sc = sc
-        self.actions.save(sc)
+        self.actions.save(sc, redraw)   # a note (no redraw) changes no damage
         if redraw:
             self.refresh()
 
@@ -441,11 +441,10 @@ class FlowSection(ft.Column):
                    self._fallback],
         )
 
-    def show(self, ctx: FlowContext, scenarios: Sequence[Scenario], *, keep_hits: bool = False) -> None:
+    def show(self, ctx: FlowContext, scenarios: Sequence[Scenario]) -> None:
         self.ctx = ctx
         self.scenarios = list(scenarios)
-        if not keep_hits:
-            self._hits = {}
+        self._hits = {}
         self._fallback.disabled = any(s.is_fallback for s in self.scenarios)
         self._render()
 
@@ -474,13 +473,17 @@ class FlowSection(ft.Column):
     def open(self, scenario_id: str) -> None:
         self._open.add(scenario_id)
 
-    def updated(self, sc: Scenario) -> None:
-        """A scenario was saved: keep it, and drop its damage until it is recomputed."""
+    def updated(self, sc: Scenario, *, keep_hits: bool = False) -> None:
+        """A scenario was saved: keep it, and drop its damage until it is recomputed (unless
+        the edit was a note)."""
         self.scenarios = [sc if s.scenario_id == sc.scenario_id else s for s in self.scenarios]
-        self._hits.pop(sc.scenario_id, None)
+        if not keep_hits:
+            self._hits.pop(sc.scenario_id, None)
         card = self.cards.get(sc.scenario_id)
         if card is not None:
-            card.sc, card.hits = sc, None
+            card.sc = sc
+            if not keep_hits:
+                card.hits = None
 
     def set_hits(self, scenario_id: str, hits: dict[HitKey, tuple[Hit, ...]]) -> None:
         self._hits[scenario_id] = hits

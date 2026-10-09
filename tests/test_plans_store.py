@@ -175,6 +175,34 @@ class TestBattleFlowStore(_PlansCase):
         self.assertEqual(restored.turns[0].actions[0].move, "Heat Wave", "undo brings it back")
         self.assertEqual(len(self.plans.scenarios(plan.plan_id)), 2)
 
+    def test_undo_of_a_delete_is_refused_when_that_lead_has_a_new_scenario(self):
+        plan = self.plans.create_from_draft(self.team_id, _draft())
+        lead = (self._opp(0, "kingambit"), self._opp(1, "incineroar"))
+        first = self.plans.add_scenario(plan.plan_id, lead)
+        self.plans.delete_scenario(first.scenario_id)
+        self.plans.add_scenario(plan.plan_id, lead)
+        with self.assertRaises(ValueError):
+            self.plans.restore_scenario(first)
+        self.assertEqual(len(self.plans.scenarios(plan.plan_id)), 1)
+
+    def test_edit_as_paste_moves_pins_and_the_flow_with_their_pokemon(self):
+        from pokemon_champions_planning_tool.ui.views.plans.flow import Action, set_action
+        plan = self.plans.create_from_draft(self.team_id, _draft())
+        sc = self.plans.add_scenario(plan.plan_id, (self._opp(0, "kingambit"), self._opp(1, "incineroar")))
+        self.plans.save_scenario(set_action(sc, None, 0, 0, Action("move", "Heat Wave", "foe", self._opp(1, "incineroar"))))
+        pin = self.plans.add_pin(plan.plan_id, CalcState(), link=PinLink(None, 1))
+        self.plans.set_threat_note(plan.plan_id, 1, "Fake Out")
+        swapped = self.plans.replace_opponent(plan.plan_id, [_rival("incineroar", "Sitrus Berry", "Intimidate"), _rival("garchomp")])
+        self.assertEqual(swapped.threat_notes, {0: "Fake Out"})
+        self.assertEqual(self.plans.pins(plan.plan_id)[0].link, PinLink(None, 0))
+        again = self.plans.scenarios(plan.plan_id)[0]
+        self.assertEqual([(o.index, o.species) for o in again.their_lead], [(0, "kingambit"), (0, "incineroar")],
+                         "Kingambit left: kept at its slot, and flagged")
+        from pokemon_champions_planning_tool.ui.views.plans.flow import validate
+        self.assertTrue(any("slot 1 changed" in i.text for i in validate(swapped, again, {})))
+        self.assertEqual(again.turns[0].actions[0].foe.index, 0)
+        self.assertEqual(pin.calc_id, self.plans.pins(plan.plan_id)[0].calc_id)
+
     def test_scenarios_go_with_their_plan_and_team(self):
         plan = self.plans.create_from_draft(self.team_id, _draft())
         self.plans.add_scenario(plan.plan_id, (self._opp(0, "kingambit"), self._opp(1, "incineroar")))
@@ -261,6 +289,10 @@ class TestMegaNormalisation(unittest.TestCase):
     def test_without_mega_evolution_the_base_form_is_kept(self):
         out = self.plans.normalise_megas([_rival("charizard", "Charizardite Y", "Blaze")], enabled=False)
         self.assertEqual(out[0].pokemon.species, "charizard")
+
+    def test_without_mega_evolution_a_mega_form_goes_back_to_its_base(self):
+        out = self.plans.normalise_megas([_rival("charizard-mega-y", "Charizardite Y", "Drought")], enabled=False)
+        self.assertEqual((out[0].pokemon.species, out[0].pokemon.ability), ("charizard", "Blaze"))
 
 
 class TestMarkdown(unittest.TestCase):

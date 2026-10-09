@@ -16,7 +16,9 @@ from pokemon_champions_planning_tool.ui.views.plans.flow import (
     board_at,
     brought,
     default_target,
+    NO_ACTION,
     foes_at,
+    remap_opponents,
     remove_turn,
     scenario_markdown,
     set_action,
@@ -191,3 +193,56 @@ class TestWords(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReviewFixes(unittest.TestCase):
+    def test_removing_an_earlier_turn_keeps_the_if_after_the_same_turn(self):
+        sc = scenario(Turn(), Turn(), Turn(), Turn())
+        sc = add_branch(sc, 3, ko=GARD)
+        self.assertEqual(remove_turn(sc, None, 0).branches[0].after_turn, 2, "after the old T3, now T2")
+        self.assertEqual(remove_turn(sc, None, 2).branches[0].after_turn, 2, "its own turn gone: after the turn before")
+        self.assertEqual(remove_turn(sc, None, 3).branches[0].after_turn, 3, "a later turn gone: unchanged")
+
+    def test_odd_json_shapes_load_as_empty(self):
+        for body in ({"turns": 5}, {"their_lead": True}, {"turns": [{"actions": 3}]}, {"lead": ["x"]},
+                     {"turns": [{"actions": [{"kind": "switch", "switch_to": "abc"}]}]},
+                     {"branches": [{"after_turn": float("inf")}]}, {"their_lead": [{"index": float("inf")}]}):
+            Scenario.from_body(body)   # never raises
+
+    def test_a_mega_without_its_stone_does_not_use_up_the_mega(self):
+        sc = scenario(Turn(actions=(move("Hyper Voice", "foes", mega=False), move("Stone Axe", foe=opp(0), mega=True))),
+                      Turn(actions=(move("Hyper Voice", "foes", mega=True), NO_ACTION)))
+        stone = {"g"}.__contains__
+        texts = [i.text for i in validate(PLAN, sc, MINE, can_mega=stone)]
+        self.assertIn("kleavor can't Mega Evolve (no Mega Stone)", texts)
+        self.assertNotIn("Only one Mega Evolution per battle", texts)
+        self.assertEqual(board_at(PLAN, sc, 2, can_mega=stone).mega_by, "g")
+
+    def test_two_switches_to_the_same_member_are_flagged_and_only_one_happens(self):
+        sc = scenario(Turn(actions=(switch(GAMBIT), switch(GAMBIT))), Turn())
+        self.assertTrue(any("already coming in" in i.text for i in validate(PLAN, sc, MINE)))
+        board = board_at(PLAN, sc, 1)
+        self.assertEqual((board.left, board.right), (GAMBIT, KLEAVOR))
+
+    def test_the_member_switched_out_cannot_come_back_in_the_same_turn(self):
+        sc = scenario(Turn(actions=(switch(GAMBIT), switch(GARD))), Turn())
+        board = board_at(PLAN, sc, 1)
+        self.assertEqual((board.left, board.right), (GAMBIT, KLEAVOR))
+        self.assertTrue(any("not in the back" in i.text for i in validate(PLAN, sc, MINE)))
+
+    def test_a_mega_on_a_switch_and_a_ko_branch_without_its_member_are_flagged(self):
+        sc = scenario(Turn(actions=(Action("switch", switch_to=GAMBIT, mega=True), NO_ACTION)))
+        sc = add_branch(sc, 1)
+        sc = set_branch(sc, 0, ko=None)
+        texts = [i.text for i in validate(PLAN, sc, MINE)]
+        self.assertIn("Mega Evolution needs an attack, not a switch", texts)
+        self.assertIn("Pick which of yours is KO'd", texts)
+
+    def test_remap_follows_their_pokemon_to_new_slots(self):
+        sc = scenario(Turn(actions=(move("Stone Axe", foe=opp(2)), NO_ACTION), their_field=(opp(2), opp(1))))
+        moved = {0: 1, 1: 0, 2: 2}
+        new_opp = tuple(PLAN.opponent[i] for i in (1, 0, 2, 3, 4, 5))
+        out = remap_opponents(sc, moved, new_opp)
+        self.assertEqual([o.index for o in out.their_lead], [1, 0])
+        self.assertEqual([o.index for o in out.turns[0].their_field], [2, 0])
+        self.assertEqual(out.turns[0].actions[0].foe.index, 2)

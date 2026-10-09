@@ -62,6 +62,8 @@ class PlanEditor(ft.Column):
         self.actions = actions
         self.plan: Plan | None = None
         self._mine: list[tuple[str, PokemonState]] = []
+        self._note_fields: dict[int, ft.TextField] = {}   # threat note by opponent slot
+        self._pin_notes: dict[str, str] = {}              # pin note as last saved, by calc id
 
         self._title = ft.Text("", theme_style=ft.TextThemeStyle.TITLE_MEDIUM, weight=ft.FontWeight.W_600, color=Palette.ON_SURFACE,
                               max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True)
@@ -104,7 +106,7 @@ class PlanEditor(ft.Column):
         self._opponent_section = section(
             "Their team", self._opponent,
             trailing=[ft.TextButton("Edit as paste…", icon=ft.Icons.EDIT_NOTE, on_click=lambda _e: self._act(self.actions.edit_paste),
-                                    tooltip="Replace their sets with a Showdown paste; notes stay with each slot")],
+                                    tooltip="Replace their sets with a Showdown paste; notes follow each Pokémon that stays")],
             tip="The plan keeps its own copy of their six. Italic fields were filled from tournament data, not seen.",
         )
 
@@ -126,6 +128,9 @@ class PlanEditor(ft.Column):
     def show(self, plan: Plan, mine: Sequence[tuple[str, PokemonState]]) -> None:
         """Lay a plan out (a different plan, or the same after an edit from elsewhere)."""
         same = self.plan is not None and self.plan.plan_id == plan.plan_id
+        if not same:
+            self.flush()   # text typed into the plan on show, whose field hasn't lost focus yet
+        typed = self._typed() if same else ({}, None)
         self.plan = plan
         self._mine = list(mine)
         self._title.value = plan.name
@@ -133,11 +138,39 @@ class PlanEditor(ft.Column):
         self._source.visible = bool(plan.source)
         self._difficulty.selected = [str(plan.difficulty)]
         self.grid.set_field(plan.field)
-        if not same or (self._game_plan.value or "") != plan.game_plan:
-            self._game_plan.value = plan.game_plan
+        notes, game_plan = typed
+        self._game_plan.value = plan.game_plan if game_plan is None else game_plan
         self._render_picks()
         self._render_opponent()
+        for i, text in notes.items():   # unsaved notes survive a redraw of the same plan
+            if i in self._note_fields:
+                self._note_fields[i].value = text
         self._refresh()
+
+    def retitle(self, plan: Plan) -> None:
+        """A rename: only the title changes."""
+        self.plan = plan
+        self._title.value = plan.name
+        if is_mounted(self._title):
+            self._title.update()
+
+    def _typed(self) -> tuple[dict[int, str], str | None]:
+        """What is typed but not saved yet: (threat notes by slot, the game plan or None)."""
+        plan = self.plan
+        if plan is None:
+            return {}, None
+        notes = {i: f.value or "" for i, f in self._note_fields.items() if (f.value or "") != plan.note_for(i)}
+        game_plan = self._game_plan.value or ""
+        return notes, (game_plan if game_plan != plan.game_plan else None)
+
+    def flush(self) -> None:
+        """Save what is typed but not saved yet (a field saves when it loses focus, and
+        clicking another plan in the list doesn't take it)."""
+        notes, game_plan = self._typed()
+        if game_plan is not None:
+            self._save_game_plan(game_plan)
+        for i, text in notes.items():
+            self._save_note(i, text)
 
     def set_mine(self, mine: Sequence[tuple[str, PokemonState]]) -> None:
         """The team changed: redraw the picks (names, and any that left the team)."""
@@ -189,9 +222,11 @@ class PlanEditor(ft.Column):
         plan = self.plan
         assert plan is not None
         if not plan.opponent:
+            self._note_fields = {}
             self._opponent.controls = [ft.Text("No opposing Pokémon: use Edit as paste… to add them.", col=12,
                                                theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)]
             return
+        self._note_fields = {}
         self._opponent.controls = [self._opponent_card(i, m) for i, m in enumerate(plan.opponent)]
 
     def _opponent_card(self, index: int, member: RivalMember) -> ft.Control:
@@ -210,11 +245,13 @@ class PlanEditor(ft.Column):
             lines.append(field_text(" · ".join(build_bits), "item" if "item" in assumed else "ability"))
         if moves:
             lines.append(field_text(moves, "moves"))
+        plan_id = self.plan.plan_id if self.plan else ""
         note = ft.TextField(
             value=self.plan.note_for(index) if self.plan else "", label="Threat note", hint_text="How you deal with it…",
             multiline=True, min_lines=1, max_lines=4, dense=True, text_size=13,
-            on_blur=lambda e, i=index: self._save_note(i, e.control.value or ""),
+            on_blur=lambda e, i=index, pid=plan_id: self._save_note(i, e.control.value or "") if self.plan and self.plan.plan_id == pid else None,
         )
+        self._note_fields[index] = note
         return ft.Container(
             col={"xs": 12, "md": 6, "xl": 4},
             content=ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
@@ -242,6 +279,7 @@ class PlanEditor(ft.Column):
             self._pins.controls = [ft.Text("No pinned calcs yet. Right-click a cell of the grid, or use Pin to plan… in Calc.",
                                            theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)]
         else:
+            self._pin_notes = {}
             self._pins.controls = [self._pin_row(v) for v in views]
         self._refresh()
 
@@ -274,7 +312,7 @@ class PlanEditor(ft.Column):
                 ]),
                 *lines,
                 ft.TextField(value=pin.note, label="Note", hint_text="Why it matters…", dense=True, multiline=True, min_lines=1, max_lines=3, text_size=13,
-                             on_blur=lambda e: self.actions.pin_note(pin, e.control.value or "") if (e.control.value or "") != pin.note else None),
+                             on_blur=lambda e: self._save_pin_note(pin, e.control.value or "")),
             ]),
         )
 
@@ -316,6 +354,11 @@ class PlanEditor(ft.Column):
         saved = self.actions.set_note(self.plan.plan_id, index, text)
         if saved is not None:
             self.plan = saved
+
+    def _save_pin_note(self, pin: PinnedCalc, text: str) -> None:
+        if text != self._pin_notes.get(pin.calc_id, pin.note):
+            self.actions.pin_note(pin, text)
+            self._pin_notes[pin.calc_id] = text
 
     # -- helpers --------------------------------------------------------------------------
 

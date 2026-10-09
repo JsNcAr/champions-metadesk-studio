@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime
+from typing import Any
 
 from ..calc.state import CalcState, FieldState, RivalMember
 
@@ -37,8 +38,8 @@ class MemberRef:
         return {"box_entry_id": self.box_entry_id, "species": self.species}
 
     @classmethod
-    def from_dict(cls, data: dict | None) -> "MemberRef | None":
-        d = dict(data or {})
+    def from_dict(cls, data: Any) -> "MemberRef | None":
+        d = data if isinstance(data, dict) else {}
         box_id = str(d.get("box_entry_id") or "")
         return cls(box_id, str(d.get("species") or "")) if box_id else None
 
@@ -78,10 +79,13 @@ class PinLink:
         return {"box_entry_id": self.box_entry_id, "opp_index": self.opp_index}
 
     @classmethod
-    def from_dict(cls, data: dict | None) -> "PinLink":
-        d = dict(data or {})
-        opp = d.get("opp_index")
-        return cls(str(d["box_entry_id"]) if d.get("box_entry_id") else None, int(opp) if opp is not None else None)
+    def from_dict(cls, data: Any) -> "PinLink":
+        d = data if isinstance(data, dict) else {}
+        try:
+            opp = int(d["opp_index"]) if d.get("opp_index") is not None else None
+        except (TypeError, ValueError, OverflowError):
+            opp = None
+        return cls(str(d["box_entry_id"]) if d.get("box_entry_id") else None, opp)
 
 
 @dataclass(frozen=True)

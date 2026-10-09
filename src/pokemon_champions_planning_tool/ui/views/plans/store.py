@@ -21,7 +21,7 @@ from ....infrastructure.database.models import MatchupPlanRecord, PlanCalcRecord
 from ....infrastructure.database.repositories import MatchupPlanRepository, TeamRepository
 from ..calc.state import CalcState, FieldState, PokemonState, RivalMember, pokemon_from_slot
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinLink, PinnedCalc, Plan, PlanDraft
-from .flow import Names, OppRef, Scenario, Turn, scenario_markdown
+from .flow import Names, OppRef, Scenario, Turn, remap_opponents, scenario_markdown
 from .flow_calc import action_hits, hit_text
 from .pins import PinView, view_pin
 from .report import PinLine, PlanText, plan_markdown, team_markdown
@@ -176,13 +176,20 @@ class PlanStore:
 
     # -- creating -------------------------------------------------------------------------
 
+    def _base(self, canonical_id: str | None) -> str | None:
+        species = self.catalogs.species_for(canonical_id) if canonical_id else None
+        if species is None:
+            return canonical_id
+        return species.base_species_id if species.is_mega else species.canonical_id
+
     def normalise_megas(self, members: Iterable[RivalMember], *, enabled: bool = True) -> tuple[RivalMember, ...]:
         """A member holding its Mega Stone becomes the Mega form, as the calculator does when
-        an item is set: tournament rosters and pastes keep the base species."""
+        an item is set: tournament rosters and pastes keep the base species. With Megas off
+        (the team's format has none) a Mega form goes back to its base species."""
         out: list[RivalMember] = []
         for member in members:
             p = member.pokemon
-            mega = self.catalogs.mega_for_item(p.species, p.item) if enabled else None
+            mega = self.catalogs.mega_for_item(p.species, p.item) if enabled else self._base(p.species)
             if mega and mega != p.species:
                 species = self.catalogs.species_for(mega)
                 ability = species.abilities[0] if species is not None and species.abilities else p.ability
@@ -206,15 +213,42 @@ class PlanStore:
             return plan_from_record(repo.upsert(record))
 
     def replace_opponent(self, plan_id: str, members: Sequence[RivalMember]) -> Plan:
-        """New sets for the opposing six ("Edit as paste…"). A note stays with its slot;
-        notes past the new team's size are dropped."""
+        """New sets for the opposing six ("Edit as paste…"). Notes, pinned calcs and the
+        battle flow follow each Pokémon still in the team, wherever it is now; a Pokémon that
+        left keeps its slot (its note goes to what replaced it, its flow is flagged)."""
         plan = self.get(plan_id)
         if plan is None:
             raise KeyError(plan_id)
         fmt = self._team_format(plan.team_id)
         members = self.normalise_megas(list(members)[:6], enabled=fmt.has(Mechanic.MEGA) if fmt is not None else True)
-        notes = {i: n for i, n in plan.threat_notes.items() if i < len(members)}
+        moved = self._follow(plan.opponent, members)
+        notes: dict[int, str] = {}
+        for i, note in sorted(plan.threat_notes.items(), key=lambda kv: kv[0] not in moved):   # followed notes first
+            j = moved.get(i, i)
+            if j < len(members) and j not in notes:
+                notes[j] = note
+        if any(i != j for i, j in moved.items()):
+            for pin in self.pins(plan_id):
+                j = moved.get(pin.link.opp_index) if pin.link.opp_index is not None else None
+                if j is not None and j != pin.link.opp_index:
+                    self.update_pin(pin.calc_id, link=replace(pin.link, opp_index=j))
+            for sc in self.scenarios(plan_id):
+                again = remap_opponents(sc, moved, members)
+                if again != sc:
+                    self.save_scenario(again)
         return self.update(plan_id, opponent=members, threat_notes=notes)
+
+    def _follow(self, old: Sequence[RivalMember], new: Sequence[RivalMember]) -> dict[int, int]:
+        """Old slot -> new slot of each Pokémon still there (by species, Mega or not)."""
+        free = {j: self._base(m.pokemon.species) for j, m in enumerate(new)}
+        out: dict[int, int] = {}
+        for i, m in enumerate(old):
+            base = self._base(m.pokemon.species)
+            j = i if free.get(i) == base else next((k for k, b in free.items() if b == base), None)
+            if j is not None:
+                out[i] = j
+                del free[j]
+        return out
 
     # -- reading and editing plans --------------------------------------------------------
 
@@ -348,7 +382,11 @@ class PlanStore:
             return MatchupPlanRepository(s).delete_scenario(UUID(scenario_id))
 
     def restore_scenario(self, sc: Scenario) -> Scenario:
-        """Undo a delete: the same scenario back, at the end of the list."""
+        """Undo a delete: the same scenario back, at the end of the list (unless one for the
+        same lead was added since)."""
+        wanted = frozenset(o.index for o in sc.their_lead)
+        if any(frozenset(o.index for o in e.their_lead) == wanted for e in self.scenarios(sc.plan_id)):
+            raise ValueError("There is already a fallback for any other lead" if not wanted else "There is already a scenario for that lead")
         with self._sf() as s:
             r = MatchupPlanRepository(s).add_scenario(PlanScenarioRecord(plan_id=UUID(sc.plan_id), body=sc.body()))
             return Scenario.from_body(r.body, scenario_id=str(r.scenario_id), plan_id=sc.plan_id, position=r.position)

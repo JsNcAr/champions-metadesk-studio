@@ -92,6 +92,8 @@ class PlansView(ft.Column):
         self._flow_version = 0
         self._pins_version = 0
         self._grid_cache: dict = {}     # pairings by both sets and the field (grid.py)
+        self._announcing = False        # emitting PLANS_CHANGED for a change already shown
+        self._flow_edits: dict[str, int] = {}   # damage-changing saves per scenario, so an older result is dropped
         self._grid_version = 0          # a newer request wins over a slower older one
         self._editor_host = ft.Container(expand=True, content=self.editor, padding=ft.Padding.only(left=Space.LG))
         self._body = ft.Row(expand=True, spacing=0, vertical_alignment=ft.CrossAxisAlignment.STRETCH, controls=[self._list_panel, self._editor_host])
@@ -101,7 +103,7 @@ class PlansView(ft.Column):
 
         team_store.subscribe(self._on_team_store_change)
         ctx.bus.on(events.TEAMS_CHANGED, lambda _p: self._mark_stale(teams=True))
-        ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._mark_stale())
+        ctx.bus.on(events.BOX_ENTRY_DELETED, lambda _p: self._mark_stale(teams=True))
         ctx.bus.on(events.CATALOGS_RELOADED, self._on_catalogs_reloaded)
         ctx.bus.on(events.FORMAT_CHANGED, lambda _p: self._mark_stale())
         ctx.bus.on(events.PLAN_ADD_REQUESTED, self.request_add)
@@ -233,6 +235,9 @@ class PlansView(ft.Column):
     def _replace(self, plan: Plan) -> None:
         """Keep the list in step with an edit without redrawing the editor under the cursor."""
         self.plans = [plan if p.plan_id == plan.plan_id else p for p in self.plans]
+        self._replace_rows()
+
+    def _replace_rows(self) -> None:
         self._list.controls = [self._row(p) for p in self.plans]
         if is_mounted(self._list):
             self._list.update()
@@ -296,32 +301,38 @@ class PlansView(ft.Column):
     def refresh_flow(self, plan: Plan) -> None:
         """Show the plan's scenarios now; their damage follows from a worker."""
         self._flow_version += 1
-        version = self._flow_version
+        version, edits = self._flow_version, dict(self._flow_edits)
         scenarios = self.store.scenarios(plan.plan_id)
         self.editor.flow.show(self._flow_context(plan), scenarios)
 
+        def current() -> bool:
+            return version == self._flow_version and self.plan_id == plan.plan_id
+
         def done(hits: dict) -> None:
-            if version == self._flow_version and self.plan_id == plan.plan_id:
+            if current():
                 for scenario_id, h in hits.items():
-                    self.editor.flow.set_hits(scenario_id, h)
+                    if self._flow_edits.get(scenario_id, 0) == edits.get(scenario_id, 0):   # not edited since
+                        self.editor.flow.set_hits(scenario_id, h)
 
         self.ctx.run_in_background(lambda: {sc.scenario_id: self.store.flow_hits(plan, sc) for sc in scenarios}, on_done=done,
-                                   on_error=lambda exc: self.ctx.toast(f"Couldn't calculate the battle flow: {exc}", "error"))
+                                   on_error=lambda exc: self.ctx.toast(f"Couldn't calculate the battle flow: {exc}", "error") if current() else None)
 
-    def _flow_save(self, sc: Scenario) -> None:
+    def _flow_save(self, sc: Scenario, recalc: bool = True) -> None:
         plan = self._current()
         try:
             saved = self.store.save_scenario(sc)
         except KeyError:
             return
-        self.editor.flow.updated(saved)
-        if plan is None:
+        self.editor.flow.updated(saved, keep_hits=not recalc)
+        if plan is None or not recalc:
             return
+        sid = saved.scenario_id
+        self._flow_edits[sid] = edit = self._flow_edits.get(sid, 0) + 1
         version = self._flow_version
 
         def done(hits: dict) -> None:
-            if version == self._flow_version and self.plan_id == plan.plan_id:
-                self.editor.flow.set_hits(saved.scenario_id, hits)
+            if version == self._flow_version and self.plan_id == plan.plan_id and self._flow_edits.get(sid) == edit:
+                self.editor.flow.set_hits(sid, hits)
 
         self.ctx.run_in_background(lambda: self.store.flow_hits(plan, saved), on_done=done, on_error=lambda _exc: None)
 
@@ -355,7 +366,11 @@ class PlansView(ft.Column):
             self.refresh_flow(plan)
 
         def undo() -> None:
-            self.store.restore_scenario(sc)
+            try:
+                self.store.restore_scenario(sc)
+            except ValueError as exc:
+                self.ctx.toast(f"{exc}: the deleted one wasn't brought back", "warning")
+                return
             current = self._current()
             if current is not None and current.plan_id == sc.plan_id:
                 self.refresh_flow(current)
@@ -430,7 +445,8 @@ class PlansView(ft.Column):
                 self.editor.set_pins(views)
 
         self.ctx.run_in_background(lambda: self.store.pin_views(plan), on_done=done,
-                                   on_error=lambda exc: self.ctx.toast(f"Couldn't recalculate the pinned calcs: {exc}", "error"))
+                                   on_error=lambda exc: self.ctx.toast(f"Couldn't recalculate the pinned calcs: {exc}", "error")
+                                   if version == self._pins_version else None)
 
     def _pin_pair(self, box_id: str, index: int) -> None:
         plan = self._current()
@@ -461,6 +477,7 @@ class PlansView(ft.Column):
         self.ctx.page.run_task(run)
 
     def _delete_pin(self, pin: PinnedCalc) -> None:
+        pin = next((p for p in self.store.pins(pin.plan_id) if p.calc_id == pin.calc_id), pin)   # its note as saved now
         self.store.delete_pin(pin.calc_id)
         plan = self._current()
         if plan is not None:
@@ -544,26 +561,30 @@ class PlansView(ft.Column):
             name = await self.ctx.prompt_text("Rename plan", "Name", value=plan.name)
             if name is None or not name.strip() or name.strip() == plan.name:
                 return
-            self._update_plan(plan.plan_id, name=name)
-            self._reload_plans(keep=plan.plan_id)
+            saved = self._update_plan(plan.plan_id, name=name)
+            if saved is not None and saved.plan_id == self.plan_id:
+                self.editor.retitle(saved)   # the list follows in _update_plan; no calc changes
         self.ctx.page.run_task(run)
 
     def _duplicate(self, plan: Plan) -> None:
         copy = self.store.duplicate(plan.plan_id, f"{plan.name} (copy)")
         self._reload_plans(keep=copy.plan_id)
-        self.ctx.bus.emit(events.PLANS_CHANGED, self.team_id)
+        self._announce(self.team_id)
 
     def _move(self, plan: Plan, delta: int) -> None:
         self.store.move(plan.plan_id, delta)
-        self._reload_plans(keep=self.plan_id)
+        self.plans = self.store.list_plans(self.team_id) if self.team_id else []
+        self._replace_rows()   # only the order changed: the editor and its calcs stay
 
     def _delete(self, plan: Plan) -> None:
         async def run() -> None:
-            if not await self.ctx.confirm("Delete plan?", f"“{plan.name}” and its pinned calcs will be deleted."):
+            if not await self.ctx.confirm("Delete plan?", f"“{plan.name}”, its pinned calcs and its battle flow will be deleted."):
                 return
+            if self.editor.plan is not None and self.editor.plan.plan_id == plan.plan_id:
+                self.editor.plan = None   # nothing typed in it is saved any more
             self.store.delete(plan.plan_id)
             self._reload_plans(keep=None if plan.plan_id == self.plan_id else self.plan_id)
-            self.ctx.bus.emit(events.PLANS_CHANGED, self.team_id)
+            self._announce(self.team_id)
             self.ctx.toast(f"Deleted “{plan.name}”", "info")
         self.ctx.page.run_task(run)
 
@@ -580,7 +601,7 @@ class PlansView(ft.Column):
             self.select_team(target)
         self._reload_plans(keep=plan.plan_id)
         self.ctx.prefs.set(PREF_PLAN, plan.plan_id)
-        self.ctx.bus.emit(events.PLANS_CHANGED, target)
+        self._announce(target)
         return plan
 
     def request_add(self, draft: PlanDraft) -> None:
@@ -620,9 +641,17 @@ class PlansView(ft.Column):
                 self._reload_plans(keep=plan_id)
         self.ctx.bus.emit(events.NAVIGATE, "plans")
 
+    def _announce(self, team_id: str | None) -> None:
+        """PLANS_CHANGED for others, after this view has already redrawn itself."""
+        self._announcing = True
+        try:
+            self.ctx.bus.emit(events.PLANS_CHANGED, team_id)
+        finally:
+            self._announcing = False
+
     def _on_plans_changed(self, team_id: Any) -> None:
         """A plan was added from elsewhere: refresh the list if it is the team on show."""
-        if self._loaded and team_id == self.team_id:
+        if self._loaded and not self._announcing and team_id == self.team_id:
             self._reload_plans(keep=self.plan_id)
 
     def _add_from_meta(self) -> None:
@@ -646,6 +675,8 @@ class PlansView(ft.Column):
             return rivals_from_text_or_url(text, self.store.catalogs)
 
         def done(result) -> None:
+            if self._dialog is not dialog:   # cancelled while the link was loading
+                return
             members, skipped, source = result
             if not members:
                 dialog.set_error("No Pokémon in the Champions species catalogue were found in that paste")
@@ -660,14 +691,15 @@ class PlansView(ft.Column):
                 self.ctx.toast(f"Skipped (not in the species catalogue): {', '.join(skipped)}", "warning")
 
         def failed(exc: BaseException) -> None:
-            dialog.set_error(f"Couldn't read that team: {exc}")
+            if self._dialog is dialog:
+                dialog.set_error(f"Couldn't read that team: {exc}")
 
         self.ctx.run_in_background(work, on_done=done, on_error=failed)
 
     def open_edit_paste(self, plan: Plan) -> None:
         text = "\n\n".join(pokemon_to_showdown(m.pokemon, self.store.species_name(m.pokemon.species)) for m in plan.opponent)
         dialog = PasteDialog(title=f"Their team · {plan.name}", submit_label="Save", on_cancel=self._close_dialog, name=None, text=text,
-                             note="Edit their sets. A note stays with its slot (the first Pokémon's note with the first Pokémon).",
+                             note="Edit their sets. Notes, pinned calcs and the battle flow follow each Pokémon that stays, even in another slot.",
                              on_submit=lambda _name, t: self._import_paste(dialog, "", t, plan=plan))
         self._open_dialog(dialog)
 

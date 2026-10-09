@@ -37,6 +37,8 @@ for the headings and style.
     longer in the moveset, a second Mega) show as warning chips.
   - Copy a plan, or every plan of a team, as Markdown: difficulty, Lead/Back, the game plan
     and battle flow as bullets, threat notes and the key calcs.
+  - Edit as paste… replaces their sets; threat notes, pinned calcs and the battle flow
+    follow each Pokémon that stays, even when the paste lists it in another slot.
   - Duplicating a team copies its plans; deleting it deletes them. Lead and Back follow the
     Pokémon, so reordering the team keeps them.
 

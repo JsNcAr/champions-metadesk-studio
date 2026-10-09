@@ -120,6 +120,20 @@ class TestListAndEditor(_ViewCase):
         self.assertEqual(saved.game_plan, "Tailwind T1\n  Fake Out the Kingambit")
         self.assertEqual(saved.note_for(0), "Low Kick OHKOs it")
 
+    def test_text_still_in_focus_is_saved_when_another_plan_is_opened(self):
+        a = self.plans.create_from_draft(self.team_id, _draft("A"))
+        b = self.plans.create_from_draft(self.team_id, _draft("B"))
+        self.view.ensure_loaded()
+        self.view.select_plan(a.plan_id)
+        ed = self.view.editor
+        ed._game_plan.value = "typed, never blurred"
+        ed._note_fields[1].value = "Fake Out first"
+        self.view.select_plan(b.plan_id)
+        saved = self.plans.get(a.plan_id)
+        self.assertEqual((saved.game_plan, saved.note_for(1)), ("typed, never blurred", "Fake Out first"))
+        self.assertEqual(ed._game_plan.value, "", "plan B shows its own (empty) game plan")
+        self.assertEqual(self.plans.get(b.plan_id).game_plan, "")
+
     def test_switching_team_shows_its_own_plans(self):
         self.plans.create_from_draft(self.team_id, _draft("Sun's plan"))
         self.store.create_team("Rain")
@@ -546,7 +560,7 @@ class TestAddingPlans(_ViewCase):
         self.assertIn("No Pokémon", dialog._error.value)
         self.assertEqual(self.view.plans, [])
 
-    def test_edit_as_paste_replaces_their_sets_and_keeps_notes_by_slot(self):
+    def test_edit_as_paste_replaces_their_sets_and_notes_follow_their_pokemon(self):
         plan = self.plans.create_from_draft(self.team_id, _draft())
         self.plans.set_threat_note(plan.plan_id, 0, "first slot note")
         self.plans.set_threat_note(plan.plan_id, 1, "second slot note")
@@ -559,7 +573,7 @@ class TestAddingPlans(_ViewCase):
         dialog._fire()
         saved = self.plans.get(plan.plan_id)
         self.assertEqual([m.pokemon.species for m in saved.opponent], ["incineroar"])
-        self.assertEqual(saved.threat_notes, {0: "first slot note"}, "the second slot is gone, so is its note")
+        self.assertEqual(saved.threat_notes, {0: "second slot note"}, "Incineroar's note follows it to the first slot; Kingambit's goes")
 
     def test_a_rival_preset_becomes_a_plan(self):
         RivalStore(self.db.session).create("Rain (Wolfe)", [_rival("kingambit", "Black Glasses")], source="Meta · Wolfe")

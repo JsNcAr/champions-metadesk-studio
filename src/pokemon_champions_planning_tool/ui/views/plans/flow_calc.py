@@ -14,11 +14,12 @@ from typing import Any
 
 from ..calc.state import MoveResult, PokemonState
 from ..calc.store import engine_field, run_side
-from .flow import Scenario, Where, board_at, foes_at
+from .flow import Action, Board, Scenario, Where, board_at, foes_at
 from .grid import calc_key, remember
 from .model import Plan
 
 HitKey = tuple[Where, int, int]   # (branch or None, turn index in its line, your slot)
+_NO_RESULT = object()              # cached: the calc can't run (a species the catalogue lacks)
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,11 @@ def form_for(state: PokemonState, *, mega_now: bool, catalogs: Any) -> PokemonSt
     return replace(state, species=target, ability=ability)
 
 
+def _mega_now(board: Board, who_id: str, action: Action, allowed: bool) -> bool:
+    """In its Mega form: it Mega Evolved earlier, or does now and may (the first, with its stone)."""
+    return board.mega_by == who_id or (action.mega and action.kind != "switch" and board.mega_by is None and allowed)
+
+
 def _one(attacker: PokemonState, index: int, defender: PokemonState, *, single: bool, plan: Plan, catalogs: Any) -> MoveResult | None:
     only = replace(attacker, moves=[m if j == index else None for j, m in enumerate(attacker.moves)],
                    single=[single if j == index else False for j in range(4)])
@@ -65,6 +71,10 @@ def _one(attacker: PokemonState, index: int, defender: PokemonState, *, single: 
 def action_hits(plan: Plan, sc: Scenario, mine: dict[str, PokemonState], catalogs: Any, *, cache: dict | None = None) -> dict[HitKey, tuple[Hit, ...]]:
     """Every picked attack of a scenario (main line and "If…" branches) against its target(s)."""
     out: dict[HitKey, tuple[Hit, ...]] = {}
+
+    def allowed(box: str) -> bool:
+        return can_mega(mine.get(box), catalogs)
+
     lines: list[Where] = [None, *range(len(sc.branches))]
     for where in lines:
         for i, turn in enumerate(sc.turns_of(where)):
@@ -72,12 +82,12 @@ def action_hits(plan: Plan, sc: Scenario, mine: dict[str, PokemonState], catalog
             for slot, action in enumerate(turn.actions):
                 if action.kind != "move" or not action.move or action.target not in ("foe", "foes"):
                     continue
-                board = board or board_at(plan, sc, i, where)
+                board = board or board_at(plan, sc, i, where, can_mega=allowed)
                 who = board.slot(slot)
                 state = mine.get(who.box_entry_id) if who is not None else None
                 if state is None:
                     continue
-                attacker = form_for(state, mega_now=action.mega or board.mega_by == who.box_entry_id, catalogs=catalogs)
+                attacker = form_for(state, mega_now=_mega_now(board, who.box_entry_id, action, allowed(who.box_entry_id)), catalogs=catalogs)
                 if action.move not in attacker.moves:
                     continue
                 index = attacker.moves.index(action.move)
@@ -94,9 +104,8 @@ def action_hits(plan: Plan, sc: Scenario, mine: dict[str, PokemonState], catalog
                     result = cache.get(key) if cache is not None else None
                     if result is None:
                         result = _one(attacker, index, defender, single=single, plan=plan, catalogs=catalogs)
-                        if result is not None:
-                            remember(cache, key, result)
-                    if result is not None and result.ok:
+                        remember(cache, key, _NO_RESULT if result is None else result)
+                    if isinstance(result, MoveResult) and result.ok:
                         hits.append(Hit(foe.index, result))
                 if hits:
                     out[(where, i, slot)] = tuple(hits)
@@ -109,13 +118,12 @@ def attacker_at(plan: Plan, sc: Scenario, key: HitKey, mine: dict[str, PokemonSt
     turns = sc.turns_of(where)
     if not 0 <= i < len(turns):
         return None
-    board = board_at(plan, sc, i, where)
+    board = board_at(plan, sc, i, where, can_mega=lambda box: can_mega(mine.get(box), catalogs))
     who = board.slot(slot)
     state = mine.get(who.box_entry_id) if who is not None else None
     if state is None:
         return None
-    action = turns[i].actions[slot]
-    return form_for(state, mega_now=action.mega or board.mega_by == who.box_entry_id, catalogs=catalogs)
+    return form_for(state, mega_now=_mega_now(board, who.box_entry_id, turns[i].actions[slot], can_mega(state, catalogs)), catalogs=catalogs)
 
 
 def hit_text(hits: tuple[Hit, ...], foe_name: Any) -> str:

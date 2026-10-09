@@ -16,6 +16,7 @@ from ..calc.state import RivalTeam
 from .components import species_sprite
 
 PASTE_HINT = "Showdown text of their six, or a pokepast.es link"
+DIALOG_FIELD_W = 520   # a Dropdown keeps its own width in a stretched column: set it
 
 
 class PasteDialog(ft.AlertDialog):
@@ -82,7 +83,7 @@ class AddPlanDialog(ft.AlertDialog):
                  source: str, on_save: Callable[[str, str], None], on_cancel: Callable[[], None]) -> None:
         super().__init__(modal=True, scrollable=True)
         self._on_save = on_save
-        self._team = ft.Dropdown(label="Plan for your team", value=team_id, leading_icon=ft.Icons.GROUPS_OUTLINED,
+        self._team = ft.Dropdown(label="Plan for your team", value=team_id, leading_icon=ft.Icons.GROUPS_OUTLINED, width=DIALOG_FIELD_W,
                                  options=[ft.DropdownOption(key=t, text=n) for t, n in teams])
         self._name = ft.TextField(label="Plan name", value=name, hint_text="e.g. Big Six, Raptor (Sand)…", autofocus=True,
                                   on_submit=lambda _e: self._fire())
@@ -103,6 +104,85 @@ class AddPlanDialog(ft.AlertDialog):
                 self.update()
             return
         self._on_save(str(self._team.value), (self._name.value or "").strip())
+
+
+class PinDialog(ft.AlertDialog):
+    """Pin the calculator's calc to one of a team's plans.
+
+    ``plans_for(team_id)`` lists a team's plans; ``match_mine(team_id, species)`` and
+    ``match_theirs(plan_id, species)`` find the team member and the opponent a side can
+    follow ((key, label) or None), so the link checkboxes name what the pin will track.
+    """
+
+    def __init__(self, *, left_name: str, right_name: str, teams: Sequence[tuple[str, str]], team_id: str | None, label: str,
+                 left_species: str | None, right_species: str | None,
+                 plans_for: Callable[[str], list[tuple[str, str]]], match_mine: Callable[[str, str | None], tuple[str, str] | None],
+                 match_theirs: Callable[[str, str | None], tuple[int, str] | None],
+                 on_save: Callable[[str, str, str, str, str | None, int | None], None], on_cancel: Callable[[], None]) -> None:
+        super().__init__(modal=True, scrollable=True)
+        self._on_save = on_save
+        self._plans_for, self._match_mine, self._match_theirs = plans_for, match_mine, match_theirs
+        self._species = {"left": left_species, "right": right_species}
+        self._mine_value: tuple[str, str] | None = None
+        self._theirs_value: tuple[int, str] | None = None
+        self._team = ft.Dropdown(label="Team", value=team_id, leading_icon=ft.Icons.GROUPS_OUTLINED, width=DIALOG_FIELD_W,
+                                 options=[ft.DropdownOption(key=t, text=n) for t, n in teams], on_select=lambda _e: self._team_changed())
+        self._plan = ft.Dropdown(label="Plan", width=DIALOG_FIELD_W, on_select=lambda _e: self._links())
+        self._label = ft.TextField(label="Label", value=label, hint_text="What this calc shows, e.g. Low Kick into their Kingambit")
+        self._mine = ft.SegmentedButton(
+            selected=["left"], allow_multiple_selection=False, allow_empty_selection=False, show_selected_icon=False,
+            segments=[ft.Segment(value="left", label=ft.Text(f"Attacker · {left_name}")), ft.Segment(value="right", label=ft.Text(f"Defender · {right_name}"))],
+            on_change=lambda _e: self._links(),
+        )
+        self._follow_mine = ft.Checkbox(value=True)
+        self._follow_theirs = ft.Checkbox(value=True)
+        self._error = ft.Text("", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ERROR, visible=False)
+        self.title = ft.Text("Pin to a plan")
+        self.content = ft.Container(width=560, content=ft.Column(spacing=Space.MD, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+            ft.Text("The pin keeps this calc's boosts, HP, status and field; a side that follows a Pokémon takes its current set each time.",
+                    theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT),
+            self._team, self._plan, self._label,
+            ft.Text("Your Pokémon is the", theme_style=ft.TextThemeStyle.LABEL_MEDIUM, color=Palette.ON_SURFACE_VARIANT), self._mine,
+            self._follow_mine, self._follow_theirs, self._error,
+        ]))
+        self.actions = [ft.TextButton("Cancel", on_click=lambda _e: on_cancel()), ft.FilledButton("Pin", icon=ft.Icons.PUSH_PIN, on_click=lambda _e: self._fire())]
+        self.actions_alignment = ft.MainAxisAlignment.END
+        self._team_changed(refresh=False)
+
+    @property
+    def mine(self) -> str:
+        return next(iter(self._mine.selected or ["left"]))
+
+    def _team_changed(self, *, refresh: bool = True) -> None:
+        plans = self._plans_for(self._team.value) if self._team.value else []
+        self._plan.options = [ft.DropdownOption(key=p, text=n) for p, n in plans]
+        self._plan.value = plans[0][0] if plans else None
+        self._plan.disabled = not plans
+        self._plan.hint_text = None if plans else "This team has no plans yet"
+        self._links(refresh=refresh)
+
+    def _links(self, *, refresh: bool = True) -> None:
+        mine, theirs = self.mine, "right" if self.mine == "left" else "left"
+        self._mine_value = self._match_mine(self._team.value, self._species[mine]) if self._team.value else None
+        self._theirs_value = self._match_theirs(self._plan.value, self._species[theirs]) if self._plan.value else None
+        self._follow_mine.label = f"Follow your {self._mine_value[1]} in the team" if self._mine_value else "Your side is not in this team: kept as pinned"
+        self._follow_mine.disabled = self._mine_value is None
+        self._follow_mine.value = self._mine_value is not None
+        self._follow_theirs.label = f"Follow their {self._theirs_value[1]} in this plan" if self._theirs_value else "Their side is not in this plan: kept as pinned"
+        self._follow_theirs.disabled = self._theirs_value is None
+        self._follow_theirs.value = self._theirs_value is not None
+        if refresh and is_mounted(self):
+            self.update()
+
+    def _fire(self) -> None:
+        if not self._team.value or not self._plan.value:
+            self._error.value, self._error.visible = "Pick a team and one of its plans", True
+            if is_mounted(self):
+                self.update()
+            return
+        box_id = self._mine_value[0] if self._mine_value and self._follow_mine.value else None
+        opp_index = self._theirs_value[0] if self._theirs_value and self._follow_theirs.value else None
+        self._on_save(str(self._team.value), str(self._plan.value), (self._label.value or "").strip(), self.mine, box_id, opp_index)
 
 
 class PresetPickerDialog(ft.AlertDialog):
@@ -143,4 +223,4 @@ def _hover(e: ft.ControlEvent) -> None:
         e.control.update()
 
 
-__all__ = ["PASTE_HINT", "AddPlanDialog", "PasteDialog", "PresetPickerDialog"]
+__all__ = ["PASTE_HINT", "AddPlanDialog", "PasteDialog", "PinDialog", "PresetPickerDialog"]

@@ -19,7 +19,7 @@ _BULLETS = ("- ", "* ", "• ", "+ ")
 @dataclass(frozen=True)
 class PinLine:
     label: str
-    line: str           # the calc line, "252+ Atk Kingambit Low Kick vs. … — guaranteed OHKO"
+    line: str           # the calc line(s), "252+ Atk Kingambit Low Kick vs. … — guaranteed OHKO"; one per line
     note: str = ""
 
 
@@ -79,7 +79,9 @@ def plan_markdown(text: PlanText, *, level: int = 2) -> str:
         for pin in text.pins:
             head = f"*{pin.label}:* " if pin.label else ""
             tail = f" — {pin.note.strip()}" if pin.note.strip() else ""
-            lines.append(f"- {head}{pin.line}{tail}")
+            first, *more = pin.line.splitlines() or [""]
+            lines.append(f"- {head}{first}{tail}")
+            lines += [f"  - {extra}" for extra in more]   # a best-each-way pin: their hit under yours
     return "\n".join(lines) + "\n"
 
 

@@ -19,12 +19,13 @@ from ...components import EmptyState, PageHeader
 from ...context import AppContext
 from ...tasks import is_mounted
 from ...theme import DEFAULT_WINDOW_WIDTH, Accent, IconSize, Layout, Palette, Radius, Space
-from ..calc.state import CalcRequest, FieldState, PokemonState, RivalTeam
+from ..calc.state import CalcRequest, CalcState, FieldState, PokemonState, RivalTeam
 from .components import PlanRow
-from .dialogs import AddPlanDialog, PasteDialog, PresetPickerDialog
+from .dialogs import AddPlanDialog, PasteDialog, PinDialog, PresetPickerDialog
 from .editor import EditorActions, PlanEditor
 from .grid import compute_grid, with_ko_text
-from .model import Plan, PlanDraft
+from .model import PinLink, PinnedCalc, PinRequest, Plan, PlanDraft
+from .pins import PinView
 from .report import pokemon_to_showdown
 from .store import PlanStore
 
@@ -81,7 +82,9 @@ class PlansView(ft.Column):
             update=self._update_plan, set_note=self._set_note, open_in_calc=self._open_in_calc, edit_paste=self.open_edit_paste,
             copy=self.copy_plan, rename=self._rename, duplicate=self._duplicate, delete=self._delete,
             set_field=self._set_field, open_pair=self._open_pair,
+            pin_pair=self._pin_pair, open_pin=self._open_pin, rename_pin=self._rename_pin, delete_pin=self._delete_pin, pin_note=self._pin_note,
         ))
+        self._pins_version = 0
         self._grid_cache: dict = {}     # pairings by both sets and the field (grid.py)
         self._grid_version = 0          # a newer request wins over a slower older one
         self._editor_host = ft.Container(expand=True, content=self.editor, padding=ft.Padding.only(left=Space.LG))
@@ -98,6 +101,7 @@ class PlansView(ft.Column):
         ctx.bus.on(events.PLAN_ADD_REQUESTED, self.request_add)
         ctx.bus.on(events.PLAN_OPEN, self._on_plan_open)
         ctx.bus.on(events.PLANS_CHANGED, self._on_plans_changed)
+        ctx.bus.on(events.PLAN_PIN_REQUESTED, self.request_pin)
 
     # -- lifecycle ------------------------------------------------------------------------
 
@@ -172,6 +176,7 @@ class PlansView(ft.Column):
             self.editor.show(plan, self.store.my_members(self.team_id))
             self._update()
             self.refresh_grid(plan)
+            self.refresh_pins(plan)
             return
         self._update()
 
@@ -263,6 +268,118 @@ class PlansView(ft.Column):
         if you is None:
             return
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=you, defender=plan.opponent[index].pokemon, field=plan.field))
+
+    # -- pinned calcs ---------------------------------------------------------------------
+
+    def _current(self) -> Plan | None:
+        return next((p for p in self.plans if p.plan_id == self.plan_id), None)
+
+    def refresh_pins(self, plan: Plan) -> None:
+        """Recompute the plan's pins on a worker (full calcs, with linked sets refreshed)."""
+        self._pins_version += 1
+        version = self._pins_version
+        self.editor.set_pins(None)
+
+        def done(views: list[PinView]) -> None:
+            if version == self._pins_version and self.plan_id == plan.plan_id:
+                self.editor.set_pins(views)
+
+        self.ctx.run_in_background(lambda: self.store.pin_views(plan), on_done=done,
+                                   on_error=lambda exc: self.ctx.toast(f"Couldn't recalculate the pinned calcs: {exc}", "error"))
+
+    def _pin_pair(self, box_id: str, index: int) -> None:
+        plan = self._current()
+        if plan is None or index >= len(plan.opponent):
+            return
+        you = dict(self.store.my_members(plan.team_id)).get(box_id)
+        if you is None:
+            return
+        rival = plan.opponent[index].pokemon
+        label = f"{self.store.species_name(you.species)} vs {self.store.species_name(rival.species)}"
+        self.store.add_pin(plan.plan_id, CalcState(left=you, right=rival, field=plan.field), label=label, mine="left", link=PinLink(box_id, index))
+        self.ctx.toast(f"Pinned “{label}”", "success")
+        self.refresh_pins(plan)
+
+    def _open_pin(self, view: PinView) -> None:
+        state = view.state
+        self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(attacker=state.left, defender=state.right, field=state.field))
+
+    def _rename_pin(self, pin: PinnedCalc) -> None:
+        async def run() -> None:
+            name = await self.ctx.prompt_text("Rename pinned calc", "Label", value=pin.label)
+            if name is None:
+                return
+            self.store.update_pin(pin.calc_id, label=name)
+            plan = self._current()
+            if plan is not None:
+                self.refresh_pins(plan)
+        self.ctx.page.run_task(run)
+
+    def _delete_pin(self, pin: PinnedCalc) -> None:
+        self.store.delete_pin(pin.calc_id)
+        plan = self._current()
+        if plan is not None:
+            self.refresh_pins(plan)
+
+        def undo() -> None:
+            self.store.add_pin(pin.plan_id, pin.state, label=pin.label, mine=pin.mine, focus=pin.focus, link=pin.link, note=pin.note)
+            current = self._current()
+            if current is not None and current.plan_id == pin.plan_id:
+                self.refresh_pins(current)
+
+        self.ctx.toast("Unpinned", "info", action="Undo", on_action=undo)
+
+    def _pin_note(self, pin: PinnedCalc, text: str) -> None:
+        self.store.update_pin(pin.calc_id, note=text)
+
+    def request_pin(self, request: PinRequest) -> None:
+        """Calc's "Pin to plan…": which team and plan, which side is yours, what it follows."""
+        self._load_teams()
+        state = request.state
+        if not state.left.species or not state.right.species:
+            self.ctx.toast("Load a Pokémon on both sides before pinning", "warning")
+            return
+        teams_with_plans = [(t, n) for t, n in self._teams if self.store.list_plans(t)]
+        if not teams_with_plans:
+            self.ctx.toast("Make a plan first: Plans › Add plan, or Add to plan… in Meta", "warning",
+                           action="Go to Plans", on_action=lambda: self.ctx.bus.emit(events.NAVIGATE, "plans"))
+            return
+        ids = [t for t, _ in teams_with_plans]
+        active = str(self.team_store.active_team_id) if self.team_store.active_team_id else None
+        default = self.team_id if self.team_id in ids else (active if active in ids else ids[0])
+        name = self.store.species_name
+
+        def same(a: str | None, b: str | None) -> bool:
+            if not a or not b:
+                return False
+            sa, sb = self.store.catalogs.species_for(a), self.store.catalogs.species_for(b)
+            return a == b or (sa is not None and sb is not None and sa.base_species_id == sb.base_species_id)
+
+        def match_mine(team_id: str, species: str | None) -> tuple[str, str] | None:
+            return next(((box_id, name(st.species)) for box_id, st in self.store.my_members(team_id) if same(st.species, species)), None)
+
+        def match_theirs(plan_id: str, species: str | None) -> tuple[int, str] | None:
+            plan = self.store.get(plan_id)
+            if plan is None:
+                return None
+            return next(((i, name(m.pokemon.species)) for i, m in enumerate(plan.opponent) if same(m.pokemon.species, species)), None)
+
+        def save(team_id: str, plan_id: str, label: str, mine: str, box_id: str | None, opp_index: int | None) -> None:
+            self._close_dialog()
+            default_label = request.label or f"{name(state.left.species)} vs {name(state.right.species)}"
+            self.store.add_pin(plan_id, state, label=label or default_label, mine=mine, focus=request.focus, link=PinLink(box_id, opp_index))
+            plan = self.store.get(plan_id)
+            if plan is not None and plan_id == self.plan_id:
+                self.refresh_pins(plan)
+            self.ctx.toast(f"Pinned to “{plan.name if plan else ''}”", "success", action="Open",
+                           on_action=lambda: self.ctx.bus.emit(events.PLAN_OPEN, (team_id, plan_id)))
+
+        self._open_dialog(PinDialog(
+            left_name=name(state.left.species), right_name=name(state.right.species), teams=teams_with_plans, team_id=default,
+            label=request.label, left_species=state.left.species, right_species=state.right.species,
+            plans_for=lambda t: [(p.plan_id, p.name) for p in self.store.list_plans(t)],
+            match_mine=match_mine, match_theirs=match_theirs, on_save=save, on_cancel=self._close_dialog,
+        ))
 
     def _open_in_calc(self, pokemon: PokemonState) -> None:
         self.ctx.bus.emit(events.CALC_REQUESTED, CalcRequest(defender=pokemon))

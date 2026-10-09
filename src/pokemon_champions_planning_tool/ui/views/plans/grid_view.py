@@ -37,7 +37,7 @@ def cell_tooltip(rating: TeamRating, your_name: str, rival_name: str) -> str:
         f"You: {hit_text(rating.your_best, ko=True)}",
         f"Them: {hit_text(rating.their_best, ko=True)}",
         speed_line(rating),
-        "Click to open both in Calc",
+        "Click to open both in Calc · right-click to pin it to the plan",
     ))
 
 
@@ -57,11 +57,13 @@ def _label(text: str, *, width: int, bold: bool = False, color: str = Palette.ON
 
 
 class GridSection(ft.Column):
-    def __init__(self, *, catalogs: Any, on_field: Callable[[FieldState], None], on_cell: Callable[[str, int], None]) -> None:
+    def __init__(self, *, catalogs: Any, on_field: Callable[[FieldState], None], on_cell: Callable[[str, int], None],
+                 on_pin: Callable[[str, int], None] | None = None) -> None:
         super().__init__(spacing=Space.SM, tight=True)
         self.catalogs = catalogs
         self._on_field = on_field
         self._on_cell = on_cell
+        self._on_pin = on_pin
         self.field = FieldState()
         self._bar = ft.Row(spacing=Space.SM, wrap=True, run_spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         self._status = ft.Row(spacing=Space.SM, visible=False, controls=[
@@ -194,7 +196,7 @@ class GridSection(ft.Column):
         if rating is None:
             return ft.Container(width=CELL_W, height=CELL_H, border_radius=Radius.SM, bgcolor=Palette.SURFACE_2, alignment=ft.Alignment.CENTER,
                                 content=_label("—", width=CELL_W), tooltip="Not in the species catalogue")
-        return ft.Container(
+        cell = ft.Container(
             width=CELL_W, height=CELL_H, border_radius=Radius.SM, bgcolor=CLASS_BG.get(rating.klass, Palette.SURFACE_2),
             border=CLASS_BORDER.get(rating.klass), alignment=ft.Alignment.CENTER, ink=True, tooltip=cell_tooltip(rating, your_name, rival_name),
             on_click=lambda _e: self._on_cell(key, j), data={"cell": (key, j), "klass": rating.klass},
@@ -204,6 +206,9 @@ class GridSection(ft.Column):
                 _label(f"{dict(SWEEP_CLASSES).get(rating.klass, rating.klass)} {_speed_mark(rating)}", width=CELL_W),
             ]),
         )
+        if self._on_pin is None:
+            return cell
+        return ft.GestureDetector(content=cell, on_secondary_tap=lambda _e: self._on_pin(key, j), data={"pin_cell": (key, j)})
 
     def _name(self, canonical_id: str | None) -> str:
         if not canonical_id:

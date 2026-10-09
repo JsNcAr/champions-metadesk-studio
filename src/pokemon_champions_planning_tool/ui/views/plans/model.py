@@ -111,6 +111,16 @@ class PlanDraft:
     source: str = ""
 
 
+@dataclass(frozen=True)
+class PinRequest:
+    """A calculator state to pin to a plan (Calc's "Pin to plan…"). ``focus`` is the move
+    card that was open, (side, move index); without one the pin shows the best hit each way."""
+
+    state: CalcState
+    focus: tuple[str, int] | None = None
+    label: str = ""
+
+
 __all__ = [
-    "DIFFICULTIES", "MAX_PICKS", "MemberRef", "PinLink", "PinnedCalc", "Plan", "PlanDraft", "difficulty_label",
+    "DIFFICULTIES", "MAX_PICKS", "MemberRef", "PinLink", "PinRequest", "PinnedCalc", "Plan", "PlanDraft", "difficulty_label",
 ]

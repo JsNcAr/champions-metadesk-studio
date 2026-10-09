@@ -10,12 +10,14 @@ from typing import Any
 
 import flet as ft
 
+from ...components import StatusChip
 from ...tasks import is_mounted
 from ...theme import Accent, IconSize, Palette, Radius, Space, alpha
 from ..calc.state import FieldState, PokemonState, RivalMember
 from .components import section, species_sprite
 from .grid_view import GRID_TIP, GridSection
-from .model import DIFFICULTIES, MAX_PICKS, MemberRef, Plan
+from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinnedCalc, Plan
+from .pins import PinView
 
 GAME_PLAN_HINT = (
     "One step per line, like a team report:\n"
@@ -38,6 +40,17 @@ class EditorActions:
     delete: Callable[[Plan], None]
     set_field: Callable[[str, FieldState], None]         # (plan_id, field) for the matchup grid
     open_pair: Callable[[str, int], None]                # (your box entry id, their index) in Calc
+    pin_pair: Callable[[str, int], None]                 # pin a grid cell's calc
+    open_pin: Callable[[PinView], None]
+    rename_pin: Callable[[PinnedCalc], None]
+    delete_pin: Callable[[PinnedCalc], None]
+    pin_note: Callable[[PinnedCalc, str], None]
+
+PINS_TIP = (
+    "Calcs you keep with this plan, recomputed every time: a side that follows your team member or their Pokémon "
+    "takes its current set, the rest (boosts, HP, status, field) stays as pinned. Pin from Calc (Pin to plan…) "
+    "or right-click a cell of the grid."
+)
 
 
 class PlanEditor(ft.Column):
@@ -94,10 +107,14 @@ class PlanEditor(ft.Column):
         )
 
         self.grid = GridSection(catalogs=catalogs, on_field=lambda f: self.plan and self.actions.set_field(self.plan.plan_id, f),
-                                on_cell=lambda box_id, j: self.actions.open_pair(box_id, j))
+                                on_cell=lambda box_id, j: self.actions.open_pair(box_id, j),
+                                on_pin=lambda box_id, j: self.actions.pin_pair(box_id, j))
         grid = section("Matchup grid", self.grid, tip=GRID_TIP)
 
-        self.controls = [header, overview, game_plan, grid, self._opponent_section]
+        self._pins = ft.Column(spacing=Space.SM, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+        pins = section("Key calcs", self._pins, tip=PINS_TIP)
+
+        self.controls = [header, overview, game_plan, grid, pins, self._opponent_section]
 
     # -- showing a plan -------------------------------------------------------------------
 
@@ -206,6 +223,54 @@ class PlanEditor(ft.Column):
             ]),
             bgcolor=Palette.SURFACE_3, border_radius=Radius.SM, padding=Space.SM,
             data={"opponent_index": index},
+        )
+
+    # -- pinned calcs ---------------------------------------------------------------------
+
+    def set_pins(self, views: Sequence[PinView] | None) -> None:
+        """The plan's pins as they read now; None while they are being recomputed."""
+        if views is None:
+            self._pins.controls = [ft.Row(spacing=Space.SM, controls=[
+                ft.ProgressRing(width=14, height=14, stroke_width=2),
+                ft.Text("Recalculating pinned calcs…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)])]
+        elif not views:
+            self._pins.controls = [ft.Text("No pinned calcs yet. Right-click a cell of the grid, or use Pin to plan… in Calc.",
+                                           theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)]
+        else:
+            self._pins.controls = [self._pin_row(v) for v in views]
+        self._refresh()
+
+    def _pin_row(self, view: PinView) -> ft.Control:
+        pin = view.pin
+        chips: list[ft.Control] = []
+        if view.linked_yours:
+            chips.append(StatusChip(f"Follows your {view.your_name}", "info", icon=ft.Icons.LINK, tooltip="Takes your team member's current set"))
+        if view.linked_theirs:
+            chips.append(StatusChip(f"Follows their {view.their_name}", "info", icon=ft.Icons.LINK, tooltip="Takes the plan's current set for it"))
+        if view.broken:
+            chips.append(StatusChip("Kept as pinned", "warning", icon=ft.Icons.LINK_OFF,
+                                    tooltip=f"The {' and the '.join(view.broken)} it followed is gone: showing the set as it was pinned"))
+        lines = [ft.Text(line, theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE if i == 0 else Palette.ON_SURFACE_VARIANT, selectable=True)
+                 for i, line in enumerate(view.lines)]
+        return ft.Container(
+            data={"pin": pin.calc_id},
+            bgcolor=Palette.SURFACE_3, border_radius=Radius.SM, padding=Space.SM,
+            content=ft.Column(spacing=Space.XS, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, controls=[
+                ft.Row(spacing=Space.SM, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    ft.Icon(ft.Icons.PUSH_PIN, size=IconSize.SM, color=Accent.PLANS),
+                    ft.Text(pin.label or f"{view.your_name} vs {view.their_name}", theme_style=ft.TextThemeStyle.BODY_MEDIUM, weight=ft.FontWeight.W_600,
+                            color=Palette.ON_SURFACE, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    *chips,
+                    ft.IconButton(icon=ft.Icons.CALCULATE_OUTLINED, icon_size=IconSize.SM, tooltip="Open in Calc", on_click=lambda _e: self.actions.open_pin(view)),
+                    ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_size=IconSize.SM, tooltip="Pin actions", items=[
+                        ft.PopupMenuItem(content=ft.Text("Rename…"), icon=ft.Icons.EDIT_OUTLINED, on_click=lambda _e: self.actions.rename_pin(pin)),
+                        ft.PopupMenuItem(content=ft.Text("Unpin"), icon=ft.Icons.DELETE_OUTLINE, on_click=lambda _e: self.actions.delete_pin(pin)),
+                    ]),
+                ]),
+                *lines,
+                ft.TextField(value=pin.note, label="Note", hint_text="Why it matters…", dense=True, multiline=True, min_lines=1, max_lines=3, text_size=13,
+                             on_blur=lambda e: self.actions.pin_note(pin, e.control.value or "") if (e.control.value or "") != pin.note else None),
+            ]),
         )
 
     # -- edits ----------------------------------------------------------------------------

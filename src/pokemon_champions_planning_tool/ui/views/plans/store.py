@@ -21,6 +21,7 @@ from ....infrastructure.database.models import MatchupPlanRecord, PlanCalcRecord
 from ....infrastructure.database.repositories import MatchupPlanRepository, TeamRepository
 from ..calc.state import CalcState, FieldState, PokemonState, RivalMember, pokemon_from_slot
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinLink, PinnedCalc, Plan, PlanDraft
+from .pins import PinView, view_pin
 from .report import PinLine, PlanText, plan_markdown, team_markdown
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
@@ -328,13 +329,24 @@ class PlanStore:
             threats=threats, pins=tuple(pins),
         )
 
-    def plan_markdown(self, plan_id: str, pins: Sequence[PinLine] = ()) -> str:
-        plan = self.get(plan_id)
-        return plan_markdown(self.plan_text(plan, pins)) if plan is not None else ""
+    def pin_views(self, plan: Plan) -> list[PinView]:
+        """Every pin of a plan recomputed now: linked sides take the current sets."""
+        mine = dict(self.my_members(plan.team_id))
+        opponent = [m.pokemon for m in plan.opponent]
+        return [view_pin(pin, mine, opponent, self.catalogs) for pin in self.pins(plan.plan_id)]
 
-    def team_markdown(self, team_id: str, team_name: str, pins_by_plan: dict[str, Sequence[PinLine]] | None = None) -> str:
-        pins_by_plan = pins_by_plan or {}
-        texts = [self.plan_text(p, pins_by_plan.get(p.plan_id, ())) for p in self.list_plans(team_id)]
+    def pin_lines(self, plan: Plan) -> list[PinLine]:
+        return [PinLine(v.pin.label or f"{v.your_name} vs {v.their_name}", "\n".join(v.lines), v.pin.note) for v in self.pin_views(plan)]
+
+    def plan_markdown(self, plan_id: str, pins: Sequence[PinLine] | None = None) -> str:
+        """One plan as Markdown; its pinned calcs are recomputed unless ``pins`` is given."""
+        plan = self.get(plan_id)
+        if plan is None:
+            return ""
+        return plan_markdown(self.plan_text(plan, self.pin_lines(plan) if pins is None else pins))
+
+    def team_markdown(self, team_id: str, team_name: str) -> str:
+        texts = [self.plan_text(p, self.pin_lines(p)) for p in self.list_plans(team_id)]
         return team_markdown(team_name, texts)
 
 

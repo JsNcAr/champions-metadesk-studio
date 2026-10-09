@@ -77,6 +77,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Add plan takes their six from Meta (Top teams or a team in Events: Add to plan…), a paste or Poképaste link, or one of your Calc rival presets. The plan keeps its own copy, so deleting the preset or a tournament resync never changes it; Edit as paste… replaces their sets and keeps each note with its slot.",
         "The game plan is one step per line; indent a line for a sub-point. Copy as Markdown turns a plan (or every plan of the team) into report-style text with bullets, ready to paste into a document or a message.",
         "The matchup grid puts your six (rows) against their six (columns) under the plan's own field: Doubles or Singles, weather, terrain, Trick Room, and each side's Tailwind and Stealth Rock. → is your best hit, ← theirs, ▲ you move first; hover a cell for the KO text, click it to open both in Calc with the same field.",
+        "Key calcs keep a calc with the plan, boosts, HP and field as you set them, and recompute every time it is shown: a side that follows your team member or their Pokémon takes its current set. Pin to plan… in Calc pins the open move card (or the best hit each way); right-click a grid cell to pin that pairing.",
         "Lead and Back follow the Pokémon, not the slot: reordering the team keeps them, and one that leaves the team stays listed as \"not in team\". Duplicating a team copies its plans; deleting it deletes them.",
     ),
     "Data & syncing": (

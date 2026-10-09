@@ -49,6 +49,8 @@ PLANS_CHANGED = "plans.changed"
 PLAN_ADD_REQUESTED = "plans.add_requested"
 # Show a plan (the view is shown first). Payload: (team id, plan id) as strings.
 PLAN_OPEN = "plans.open"
+# Pin the calculator's current calc to a matchup plan. Payload: ui.views.plans.PinRequest.
+PLAN_PIN_REQUESTED = "plans.pin_requested"
 
 
 class EventBus:

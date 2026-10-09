@@ -25,7 +25,7 @@ from .refresh import BackgroundRefresh
 from .rival_store import RivalStore, rivals_from_team
 from .rivals_panel import RivalsPanel
 from .side_panel import SIDE_TABS, BoxList, SidePanel
-from .state import CalcRequest, RivalMember, SweepEntry, revealed_fields, rival_set
+from .state import CalcRequest, CalcState, RivalMember, SweepEntry, revealed_fields, rival_set
 from .store import CalcStore
 from .sweep import SweepPanel
 from .team_strip import STACK_BELOW, RivalStrip, TeamStrip, fit_tier
@@ -121,6 +121,8 @@ class CalcView(ft.Column):
             "Calc", icon=ft.Icons.CALCULATE, accent=Accent.CALC, caption=CAPTION,
             actions=[
                 ft.IconButton(icon=ft.Icons.SWAP_HORIZ, tooltip=shortcut("Swap attacker and defender (Ctrl+Shift+S)"), on_click=lambda _e: self.store.swap_sides()),
+                ft.IconButton(icon=ft.Icons.PUSH_PIN_OUTLINED, tooltip="Pin this calc to a matchup plan… (the open move card, or the best hit each way)",
+                              on_click=lambda _e: self._pin_to_plan()),
                 ft.TextButton("Reset", icon=ft.Icons.RESTART_ALT, tooltip="Clear both Pokémon and the field", on_click=lambda _e: self._reset()),
                 self._side_toggle,
             ],
@@ -425,6 +427,23 @@ class CalcView(ft.Column):
         team = self.rivals.get(linked[0])
         if team is not None and team.is_battle:
             self.rivals.sync_member(linked[0], linked[1], self.store.state.right)
+
+    def _pin_to_plan(self) -> None:
+        """Send this calc to the Plans view, which asks for the team and plan. The open move
+        card (Attacker first) becomes the pin's focus."""
+        from ..plans.model import PinRequest
+
+        state = CalcState.from_dict(self.store.state.to_dict())   # a copy: Calc keeps changing its own
+        focus = next(((side, i) for side, panel in (("left", self.attacker), ("right", self.defender))
+                      for i, card in enumerate(panel.cards) if card.expanded), None)
+        label = ""
+        if focus is not None:
+            side, index = focus
+            other = "right" if side == "left" else "left"
+            move = state.side(side).moves[index]
+            if move:
+                label = f"{self._species_name(state.side(side).species)} {move} vs {self._species_name(state.side(other).species)}"
+        self.ctx.bus.emit(events.PLAN_PIN_REQUESTED, PinRequest(state=state, focus=focus, label=label))
 
     def _rival_action(self, key: str) -> None:
         team = self.rivals.active

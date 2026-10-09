@@ -10,6 +10,34 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+- **Plans.** A new view (Ctrl+5) for each of your teams' matchup plans against common meta
+  teams, like the matchup section of a team report. The app runs the calcs; the plan is
+  yours to write.
+  - A plan holds the opposing six as its own copy (Mega forms resolved from held stones), a
+    difficulty from Very easy to Very hard, the two you lead with and the two you keep in the
+    back, a game plan written one step per line, and a note on each of their Pokémon.
+  - A matchup grid puts your six against theirs under the plan's own field (Doubles or
+    Singles, weather, terrain, Trick Room, each side's Tailwind and Stealth Rock): your best
+    hit and theirs, who moves first and the Crushed/Threat/… class in each cell, the KO text
+    on hover. Click a cell to open both in Calc with that field.
+  - Pinned calcs keep the exact calc you want to remember, boosts, HP and field included,
+    and recompute every time: a side that follows your team member or their Pokémon takes
+    its current set, so the line stays right after you change a spread. Pin from Calc
+    (the new Pin to plan… button, which pins the open move card) or right-click a grid cell.
+  - Add a plan from Meta (Add to plan… on a Top teams lineup, on one team of its group or on
+    an Events team), from Calc's rival menu, from one of your rival presets, or from a paste
+    or Poképaste link. It asks which of your teams the plan is for.
+  - Copy a plan, or every plan of a team, as Markdown: difficulty, Lead/Back, the game plan
+    as bullets, threat notes and the key calcs.
+  - Duplicating a team copies its plans; deleting it deletes them. Lead and Back follow the
+    Pokémon, so reordering the team keeps them.
+
+### Fixed
+- **Warning messages showed nothing.** A warning toast ("None of this lineup's Pokémon are
+  in the species catalogue", "This slot cannot be calculated"…) raised an error instead of
+  appearing, in Box, Teams and Meta.
+
 ## [0.6.0] - 2026-09-29
 
 ### Added

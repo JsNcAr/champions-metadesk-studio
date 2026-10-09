@@ -74,6 +74,13 @@ Pokémon Company ([details](#license-and-disclaimer)).*
   panel, keeps what the battle reveals, and shows up in a Team vs team grid of every pairing.
   Benchmarks say how many stat points a KO or a survival takes, and in Doubles spread moves
   are calculated on two targets, or one when only one foe is left.
+- **Plans.** Each of your teams' matchup plans against common meta teams, like the matchup
+  section of a team report. A plan holds the opposing six (from Meta's Top teams or Events,
+  a Calc rival preset, a paste or a Poképaste link), how hard it is, the two you lead with
+  and the two you keep in the back, your game plan, a note on each threat, a matchup grid of
+  your six against theirs under a field you set (Tailwind, Stealth Rock, weather, Trick
+  Room…), and pinned calcs that stay up to date as your sets change. The app runs the calcs;
+  the plan is yours to write. Copy a plan, or all of a team's plans, as Markdown.
 
 ## Download
 

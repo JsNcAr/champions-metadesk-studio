@@ -8,18 +8,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import flet as ft  # noqa: E402
 from _ui_stubs import StubPage, check_layout, serialise  # noqa: E402
 from test_plans_store import _draft, _rival  # noqa: E402
-from test_ui_calc import CHARIZARD, INCINEROAR, KINGAMBIT, MEGA_Y  # noqa: E402
+from test_ui_calc import CHARIZARD, INCINEROAR, KINGAMBIT, MEGA_Y, MOVES  # noqa: E402
 from test_ui_team_store import _TeamStoreCase  # noqa: E402
 
 from pokemon_champions_planning_tool.ui import events  # noqa: E402
 from pokemon_champions_planning_tool.ui.context import AppContext  # noqa: E402
 from pokemon_champions_planning_tool.ui.help import SHORTCUTS, TIPS  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.calc.rival_store import RivalStore  # noqa: E402
-from pokemon_champions_planning_tool.ui.views.calc.state import FieldState, SideConditions  # noqa: E402
-from pokemon_champions_planning_tool.ui.views.plans import MemberRef, PlanStore  # noqa: E402
-from pokemon_champions_planning_tool.ui.views.plans.dialogs import AddPlanDialog, PasteDialog, PresetPickerDialog  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.calc.state import CalcState, FieldState, PokemonState, SideConditions  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.plans import MemberRef, PinLink, PinRequest, PlanStore  # noqa: E402
+from pokemon_champions_planning_tool.ui.views.plans.dialogs import AddPlanDialog, PasteDialog, PinDialog, PresetPickerDialog  # noqa: E402
 from pokemon_champions_planning_tool.ui.views.plans.view import PREF_TEAM, PlansView  # noqa: E402
 
 
@@ -28,7 +29,7 @@ class _ViewCase(_TeamStoreCase):
 
     def setUp(self):
         super().setUp()
-        self.catalogs = replace(self.catalogs, species_by_canonical={s.canonical_id: s for s in (KINGAMBIT, INCINEROAR, CHARIZARD, MEGA_Y)})
+        self.catalogs = replace(self.catalogs, species_by_canonical={s.canonical_id: s for s in (KINGAMBIT, INCINEROAR, CHARIZARD, MEGA_Y)}, moves_by_id=MOVES)
         if self.make_team:
             self.store.create_team("Sun")
             self.store.assign(1, self.charizard)
@@ -246,6 +247,120 @@ class TestMatchupGrid(_ViewCase):
         self.view.ensure_loaded()
         self.assertEqual(len(self._cells()), 0)
         self.assertGreater(before, 0)
+
+
+class TestPinnedCalcs(_ViewCase):
+    def setUp(self):
+        super().setUp()
+        self.plan = self.plans.create_from_draft(self.team_id, _draft())
+        self.view.ensure_loaded()
+
+    def _pin_rows(self):
+        return [c for c in self.view.editor._pins.controls if isinstance(getattr(c, "data", None), dict) and "pin" in c.data]
+
+    def _pin_cell(self, box_id, j):
+        def walk(c):
+            if isinstance(c, ft.GestureDetector) and c.data == {"pin_cell": (box_id, j)}:
+                return c
+            for attr in ("content", "controls"):
+                child = getattr(c, attr, None)
+                for x in (child if isinstance(child, list) else [child] if child is not None else []):
+                    found = walk(x)
+                    if found is not None:
+                        return found
+            return None
+        return walk(self.view.editor.grid._table)
+
+    def test_right_click_on_a_grid_cell_pins_it(self):
+        self.assertIn("No pinned calcs yet", serialise_text(self.view.editor._pins))
+        self._pin_cell(str(self.charizard), 0).on_secondary_tap(None)
+        pins = self.plans.pins(self.plan.plan_id)
+        self.assertEqual([(p.label, p.link.box_entry_id, p.link.opp_index) for p in pins], [("Charizard vs Kingambit", str(self.charizard), 0)])
+        rows = self._pin_rows()
+        self.assertEqual(len(rows), 1)
+        text = serialise_text(rows[0])
+        self.assertIn("Follows your Charizard", text)
+        self.assertIn("Follows their Kingambit", text)
+        serialise(self.view)
+
+    def test_open_rename_note_unpin_and_undo(self):
+        async def named(*_a, **_k):
+            return "Kowtow into Zard"
+
+        self.ctx.prompt_text = named
+        self._pin_cell(str(self.charizard), 0).on_secondary_tap(None)
+        pin = self.plans.pins(self.plan.plan_id)[0]
+        got = []
+        self.ctx.bus.on(events.CALC_REQUESTED, got.append)
+        self.view.editor.actions.open_pin(self.view.store.pin_views(self.view.plans[0])[0])
+        self.assertEqual((got[0].attacker.species, got[0].defender.species), ("charizard", "kingambit"))
+        self.view._rename_pin(pin)
+        self.view._pin_note(pin, "after Intimidate")
+        saved = self.plans.pins(self.plan.plan_id)[0]
+        self.assertEqual((saved.label, saved.note), ("Kowtow into Zard", "after Intimidate"))
+        toasts = []
+        self.ctx.toast = lambda message, kind="info", **kw: toasts.append((message, kw))
+        self.view._delete_pin(saved)
+        self.assertEqual(self.plans.pins(self.plan.plan_id), [])
+        self.assertEqual((toasts[-1][0], toasts[-1][1]["action"]), ("Unpinned", "Undo"))
+        toasts[-1][1]["on_action"]()
+        restored = self.plans.pins(self.plan.plan_id)
+        self.assertEqual([(p.label, p.note, p.link) for p in restored], [("Kowtow into Zard", "after Intimidate", saved.link)])
+
+    def test_a_pin_follows_a_spread_change_in_teams(self):
+        state = CalcState(left=PokemonState(species="charizard"), right=PokemonState(species="kingambit", nature="adamant", points={"attack": 32},
+                                                                                  moves=["Kowtow Cleave", None, None, None]))
+        self.plans.add_pin(self.plan.plan_id, state, label="Kowtow into Zard", mine="left", focus=("right", 0), link=PinLink(str(self.charizard), None))
+        self.view.refresh_pins(self.view.plans[0])
+        before = serialise_text(self._pin_rows()[0])
+        self.store.load(self.store.active_team_id)
+        self.store.save_spread(1, nature="bold", points={"hp": 32, "defense": 32})   # Charizard bulks up in Teams
+        self.view.ensure_loaded()                                                    # Plans is shown again
+        after = serialise_text(self._pin_rows()[0])
+        self.assertIn("Kowtow Cleave", after)
+        self.assertNotEqual(before, after, "the linked side took the new spread")
+        self.assertIn("32 HP / 32+ Def Charizard", after)
+
+    def test_pins_are_in_the_markdown(self):
+        self._pin_cell(str(self.charizard), 0).on_secondary_tap(None)
+        self.view.copy_plan(self.view.plans[0])
+        self.assertIn("### Key calcs", self.copied[-1])
+        self.assertIn("*Charizard vs Kingambit:*", self.copied[-1])
+
+    def test_a_calc_from_calc_is_pinned_with_its_links(self):
+        state = CalcState(left=PokemonState(species="charizard-mega-y", moves=["Heat Wave", None, None, None]),
+                          right=PokemonState(species="kingambit", moves=["Kowtow Cleave", None, None, None]),
+                          field=FieldState(weather="Sun"))
+        self.ctx.bus.emit(events.PLAN_PIN_REQUESTED, PinRequest(state=state, focus=("left", 0), label="Heat Wave into Gambit"))
+        dialog = self.page.dialogs[-1]
+        self.assertIsInstance(dialog, PinDialog)
+        self.assertEqual((dialog._team.value, dialog._plan.value), (self.team_id, self.plan.plan_id))
+        self.assertTrue(dialog._follow_mine.value and dialog._follow_theirs.value, "Mega Charizard Y matches the team's Charizard")
+        self.assertIn("Charizard", dialog._follow_mine.label)
+        dialog._fire()
+        pin = self.plans.pins(self.plan.plan_id)[0]
+        self.assertEqual((pin.label, pin.mine, pin.focus), ("Heat Wave into Gambit", "left", ("left", 0)))
+        self.assertEqual(pin.link, PinLink(str(self.charizard), 0))
+        self.assertEqual(pin.state.field.weather, "Sun")
+        self.assertTrue(self._toast_text().startswith("Pinned to"))
+
+    def test_your_side_as_the_defender(self):
+        state = CalcState(left=PokemonState(species="kingambit"), right=PokemonState(species="charizard"))
+        self.view.request_pin(PinRequest(state=state))
+        dialog = self.page.dialogs[-1]
+        dialog._mine.selected = ["right"]
+        dialog._links(refresh=False)
+        dialog._fire()
+        pin = self.plans.pins(self.plan.plan_id)[0]
+        self.assertEqual((pin.mine, pin.link), ("right", PinLink(str(self.charizard), 0)))
+        self.assertEqual(pin.label, "Kingambit vs Charizard")
+
+    def test_pinning_needs_a_plan_and_both_pokemon(self):
+        self.view.request_pin(PinRequest(state=CalcState(left=PokemonState(species="kingambit"))))
+        self.assertIn("both sides", self._toast_text())
+        self.plans.delete(self.plan.plan_id)
+        self.view.request_pin(PinRequest(state=CalcState(left=PokemonState(species="kingambit"), right=PokemonState(species="charizard"))))
+        self.assertIn("Make a plan first", self._toast_text())
 
 
 class TestAddingPlans(_ViewCase):

@@ -245,6 +245,23 @@ Database models in `src/pokemon_champions_planning_tool/infrastructure/database/
 - `created_at`, `updated_at`, `last_used_at: datetime` (the Calc lists saved teams by last use)
 - A new table: `create_all` adds it to an existing database, no migration step
 
+### `MatchupPlanRecord` (Table: `matchup_plans`)
+- One of your teams' plans against an opposing team, like a team report's matchup entry: `plan_id: UUID` (Primary Key), `team_id: UUID` (indexed), `name: str`, `source: str` (e.g. "Meta · Top teams", "Paste"), `difficulty: int` (0 not rated, 1 Very easy … 5 Very hard), `sort_order: int` (the order in the team's list)
+- `lead`, `back: list[dict]` (JSON, up to two each): `{"box_entry_id", "species"}`. A pick names a box entry, not a slot position, so reordering the team does not move it; `species` is the label kept if that Pokémon leaves the team. No Pokémon is in both
+- `game_plan: str` (one bullet per line), `threat_notes: dict` (JSON, opponent index `"0"`…`"5"` → note)
+- `field: dict` (JSON): the calculator `FieldState` the matchup grid is computed under (Singles/Doubles, weather, terrain, Trick Room, each side's Tailwind, Stealth Rock…)
+- `opponent: list[dict]` (JSON, up to six): the plan's own copy of the opposing team, the same `{"pokemon", "assumed"}` shape as `rival_teams.members`, Mega forms already resolved from held stones. Deleting the rival preset or Meta team it came from does not change it
+- `data_version: int` (the shape of the JSON columns, 1), `created_at`, `updated_at`
+- Deleting a team deletes its plans and their calcs (`TeamStore.delete_team`; SQLite foreign keys are not enforced); duplicating a team copies them
+- A new table: `create_all` adds it to an existing database, no migration step
+
+### `PlanCalcRecord` (Table: `plan_calcs`)
+- A damage calc pinned to a plan: `calc_id: UUID` (Primary Key), `plan_id: UUID` (indexed), `position: int`, `label: str`, `note: str`
+- `state: dict` (JSON): the whole calculator `CalcState` (both Pokémon with boosts, HP, status, crit and active moves, and the field), recomputed each time it is shown so the result stays right after a set changes
+- `mine: str` (`"left"`/`"right"`, the side holding your Pokémon), `focus: dict | None` (JSON `{"side", "index"}`, the move the pin is about), `link: dict` (JSON `{"box_entry_id", "opp_index"}`, either may be null): the team member and opponent whose current sets replace the stored ones on recompute
+- Its own table rather than a list in the plan row, so a pin added from the calculator is one insert and cannot race the Plans editor's save of the plan
+- `data_version: int`, `created_at`
+
 ---
 
 ## Formats (preferences, not tables)

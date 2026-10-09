@@ -32,7 +32,7 @@ from ....domain.entities.team_member import TeamMember
 from ....domain.stat_calc import validate_points
 from ....infrastructure.database.database import get_session
 from ....infrastructure.database.models import ItemRecord
-from ....infrastructure.database.repositories import BoxRepository, MegaEvolutionRepository, TeamRepository
+from ....infrastructure.database.repositories import BoxRepository, MatchupPlanRepository, MegaEvolutionRepository, TeamRepository
 from ....infrastructure.providers.pokepast_provider import PokepastProvider
 from ....services.showdown_service import (
     ImportedTeam,
@@ -310,6 +310,8 @@ class TeamStore:
             repo = TeamRepository(s)
             for m in repo.list_members(self.active_team_id):
                 repo.delete_member(self.active_team_id, m.slot_position)
+            # No FK cascade in SQLite here: the team's matchup plans would be orphaned.
+            MatchupPlanRepository(s).delete_for_team(self.active_team_id)
             repo.delete(self.active_team_id)
         self.active_team_id = None
         self.load()
@@ -328,6 +330,7 @@ class TeamStore:
             for m in (s.member for s in self.slots if s.member is not None)
         ]
         format_id = self.active_team_format_id
+        source_id = self.active_team_id
         new_id = self.create_team(name)
         with self._sf() as s:
             repo = TeamRepository(s)
@@ -335,6 +338,8 @@ class TeamStore:
                 repo.set_format(new_id, format_id)
             for member in copies:
                 repo.upsert_member(new_id, member)
+            # Same box entries in the copy, so the plans' Lead/Back picks still point at them.
+            MatchupPlanRepository(s).copy_to_team(source_id, new_id)
         self.load(new_id)
         return new_id
 

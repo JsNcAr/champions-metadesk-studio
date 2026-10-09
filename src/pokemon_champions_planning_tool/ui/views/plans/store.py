@@ -1,0 +1,330 @@
+"""Plans store: matchup plans and their pinned calcs. Flet-free, one session per call.
+
+Plans belong to one of your teams; their opponent is a copy taken when the plan is made.
+Your side is read live from the team (``my_members``), so a plan follows the team as it
+changes, and Lead/Back name box entries so reordering the team does not move them.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Sequence
+from contextlib import AbstractContextManager
+from dataclasses import asdict, replace
+from typing import Any
+from uuid import UUID
+
+from sqlmodel import Session
+
+from ....domain.formats import Mechanic
+from ....infrastructure.database.database import get_session
+from ....infrastructure.database.models import MatchupPlanRecord, PlanCalcRecord
+from ....infrastructure.database.repositories import MatchupPlanRepository, TeamRepository
+from ..calc.state import CalcState, FieldState, PokemonState, RivalMember, pokemon_from_slot
+from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinLink, PinnedCalc, Plan, PlanDraft
+from .report import PinLine, PlanText, plan_markdown, team_markdown
+
+SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+_EDITABLE = frozenset({"name", "source", "difficulty", "lead", "back", "game_plan", "field", "opponent", "threat_notes"})
+
+
+# -- record <-> plain data ----------------------------------------------------------------------
+
+
+def plan_from_record(record: MatchupPlanRecord) -> Plan:
+    notes: dict[int, str] = {}
+    for key, text in (record.threat_notes or {}).items():
+        try:
+            if text:
+                notes[int(key)] = str(text)
+        except (TypeError, ValueError):
+            continue
+    return Plan(
+        plan_id=str(record.plan_id), team_id=str(record.team_id), name=record.name, source=record.source or "",
+        difficulty=max(0, min(len(DIFFICULTIES) - 1, int(record.difficulty or 0))),
+        lead=_refs(record.lead), back=_refs(record.back), game_plan=record.game_plan or "",
+        field=FieldState.from_dict(record.field), opponent=tuple(RivalMember.from_dict(m) for m in (record.opponent or [])),
+        threat_notes=notes, sort_order=record.sort_order, updated_at=record.updated_at,
+    )
+
+
+def _refs(items: Iterable[dict] | None) -> tuple[MemberRef, ...]:
+    refs = (MemberRef.from_dict(x) for x in (items or []))
+    return tuple(r for r in refs if r is not None)[:MAX_PICKS]
+
+
+def pin_from_record(record: PlanCalcRecord) -> PinnedCalc:
+    focus = None
+    if record.focus and record.focus.get("side") in ("left", "right"):
+        try:
+            focus = (str(record.focus["side"]), int(record.focus.get("index", 0)))
+        except (TypeError, ValueError):
+            focus = None
+    return PinnedCalc(
+        calc_id=str(record.calc_id), plan_id=str(record.plan_id), state=CalcState.from_dict(record.state),
+        label=record.label or "", note=record.note or "", mine="right" if record.mine == "right" else "left",
+        focus=focus, link=PinLink.from_dict(record.link), position=record.position,
+    )
+
+
+def _apply_changes(record: MatchupPlanRecord, changes: dict[str, Any]) -> None:
+    unknown = set(changes) - _EDITABLE
+    if unknown:
+        raise ValueError(f"Not a plan field: {', '.join(sorted(unknown))}")
+    if "name" in changes:
+        clean = str(changes["name"] or "").strip()
+        if not clean:
+            raise ValueError("A plan needs a name")
+        record.name = clean
+    if "source" in changes:
+        record.source = str(changes["source"] or "")
+    if "difficulty" in changes:
+        record.difficulty = max(0, min(len(DIFFICULTIES) - 1, int(changes["difficulty"] or 0)))
+    lead = _clean_refs(changes["lead"]) if "lead" in changes else _refs(record.lead)
+    back = _clean_refs(changes["back"]) if "back" in changes else _refs(record.back)
+    if "lead" in changes or "back" in changes:
+        # A Pokémon leads or stays back, never both: the newest pick wins.
+        if "lead" in changes:
+            taken = {r.box_entry_id for r in lead}
+            back = tuple(r for r in back if r.box_entry_id not in taken)
+        else:
+            taken = {r.box_entry_id for r in back}
+            lead = tuple(r for r in lead if r.box_entry_id not in taken)
+        record.lead = [r.to_dict() for r in lead]
+        record.back = [r.to_dict() for r in back]
+    if "game_plan" in changes:
+        record.game_plan = str(changes["game_plan"] or "")
+    if "field" in changes:
+        fs = changes["field"]
+        record.field = asdict(fs) if isinstance(fs, FieldState) else asdict(FieldState.from_dict(fs))
+    if "opponent" in changes:
+        record.opponent = [m.to_dict() for m in changes["opponent"]]
+    if "threat_notes" in changes:
+        record.threat_notes = {str(int(k)): str(v) for k, v in dict(changes["threat_notes"]).items() if str(v or "").strip()}
+
+
+def _clean_refs(refs: Sequence[MemberRef]) -> tuple[MemberRef, ...]:
+    seen: set[str] = set()
+    out: list[MemberRef] = []
+    for ref in refs:
+        if ref.box_entry_id and ref.box_entry_id not in seen:
+            seen.add(ref.box_entry_id)
+            out.append(ref)
+    return tuple(out[:MAX_PICKS])
+
+
+# -- store --------------------------------------------------------------------------------------
+
+
+class PlanStore:
+    def __init__(self, catalogs: Any, session_factory: SessionFactory = get_session, *, team_store: Any = None) -> None:
+        self.catalogs = catalogs
+        self._sf = session_factory
+        self.team_store = team_store
+        self._members_cache: dict[str, list[tuple[str, PokemonState]]] = {}
+
+    # -- your side ------------------------------------------------------------------------
+
+    def my_members(self, team_id: str) -> list[tuple[str, PokemonState]]:
+        """(box entry id, calc state) for each filled slot of a team, in slot order. Cached
+        until ``invalidate`` (a team edit, a box change or a catalogue reload)."""
+        if team_id in self._members_cache:
+            return self._members_cache[team_id]
+        out: list[tuple[str, PokemonState]] = []
+        if self.team_store is not None:
+            name, slots, _summary = self.team_store.summary_for(UUID(team_id))
+            for slot in slots:
+                if not getattr(slot, "filled", False):
+                    continue
+                state = pokemon_from_slot(slot, self.catalogs, source=f"{name} · slot {slot.position}")
+                if state is not None:
+                    out.append((str(slot.entry.box_entry_id), state))
+        self._members_cache[team_id] = out
+        return out
+
+    def invalidate(self, team_id: str | None = None) -> None:
+        if team_id is None:
+            self._members_cache.clear()
+        else:
+            self._members_cache.pop(str(team_id), None)
+
+    def species_name(self, canonical_id: str | None) -> str:
+        if not canonical_id:
+            return ""
+        species = self.catalogs.species_for(canonical_id)
+        return species.name if species else canonical_id.replace("-", " ").title()
+
+    def ref_label(self, ref: MemberRef, team_id: str) -> tuple[str, bool]:
+        """(name, still in the team): a pick whose Pokémon left the team keeps its name."""
+        for box_id, state in self.my_members(team_id):
+            if box_id == ref.box_entry_id:
+                return self.species_name(state.species), True
+        return self.species_name(ref.species), False
+
+    def _team_format(self, team_id: str) -> Any:
+        if self.team_store is None:
+            return None
+        with self._sf() as s:
+            record = TeamRepository(s).get(UUID(team_id))
+            format_id = record.format_id if record else None
+        return self.team_store.formats.for_team(format_id)
+
+    # -- creating -------------------------------------------------------------------------
+
+    def normalise_megas(self, members: Iterable[RivalMember], *, enabled: bool = True) -> tuple[RivalMember, ...]:
+        """A member holding its Mega Stone becomes the Mega form, as the calculator does when
+        an item is set: tournament rosters and pastes keep the base species."""
+        out: list[RivalMember] = []
+        for member in members:
+            p = member.pokemon
+            mega = self.catalogs.mega_for_item(p.species, p.item) if enabled else None
+            if mega and mega != p.species:
+                species = self.catalogs.species_for(mega)
+                ability = species.abilities[0] if species is not None and species.abilities else p.ability
+                member = replace(member, pokemon=replace(p, species=mega, ability=ability))
+            out.append(member)
+        return tuple(out)
+
+    def create_from_draft(self, team_id: str, draft: PlanDraft) -> Plan:
+        name = (draft.name or "").strip() or "New plan"
+        fmt = self._team_format(team_id)
+        mega_enabled = fmt.has(Mechanic.MEGA) if fmt is not None else True
+        game_type = fmt.game_type if fmt is not None else "doubles"
+        members = self.normalise_megas(draft.members[:6], enabled=mega_enabled)
+        with self._sf() as s:
+            repo = MatchupPlanRepository(s)
+            record = MatchupPlanRecord(
+                team_id=UUID(team_id), name=name, source=draft.source or "",
+                field=asdict(FieldState(game_type=game_type)), opponent=[m.to_dict() for m in members],
+                sort_order=repo.next_sort_order(UUID(team_id)),
+            )
+            return plan_from_record(repo.upsert(record))
+
+    # -- reading and editing plans --------------------------------------------------------
+
+    def list_plans(self, team_id: str) -> list[Plan]:
+        with self._sf() as s:
+            return [plan_from_record(r) for r in MatchupPlanRepository(s).list_for_team(UUID(team_id))]
+
+    def get(self, plan_id: str) -> Plan | None:
+        with self._sf() as s:
+            record = MatchupPlanRepository(s).get(UUID(plan_id))
+            return plan_from_record(record) if record else None
+
+    def update(self, plan_id: str, **changes: Any) -> Plan:
+        """Save some of a plan's fields (name, difficulty, lead, back, game_plan, field,
+        opponent, threat_notes, source); the others stay as they are in the database."""
+        with self._sf() as s:
+            repo = MatchupPlanRepository(s)
+            record = repo.get(UUID(plan_id))
+            if record is None:
+                raise KeyError(plan_id)
+            _apply_changes(record, changes)
+            return plan_from_record(repo.upsert(record))
+
+    def set_threat_note(self, plan_id: str, index: int, text: str) -> Plan:
+        plan = self.get(plan_id)
+        if plan is None:
+            raise KeyError(plan_id)
+        notes = dict(plan.threat_notes)
+        if text.strip():
+            notes[index] = text
+        else:
+            notes.pop(index, None)
+        return self.update(plan_id, threat_notes=notes)
+
+    def duplicate(self, plan_id: str, name: str | None = None) -> Plan:
+        with self._sf() as s:
+            record = MatchupPlanRepository(s).copy_plan(UUID(plan_id), name=name)
+            if record is None:
+                raise KeyError(plan_id)
+            return plan_from_record(record)
+
+    def delete(self, plan_id: str) -> bool:
+        with self._sf() as s:
+            return MatchupPlanRepository(s).delete(UUID(plan_id))
+
+    def move(self, plan_id: str, delta: int) -> None:
+        """Move a plan up (-1) or down (+1) in its team's list."""
+        plan = self.get(plan_id)
+        if plan is None:
+            return
+        ids = [p.plan_id for p in self.list_plans(plan.team_id)]
+        i = ids.index(plan_id)
+        j = max(0, min(len(ids) - 1, i + delta))
+        if i == j:
+            return
+        ids.insert(j, ids.pop(i))
+        with self._sf() as s:
+            MatchupPlanRepository(s).reorder(UUID(plan.team_id), [UUID(x) for x in ids])
+
+    # -- pinned calcs ---------------------------------------------------------------------
+
+    def pins(self, plan_id: str) -> list[PinnedCalc]:
+        with self._sf() as s:
+            return [pin_from_record(r) for r in MatchupPlanRepository(s).calcs(UUID(plan_id))]
+
+    def add_pin(
+        self, plan_id: str, state: CalcState, *, label: str = "", mine: str = "left",
+        focus: tuple[str, int] | None = None, link: PinLink | None = None, note: str = "",
+    ) -> PinnedCalc:
+        record = PlanCalcRecord(
+            plan_id=UUID(plan_id), label=label.strip(), note=note, mine="right" if mine == "right" else "left",
+            state=state.to_dict(), focus={"side": focus[0], "index": int(focus[1])} if focus else None,
+            link=(link or PinLink()).to_dict(),
+        )
+        with self._sf() as s:
+            return pin_from_record(MatchupPlanRepository(s).add_calc(record))
+
+    def update_pin(self, calc_id: str, **changes: Any) -> PinnedCalc:
+        with self._sf() as s:
+            repo = MatchupPlanRepository(s)
+            record = repo.get_calc(UUID(calc_id))
+            if record is None:
+                raise KeyError(calc_id)
+            if "label" in changes:
+                record.label = str(changes["label"] or "").strip()
+            if "note" in changes:
+                record.note = str(changes["note"] or "")
+            if "state" in changes:
+                record.state = changes["state"].to_dict()
+            if "link" in changes:
+                record.link = (changes["link"] or PinLink()).to_dict()
+            return pin_from_record(repo.update_calc(record))
+
+    def delete_pin(self, calc_id: str) -> bool:
+        with self._sf() as s:
+            return MatchupPlanRepository(s).delete_calc(UUID(calc_id))
+
+    # -- export ---------------------------------------------------------------------------
+
+    def member_line(self, pokemon: PokemonState) -> str:
+        name = self.species_name(pokemon.species)
+        return f"{name} @ {pokemon.item}" if pokemon.item else name
+
+    def plan_text(self, plan: Plan, pins: Sequence[PinLine] = ()) -> PlanText:
+        """A plan with every name resolved, ready for ``report.plan_markdown``."""
+        threats = tuple(
+            (self.species_name(plan.opponent[i].pokemon.species), note)
+            for i, note in sorted(plan.threat_notes.items())
+            if 0 <= i < len(plan.opponent) and note.strip()
+        )
+        return PlanText(
+            plan=plan,
+            lead=tuple(self.ref_label(r, plan.team_id)[0] for r in plan.lead),
+            back=tuple(self.ref_label(r, plan.team_id)[0] for r in plan.back),
+            opponent=tuple(self.member_line(m.pokemon) for m in plan.opponent),
+            threats=threats, pins=tuple(pins),
+        )
+
+    def plan_markdown(self, plan_id: str, pins: Sequence[PinLine] = ()) -> str:
+        plan = self.get(plan_id)
+        return plan_markdown(self.plan_text(plan, pins)) if plan is not None else ""
+
+    def team_markdown(self, team_id: str, team_name: str, pins_by_plan: dict[str, Sequence[PinLine]] | None = None) -> str:
+        pins_by_plan = pins_by_plan or {}
+        texts = [self.plan_text(p, pins_by_plan.get(p.plan_id, ())) for p in self.list_plans(team_id)]
+        return team_markdown(team_name, texts)
+
+
+__all__ = ["PlanStore", "pin_from_record", "plan_from_record"]

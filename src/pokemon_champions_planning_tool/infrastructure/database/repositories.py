@@ -24,7 +24,9 @@ from .models import (
     ItemCatalogMetaRecord,
     ItemRecord,
     LearnsetRecord,
+    MatchupPlanRecord,
     MegaCheckedSpeciesRecord,
+    PlanCalcRecord,
     SpeciesCatalogMetaRecord,
     SpeciesRecord,
     MegaEvolutionRecord,
@@ -639,6 +641,151 @@ class RivalTeamRepository:
 
     def delete(self, rival_team_id: UUID) -> bool:
         record = self.session.get(RivalTeamRecord, rival_team_id)
+        if record is None:
+            return False
+        self.session.delete(record)
+        self.session.commit()
+        return True
+
+
+class MatchupPlanRepository:
+    """Matchup plans of your teams and the calcs pinned to them.
+
+    SQLite foreign keys are not enforced here, so deleting a plan deletes its calcs by
+    hand, and a deleted team's plans are removed through ``delete_for_team``.
+    """
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    # -- plans ------------------------------------------------------------------------------
+
+    def list_for_team(self, team_id: UUID) -> list[MatchupPlanRecord]:
+        stmt = (
+            select(MatchupPlanRecord)
+            .where(MatchupPlanRecord.team_id == team_id)
+            .order_by(MatchupPlanRecord.sort_order, MatchupPlanRecord.created_at)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def get(self, plan_id: UUID) -> MatchupPlanRecord | None:
+        return self.session.get(MatchupPlanRecord, plan_id)
+
+    def next_sort_order(self, team_id: UUID) -> int:
+        current = self.session.exec(
+            select(func.max(MatchupPlanRecord.sort_order)).where(MatchupPlanRecord.team_id == team_id)
+        ).one()
+        return 0 if current is None else int(current) + 1
+
+    def upsert(self, record: MatchupPlanRecord) -> MatchupPlanRecord:
+        record.updated_at = _utc_now()
+        merged = self.session.merge(record)
+        self.session.commit()
+        self.session.refresh(merged)
+        return merged
+
+    def delete(self, plan_id: UUID) -> bool:
+        record = self.session.get(MatchupPlanRecord, plan_id)
+        if record is None:
+            return False
+        self.session.exec(delete(PlanCalcRecord).where(PlanCalcRecord.plan_id == plan_id))
+        self.session.delete(record)
+        self.session.commit()
+        return True
+
+    def delete_for_team(self, team_id: UUID) -> int:
+        plan_ids = [p.plan_id for p in self.list_for_team(team_id)]
+        if not plan_ids:
+            return 0
+        self.session.exec(delete(PlanCalcRecord).where(PlanCalcRecord.plan_id.in_(plan_ids)))
+        self.session.exec(delete(MatchupPlanRecord).where(MatchupPlanRecord.team_id == team_id))
+        self.session.commit()
+        return len(plan_ids)
+
+    def copy_plan(self, plan_id: UUID, *, team_id: UUID | None = None, name: str | None = None) -> MatchupPlanRecord | None:
+        """A copy of one plan and its calcs, onto the same team (a duplicate) or another one."""
+        source = self.get(plan_id)
+        if source is None:
+            return None
+        target_team = team_id or source.team_id
+        copy = self._clone_plan(source, team_id=target_team, sort_order=self.next_sort_order(target_team), name=name)
+        self.session.add(copy)
+        for calc in self.calcs(plan_id):
+            self.session.add(self._clone_calc(calc, plan_id=copy.plan_id))
+        self.session.commit()
+        self.session.refresh(copy)
+        return copy
+
+    def copy_to_team(self, source_team_id: UUID, target_team_id: UUID) -> int:
+        """Every plan of a team, calcs included, onto another (a duplicated team keeps its plans)."""
+        plans = self.list_for_team(source_team_id)
+        for plan in plans:
+            copy = self._clone_plan(plan, team_id=target_team_id, sort_order=plan.sort_order)
+            self.session.add(copy)
+            for calc in self.calcs(plan.plan_id):
+                self.session.add(self._clone_calc(calc, plan_id=copy.plan_id))
+        self.session.commit()
+        return len(plans)
+
+    @staticmethod
+    def _clone_plan(source: MatchupPlanRecord, *, team_id: UUID, sort_order: int, name: str | None = None) -> MatchupPlanRecord:
+        return MatchupPlanRecord(
+            team_id=team_id, name=name or source.name, source=source.source, difficulty=source.difficulty,
+            lead=[dict(x) for x in source.lead], back=[dict(x) for x in source.back], game_plan=source.game_plan,
+            field=json.loads(json.dumps(source.field)), opponent=json.loads(json.dumps(source.opponent)),
+            threat_notes=dict(source.threat_notes), sort_order=sort_order, data_version=source.data_version,
+        )
+
+    @staticmethod
+    def _clone_calc(source: PlanCalcRecord, *, plan_id: UUID) -> PlanCalcRecord:
+        return PlanCalcRecord(
+            plan_id=plan_id, position=source.position, label=source.label, note=source.note, mine=source.mine,
+            state=json.loads(json.dumps(source.state)), focus=dict(source.focus) if source.focus else None,
+            link=dict(source.link), data_version=source.data_version,
+        )
+
+    def reorder(self, team_id: UUID, plan_ids: Sequence[UUID]) -> None:
+        """Give the team's plans the order of ``plan_ids``; plans not named keep their place after them."""
+        order = {pid: i for i, pid in enumerate(plan_ids)}
+        plans = self.list_for_team(team_id)
+        plans.sort(key=lambda p: (order.get(p.plan_id, len(order)), p.sort_order))
+        for i, plan in enumerate(plans):
+            plan.sort_order = i
+            self.session.add(plan)
+        self.session.commit()
+
+    # -- pinned calcs -----------------------------------------------------------------------
+
+    def calcs(self, plan_id: UUID) -> list[PlanCalcRecord]:
+        stmt = (
+            select(PlanCalcRecord)
+            .where(PlanCalcRecord.plan_id == plan_id)
+            .order_by(PlanCalcRecord.position, PlanCalcRecord.created_at)
+        )
+        return list(self.session.exec(stmt).all())
+
+    def get_calc(self, calc_id: UUID) -> PlanCalcRecord | None:
+        return self.session.get(PlanCalcRecord, calc_id)
+
+    def add_calc(self, record: PlanCalcRecord) -> PlanCalcRecord:
+        """Append a calc at the end of its plan's list."""
+        current = self.session.exec(
+            select(func.max(PlanCalcRecord.position)).where(PlanCalcRecord.plan_id == record.plan_id)
+        ).one()
+        record.position = 0 if current is None else int(current) + 1
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
+    def update_calc(self, record: PlanCalcRecord) -> PlanCalcRecord:
+        merged = self.session.merge(record)
+        self.session.commit()
+        self.session.refresh(merged)
+        return merged
+
+    def delete_calc(self, calc_id: UUID) -> bool:
+        record = self.session.get(PlanCalcRecord, calc_id)
         if record is None:
             return False
         self.session.delete(record)

@@ -559,3 +559,59 @@ class RivalTeamRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
     last_used_at: datetime = Field(default_factory=_utc_now)
+
+
+class MatchupPlanRecord(SQLModel, table=True):
+    """One of your teams' plans against an opposing team, like a team report's matchup entry.
+
+    ``opponent`` is the plan's own copy of the opposing six (``RivalMember`` dicts), so a
+    deleted rival preset or a resynced tournament never changes it. ``lead``/``back`` name
+    team members by box entry (``{"box_entry_id", "species"}``): slot positions shift when
+    the team is reordered, box entries don't. ``field`` is a calculator ``FieldState`` dict
+    for the matchup grid, ``threat_notes`` maps an opponent index ("0".."5") to a note.
+    ``data_version`` is the shape of these JSON columns, for a future migration.
+    """
+
+    __tablename__: ClassVar[str] = "matchup_plans"
+
+    plan_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    team_id: UUID = Field(index=True)
+    name: str
+    source: str = ""
+    difficulty: int = 0
+    lead: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    back: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    game_plan: str = Field(default="", sa_column=Column(Text, nullable=False, default=""))
+    field: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    opponent: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    threat_notes: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    sort_order: int = 0
+    data_version: int = 1
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
+
+
+class PlanCalcRecord(SQLModel, table=True):
+    """A damage calc pinned to a matchup plan: the whole calculator state, recomputed live.
+
+    Its own table, not a list in the plan row, so pinning from the calculator is a single
+    insert that cannot race the Plans editor's debounced save of the plan. ``mine`` is the
+    side ("left"/"right") holding your Pokémon; ``link`` (``{"box_entry_id", "opp_index"}``,
+    either may be null) names the team member and opponent the sides stand for, whose
+    current sets replace the stored ones on recompute. ``focus`` (``{"side", "index"}``)
+    picks the move the pin is about; without it, the best hit each way is shown.
+    """
+
+    __tablename__: ClassVar[str] = "plan_calcs"
+
+    calc_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    plan_id: UUID = Field(index=True)
+    position: int = 0
+    label: str = ""
+    note: str = Field(default="", sa_column=Column(Text, nullable=False, default=""))
+    mine: str = "left"
+    state: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    focus: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    link: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    data_version: int = 1
+    created_at: datetime = Field(default_factory=_utc_now)

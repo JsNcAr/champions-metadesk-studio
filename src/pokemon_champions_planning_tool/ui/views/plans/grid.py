@@ -24,13 +24,13 @@ _IGNORED = ("source", "assumptions")
 _CACHE_LIMIT = 1024
 
 
-def _key(you: PokemonState, rival: PokemonState, field: FieldState, kind: str) -> str:
+def calc_key(you: PokemonState, rival: PokemonState, field: FieldState, kind: str) -> str:
     y = {k: v for k, v in asdict(you).items() if k not in _IGNORED}
     r = {k: v for k, v in asdict(rival).items() if k not in _IGNORED}
     return json.dumps((kind, y, r, asdict(field)), sort_keys=True, default=str)
 
 
-def _remember(cache: dict | None, key: str, value: Any) -> None:
+def remember(cache: dict | None, key: str, value: Any) -> None:
     if cache is None:
         return
     if len(cache) >= _CACHE_LIMIT:
@@ -52,12 +52,12 @@ def compute_grid(mine: Sequence[tuple[str, PokemonState]], opponent: Sequence[Po
             r_species = catalogs.species_for(rival.species) if rival.species else None
             if r_species is None:
                 continue
-            key = _key(you, rival, field, "fast")
+            key = calc_key(you, rival, field, "fast")
             cached = cache.get(key) if cache is not None else None
             if cached is None:
                 yours, theirs, y_speed, r_speed, faster, klass = matchup(you, y_species, rival, r_species, field, catalogs, fields=fields)
                 cached = TeamRating(box_id, r_species.name, klass, yours, theirs, y_speed, r_speed, faster)
-                _remember(cache, key, cached)
+                remember(cache, key, cached)
             grid[(box_id, j)] = replace(cached, slot_key=box_id)
     return grid
 
@@ -82,7 +82,7 @@ def with_ko_text(grid: Grid, mine: Sequence[tuple[str, PokemonState]], opponent:
         if you is None or rival is None:
             out[(box_id, j)] = rating
             continue
-        key = _key(you, rival, field, "ko")
+        key = calc_key(you, rival, field, "ko")
         cached = cache.get(key) if cache is not None else None
         if cached is None:
             cached = replace(
@@ -90,9 +90,9 @@ def with_ko_text(grid: Grid, mine: Sequence[tuple[str, PokemonState]], opponent:
                 your_best=_full(you, rival, rating.your_best, field, catalogs, left=True),
                 their_best=_full(rival, you, rating.their_best, field, catalogs, left=False),
             )
-            _remember(cache, key, cached)
+            remember(cache, key, cached)
         out[(box_id, j)] = replace(cached, slot_key=box_id)
     return out
 
 
-__all__ = ["Grid", "compute_grid", "with_ko_text"]
+__all__ = ["Grid", "calc_key", "compute_grid", "remember", "with_ko_text"]

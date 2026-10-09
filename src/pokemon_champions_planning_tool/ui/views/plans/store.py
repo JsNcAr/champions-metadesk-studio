@@ -22,6 +22,7 @@ from ....infrastructure.database.repositories import MatchupPlanRepository, Team
 from ..calc.state import CalcState, FieldState, PokemonState, RivalMember, pokemon_from_slot
 from .model import DIFFICULTIES, MAX_PICKS, MemberRef, PinLink, PinnedCalc, Plan, PlanDraft
 from .flow import Names, OppRef, Scenario, Turn, scenario_markdown
+from .flow_calc import action_hits, hit_text
 from .pins import PinView, view_pin
 from .report import PinLine, PlanText, plan_markdown, team_markdown
 
@@ -124,6 +125,7 @@ class PlanStore:
         self._sf = session_factory
         self.team_store = team_store
         self._members_cache: dict[str, list[tuple[str, PokemonState]]] = {}
+        self.calc_cache: dict = {}   # battle-flow damage, shared by the view's worker and the export
 
     # -- your side ------------------------------------------------------------------------
 
@@ -147,6 +149,7 @@ class PlanStore:
     def invalidate(self, team_id: str | None = None) -> None:
         if team_id is None:
             self._members_cache.clear()
+            self.calc_cache.clear()
         else:
             self._members_cache.pop(str(team_id), None)
 
@@ -371,11 +374,21 @@ class PlanStore:
             return self.species_name(ref.species) or f"their #{ref.index + 1}"
         return Names(member=lambda ref: self.ref_label(ref, plan.team_id)[0], opp=opp)
 
-    def flow_lines(self, plan: Plan, hits: dict | None = None) -> list[str]:
+    def flow_hits(self, plan: Plan, sc: Scenario) -> dict:
+        """Every picked attack of a scenario against its target(s), under the plan's field."""
+        return action_hits(plan, sc, dict(self.my_members(plan.team_id)), self.catalogs, cache=self.calc_cache)
+
+    def flow_lines(self, plan: Plan) -> list[str]:
+        """The battle flow as Markdown lines, each attack with its damage."""
         names = self.names(plan)
+
+        def foe(index: int) -> str:
+            return self.species_name(plan.opponent[index].pokemon.species) if 0 <= index < len(plan.opponent) else "?"
+
         out: list[str] = []
         for sc in self.scenarios(plan.plan_id):
-            out += scenario_markdown(plan, sc, names, level=4, hits=(hits or {}).get(sc.scenario_id)) + [""]
+            hits = {key: hit_text(h, foe) for key, h in self.flow_hits(plan, sc).items()}
+            out += scenario_markdown(plan, sc, names, level=4, hits=hits) + [""]
         return out[:-1] if out else out
 
     # -- export ---------------------------------------------------------------------------

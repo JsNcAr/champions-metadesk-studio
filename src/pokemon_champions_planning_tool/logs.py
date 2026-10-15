@@ -72,7 +72,11 @@ def runtime_facts() -> str:
     import os
 
     def writable(path: str | None) -> str:
-        return "-" if not path else ("writable" if os.access(path, os.W_OK) else "read-only")
+        if not path:
+            return "-"
+        if not os.path.exists(path):
+            return "missing (created later)"
+        return "writable" if os.access(path, os.W_OK) else "read-only"
 
     env = {k: os.environ.get(k) for k in ("FLET_PLATFORM", "FLET_APP_STORAGE_DATA", "FLET_APP_STORAGE_TEMP", "FLET_ASSETS_DIR")}
     return " · ".join([

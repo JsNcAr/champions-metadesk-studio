@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -98,15 +98,13 @@ class TestTournamentRegulationDetection(unittest.TestCase):
 
     def test_limitless_provider_accepts_custom_format_if_champions_title(self):
         provider = LimitlessProvider()
-        # Relative to today, so the 30-day window below always includes them.
-        recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%dT10:00:00Z")
         # Mock _get returning a mix of tournaments
         raw_items = [
             {
                 "id": "tour1",
                 "name": "Pomelo Late Night Tour (M-C)",
                 "format": "CUSTOM",
-                "date": recent,
+                "date": "2026-09-12T10:00:00Z",
                 "players": 32,
                 "organizer": "Pomelo",
             },
@@ -114,7 +112,7 @@ class TestTournamentRegulationDetection(unittest.TestCase):
                 "id": "tour2",
                 "name": "Random SV Tour",
                 "format": "CUSTOM",
-                "date": recent,
+                "date": "2026-09-12T10:00:00Z",
                 "players": 16,
                 "organizer": "Random",
             },
@@ -122,7 +120,7 @@ class TestTournamentRegulationDetection(unittest.TestCase):
                 "id": "tour3",
                 "name": "Standard M-B Tour",
                 "format": "M-B",
-                "date": recent,
+                "date": "2026-09-12T10:00:00Z",
                 "players": 64,
                 "organizer": "VGC",
             },

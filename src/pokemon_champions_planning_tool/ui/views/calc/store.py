@@ -354,6 +354,9 @@ class CalcStore:
     def apply_request(self, req: CalcRequest) -> None:
         if req.defender is not None:
             self._unlink_rival()
+        if req.field is not None:
+            # Set before the Pokémon, so a weather or terrain ability can still apply on top.
+            self.state = replace(self.state, field=FieldState.from_dict(asdict(req.field)))
         if req.attacker is not None:
             self.state = self.state.with_side("left", req.attacker)
             self._apply_ability_field(req.attacker.ability)

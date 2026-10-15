@@ -191,10 +191,12 @@ class CalcResults:
 
 @dataclass(frozen=True)
 class CalcRequest:
-    """Bus payload for ``CALC_REQUESTED``: load one or both sides."""
+    """Bus payload for ``CALC_REQUESTED``: load one or both sides, and optionally the field
+    they were seen under (a matchup plan's grid opens a pairing with the plan's field)."""
 
     attacker: PokemonState | None = None
     defender: PokemonState | None = None
+    field: FieldState | None = None
 
 
 # ------------------------------------------------------------------ opponent sweep

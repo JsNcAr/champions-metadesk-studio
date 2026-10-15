@@ -215,11 +215,12 @@ class EventDialog(ft.AlertDialog):
     """Whole standings of one event, every placement, with the same team rows."""
 
     def __init__(self, first: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_close: Callable[[], None], on_calc: Callable[[MetaTeamRow, int], None] | None = None,
-                 on_rival: Callable[[MetaTeamRow], None] | None = None) -> None:
+                 on_rival: Callable[[MetaTeamRow], None] | None = None, on_plan: Callable[[MetaTeamRow], None] | None = None) -> None:
         super().__init__(modal=False, scrollable=False)
         self._on_import = on_import
         self._on_calc = on_calc
         self._on_rival = on_rival
+        self._on_plan = on_plan
         self._list = ft.ListView(spacing=0, expand=True)
         self._status = ft.Text("Loading standings…", theme_style=ft.TextThemeStyle.BODY_SMALL, color=Palette.ON_SURFACE_VARIANT)
         self._spinner = ft.ProgressRing(width=16, height=16, stroke_width=2)
@@ -248,7 +249,7 @@ class EventDialog(ft.AlertDialog):
         self.actions_alignment = ft.MainAxisAlignment.END
 
     def set_rows(self, rows: list[MetaTeamRow]) -> None:
-        self._list.controls = [TeamRow(r, on_import=self._on_import, on_calc=self._on_calc, on_rival=self._on_rival) for r in rows]
+        self._list.controls = [TeamRow(r, on_import=self._on_import, on_calc=self._on_calc, on_rival=self._on_rival, on_plan=self._on_plan) for r in rows]
         self._spinner.visible = False
         self._status.value = plural(len(rows), "team") + " · best placement first"
         if is_mounted(self):
@@ -266,7 +267,7 @@ class TeamRow(ft.Container):
     """48px row: placement · player · six sprites · legality · Poképaste · Import."""
 
     def __init__(self, row: MetaTeamRow, *, on_import: Callable[[MetaTeamRow], None], on_calc: Callable[[MetaTeamRow, int], None] | None = None,
-                 on_rival: Callable[[MetaTeamRow], None] | None = None) -> None:
+                 on_rival: Callable[[MetaTeamRow], None] | None = None, on_plan: Callable[[MetaTeamRow], None] | None = None) -> None:
         super().__init__()
         self.row = row
         self._on_import = on_import
@@ -288,10 +289,15 @@ class TeamRow(ft.Container):
             actions.append(ft.IconButton(icon=ft.Icons.OPEN_IN_NEW, icon_size=IconSize.MD, tooltip="Open Poképaste", on_click=lambda e, url=row.pokepast_url: open_url(e.control.page, url)))
         if on_calc is not None and row.members:
             items = [ft.PopupMenuItem(content=ft.Text(m.display_name), on_click=lambda _e, i=i: on_calc(self.row, i)) for i, m in enumerate(row.members)]
+            if on_rival is not None or on_plan is not None:
+                items.append(ft.PopupMenuItem())
             if on_rival is not None:
-                items += [ft.PopupMenuItem(), ft.PopupMenuItem(content=ft.Text("Save as rival preset"), icon=ft.Icons.SPORTS_MMA_OUTLINED,
-                                                               on_click=lambda _e: on_rival(self.row))]
-            actions.append(ft.PopupMenuButton(icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs… or save as a rival preset", items=items))
+                items.append(ft.PopupMenuItem(content=ft.Text("Save as rival preset"), icon=ft.Icons.SPORTS_MMA_OUTLINED,
+                                              on_click=lambda _e: on_rival(self.row)))
+            if on_plan is not None:
+                items.append(ft.PopupMenuItem(content=ft.Text("Add to plan…"), icon=ft.Icons.ASSIGNMENT_ADD,
+                                              on_click=lambda _e: on_plan(self.row)))
+            actions.append(ft.PopupMenuButton(icon=ft.Icons.CALCULATE_OUTLINED, tooltip="Damage calc vs…, save as a rival preset or add to a plan", items=items))
         if row.legality_known and not row.is_legal:
             actions.append(ft.OutlinedButton("Can't import", disabled=True, tooltip="Contains species outside the Champions Pokédex"))
         else:

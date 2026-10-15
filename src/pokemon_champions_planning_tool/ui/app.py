@@ -19,6 +19,8 @@ from .theme import apply_theme
 from .views.box import BoxView
 from .views.calc import CalcStore, CalcView
 from .views.meta import MetaView
+from .views.plans import PlanStore
+from .views.plans.view import PlansView
 from .views.settings import SettingsView
 from .views.team import TeamStore
 from .views.team.view import TeamView
@@ -176,6 +178,9 @@ def main(page: ft.Page) -> None:
     shell.register_view("calc", label="Calc", icon=ft.Icons.CALCULATE_OUTLINED, selected_icon=ft.Icons.CALCULATE,
                         factory=lambda: CalcView(ctx, CalcStore(ctx.catalogs, prefs=ctx.prefs, team_store=team_store, formats=ctx.formats)),
                         on_activate=lambda: getattr(shell.get_view("calc"), "ensure_loaded", lambda: None)())
+    shell.register_view("plans", label="Plans", icon=ft.Icons.ASSIGNMENT_OUTLINED, selected_icon=ft.Icons.ASSIGNMENT,
+                        factory=lambda: PlansView(ctx, PlanStore(ctx.catalogs, team_store=team_store), team_store),
+                        on_activate=lambda: getattr(shell.get_view("plans"), "ensure_loaded", lambda: None)())
     shell.register_view("settings", label="Settings", icon=ft.Icons.SETTINGS_OUTLINED, selected_icon=ft.Icons.SETTINGS,
                         factory=lambda: SettingsView(ctx),
                         on_activate=lambda: getattr(shell.get_view("settings"), "refresh", lambda: None)(), in_rail=False)
@@ -195,7 +200,7 @@ def main(page: ft.Page) -> None:
         """
         import asyncio
         await asyncio.sleep(0.25)
-        for k in ("team", "meta", "calc", "settings"):
+        for k in ("team", "meta", "calc", "plans", "settings"):
             try:
                 # Built, mounted hidden and loaded, so the first visit costs a later one.
                 shell.preload(k, activate=True)

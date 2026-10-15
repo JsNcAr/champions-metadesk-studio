@@ -269,6 +269,18 @@ class TestRivalPanel(_ViewBase):
         self.assertIn("Rename preset…", labels)
         self.assertIn("Use in battle", labels)
 
+    def test_a_rival_team_can_become_a_matchup_plan(self):
+        preset = self.view.rivals.create("Wolfe's Rain", [RivalMember(PokemonState(species="kingambit"), frozenset({"item"}))], source="Meta · Wolfe")
+        self.view.rivals.set_active(preset.rival_team_id)
+        labels = [getattr(i.content, "value", None) for i in self.view.rival_strip.menu_items(self.view.rivals.active)]
+        self.assertIn("Add to plan…", labels)
+        got = []
+        self.ctx.bus.on(events.PLAN_ADD_REQUESTED, got.append)
+        self.view._rival_action("plan")
+        draft = got[0]
+        self.assertEqual((draft.name, draft.source), ("Wolfe's Rain", "Calc · Meta · Wolfe"))
+        self.assertEqual(draft.members[0].assumed, frozenset({"item"}), "what was assumed stays assumed")
+
     def test_paste_tab(self):
         self.view.open_battle_dialog("paste")
         dialog = self.page.dialogs[-1]
@@ -414,6 +426,23 @@ class TestMetaSavesRivalTeams(_Base):
         self.assertEqual(calc.rivals.active.name, "Wolfe — Worlds")
         self.assertEqual(calc.side_panel.tab, "rivals")
 
+    def test_an_events_team_can_become_a_matchup_plan(self):
+        page = StubPage()
+        ctx = AppContext(page)
+        ctx.catalogs = self.catalogs
+        got = []
+        ctx.bus.on(events.PLAN_ADD_REQUESTED, got.append)
+        row = SimpleNamespace(player_name="Wolfe", tournament_name="Worlds", showdown_text=PASTE,
+                              members=[SimpleNamespace(canonical_id="kingambit", display_name="Kingambit"),
+                                       SimpleNamespace(canonical_id="incineroar", display_name="Incineroar")])
+        meta = SimpleNamespace(ctx=ctx, _species_name=lambda cid: self.catalogs.species_for(cid).name)
+        meta._lineup_name = lambda keys: MetaView._lineup_name(meta, keys)
+        MetaView._add_plan(meta, row)
+        draft = got[0]
+        self.assertEqual(draft.name, "Kingambit + Incineroar (Wolfe)")
+        self.assertEqual(draft.source, "Meta · Wolfe · Worlds")
+        self.assertEqual([m.pokemon.item for m in draft.members], ["Life Orb", None])
+
     def test_the_row_menu_offers_it(self):
         from datetime import datetime
         from uuid import uuid4
@@ -431,6 +460,12 @@ class TestMetaSavesRivalTeams(_Base):
         menu.items[-1].on_click(None)
         self.assertEqual(saved, [row])
         serialise(team_row)
+        planned = []
+        with_plan = TeamRow(row, on_import=lambda _r: None, on_calc=lambda _r, _i: None, on_rival=saved.append, on_plan=planned.append)
+        menu = next(c for c in _walk(with_plan) if isinstance(c, ft.PopupMenuButton))
+        self.assertEqual([i.content.value for i in menu.items[-2:]], ["Save as rival preset", "Add to plan…"])
+        menu.items[-1].on_click(None)
+        self.assertEqual(planned, [row])
 
 
 if __name__ == "__main__":

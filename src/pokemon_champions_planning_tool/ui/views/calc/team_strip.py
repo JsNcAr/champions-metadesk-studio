@@ -287,6 +287,7 @@ class RivalStrip(ft.Container):
         if team is None:
             return items
         items.append(item("Team vs team…", ft.Icons.GRID_VIEW, "matrix"))
+        items.append(item("Add to plan…", ft.Icons.ASSIGNMENT_ADD, "plan"))
         items.append(ft.PopupMenuItem())   # divider
         if team.is_battle:
             items += [item("Save battle as preset…", ft.Icons.BOOKMARK_ADD_OUTLINED, "save_battle"), item("End battle", ft.Icons.STOP_CIRCLE_OUTLINED, "end_battle")]

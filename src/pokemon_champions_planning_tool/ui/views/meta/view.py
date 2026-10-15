@@ -386,7 +386,7 @@ class MetaView(ft.Column):
                 card = EventCard(row, shown=0, on_open=self._open_event, on_import=self._import)
                 self._cards[row.tournament_id] = card
                 self._grid.controls.append(card)
-            group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs, on_rival=self._save_rival))
+            group.add_row(TeamRow(row, on_import=self._import, on_calc=self._calc_vs, on_rival=self._save_rival, on_plan=self._add_plan))
             self._cards[row.tournament_id].set_shown(len(group.rows))
         if self._tab == "events":
             self._list.visible = self.view_mode == "rows"
@@ -491,7 +491,12 @@ class MetaView(ft.Column):
             page.pop_dialog()
             self._import(row)
 
-        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog, on_calc=self._calc_vs, on_rival=self._save_rival)
+        def plan_and_close(row: MetaTeamRow) -> None:
+            page.pop_dialog()
+            self._add_plan(row)
+
+        dialog = EventDialog(group.first_row, on_import=import_and_close, on_close=page.pop_dialog, on_calc=self._calc_vs, on_rival=self._save_rival,
+                             on_plan=plan_and_close)
         page.show_dialog(dialog)
         self.ctx.run_in_background(lambda: self.store.teams_for_event(tournament_id), on_done=dialog.set_rows, on_error=dialog.set_error)
 
@@ -592,7 +597,44 @@ class MetaView(ft.Column):
             calc_vs_member=self._calc_vs_top_member,
             copy_team=self._copy_top_team,
             preview_entry=self._preview_top_entry,
+            add_plan_team=self._add_plan_top_team,
+            add_plan_entry=self._add_plan,
         )
+
+    # -- matchup plans (Plans view, through the bus) --------------------------------------
+
+    def _lineup_name(self, keys: list[str]) -> str:
+        names = [self._species_name(k) for k in keys[:2]]
+        return " + ".join(names) if names else "Meta team"
+
+    def _add_plan_top_team(self, team: TopTeam) -> None:
+        from ..calc.rival_store import rivals_from_paste
+        from ..plans.model import PlanDraft
+
+        def send(text: str) -> None:
+            members, _skipped = rivals_from_paste(text, self.ctx.catalogs, source="Top teams")
+            if not members:
+                self.ctx.toast("None of this lineup's Pokémon are in the species catalogue", "warning")
+                return
+            self.ctx.bus.emit(events.PLAN_ADD_REQUESTED, PlanDraft(name=self._lineup_name(list(team.members)), members=tuple(members),
+                                                                   source=f"Meta · Top teams ({team.count} teams)"))
+
+        self._with_consensus(team, send)
+
+    def _add_plan(self, row: Any) -> None:
+        """One tournament team (an Events row, or a team in a Top teams group) as a plan's opponent."""
+        from ..calc.rival_store import rivals_from_meta_row
+        from ..plans.model import PlanDraft
+
+        members = rivals_from_meta_row(row, self.ctx.catalogs)
+        if not members:
+            self.ctx.toast("None of this team's Pokémon are in the species catalogue", "warning")
+            return
+        keys = [self.ctx.catalogs.mega_for_item(m.pokemon.species, m.pokemon.item) or m.pokemon.species for m in members]
+        self.ctx.bus.emit(events.PLAN_ADD_REQUESTED, PlanDraft(
+            name=f"{self._lineup_name(keys)} ({row.player_name})", members=tuple(members),
+            source=f"Meta · {row.player_name} · {row.tournament_name}",
+        ))
 
     def _preview_top_entry(self, entry: TopTeamEntry) -> None:
         page = self.ctx.page

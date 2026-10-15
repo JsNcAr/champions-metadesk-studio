@@ -16,17 +16,19 @@ import flet as ft
 
 from .theme import Palette
 
-ToastKind = Literal["info", "success", "error"]
+ToastKind = Literal["info", "success", "warning", "error"]
 
-_TOAST_DURATION_MS: dict[ToastKind, int] = {"info": 4000, "success": 4000, "error": 8000}
+_TOAST_DURATION_MS: dict[ToastKind, int] = {"info": 4000, "success": 4000, "warning": 6000, "error": 8000}
 _TOAST_ICON: dict[ToastKind, str] = {
     "info": ft.Icons.INFO_OUTLINE,
     "success": ft.Icons.CHECK_CIRCLE_OUTLINE,
+    "warning": ft.Icons.WARNING_AMBER_OUTLINED,
     "error": ft.Icons.ERROR_OUTLINE,
 }
 _TOAST_ICON_COLOR: dict[ToastKind, str] = {
     "info": Palette.SECONDARY,
     "success": Palette.SUCCESS,
+    "warning": Palette.WARNING,
     "error": Palette.ERROR,
 }
 

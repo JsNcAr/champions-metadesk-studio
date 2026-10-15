@@ -329,6 +329,17 @@ class TestShellEscape(unittest.TestCase):
 
 
 class TestDialogs(unittest.IsolatedAsyncioTestCase):
+    async def test_every_toast_kind_renders(self):
+        # "warning" is used across Box, Teams, Meta and Plans but was missing here, so those
+        # toasts raised KeyError instead of showing.
+        from _ui_stubs import StubPage
+        from pokemon_champions_planning_tool.ui.dialogs import toast
+
+        page = StubPage()
+        for kind in ("info", "success", "warning", "error"):
+            toast(page, f"a {kind}", kind, action="Undo", on_action=lambda: None)
+            self.assertEqual(page.dialogs[-1].content.controls[1].value, f"a {kind}")
+
     async def test_confirm_resolves_true_on_confirm_click(self):
         from _ui_stubs import StubPage
         from pokemon_champions_planning_tool.ui.dialogs import confirm

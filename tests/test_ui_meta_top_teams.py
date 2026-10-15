@@ -236,6 +236,27 @@ class TestRankedList(_Base):
         snack = self.page.dialogs[-1]
         self.assertEqual(snack.content.controls[1].value, "Copied")
 
+    def test_add_the_most_common_set_to_a_plan(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        got = []
+        self.ctx.bus.on(events.PLAN_ADD_REQUESTED, got.append)
+        card._actions.add_plan_team(card.team)
+        draft = got[0]
+        self.assertEqual(draft.name, "Tyranitar + Incineroar")
+        self.assertEqual(draft.members[0].pokemon.item, "Choice Scarf")
+        self.assertEqual(draft.source, "Meta · Top teams (4 teams)")
+
+    def test_add_one_players_team_to_a_plan(self):
+        card = next(c for c in self.view.top_teams_panel._list.controls if isinstance(c, TopTeamCard))
+        got = []
+        self.ctx.bus.on(events.PLAN_ADD_REQUESTED, got.append)
+        entry = card.team.teams[0]
+        card._actions.add_plan_entry(entry)
+        draft = got[0]
+        self.assertEqual(draft.name, f"Tyranitar + Incineroar ({entry.player_name})")
+        self.assertEqual(draft.source, f"Meta · {entry.player_name} · {entry.tournament_name}")
+        self.assertEqual(draft.members[0].pokemon.species, "tyranitar")
+
 
 class TestEmptyState(_Base):
     def test_no_repeated_lineup_shows_an_empty_state(self):

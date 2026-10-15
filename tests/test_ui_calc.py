@@ -235,6 +235,20 @@ class TestCalcView(_Base):
         self.store.set_move("left", 2, "Swords Dance")
         self.store.set_move("right", 0, "Flare Blitz")
 
+    def test_pin_to_plan_sends_the_calc_and_the_open_move(self):
+        got = []
+        self.ctx.bus.on(events.PLAN_PIN_REQUESTED, got.append)
+        self._load_pair()
+        self.view._pin_to_plan()
+        self.assertIsNone(got[-1].focus, "no open move card: the best hit each way")
+        self.assertEqual((got[-1].state.left.species, got[-1].state.right.species), ("kingambit", "incineroar"))
+        self.view.attacker.cards[1].toggle()
+        self.view._pin_to_plan()
+        request = got[-1]
+        self.assertEqual((request.focus, request.label), (("left", 1), "Kingambit Iron Head vs Incineroar"))
+        self.store.set_move("left", 1, "Kowtow Cleave")
+        self.assertEqual(request.state.left.moves[1], "Iron Head", "the pin keeps its own copy")
+
     def test_empty_and_full_render(self):
         self.assertGreater(serialise(self.view), 100)
         self.assertEqual(self.view.attacker.cards[0]._name.value, "Move 1…")

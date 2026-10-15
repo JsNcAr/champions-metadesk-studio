@@ -8,7 +8,7 @@ description people read on the release page.
 ```text
 CHANGELOG.md "Unreleased"  ──►  scripts/release.py prepare  ──►  commit + tag vX.Y.Z  ──►  push
                                                                                            │
-GitHub release (notes + 3 archives)  ◄──  publish  ◄──  build ×3  ◄──  verify  ◄───────────┘
+GitHub release (notes + 3 archives + SHA256SUMS.txt)  ◄──  publish  ◄──  build ×3  ◄──  verify  ◄──┘
 ```
 
 - **The description** is the `## [Unreleased]` section of [CHANGELOG.md](../CHANGELOG.md).
@@ -20,7 +20,10 @@ GitHub release (notes + 3 archives)  ◄──  publish  ◄──  build ×3  �
   stages:
   1. **verify**: the tag matches the version, the tests pass, and the notes exist.
   2. **build**: Linux, Windows and macOS, in parallel.
-  3. **publish**: one GitHub release, created only when all three builds succeed.
+  3. **publish**: one GitHub release, created only when all three builds succeed, with
+     `SHA256SUMS.txt`. Its description is the changelog section followed by a fixed
+     **Installing** section (`INSTALLING` in `scripts/release.py`) that explains the
+     first-launch warnings of an unsigned build.
 
 ## Choosing the version
 
@@ -105,7 +108,8 @@ Open the repository's **Actions** tab. The release appears under **Releases** wh
 
 ### 6. Check the published release
 
-- The notes read correctly and the three archives are attached.
+- The notes read correctly, end with the Installing section, and the three archives and
+  `SHA256SUMS.txt` are attached.
 - Download at least one archive, start it, and confirm **Settings → About** shows the new version.
 
 ## Writing the release description
@@ -227,6 +231,58 @@ fallback is only as good as the subjects, so write summaries a user could unders
 Never re-point or reuse a tag that has a published release. Anyone who already
 downloaded it would have a different build under the same version. Release the next
 patch version instead.
+
+## Signing
+
+The builds are unsigned until the secrets below are added to the repository
+(**Settings › Secrets and variables › Actions**). Each platform's signing steps check for
+their secrets and are skipped without them, so releases keep working either way. Once a
+platform is signed, update the Installing section in `scripts/release.py` and the README's
+"First launch".
+
+### macOS: Developer ID and notarization
+
+Needs the [Apple Developer Program](https://developer.apple.com/programs/) (paid, yearly).
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | A *Developer ID Application* certificate with its private key, exported as `.p12`, base64-encoded (`base64 -i cert.p12`). |
+| `MACOS_CERTIFICATE_PASSWORD` | The `.p12` export password. |
+| `MACOS_SIGNING_IDENTITY` | The identity name, e.g. `Developer ID Application: Name (TEAMID)` (`security find-identity -v -p codesigning`). |
+| `APPLE_ID`, `APPLE_TEAM_ID` | The Apple account and team that notarize. |
+| `APPLE_APP_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that account. |
+
+With them, the macOS job imports the certificate into a temporary keychain, builds with
+`flet pack --codesign-identity` and the hardened-runtime exceptions in
+`packaging/macos/entitlements.plist`, verifies the signature, notarizes with
+`xcrun notarytool`, staples the ticket and zips the bundle with `ditto`.
+
+Check a signed build: `codesign -dv --verbose=4 ChampionsMetaDeskStudio.app` and
+`spctl -a -vv ChampionsMetaDeskStudio.app` ("source=Notarized Developer ID").
+
+Known limit: flet pack ships the Flet viewer as an archive the app unpacks on first launch,
+so the bundle's signature does not cover the viewer itself. Unpacked locally it is not
+quarantined and starts normally; signing it as well (a pre-signed viewer through
+`FLET_VIEW_PATH`) is a later step.
+
+### Windows: Azure Artifact Signing
+
+Uses [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) (formerly
+Trusted Signing; a monthly subscription; check which publishers it accepts) through
+`azure/artifact-signing-action`. Code-signing certificates in a `.pfx` file can no longer
+be issued, so a cloud signing service is the practical route for CI.
+
+| Secret | Value |
+|---|---|
+| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | An app registration with the *Artifact Signing Certificate Profile Signer* role on the account. |
+| `TRUSTED_SIGNING_ENDPOINT` | The account's region endpoint, e.g. `https://eus.codesigning.azure.net/`. |
+| `TRUSTED_SIGNING_ACCOUNT` | The signing account name. |
+| `TRUSTED_SIGNING_PROFILE` | The certificate profile name. |
+
+The step signs `dist/champions-metadesk.exe` (with an RFC 3161 timestamp) before it is
+zipped. [SignPath Foundation](https://signpath.org) signs open-source projects for free; to
+use it, replace that one step with SignPath's action. Check a signed build: the exe's
+**Properties › Digital Signatures** tab, or `Get-AuthenticodeSignature champions-metadesk.exe`.
 
 ## Hotfixes
 

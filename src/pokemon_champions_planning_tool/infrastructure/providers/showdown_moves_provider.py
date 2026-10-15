@@ -30,7 +30,7 @@ from ...config import (
     SHOWDOWN_CHAMPIONS_MOVES_URL,
     SHOWDOWN_MOVES_JSON_URL,
     TOURNAMENT_SYNC_TIMEOUT,
-    TOURNAMENT_USER_AGENT,
+    USER_AGENT,
 )
 
 _SPECIES_BLOCK_RE = re.compile(r"\n\t(\w+): \{\n\t\tlearnset: \{(.*?)\n\t\}", re.S)
@@ -186,7 +186,7 @@ def build_catalog(moves_json: dict[str, Any], learnsets: dict[str, tuple[str, ..
 
 
 class ShowdownMovesProvider:
-    def __init__(self, timeout: int = TOURNAMENT_SYNC_TIMEOUT, user_agent: str = TOURNAMENT_USER_AGENT) -> None:
+    def __init__(self, timeout: int = TOURNAMENT_SYNC_TIMEOUT, user_agent: str = USER_AGENT) -> None:
         self.timeout = timeout
         self.user_agent = user_agent
 

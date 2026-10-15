@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session
@@ -11,6 +12,8 @@ from ..domain.species import SpeciesInfo
 from ..infrastructure.database.models import SpeciesRecord
 from ..infrastructure.database.repositories import SpeciesRepository
 from ..infrastructure.providers.showdown_species_provider import ShowdownSpeciesNetworkError, ShowdownSpeciesProvider
+
+log = logging.getLogger(__name__)
 
 
 def species_catalog_is_stale(session: Session, max_age_days: int = MOVE_CATALOG_MAX_AGE_DAYS) -> bool:
@@ -37,7 +40,7 @@ def sync_species_catalog(session: Session, force: bool = False, provider: Showdo
     try:
         payload = (provider or ShowdownSpeciesProvider()).fetch_species_catalog()
     except ShowdownSpeciesNetworkError as exc:
-        print(f"⚠️ Species catalogue: {exc}. Keeping the local data.")
+        log.warning(f"Species catalogue: {exc}. Keeping the local data.")
         meta = repo.get_meta()
         return {"status": "offline", "species": meta.species_count if meta else 0, "legal": meta.legal_count if meta else 0}
     records = [
@@ -51,7 +54,7 @@ def sync_species_catalog(session: Session, force: bool = False, provider: Showdo
         for s in payload.species
     ]
     count, legal = repo.replace_all(records)
-    print(f"✅ Species catalogue synced: {count} species, {legal} legal in Champions.")
+    log.info(f"Species catalogue synced: {count} species, {legal} legal in Champions.")
     return {"status": "synced", "species": count, "legal": legal}
 
 
@@ -60,7 +63,7 @@ def sync_species_catalog_on_startup(session: Session) -> dict:
     try:
         return sync_species_catalog(session, force=False)
     except Exception as exc:  # noqa: BLE001 - startup must not depend on the network
-        print(f"⚠️ Species catalogue check skipped: {exc}")
+        log.warning(f"Species catalogue check skipped: {exc}")
         return {"status": "error", "species": 0, "legal": 0}
 
 

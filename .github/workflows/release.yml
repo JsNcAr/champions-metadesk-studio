@@ -120,13 +120,75 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
-          Compress-Archive -Path dist\champions-metadesk.exe, LICENSE, NOTICE.md -DestinationPath dist\champions-metadesk-windows-x64.zip
+          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --file-version "$env:APP_VERSION.0" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
+
+      # Code signing switches on when its secrets exist (docs/releasing.md › Signing); until
+      # then the build is unsigned and the release notes explain the SmartScreen warning.
+      - name: Check for Windows signing secrets
+        id: win_signing
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        run: echo "enabled=$([ -n "$AZURE_CLIENT_ID" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign the executable (Windows, Azure Artifact Signing)
+        if: runner.os == 'Windows' && steps.win_signing.outputs.enabled == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\champions-metadesk.exe
+          description: Champions MetaDesk Studio
+          description-url: https://github.com/JsNcAr/champions-metadesk-studio
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\champions-metadesk.exe, LICENSE, NOTICE.md -DestinationPath dist\champions-metadesk-windows-x64.zip
 
       # --- Build macOS ---
+      # Signing and notarization switch on when their secrets exist (docs/releasing.md ›
+      # Signing); until then the bundle is ad-hoc signed by PyInstaller, as before.
+      - name: Check for macOS signing secrets
+        id: mac_signing
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+        run: echo "enabled=$([ -n "$MACOS_CERTIFICATE_P12" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Import the signing certificate (macOS)
+        if: runner.os == 'macOS' && steps.mac_signing.outputs.enabled == 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+
       - name: Build app bundle (macOS)
         if: runner.os == 'macOS'
+        env:
+          SIGN: ${{ steps.mac_signing.outputs.enabled }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
+          SIGN_ARGS=()
+          if [ "$SIGN" = "true" ]; then
+            SIGN_ARGS=(--codesign-identity "$MACOS_SIGNING_IDENTITY"
+                       "--pyinstaller-build-args=--osx-entitlements-file=packaging/macos/entitlements.plist")
+          fi
           poetry run flet pack run.py \
             -n "ChampionsMetaDeskStudio" \
             --product-name "Champions MetaDesk Studio" \
@@ -134,11 +196,31 @@ jobs:
             --bundle-id "com.champions.metadesk" \
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
+            "${SIGN_ARGS[@]}" \
             -y
-          cp LICENSE NOTICE.md dist/
-          cd dist
-          zip -r -y champions-metadesk-macos.zip ChampionsMetaDeskStudio.app LICENSE NOTICE.md
-          cd ..
+          if [ "$SIGN" = "true" ]; then
+            codesign --verify --deep --strict --verbose=2 dist/ChampionsMetaDeskStudio.app
+          fi
+
+      - name: Notarize (macOS)
+        if: runner.os == 'macOS' && steps.mac_signing.outputs.enabled == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent dist/ChampionsMetaDeskStudio.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/ChampionsMetaDeskStudio.app
+
+      # ditto, not zip: it keeps the bundle's metadata and symlinks, which a signature needs.
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/macos"
+          cp -R dist/ChampionsMetaDeskStudio.app LICENSE NOTICE.md "$RUNNER_TEMP/macos/"
+          ditto -c -k --sequesterRsrc "$RUNNER_TEMP/macos" dist/champions-metadesk-macos.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -169,6 +251,12 @@ jobs:
       - name: Extract release notes from CHANGELOG.md
         run: python3 scripts/release.py notes "${{ needs.verify.outputs.version }}" > release-notes.md
 
+      - name: Write checksums
+        run: |
+          cd dist
+          sha256sum champions-metadesk-linux-x64.tar.gz champions-metadesk-windows-x64.zip champions-metadesk-macos.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
@@ -180,3 +268,4 @@ jobs:
             dist/champions-metadesk-linux-x64.tar.gz
             dist/champions-metadesk-windows-x64.zip
             dist/champions-metadesk-macos.zip
+            dist/SHA256SUMS.txt

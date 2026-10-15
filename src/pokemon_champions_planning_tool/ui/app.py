@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from pathlib import Path
 
 import flet as ft
 
+from .. import __version__, storage
 from ..config import APP_NAME, DEFAULT_PREFERENCES_FILENAME
 from ..infrastructure.database.database import get_session
 from ..services.tournament_service import TournamentService
+from ..services import update_check
 from ..services.tournament_sync_service import sync_tournaments_once_per_process
 from . import events
 from .catalogs import Catalogs
@@ -25,6 +29,8 @@ from .views.settings import SettingsView
 from .views.team import TeamStore
 from .views.team.view import TeamView
 
+log = logging.getLogger(__name__)
+
 SEED_FILE_PATH = Path(__file__).parent.parent / "data" / "seed_tournaments.json"
 
 # Headless smoke tests switch this off so construction never touches the network.
@@ -37,7 +43,7 @@ def _seed_once() -> None:
         with get_session() as session:
             TournamentService(session, seed_file_path=SEED_FILE_PATH)
     except Exception as exc:  # noqa: BLE001 - seeding is best-effort
-        print(f"⚠️ Tournament seed check skipped: {exc}")
+        log.warning(f"Tournament seed check skipped: {exc}", exc_info=exc)
 
 
 def _start_catalogue_refresh(ctx: AppContext, shell: AppShell) -> None:
@@ -76,7 +82,7 @@ def _start_catalogue_refresh(ctx: AppContext, shell: AppShell) -> None:
             ctx.bus.emit(events.CATALOGS_RELOADED, kind)
 
     def failed(exc: BaseException) -> None:
-        print(f"⚠️ Startup catalogue refresh skipped: {exc}")
+        log.warning(f"Startup catalogue refresh skipped: {exc}", exc_info=exc)
         if first_run:
             shell.set_status(f"Could not download the Pokédex data: {exc}", "error",
                              action_label="Settings", on_action=lambda: shell.navigate("settings"))
@@ -112,7 +118,7 @@ def _start_sprite_prefetch(ctx: AppContext) -> None:
         return sprite_cache.prefetch(species) + extra
 
     def failed(exc: BaseException) -> None:
-        print(f"⚠️ Sprite prefetch skipped: {exc}")
+        log.warning(f"Sprite prefetch skipped: {exc}", exc_info=exc)
 
     ctx.run_in_background(work, on_done=lambda _n: None, on_error=failed)
 
@@ -126,13 +132,43 @@ def _start_background_sync(ctx: AppContext) -> None:
     def done(result) -> None:
         if result is None:  # another session already ran it
             return
-        print(f"✅ Startup tournament sync completed: {result}")
+        log.info(f"Startup tournament sync completed: {result}")
         ctx.bus.emit(events.META_SYNCED, result)
 
     def failed(exc: BaseException) -> None:
-        print(f"⚠️ Startup tournament sync skipped/failed: {exc}")
+        log.warning(f"Startup tournament sync skipped/failed: {exc}", exc_info=exc)
 
     ctx.sync_tournaments(work, on_done=done, on_error=failed)
+
+
+UPDATE_CHECK_DELAY_S = 5   # after the catalogue refresh and the sync have started
+
+
+def _start_update_check(ctx: AppContext) -> None:
+    """Ask GitHub, at most once a day, whether a newer release is out; tell the user once
+    per version. Never downloads anything. Off when Settings' switch is off."""
+    if ctx.prefs.get(update_check.PREF_ENABLED, True) is False:
+        return
+
+    def work():
+        time.sleep(UPDATE_CHECK_DELAY_S)
+        with get_session() as session:
+            release = update_check.check_for_update(session)
+            return release if release is not None and update_check.claim_notification(session, release) else None
+
+    def done(release) -> None:
+        ctx.bus.emit(events.UPDATE_CHECKED, release)
+        if release is not None:
+            show_update_toast(ctx, release)
+
+    ctx.run_in_background(work, on_done=done, on_error=lambda exc: log.warning("Update check failed: %s", exc))
+
+
+def show_update_toast(ctx: AppContext, release: update_check.Release) -> None:
+    from .tasks import open_url
+
+    ctx.toast(f"Version {release.version} is available (you have {__version__})", "info",
+              action="Download", on_action=lambda: open_url(ctx.page, release.url))
 
 
 def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
@@ -153,6 +189,7 @@ def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
 
 def main(page: ft.Page) -> None:
     page.title = APP_NAME
+    page.on_error = lambda e: log.error("UI error: %s", e.data)
     apply_theme(page)
     page.padding = 0
 
@@ -191,6 +228,16 @@ def main(page: ft.Page) -> None:
     # window the user can already see rather than a blank one.
     page.add(shell)
     shell.navigate("box")
+    if storage.LAST_MIGRATION is not None:   # once: the first launch after the data folder moved
+        ctx.toast(f"Your data now lives in {Path(DEFAULT_PREFERENCES_FILENAME).resolve().parent} "
+                  f"(copied from {storage.LAST_MIGRATION}; the old files were left in place)", "info")
+        storage.LAST_MIGRATION = None   # one notice, not one per window (the web build opens many)
+    if storage.LAST_RESTORE is not None:
+        restored = storage.LAST_RESTORE
+        made = f" from {restored.created_at.astimezone():%d %b %Y %H:%M}" if restored.created_at else ""
+        saved = f"; your previous data was saved to {restored.saved_to}" if restored.saved_to else ""
+        ctx.toast(f"Restored the backup{made}{saved}", "success")
+        storage.LAST_RESTORE = None
 
     async def _prewarm_views() -> None:
         """Build the other views while the app is idle, so switching to them is instant.
@@ -204,8 +251,8 @@ def main(page: ft.Page) -> None:
             try:
                 # Built, mounted hidden and loaded, so the first visit costs a later one.
                 shell.preload(k, activate=True)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - a view that fails here is built again on its first visit
+                log.debug("Prewarming the %s view failed", k, exc_info=True)
             await asyncio.sleep(0)
 
     page.run_task(_prewarm_views)
@@ -214,3 +261,4 @@ def main(page: ft.Page) -> None:
         _start_catalogue_refresh(ctx, shell)
         _start_sprite_prefetch(ctx)
         _start_background_sync(ctx)
+        _start_update_check(ctx)

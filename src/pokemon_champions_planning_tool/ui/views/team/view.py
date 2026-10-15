@@ -3,6 +3,7 @@ editor), the analysis panel, and the slot dialogs."""
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 import flet as ft
@@ -29,6 +30,8 @@ from .slot_card import SlotCallbacks, SlotCard
 from .status import health_summary
 from .store import TeamStore
 from .summary_panel import SummaryPanel
+
+log = logging.getLogger(__name__)
 
 COMPACT_COL = {"xs": 12, "md": 6, "xl": 4}     # three across wide, two beside the panel, one narrow
 SPREAD_SAVE_MS = 400
@@ -346,7 +349,7 @@ class TeamView(ft.Column):
             self.ctx.run_in_background(
                 lambda p=position: self.store.partners(p, limit=5),
                 on_done=lambda partners, p=position: self.cards[p - 1].set_partners(partners),
-                on_error=lambda exc: print(f"⚠️ Partners failed: {exc}"),
+                on_error=lambda exc: log.warning("Partners failed: %s", exc, exc_info=exc),
             )
             return
 
@@ -366,7 +369,7 @@ class TeamView(ft.Column):
         self.ctx.run_in_background(
             lambda: self.store.partners_for_positions(filled),
             on_done=_apply_batch,
-            on_error=lambda exc: print(f"⚠️ Partners failed: {exc}"),
+            on_error=lambda exc: log.warning("Partners failed: %s", exc, exc_info=exc),
         )
 
     # -- expanding and focus ----------------------------------------------------------------------

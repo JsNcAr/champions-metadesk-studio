@@ -343,8 +343,33 @@ def repo_slug() -> str:
     return match.group(1) if match else "<owner>/<repo>"
 
 
+# Appended to every GitHub release, so each one explains the operating system's warnings
+# for a build that is not code-signed (yet) without anyone remembering to write it.
+INSTALLING = """\
+### Installing
+
+Download the archive for your system, extract it and run the app; no Python needed. Builds
+are not code-signed yet, so the first launch shows a warning:
+
+- **Windows:** "Windows protected your PC" — click **More info**, then **Run anyway**.
+- **macOS** (Apple Silicon): "can't be opened" or "is damaged" — try to open it once, then
+  **System Settings › Privacy & Security › Open Anyway** (on macOS 14 and older: right-click
+  the app › Open).
+- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz`, then `./champions-metadesk`
+  (needs GTK 3 and libmpv).
+
+`SHA256SUMS.txt` lists each archive's checksum. More in the README's
+[Download](https://github.com/JsNcAr/champions-metadesk-studio#download) section.
+"""
+
+
+def release_body(changelog: str, version: str) -> str:
+    """The GitHub release's description: the version's CHANGELOG section, then Installing."""
+    return f"{release_notes(changelog, version).rstrip()}\n\n{INSTALLING}"
+
+
 def cmd_notes(args: argparse.Namespace) -> None:
-    print(release_notes(CHANGELOG.read_text(), args.version.removeprefix("v")))
+    print(release_body(CHANGELOG.read_text(), args.version.removeprefix("v")))
 
 
 def cmd_check_version(args: argparse.Namespace) -> None:

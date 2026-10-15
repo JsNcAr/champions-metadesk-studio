@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session
@@ -11,6 +12,8 @@ from ..domain.moves import MoveInfo, MoveMechanics
 from ..infrastructure.database.models import MoveRecord
 from ..infrastructure.database.repositories import MoveRepository
 from ..infrastructure.providers.showdown_moves_provider import ShowdownMovesNetworkError, ShowdownMovesProvider
+
+log = logging.getLogger(__name__)
 
 
 def move_catalog_is_stale(session: Session, max_age_days: int = MOVE_CATALOG_MAX_AGE_DAYS) -> bool:
@@ -34,12 +37,12 @@ def sync_move_catalog(session: Session, force: bool = False, provider: ShowdownM
     repo = MoveRepository(session)
     if not force and not move_catalog_is_stale(session):
         meta = repo.get_meta()
-        print(f"✅ Move catalogue up-to-date in local DB ({meta.move_count} moves, {meta.species_count} learnsets).")
+        log.info(f"Move catalogue up-to-date in local DB ({meta.move_count} moves, {meta.species_count} learnsets).")
         return {"status": "cached", "moves": meta.move_count, "learnsets": meta.learnset_count, "species": meta.species_count}
     try:
         payload = (provider or ShowdownMovesProvider()).fetch_move_catalog()
     except ShowdownMovesNetworkError as exc:
-        print(f"⚠️ Move catalogue: {exc}. Keeping the local data.")
+        log.warning(f"Move catalogue: {exc}. Keeping the local data.")
         meta = repo.get_meta()
         return {"status": "offline", "moves": meta.move_count if meta else 0, "learnsets": meta.learnset_count if meta else 0, "species": meta.species_count if meta else 0}
     records = [
@@ -48,7 +51,7 @@ def sync_move_catalog(session: Session, force: bool = False, provider: ShowdownM
         for m in payload.moves
     ]
     moves, pairs = repo.replace_all(records, {k: list(v) for k, v in payload.learnsets.items()})
-    print(f"✅ Move catalogue synced: {moves} moves, {len(payload.learnsets)} learnsets ({pairs} pairs), {len(payload.removed)} removed in Champions.")
+    log.info(f"Move catalogue synced: {moves} moves, {len(payload.learnsets)} learnsets ({pairs} pairs), {len(payload.removed)} removed in Champions.")
     return {"status": "synced", "moves": moves, "learnsets": pairs, "species": len(payload.learnsets), "removed": len(payload.removed)}
 
 
@@ -57,7 +60,7 @@ def sync_move_catalog_on_startup(session: Session) -> dict:
     try:
         return sync_move_catalog(session, force=False)
     except Exception as exc:  # noqa: BLE001 - startup must not depend on the network
-        print(f"⚠️ Move catalogue check skipped: {exc}")
+        log.warning(f"Move catalogue check skipped: {exc}")
         return {"status": "error", "moves": 0, "learnsets": 0, "species": 0}
 
 

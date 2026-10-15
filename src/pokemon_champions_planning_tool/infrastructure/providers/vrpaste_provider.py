@@ -12,7 +12,7 @@ import requests
 
 from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
-    TOURNAMENT_USER_AGENT,
+    USER_AGENT,
     VRPASTE_BACKEND_URL,
 )
 
@@ -49,7 +49,7 @@ class VRPasteProvider:
     def __init__(
         self,
         base_url: str = VRPASTE_BACKEND_URL,
-        user_agent: str = TOURNAMENT_USER_AGENT,
+        user_agent: str = USER_AGENT,
         timeout: int = TOURNAMENT_SYNC_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")

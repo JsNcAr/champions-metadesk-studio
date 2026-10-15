@@ -6,6 +6,7 @@ scroll on their own; narrow windows stack everything in one scroll."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 import flet as ft
@@ -29,6 +30,8 @@ from .state import CalcRequest, CalcState, RivalMember, SweepEntry, revealed_fie
 from .store import CalcStore
 from .sweep import SweepPanel
 from .team_strip import STACK_BELOW, RivalStrip, TeamStrip, fit_tier
+
+log = logging.getLogger(__name__)
 
 SAVE_DELAY_MS = 500    # a burst of edits (a slider drag) writes preferences.json once
 SWEEP_DELAY_MS = 300   # the opponents sweep starts once the edits pause
@@ -171,7 +174,7 @@ class CalcView(ft.Column):
             try:
                 self.rivals.load()
             except Exception as exc:  # noqa: BLE001 - rival teams must not keep the calculator from opening
-                print(f"⚠️ Rival teams could not be read: {exc}")
+                log.warning(f"Rival teams could not be read: {exc}", exc_info=exc)
         self.team_strip.refresh_team()
         self.rival_strip.render()
         if self.side_panel.tab == "box":
@@ -340,7 +343,7 @@ class CalcView(ft.Column):
         state = self.store.state
 
         def failed(exc: BaseException) -> None:
-            print(f"⚠️ Benchmarks failed: {exc}")
+            log.warning(f"Benchmarks failed: {exc}", exc_info=exc)
             answer(None)
 
         try:
@@ -526,7 +529,7 @@ class CalcView(ft.Column):
                     team_store.load()
                 my_teams = [(t.team_id, t.name, t.filled) for t in team_store.teams]
             except Exception as exc:  # noqa: BLE001 - the other sources still work
-                print(f"⚠️ Teams could not be listed: {exc}")
+                log.warning(f"Teams could not be listed: {exc}", exc_info=exc)
         catalogs = self.store.catalogs
         page.show_dialog(BattleDialog(
             calc_store=self.store, run_in_background=self.ctx.run_in_background, on_start=start, on_close=page.pop_dialog, mode=mode,

@@ -11,12 +11,15 @@ the pokeapi_retrieval.py pattern established in this project.
 
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 
 import requests
 
-from ...config import POKEAPI_TIMEOUT_SECONDS
+from ...config import HTTP_HEADERS, POKEAPI_TIMEOUT_SECONDS
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # GitHub raw content URLs — only these two files are needed
@@ -36,11 +39,11 @@ _CHAMPIONS_ITEMS_URL = f"{_SHOWDOWN_BASE}/data/mods/champions/items.ts"
 def _fetch_base_items_ts() -> str:
     """Downloads data/items.ts from Showdown GitHub. Cached per process."""
     try:
-        response = requests.get(_BASE_ITEMS_URL, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(_BASE_ITEMS_URL, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Showdown: Could not fetch base items.ts: {e}")
+        log.warning(f"Showdown: Could not fetch base items.ts: {e}")
         return ""
 
 
@@ -48,11 +51,11 @@ def _fetch_base_items_ts() -> str:
 def _fetch_champions_items_ts() -> str:
     """Downloads data/mods/champions/items.ts from Showdown GitHub. Cached per process."""
     try:
-        response = requests.get(_CHAMPIONS_ITEMS_URL, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(_CHAMPIONS_ITEMS_URL, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Showdown: Could not fetch champions/items.ts: {e}")
+        log.warning(f"Showdown: Could not fetch champions/items.ts: {e}")
         return ""
 
 

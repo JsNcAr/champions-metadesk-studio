@@ -98,6 +98,47 @@ Standalone builds for Windows, macOS and Linux are attached to every
 [release](https://github.com/JsNcAr/champions-metadesk-studio/releases/latest). No Python
 needed. Release notes are in the [changelog](CHANGELOG.md).
 
+**First launch.** The builds are not code-signed yet, so the system warns the first time:
+
+- **Windows:** "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **macOS** (Apple Silicon): "can't be opened because Apple cannot check it" or "is damaged".
+  Try to open it once, then **System Settings › Privacy & Security › Open Anyway**. On macOS 14
+  and older, right-click the app and choose **Open**. If it still refuses:
+  `xattr -dr com.apple.quarantine /path/to/ChampionsMetaDeskStudio.app`.
+- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz && ./champions-metadesk`. It needs
+  GTK 3 and libmpv (`sudo apt install libgtk-3-0 libmpv2` on current Debian and Ubuntu; `libmpv1` on older ones).
+
+Each release lists the archives' checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt`
+on Linux, `shasum -a 256` on macOS, `Get-FileHash` on Windows).
+
+A downloaded build keeps your data in your user folder, wherever you start it from:
+
+| OS | Data folder |
+|---|---|
+| Windows | `%LOCALAPPDATA%\Champions MetaDesk Studio` |
+| macOS | `~/Library/Application Support/Champions MetaDesk Studio` |
+| Linux | `~/.local/share/champions-metadesk-studio` (or `$XDG_DATA_HOME`) |
+
+Earlier builds kept it beside the program on Windows and Linux; the first launch of a newer
+build copies that database and its preferences over and leaves the old files in place.
+Settings › About shows the folder and opens it. Box exports go to your Downloads folder.
+
+### Updates
+
+Once a day the app asks GitHub whether a newer release is out and, if so, says so once
+(and in Settings › About, with a Download link to the release page). It never downloads or
+installs anything itself, and the request carries only the app's name and version. Turn it
+off in Settings › About; **Check now** asks any time.
+
+### Backups
+
+**Settings › Backup & restore › Back up now** saves one zip (your box, teams, plans, rival presets,
+formats and settings, plus the tournament data) to your Downloads folder, or to the working
+directory when running from source. **Restore…** lists the backups it finds, or takes a pasted
+path. It checks the backup, then replaces your data the next time the app starts, after
+saving the data it replaces to the `backups` folder inside the data folder. The app also saves
+a copy there before a new version upgrades your data, and keeps the newest five.
+
 ## Run from source
 
 Requires Python 3.13 and [Poetry](https://python-poetry.org).
@@ -118,14 +159,20 @@ and tips.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PCPT_DATABASE` | `pokemon_champions.db` (working directory) | Path of the SQLite database file. |
+| `PCPT_DATABASE` | `pokemon_champions.db` in the data folder: the working directory from source, your user folder in a downloaded build | Path of the SQLite database file. |
 | `PCPT_PREFERENCES` | `preferences.json` beside the database | Path of the view-preferences file. |
 | `PCPT_VR_MAX_PLACEMENT` | `64` | Placements ingested per official event from Victory Road. |
-| `PCPT_ASSETS_DIR` | `assets` (working directory) | Directory the app serves static assets from. |
+| `PCPT_ASSETS_DIR` | `assets` in the data folder | Directory the app serves static assets from. |
 | `PCPT_SPRITE_CACHE_DIR` | `sprites` inside the assets directory | Where downloaded sprites are cached. Keep it inside the assets directory. |
 
-Box exports go to `pokemon_team_stats.csv`: the CLI keeps it in sync with the box, and the GUI
-writes it when you export.
+Box exports go to `pokemon_team_stats.csv` (in the working directory from source, in Downloads
+in a downloaded build): the CLI keeps it in sync with the box, and the GUI writes it when you export.
+
+## Reporting a bug
+
+Open an [issue](https://github.com/JsNcAr/champions-metadesk-studio/issues) with what you did and
+what happened, and attach the app's log: **Settings › About › Log file › Open folder**, then
+`app.log`. The log stays on your computer unless you share it; the app sends nothing anywhere.
 
 ## Development
 

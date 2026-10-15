@@ -15,7 +15,7 @@ from typing import Any
 
 import requests
 
-from ...config import SHOWDOWN_CHAMPIONS_FORMATS_DATA_URL, SHOWDOWN_POKEDEX_JSON_URL, TOURNAMENT_SYNC_TIMEOUT, TOURNAMENT_USER_AGENT
+from ...config import SHOWDOWN_CHAMPIONS_FORMATS_DATA_URL, SHOWDOWN_POKEDEX_JSON_URL, TOURNAMENT_SYNC_TIMEOUT, USER_AGENT
 from ...domain.species import canonical_id_from_showdown, showdown_id
 
 _FORMATS_BLOCK_RE = re.compile(r"\n\t(\w+): \{(.*?)\n\t\}", re.S)
@@ -99,7 +99,7 @@ def build_species_catalog(pokedex: dict[str, Any], legal_ids: frozenset[str]) ->
 
 
 class ShowdownSpeciesProvider:
-    def __init__(self, timeout: int = TOURNAMENT_SYNC_TIMEOUT, user_agent: str = TOURNAMENT_USER_AGENT) -> None:
+    def __init__(self, timeout: int = TOURNAMENT_SYNC_TIMEOUT, user_agent: str = USER_AGENT) -> None:
         self.timeout = timeout
         self.user_agent = user_agent
 

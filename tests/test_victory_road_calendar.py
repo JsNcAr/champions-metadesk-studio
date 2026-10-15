@@ -168,9 +168,13 @@ class TestTeamListRetryPolicy(unittest.TestCase):
     def _sync(self, vr=None):
         vr = vr or MagicMock(fetch_season_calendar=MagicMock(return_value=[]), fetch_event=MagicMock(return_value=None))
         limitless = MagicMock(); limitless.fetch_champions_tournaments.return_value = []; limitless.fetch_standings_batch.return_value = {}
-        with patch("builtins.print") as printed:
-            res = sync_tournaments(self.session, limitless_provider=limitless, vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
-        lines = [" ".join(map(str, c.args)) for c in printed.call_args_list]
+        logs = None
+        try:
+            with self.assertLogs("pokemon_champions_planning_tool", "INFO") as logs:
+                res = sync_tournaments(self.session, limitless_provider=limitless, vr_provider=vr, pokepast_provider=MagicMock(), vrpaste_provider=MagicMock())
+        except AssertionError:   # nothing was logged
+            pass
+        lines = [r.getMessage() for r in logs.records] if logs is not None else []
         return res, vr, lines
 
     def _read(self, vr):

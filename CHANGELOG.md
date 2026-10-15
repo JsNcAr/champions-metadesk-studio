@@ -10,6 +10,22 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+
+- **Install help with every release.** Each GitHub release now ends with an Installing
+  section that explains the Windows and macOS first-launch warnings (the builds aren't
+  code-signed yet), and lists the archives' checksums in `SHA256SUMS.txt`. The release
+  workflow is ready to sign and notarize as soon as signing credentials are added.
+- **New-version notice.** Once a day the app asks GitHub whether a newer release is out and
+  says so once, with a Download link to the release page; Settings › About shows the
+  latest version, has Check now, and a switch to turn the daily check off. Nothing is
+  downloaded or installed by the app.
+- **Backup & restore** in Settings. Back up now saves one zip with your box, teams, plans,
+  rival presets, formats and settings (to Downloads in a downloaded build). Restore… lists
+  the backups it finds or takes a path, checks the backup, and replaces your data the next
+  time the app starts, after saving the current data to the `backups` folder. The app also
+  saves a copy there before a new version upgrades your data, keeping the newest five.
+
 ### Changed
 
 - **The app has its own logo.** A crimson tile with a split disc: the two sides of a matchup, with the hit
@@ -18,6 +34,27 @@ for the headings and style.
   masters, lockups and a short usage guide are in `assets/brand/`. On Linux the desktop app runs Flet's client under
   its own app ID and installs a hidden desktop entry and the icon in your user folder, which is how GNOME, KDE
   and other desktops pick the dock icon; other Flet apps keep theirs.
+
+### Fixed
+
+- **Downloaded builds keep your data in your user folder.** On Windows and Linux the app kept
+  its database, preferences and sprites in whatever folder it was started from, so a
+  different shortcut showed an empty app, and a read-only folder (such as Program Files)
+  stopped it from saving at all. It now uses `%LOCALAPPDATA%\Champions MetaDesk Studio` on
+  Windows and `~/.local/share/champions-metadesk-studio` on Linux (macOS already used
+  Application Support). The first launch copies your existing data over and leaves the old
+  files in place. Running from source still uses the working directory.
+- **A log file for bug reports.** Warnings, failed syncs and crashes are now written to
+  `logs/app.log` in the data folder (rotated, at most about 4 MB) instead of a console a
+  downloaded build doesn't have. A background task that fails is logged with its traceback,
+  and so is a crash in any thread. Settings › About shows the data folder and the log file,
+  each with a button that opens the folder. Nothing is sent anywhere.
+- **The app identifies itself to the sites it reads.** Victory Road requests were sent with a
+  Chrome browser User-Agent; every request (Victory Road, Limitless, Pokepast, VRPaste,
+  Showdown, PokéAPI, sprites) now sends `ChampionsMetaDeskStudio/<version>` with a link to
+  this repository, so site owners can see what is calling them and who to contact.
+- Box exports from a downloaded build are saved to your Downloads folder, and the message
+  shows the full path, instead of the folder the app was started from.
 
 ## [0.7.0] - 2026-10-15
 

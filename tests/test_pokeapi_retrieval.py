@@ -52,7 +52,7 @@ class DefaultVarietyFallbackTests(unittest.TestCase):
         self.calls: list[str] = []
 
     def _fake_get(self, routes):
-        def _get(url, timeout=None):
+        def _get(url, headers=None, timeout=None):
             self.calls.append(url)
             for suffix, response in routes.items():
                 if url.endswith(suffix):

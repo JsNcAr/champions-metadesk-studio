@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -14,6 +15,8 @@ from .preferences import Preferences
 
 if TYPE_CHECKING:
     from .formats import FormatRegistry
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,7 +58,7 @@ class AppContext:
             try:
                 fn()
             except Exception as exc:  # noqa: BLE001 - one failing hook must not stop the others
-                print(f"⚠️ Shutdown hook failed: {exc}")
+                log.warning(f"Shutdown hook failed: {exc}", exc_info=exc)
 
     def post(self, fn, *args) -> None:
         """Run ``fn(*args)`` on the UI loop from any thread (progress callbacks)."""

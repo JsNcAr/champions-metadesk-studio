@@ -212,6 +212,8 @@ pyrightconfig.json
 
 ## Custom
 *.db
+# App log (beside the database when running from source)
+logs/
 *.db-journal
 *.db-wal
 *.db-shm

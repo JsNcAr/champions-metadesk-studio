@@ -26,6 +26,7 @@ Division handling (verified 2026-09-01):
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -36,9 +37,11 @@ import requests
 
 from ...config import (
     TOURNAMENT_SYNC_TIMEOUT,
-    TOURNAMENT_USER_AGENT,
+    USER_AGENT,
     VICTORY_ROAD_BASE_URL,
 )
+
+log = logging.getLogger(__name__)
 
 # Known official premier events maintained as static registry
 OFFICIAL_EVENT_SLUGS: list[dict[str, Any]] = [
@@ -292,7 +295,7 @@ class VictoryRoadProvider:
     def __init__(
         self,
         base_url: str = VICTORY_ROAD_BASE_URL,
-        user_agent: str = TOURNAMENT_USER_AGENT,
+        user_agent: str = USER_AGENT,
         timeout: int = TOURNAMENT_SYNC_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")
@@ -301,10 +304,12 @@ class VictoryRoadProvider:
 
     def _fetch_html(self, url: str) -> str:
         """Fetches page HTML with timeout extension and fallback retries."""
+        # The app's own User-Agent, not a browser's: victoryroad.pro's robots.txt allows
+        # these pages, and the sync reads at most a few of them per run.
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": self.user_agent,
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en",
         }
         # Heavy WP/Elementor pages like 2026-naic can take up to 20-25s
         fetch_timeout = max(self.timeout, 25)
@@ -313,11 +318,13 @@ class VictoryRoadProvider:
         for attempt in range(1, retries + 1):
             try:
                 resp = requests.get(url, headers=headers, timeout=fetch_timeout)
+                if resp.status_code in (403, 429):
+                    log.warning("Victory Road refused the request (HTTP %s) for %s", resp.status_code, url)
                 resp.raise_for_status()
                 return resp.content.decode("utf-8", errors="ignore")
             except Exception as exc:
                 if attempt < retries:
-                    print(f"⚠️ Victory Road fetch attempt {attempt} failed ({exc}). Retrying in 2.0s...")
+                    log.warning(f"Victory Road fetch attempt {attempt} failed ({exc}). Retrying in 2.0s...")
                     time.sleep(2.0)
                     continue
                 raise VictoryRoadNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc
@@ -380,7 +387,7 @@ class VictoryRoadProvider:
         try:
             html = self._fetch_html(url)
         except VictoryRoadNetworkError as exc:
-            print(f"⚠️ Victory Road scraper: network error fetching '{slug}': {exc}")
+            log.warning(f"Victory Road scraper: network error fetching '{slug}': {exc}")
             self.last_fetch_failed = True
             return None
 
@@ -391,10 +398,8 @@ class VictoryRoadProvider:
             standings = [s for s in standings if s.division == DIVISION_MASTERS]
             dropped = total - len(standings)
             if dropped:
-                print(
-                    f"ℹ️ Victory Road scraper: '{slug}' — kept {len(standings)} Masters "
-                    f"entries, dropped {dropped} Senior/Junior entries."
-                )
+                log.info("Victory Road scraper: '%s' — kept %s Masters entries, dropped %s Senior/Junior entries.",
+                         slug, len(standings), dropped)
 
         if not standings:
             # No results table with team pastes yet (typical for a few days after an event).

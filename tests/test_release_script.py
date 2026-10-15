@@ -114,6 +114,14 @@ class TestChangelog(unittest.TestCase):
         self.assertEqual(release.release_notes(updated, "0.2.0"), notes)
         self.assertEqual(release.release_notes(updated, "0.1.0"), "First.")
 
+    def test_the_release_body_ends_with_the_installing_notes(self):
+        _updated, _notes = release.add_release(self.CHANGELOG.format(unreleased="### Fixed\n- by hand"), "0.2.0", "", dt.date(2026, 9, 21))
+        body = release.release_body(_updated, "0.2.0")
+        self.assertTrue(body.startswith("### Fixed\n- by hand"))
+        self.assertIn("### Installing", body)
+        for words in ("Run anyway", "Open Anyway", "SHA256SUMS.txt", "champions-metadesk-linux-x64.tar.gz"):
+            self.assertIn(words, body)
+
     def test_no_notes_at_all_is_an_error(self):
         with self.assertRaises(release.ReleaseError):
             release.add_release(self.CHANGELOG.format(unreleased=""), "0.2.0", "", dt.date(2026, 9, 21))

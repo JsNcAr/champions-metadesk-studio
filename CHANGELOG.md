@@ -34,6 +34,11 @@ for the headings and style.
   masters, lockups and a short usage guide are in `assets/brand/`. On Linux the desktop app runs Flet's client under
   its own app ID and installs a hidden desktop entry and the icon in your user folder, which is how GNOME, KDE
   and other desktops pick the dock icon; other Flet apps keep theirs.
+- **Native desktop apps.** The Windows, macOS and Linux downloads are now built with `flet build`:
+  each is a real app with its own name, icon and identity, and starts without unpacking anything
+  into `~/.flet`. On macOS the signature covers the whole app. The Windows download is now a
+  folder (run `champions-metadesk.exe` inside it); the Linux archive includes an `install.sh` that
+  adds a menu entry. Your data stays where it was.
 
 ### Fixed
 

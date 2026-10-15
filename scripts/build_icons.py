@@ -7,6 +7,7 @@ container formats hold PNG data as is, so no imaging library is needed:
 
 - app.ico   Windows (16–256 px; PNG entries are valid in ICO since Windows Vista)
 - app.icns  macOS (16–1024 px, PNG chunks icp4–ic14)
+- src/assets/icon.png, icon_windows.ico, icon_macos.icns  the icons `flet build` gives each native app
 
 It also copies what the running app needs into src/…/data/brand/ (shipped with the package and the
 builds): the rail image, the window icon and the web favicon and icon set.
@@ -24,6 +25,7 @@ PNG_DIR = ROOT / "assets" / "brand" / "png"
 WEB_DIR = ROOT / "assets" / "brand" / "web"
 OUT_DIR = ROOT / "packaging" / "icons"
 DATA_DIR = ROOT / "src" / "pokemon_champions_planning_tool" / "data" / "brand"
+FLET_ASSETS = ROOT / "src" / "assets"          # where `flet build` looks for icon.png / icon_windows.ico / icon_macos.icns
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
@@ -86,11 +88,16 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "app.ico").write_bytes(build_ico({s: read_png(s) for s in ICO_SIZES}))
     (OUT_DIR / "app.icns").write_bytes(build_icns([(kind, read_png(size)) for kind, size in ICNS_TYPES]))
+    FLET_ASSETS.mkdir(parents=True, exist_ok=True)
+    for name, source in {"icon.png": PNG_DIR / "tile-1024.png", "icon_windows.ico": OUT_DIR / "app.ico",
+                         "icon_macos.icns": OUT_DIR / "app.icns"}.items():
+        shutil.copyfile(source, FLET_ASSETS / name)
     for name, source in runtime_files().items():
         target = DATA_DIR / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, target)
-    print(f"wrote {OUT_DIR.relative_to(ROOT)}/app.ico, app.icns and {len(runtime_files())} files in {DATA_DIR.relative_to(ROOT)}")
+    print(f"wrote {OUT_DIR.relative_to(ROOT)}/app.ico, app.icns, the flet build icons in {FLET_ASSETS.relative_to(ROOT)} "
+          f"and {len(runtime_files())} files in {DATA_DIR.relative_to(ROOT)}")
     return 0
 
 

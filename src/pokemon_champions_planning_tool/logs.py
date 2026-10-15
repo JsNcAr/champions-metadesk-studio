@@ -59,9 +59,29 @@ def setup_logging(log_dir: str | Path | None = None) -> Path | None:
 
     logging.captureWarnings(True)
     _install_hooks()
-    log.info("%s %s · Python %s · %s · packaged=%s · data=%s", config.APP_NAME, __version__, platform.python_version(),
-             platform.platform(), config.FROZEN, Path(config.DEFAULT_DATABASE_FILENAME).resolve().parent)
+    log.info("%s %s · Python %s · %s · packaged=%s (flet build=%s) · data=%s", config.APP_NAME, __version__,
+             platform.python_version(), platform.platform(), config.PACKAGED, config.EMBEDDED,
+             Path(config.DEFAULT_DATABASE_FILENAME).resolve().parent)
+    if config.EMBEDDED:
+        log.info("Runtime: %s", runtime_facts())
     return _log_file
+
+
+def runtime_facts() -> str:
+    """What a `flet build` app's host provides, for the log (each value checked, not assumed)."""
+    import os
+
+    def writable(path: str | None) -> str:
+        return "-" if not path else ("writable" if os.access(path, os.W_OK) else "read-only")
+
+    env = {k: os.environ.get(k) for k in ("FLET_PLATFORM", "FLET_APP_STORAGE_DATA", "FLET_APP_STORAGE_TEMP", "FLET_ASSETS_DIR")}
+    return " · ".join([
+        *(f"{k}={v}" for k, v in env.items()),
+        f"cwd={os.getcwd()}", f"executable={sys.executable}", f"frozen={getattr(sys, 'frozen', False)}",
+        f"data dir {writable(str(Path(config.DEFAULT_DATABASE_FILENAME).resolve().parent))}",
+        f"assets {config.DEFAULT_ASSETS_DIR} {writable(config.DEFAULT_ASSETS_DIR)}",
+        f"FLET_ASSETS_DIR {writable(env['FLET_ASSETS_DIR'])}", f"sprites={config.SPRITE_SRC}",
+    ])
 
 
 def log_file() -> Path | None:

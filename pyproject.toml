@@ -45,6 +45,30 @@ metadesk = "pokemon_champions_planning_tool.main:run"
 packages = [{include = "pokemon_champions_planning_tool", from = "src"}]
 
 
+# `flet build <linux|windows|macos>` (scripts/build_desktop.sh, release.yml): a native app per OS
+# with its own name, ID and icon. The app folder is src/ (src/main.py starts the app); the icons are
+# src/assets/icon*.{png,ico,icns}, written by scripts/build_icons.py.
+[tool.flet]
+product = "Champions MetaDesk Studio"
+org = "io.metadesk"
+bundle_id = "io.metadesk.champ"   # the app ID; matches flet_client.APP_ID (the Linux desktop entry uses it)
+company = "JsNcAr"
+copyright = "© 2026 Jason Arias · MIT License"
+
+[tool.flet.app]
+path = "src"
+module = "main"
+exclude = ["assets/sprites"]
+
+[tool.flet.linux]
+artifact = "champions-metadesk"
+
+[tool.flet.windows]
+artifact = "champions-metadesk"
+
+[tool.flet.macos]
+artifact = "ChampionsMetaDeskStudio"
+
 [tool.poetry.group.dev.dependencies]
 pyinstaller = "^6.22.2"
 

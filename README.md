@@ -100,13 +100,16 @@ needed. Release notes are in the [changelog](CHANGELOG.md).
 
 **First launch.** The builds are not code-signed yet, so the system warns the first time:
 
-- **Windows:** "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **Windows:** open the `champions-metadesk` folder from the zip and run `champions-metadesk.exe`.
+  At "Windows protected your PC", click **More info**, then **Run anyway**.
 - **macOS** (Apple Silicon): "can't be opened because Apple cannot check it" or "is damaged".
   Try to open it once, then **System Settings › Privacy & Security › Open Anyway**. On macOS 14
   and older, right-click the app and choose **Open**. If it still refuses:
   `xattr -dr com.apple.quarantine /path/to/ChampionsMetaDeskStudio.app`.
-- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz && ./champions-metadesk`. It needs
-  GTK 3 and libmpv (`sudo apt install libgtk-3-0 libmpv2` on current Debian and Ubuntu; `libmpv1` on older ones).
+- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz`, then run
+  `champions-metadesk-linux-x64/champions-metadesk/champions-metadesk`, or
+  `./champions-metadesk-linux-x64/install.sh` for a menu entry with the icon (no sudo; `--uninstall`
+  removes it). It needs GTK 3, which desktop Linux systems have.
 
 Each release lists the archives' checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt`
 on Linux, `shasum -a 256` on macOS, `Get-FileHash` on Windows).

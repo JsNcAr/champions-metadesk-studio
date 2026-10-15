@@ -60,7 +60,7 @@ git pull
 poetry run python -m unittest discover -s tests
 ```
 
-Optionally build for your own platform (see [building.md](building.md#2-native-build-on-current-host-os-flet-pack))
+Optionally build for your own platform (see [building.md](building.md#2-native-build-with-flet-build-the-release-path))
 and start the executable from a folder other than the repository, to catch packaging
 problems before CI does.
 
@@ -259,18 +259,16 @@ Needs the [Apple Developer Program](https://developer.apple.com/programs/) (paid
 | `APPLE_ID`, `APPLE_TEAM_ID` | The Apple account and team that notarize. |
 | `APPLE_APP_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that account. |
 
-With them, the macOS job imports the certificate into a temporary keychain, builds with
-`flet pack --codesign-identity` and the hardened-runtime exceptions in
-`packaging/macos/entitlements.plist`, verifies the signature, notarizes with
-`xcrun notarytool`, staples the ticket and zips the bundle with `ditto`.
+With them, the macOS job imports the certificate into a temporary keychain, builds the app with
+`flet build`, signs the whole `ChampionsMetaDeskStudio.app` (`codesign --deep --options runtime`
+with the hardened-runtime exceptions in `packaging/macos/entitlements.plist`), verifies the
+signature, notarizes with `xcrun notarytool`, staples the ticket and zips the bundle with `ditto`.
 
 Check a signed build: `codesign -dv --verbose=4 ChampionsMetaDeskStudio.app` and
 `spctl -a -vv ChampionsMetaDeskStudio.app` ("source=Notarized Developer ID").
 
-Known limit: flet pack ships the Flet viewer as an archive the app unpacks on first launch,
-so the bundle's signature does not cover the viewer itself. Unpacked locally it is not
-quarantined and starts normally; signing it as well (a pre-signed viewer through
-`FLET_VIEW_PATH`) is a later step.
+A `flet build` app is a single native bundle (no viewer unpacked at first launch), so this one
+signature covers everything that runs.
 
 ### Windows: Azure Artifact Signing
 
@@ -286,8 +284,8 @@ be issued, so a cloud signing service is the practical route for CI.
 | `TRUSTED_SIGNING_ACCOUNT` | The signing account name. |
 | `TRUSTED_SIGNING_PROFILE` | The certificate profile name. |
 
-The step signs `dist/champions-metadesk.exe` (with an RFC 3161 timestamp) before it is
-zipped. [SignPath Foundation](https://signpath.org) signs open-source projects for free; to
+The step signs every `.exe` and `.dll` in `dist/windows/` (the app and Flutter's runtime, with an
+RFC 3161 timestamp) before the folder is zipped. [SignPath Foundation](https://signpath.org) signs open-source projects for free; to
 use it, replace that one step with SignPath's action. Check a signed build: the exe's
 **Properties › Digital Signatures** tab, or `Get-AuthenticodeSignature champions-metadesk.exe`.
 

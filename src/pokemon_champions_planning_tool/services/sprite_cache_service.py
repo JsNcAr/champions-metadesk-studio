@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, USER_AGENT
+from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, SPRITE_SRC, USER_AGENT
 from ..domain.pokemon_identity import (
     get_pokemon_sprite_url,
     get_showdown_ani_sprite_url,
@@ -83,8 +83,10 @@ class SpriteCacheService:
         self,
         cache_dir: str | Path | None = None,
         assets_dir: str | Path | None = None,
+        src_mode: str | None = None,
     ) -> None:
         self.assets_dir = Path(assets_dir or DEFAULT_ASSETS_DIR)
+        self.src_mode = src_mode or SPRITE_SRC          # "asset" | "file" | "remote" (config.SPRITE_SRC)
         self.cache_dir = Path(cache_dir or DEFAULT_SPRITE_CACHE_DIR)
         self._lock = threading.Lock()
         self._in_flight: set[str] = set()
@@ -156,8 +158,9 @@ class SpriteCacheService:
         return name or None
 
     def is_servable(self, filename: str) -> bool:
-        """Was this file on disk before the app started, and so safe to serve locally?"""
-        return filename in self._present_at_start
+        """Was this file on disk before the app started, and so safe to serve locally? Never in
+        "remote" mode, where the app can't show local files (a `flet build` app by default)."""
+        return self.src_mode != "remote" and filename in self._present_at_start
 
     def is_cached(self, filename: str) -> bool:
         """Checks whether the file is cached locally."""
@@ -176,7 +179,9 @@ class SpriteCacheService:
         return self.is_cached(filename) or self.is_cached(f"{Path(filename).stem}.gif")
 
     def get_local_src(self, filename: str) -> str:
-        """Returns the local asset path for Flet controls."""
+        """How Flet controls load a cached sprite: its asset URL, or its file path in "file" mode."""
+        if self.src_mode == "file":
+            return str((self.cache_dir / filename).resolve())
         return f"/sprites/{filename}"
 
     def resolve_sprite_src(
@@ -210,7 +215,7 @@ class SpriteCacheService:
 
         # A previous launch's self-heal (see _try_fallback_download) may have cached this
         # species/form under a different extension than the primary URL implies.
-        fallback = self._stem_at_start.get(Path(filename).stem)
+        fallback = self._stem_at_start.get(Path(filename).stem) if self.src_mode != "remote" else None
         if fallback is not None:
             return self.get_local_src(fallback)
 

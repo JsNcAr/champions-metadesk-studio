@@ -1,6 +1,6 @@
 # Packaging and Building Executables
 
-This document describes how to package **Champions MetaDesk Studio** into standalone executables across Windows, Linux, and macOS using GitHub Actions, local `flet pack`, or Docker.
+This document describes how to package **Champions MetaDesk Studio** as a native desktop app on Windows, Linux and macOS: with `flet build` (the release path, locally or in GitHub Actions), and the older `flet pack` and Docker routes.
 
 ---
 
@@ -15,9 +15,10 @@ The repository includes a GitHub Actions workflow at [`.github/workflows/release
 Running the workflow by hand (*Run workflow* in the Actions tab) builds and uploads the archives as workflow artifacts without publishing anything.
 
 ### Matrix Build Configuration
-* **Windows** (`windows-latest`): Builds `champions-metadesk.exe` and packages it into `champions-metadesk-windows-x64.zip`.
-* **Linux** (`ubuntu-latest`): Builds the Linux standalone binary and packages it into `champions-metadesk-linux-x64.tar.gz`.
-* **macOS** (`macos-latest`): Builds the `ChampionsMetaDeskStudio.app` bundle and packages it into `champions-metadesk-macos.zip`.
+Each job runs `scripts/build_desktop.sh <os>` (`flet build`, section 2) with Flutter cached between runs.
+* **Windows** (`windows-latest`): the `champions-metadesk` folder (`champions-metadesk.exe`, Flutter's DLLs, `data/`), signed when the signing secrets exist, zipped into `champions-metadesk-windows-x64.zip`.
+* **Linux** (`ubuntu-latest`): the bundle plus icons and `install.sh`, in `champions-metadesk-linux-x64.tar.gz`.
+* **macOS** (`macos-latest`): `ChampionsMetaDeskStudio.app`, signed and notarized when the secrets exist, in `champions-metadesk-macos.zip`.
 
 ### Publishing a Release
 
@@ -32,7 +33,58 @@ workflow publishes.
 
 ---
 
-## 2. Native Build on Current Host OS (`flet pack`)
+## 2. Native Build with `flet build` (the release path)
+
+`flet build` compiles a dedicated Flutter app for this project, so each OS sees **our** app: its own
+name, app ID (`io.metadesk.champ`) and icon, one bundle to sign, and no client unpacked into `~/.flet` at
+first launch. It reads `[tool.flet]` in `pyproject.toml`: the app folder is `src/` (`src/main.py` starts
+the app) and the icons are `src/assets/icon.png`, `icon_windows.ico` and `icon_macos.icns`, written by
+`scripts/build_icons.py`. Each OS builds on itself (no cross-compiling). The first build downloads
+Flutter 3.41.7 (about 2 GB) into `~/flutter`.
+
+### Linux (tested on openSUSE; apt and dnf work too)
+
+```bash
+scripts/flet_build_prereqs.sh          # lists Flutter's toolchain packages: ok / missing / not found by name
+scripts/flet_build_prereqs.sh --yes    # installs the missing ones (sudo)
+scripts/build_desktop.sh linux         # icons, flet build, then the archive
+dist/linux/champions-metadesk          # run the built app
+```
+
+The build writes everything it prints to `dist/build-linux.log`, and `flutter doctor -v` to
+`dist/doctor.txt`. `dist/champions-metadesk-linux-x64.tar.gz` is the release archive: the app, its icons,
+and `install.sh` (installs into `~/.local` with a menu entry, no sudo; `--uninstall` removes it).
+
+**What to send back after a test build:** `dist/build-linux.log`, `dist/doctor.txt`, the app's
+`app.log` from its first launch (Settings › About › Log file; its `Runtime:` line records what the
+built app's host provides), and whether the dock shows the crimson tile.
+
+### macOS and Windows
+
+`scripts/build_desktop.sh macos` (Xcode and CocoaPods installed) builds `dist/macos/ChampionsMetaDeskStudio.app`;
+`scripts/build_desktop.sh windows` from Git Bash (Visual Studio with "Desktop development with C++") builds
+`dist/windows/`. The release workflow signs and zips both.
+
+### How a built app differs from a run from source
+- It is detected by `FLET_PLATFORM`, which the Flutter host sets (`config.EMBEDDED`). It keeps its data in
+  the same per-user folder as the `flet pack` builds, so switching keeps the user's data.
+- `--cli` and `--web` aren't available in it (use a run from source or a pip install).
+- Sprites come from the CDN (`PCPT_SPRITE_SRC=remote`): the host serves its own bundled assets, not the
+  sprite cache. `PCPT_SPRITE_SRC=file` shows cached sprites by file path instead, if that works on the platform.
+- On Linux it writes a hidden `io.metadesk.champ.desktop` and the icon, unless `install.sh` made a real
+  menu entry, since `flet build` provides no Linux desktop entry of its own.
+
+### Troubleshooting
+| Symptom | What to do |
+|---|---|
+| CMake or `gtk/gtk.h` errors | Flutter's Linux toolchain is incomplete: run `scripts/flet_build_prereqs.sh` again |
+| `flutter doctor` lists missing pieces | `dist/doctor.txt` says which; install them and rebuild |
+| A stale or broken template | `poetry run flet build linux --clear-cache --yes` |
+| The window opens without the icon in the dock | Log out and back in once (the desktop caches icons); check `~/.local/share/applications/io.metadesk.champ.desktop` |
+
+---
+
+## 3. Legacy: Native Build with `flet pack`
 
 To build a standalone executable directly on your development machine:
 
@@ -69,7 +121,7 @@ The resulting binary will be placed in the `dist/` directory.
 
 ---
 
-## 3. Cross-Compiling Windows Executables (`.exe`) via Docker
+## 4. Cross-Compiling Windows Executables (`.exe`) via Docker
 
 If you are developing on a Linux host system and need to build a native standalone Windows `.exe` binary locally without a Windows machine:
 
@@ -85,7 +137,7 @@ The container downloads all Windows-compatible wheels, installs them into a head
 
 ---
 
-## 4. Configuration & Database Behavior in Frozen Builds
+## 5. Configuration & Database Behavior in Frozen Builds
 
 When running the standalone executable:
 

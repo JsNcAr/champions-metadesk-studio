@@ -348,15 +348,18 @@ def repo_slug() -> str:
 INSTALLING = """\
 ### Installing
 
-Download the archive for your system, extract it and run the app; no Python needed. Builds
-are not code-signed yet, so the first launch shows a warning:
+Download the archive for your system and extract it; no Python needed. Builds are not
+code-signed yet, so the first launch shows a warning:
 
-- **Windows:** "Windows protected your PC" — click **More info**, then **Run anyway**.
-- **macOS** (Apple Silicon): "can't be opened" or "is damaged" — try to open it once, then
-  **System Settings › Privacy & Security › Open Anyway** (on macOS 14 and older: right-click
-  the app › Open).
-- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz`, then `./champions-metadesk`
-  (needs GTK 3 and libmpv).
+- **Windows:** open the `champions-metadesk` folder and run `champions-metadesk.exe`. At
+  "Windows protected your PC", click **More info**, then **Run anyway**.
+- **macOS** (Apple Silicon): move `ChampionsMetaDeskStudio.app` to Applications. At "can't be
+  opened" or "is damaged", try to open it once, then **System Settings › Privacy & Security ›
+  Open Anyway** (on macOS 14 and older: right-click the app › Open).
+- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz`, then run
+  `champions-metadesk-linux-x64/champions-metadesk/champions-metadesk`, or
+  `./champions-metadesk-linux-x64/install.sh` for a menu entry and icon (no sudo; `--uninstall`
+  removes it). Needs GTK 3.
 
 `SHA256SUMS.txt` lists each archive's checksum. More in the README's
 [Download](https://github.com/JsNcAr/champions-metadesk-studio#download) section.

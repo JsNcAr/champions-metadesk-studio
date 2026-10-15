@@ -10,6 +10,9 @@ from . import __version__
 APP_NAME = "Champions MetaDesk Studio"
 
 FROZEN = bool(getattr(sys, "frozen", False))   # a packaged build (PyInstaller via flet pack)
+# A native app made by `flet build`: its Flutter host sets FLET_PLATFORM before Python starts.
+EMBEDDED = bool(os.environ.get("FLET_PLATFORM"))
+PACKAGED = FROZEN or EMBEDDED                   # either kind of downloaded build (not a run from source)
 
 
 def user_data_dir(platform: str = sys.platform, env: Mapping[str, str] = os.environ, home: Path | None = None) -> Path:
@@ -28,10 +31,12 @@ def user_data_dir(platform: str = sys.platform, env: Mapping[str, str] = os.envi
 # starts in the read-only "/", a Windows shortcut wherever it says), so its files live in
 # the per-user folder; a run from source or a pip install keeps them in the working
 # directory. The folder is created by storage.prepare_data_dir(), not on import.
-DATA_DIR = user_data_dir() if FROZEN else Path()
+# A `flet build` app uses the same folder as a `flet pack` one (not the host's FLET_APP_STORAGE_DATA),
+# so switching between the two builds keeps the user's data.
+DATA_DIR = user_data_dir() if PACKAGED else Path()
 # Where exports (Box files, the CSV) are written: Downloads for a packaged build.
 EXPORT_DIR = ((Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home())
-              if FROZEN else Path())
+              if PACKAGED else Path())
 
 # Shown in Settings › About; the README and NOTICE.md carry the same text.
 DISCLAIMER = (
@@ -59,6 +64,10 @@ DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", str(DATA_DIR / "
 DEFAULT_SPRITE_CACHE_DIR = str(
     Path(os.environ.get("PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites"))).resolve()
 )
+# How a cached sprite is shown: "asset" (served from assets_dir as /sprites/<file>, the default),
+# "file" (its absolute path) or "remote" (always the CDN URL). A `flet build` app's host serves its
+# own bundled assets, not the sprite cache, so it uses the CDN unless PCPT_SPRITE_SRC says otherwise.
+SPRITE_SRC = os.environ.get("PCPT_SPRITE_SRC") or ("remote" if EMBEDDED else "asset")
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2"
 POKEAPI_TIMEOUT_SECONDS = 5
 

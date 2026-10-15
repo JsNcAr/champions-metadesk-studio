@@ -226,6 +226,8 @@ src/pokemon_champions_planning_tool/
                   the Linux desktop entry + icon theme files for the app's own app ID
   flet_client.py  Linux: a copy of Flet's client with the app ID io.metadesk.champ (FLET_VIEW_PATH), so the
                   dock matches the window to the app's icon
+  (src/main.py)   the `flet build` entry point; a built app (config.EMBEDDED: FLET_PLATFORM set) runs
+                  main.run_embedded(): no view to pick, CDN sprites, the Linux desktop entry
   ui/
     __init__.py
     ...

@@ -149,6 +149,13 @@ class TestLinuxDesktopEntry(unittest.TestCase):
         self.install()
         self.assertIn("Some other Flet app", other.read_text())
 
+    def test_the_menu_entry_install_sh_wrote_is_kept(self):
+        self.entry.parent.mkdir(parents=True)
+        installed = "[Desktop Entry]\nName=Champions MetaDesk Studio\nExec=/opt/x\nX-Champions-MetaDesk-Studio=installed\n"
+        self.entry.write_text(installed)
+        self.assertFalse(self.install())
+        self.assertEqual(self.entry.read_text(), installed)
+
     def test_only_on_linux(self):
         for platform in ("win32", "darwin"):
             self.assertFalse(self.install(platform=platform))

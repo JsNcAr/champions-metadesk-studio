@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pokemon_champions_planning_tool import flet_client
 from pokemon_champions_planning_tool.brand import install_linux_desktop_entry, install_web_icons
-from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR
+from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, EMBEDDED
 from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database, get_session
 from pokemon_champions_planning_tool.services.champions_catalog_service import sync_champions_catalog_on_startup
 from pokemon_champions_planning_tool.services.items_catalog_service import sync_items_catalog
@@ -121,6 +121,10 @@ def run():
     backup_before_upgrade()
     initialize_database()
 
+    if EMBEDDED:   # a `flet build` app: the Flutter host already is the window
+        run_embedded()
+        return
+
     if "--cli" in sys.argv:
         with get_session() as session:
             bootstrap_catalogues(session)
@@ -143,6 +147,22 @@ def run():
             os.environ["FLET_VIEW_PATH"] = own_client
             install_linux_desktop_entry(flet_client.APP_ID)
     ft.run(gui_main, view=view_mode, port=8550, assets_dir=DEFAULT_ASSETS_DIR)
+
+
+def run_embedded() -> None:
+    """A native app made by `flet build`. Its host shows the window and serves its bundled assets,
+    so there is no view to choose, no Flet client to prepare and no web icons to install; --cli and
+    --web need a run from source or a pip install."""
+    import flet as ft
+    from pokemon_champions_planning_tool.ui.app import main as gui_main
+
+    ignored = [a for a in ("--cli", "--web") if a in sys.argv]
+    if ignored:
+        log.warning("%s isn't available in the desktop app; run it from source or a pip install", " and ".join(ignored))
+    prepare_sprite_cache_dir()
+    if sys.platform.startswith("linux"):
+        install_linux_desktop_entry(flet_client.APP_ID)   # flet build gives Linux no desktop entry or icon
+    ft.run(gui_main, assets_dir=DEFAULT_ASSETS_DIR)
 
 
 if __name__ == "__main__":

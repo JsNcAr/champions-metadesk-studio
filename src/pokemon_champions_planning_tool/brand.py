@@ -89,6 +89,8 @@ def install_linux_desktop_entry(app_id: str, *, platform: str = sys.platform, en
         if current is not None and OWNER_KEY not in current:
             log.info("%s was not written by this app; leaving it", entry_path)
             return False
+        if current is not None and f"{OWNER_KEY}=installed" in current:
+            return False                                      # the archive's install.sh made a real menu entry
         wrote = False
         for size in LINUX_ICON_SIZES:
             source = BRAND_DIR / "linux" / f"{size}.png"

@@ -15,10 +15,10 @@ from typing import Optional
 
 import requests
 
+from ...config import USER_AGENT
 
 _BASE_URL = "https://pokepast.es"
 _TIMEOUT_SECONDS = 8
-_USER_AGENT = "ChampionsMetaDeskStudio/1.0 (https://github.com)"
 _PASTE_ID_RE = re.compile(r"pokepast\.es/([a-f0-9]+)", re.IGNORECASE)
 
 
@@ -70,7 +70,7 @@ class PokepastProvider:
             resp = requests.post(
                 f"{_BASE_URL}/create",
                 data=payload,
-                headers={"User-Agent": _USER_AGENT},
+                headers={"User-Agent": USER_AGENT},
                 timeout=_TIMEOUT_SECONDS,
             )
             resp.raise_for_status()
@@ -103,7 +103,7 @@ class PokepastProvider:
         try:
             resp = requests.get(
                 url,
-                headers={"User-Agent": _USER_AGENT},
+                headers={"User-Agent": USER_AGENT},
                 timeout=_TIMEOUT_SECONDS,
             )
             resp.raise_for_status()

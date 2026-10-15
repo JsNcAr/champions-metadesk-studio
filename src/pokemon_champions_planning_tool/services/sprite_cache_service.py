@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, TOURNAMENT_USER_AGENT
+from ..config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR, USER_AGENT
 from ..domain.pokemon_identity import (
     get_pokemon_sprite_url,
     get_showdown_ani_sprite_url,
@@ -270,7 +270,7 @@ class SpriteCacheService:
         dest = self.cache_dir / filename
         tmp = dest.with_suffix(f".{os.getpid()}.tmp")
 
-        headers = {"User-Agent": TOURNAMENT_USER_AGENT}
+        headers = {"User-Agent": USER_AGENT}
         resp = requests.get(url, headers=headers, timeout=6)
         if resp.status_code != 200 or not resp.content:
             return False

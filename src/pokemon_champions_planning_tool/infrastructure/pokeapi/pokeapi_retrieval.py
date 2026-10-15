@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 import requests
 
-from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...config import POKEAPI_BASE_URL, HTTP_HEADERS, POKEAPI_TIMEOUT_SECONDS
 from ...domain.entities.pokemon import Pokemon
 from ...domain.entities.pokemon_ability import PokemonAbility
 from ...domain.entities.pokemon_stats import PokemonStats
@@ -27,7 +27,7 @@ class PokeApiUnavailable(Exception):
 def _get_json(url: str) -> dict | None:
     """GET ``url``; the parsed body, None on 404, ``PokeApiUnavailable`` on anything else."""
     try:
-        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         if response.status_code == 404:
             return None  # genuinely unknown name
         response.raise_for_status()
@@ -139,7 +139,7 @@ def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]
     """Fetches the list of species in the specified Pokédex (defaults to 'champions') from PokéAPI."""
     try:
         url = f"{POKEAPI_BASE_URL}/pokedex/{pokedex_name}"
-        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         response.raise_for_status()
 
         data = response.json()
@@ -164,7 +164,7 @@ def get_mega_varieties_for_species(species_name: str) -> list[str]:
     """Fetches the list of Mega variety canonical IDs for a species from PokéAPI."""
     try:
         url = f"{POKEAPI_BASE_URL}/pokemon-species/{species_name.strip().lower()}"
-        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         response.raise_for_status()
         data = response.json()
         varieties = data.get("varieties", [])
@@ -184,7 +184,7 @@ def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
     """Fetches details for a specific Mega Evolution from PokéAPI and builds a MegaEvolutionRecord."""
     try:
         url = f"{POKEAPI_BASE_URL}/pokemon/{mega_api_name.strip().lower()}"
-        response = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        response = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         response.raise_for_status()
 
         data = response.json()

@@ -24,6 +24,10 @@ for the headings and style.
   downloaded build doesn't have. A background task that fails is logged with its traceback,
   and so is a crash in any thread. Settings › About shows the data folder and the log file,
   each with a button that opens the folder. Nothing is sent anywhere.
+- **The app identifies itself to the sites it reads.** Victory Road requests were sent with a
+  Chrome browser User-Agent; every request (Victory Road, Limitless, Pokepast, VRPaste,
+  Showdown, PokéAPI, sprites) now sends `ChampionsMetaDeskStudio/<version>` with a link to
+  this repository, so site owners can see what is calling them and who to contact.
 - Box exports from a downloaded build are saved to your Downloads folder, and the message
   shows the full path, instead of the folder the app was started from.
 

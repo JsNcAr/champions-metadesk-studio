@@ -57,8 +57,11 @@ Victory Road (`victoryroad.pro`) publishes official Premier Event team sheets an
   is *link-anchored*: it locates every Poképaste/VRPaste URL in the document, then walks
   backwards through the preceding ~3000 characters of `<td>` cells to recover the placement
   (first purely numeric cell) and the player handle (cell containing a bracketed `( handle )`).
-- **Custom User-Agent & Timeouts**: Configured with a 25-second timeout, two retries, and
-  modern browser headers to reliably fetch large event pages.
+- **User-Agent & Timeouts**: Requests send the app's own User-Agent (`config.USER_AGENT`:
+  `ChampionsMetaDeskStudio/<version> (+https://github.com/JsNcAr/champions-metadesk-studio)`),
+  never a browser's; victoryroad.pro's robots.txt allows these pages, and a sync reads at most
+  a few of them. 25-second timeout and two retries for the large event pages; a 403 or 429 is
+  logged as a refusal.
 - **Poképaste Sheet Extraction**: Extracts Poképaste URLs and player standings directly into `TournamentTeamRecord`.
 - **Fetch once**: an event already ingested completely is never requested again; a partially ingested event (some pastes failed) stays pending and only its missing pastes are fetched on the next run. Paste fetches get one retry and a short pause.
 - **Discovery**: the season calendar pages (`/{season}-season-calendar/`, this season and the next, re-read at most every 24 h or on a forced sync) list every event with its dates, name and city, winner and format. Each row becomes a pending tournament (date = last day, game and regulation from the Format cell, tier from the name). The static registry (`OFFICIAL_EVENT_SLUGS`) seeds the same way, so the app works before the first calendar read, and existing rows are never overwritten.
@@ -107,6 +110,16 @@ Stored in `moves` (with a `mechanics` JSON column: flags, secondaries, recoil, d
 CSV remains a useful export format for spreadsheet tools.
 - Written on demand from the Box toolbar's Export button (no longer on every write).
 - Stable column order containing canonical identity, display name, base stats, types, and favorite status.
+
+---
+
+## How the app identifies itself
+
+Every HTTP request (Limitless, Victory Road, Pokepast, VRPaste, Pokémon Showdown, PokéAPI and
+the sprite downloads) sends `User-Agent: ChampionsMetaDeskStudio/<version> (+https://github.com/JsNcAr/champions-metadesk-studio)`
+from `config.USER_AGENT`, so site owners can see what is calling them and how to reach the
+author. `tests/test_http_identity.py` checks each client sends it and that no source file
+carries a browser User-Agent.
 
 ---
 

@@ -5,6 +5,8 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+from . import __version__
+
 APP_NAME = "Champions MetaDesk Studio"
 
 FROZEN = bool(getattr(sys, "frozen", False))   # a packaged build (PyInstaller via flet pack)
@@ -128,5 +130,8 @@ RECENT_EVENT_GRACE_DAYS = 3
 # The launch-time sync is skipped when a sync completed this recently and no backlog
 # is waiting; "Sync now" in Settings always runs.
 STARTUP_SYNC_MIN_INTERVAL_HOURS = 6
-TOURNAMENT_USER_AGENT = "ChampionsMetaDeskStudio/1.0 (https://github.com)"
+# Every HTTP request says which app sends it, its version and where to reach its author,
+# as the sites it reads from ask of automated clients. Never a browser's UA.
+USER_AGENT = f"ChampionsMetaDeskStudio/{__version__} (+https://github.com/JsNcAr/champions-metadesk-studio)"
+HTTP_HEADERS = {"User-Agent": USER_AGENT}
 

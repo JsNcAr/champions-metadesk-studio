@@ -44,7 +44,7 @@ from ...config import (
     LIMITLESS_RATE_RESERVE,
     LIMITLESS_STANDINGS_PER_RUN,
     TOURNAMENT_SYNC_TIMEOUT,
-    TOURNAMENT_USER_AGENT,
+    USER_AGENT,
 )
 from ...domain.pokemon_identity import _CHAMPIONS_REG_RE, classify_battle_format
 
@@ -123,7 +123,7 @@ class LimitlessProvider:
     def __init__(
         self,
         base_url: str = LIMITLESS_API_BASE_URL,
-        user_agent: str = TOURNAMENT_USER_AGENT,
+        user_agent: str = USER_AGENT,
         timeout: int = TOURNAMENT_SYNC_TIMEOUT,
     ):
         self.base_url = base_url.rstrip("/")

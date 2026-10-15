@@ -16,7 +16,7 @@ import re
 
 import requests
 
-from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...config import POKEAPI_BASE_URL, HTTP_HEADERS, POKEAPI_TIMEOUT_SECONDS
 from ...domain.item_sprites import sheet_url
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
@@ -90,7 +90,7 @@ def _fetch_pokeapi_item_detail(pokeapi_slug: str) -> dict | None:
     """Fetches a single item's display metadata from PokéAPI. Returns None on error."""
     try:
         url = f"{POKEAPI_BASE_URL}/item/{pokeapi_slug}"
-        res = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        res = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         if res.status_code == 404:
             return None
         res.raise_for_status()

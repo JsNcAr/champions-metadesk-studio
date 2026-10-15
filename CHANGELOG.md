@@ -10,6 +10,8 @@ for the headings and style.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-15
+
 ### Added
 - **Plans.** A new view (Ctrl+5) for each of your teams' matchup plans against common meta
   teams, like the matchup section of a team report. The app runs the calcs; the plan is

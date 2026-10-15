@@ -199,6 +199,7 @@ def main(page: ft.Page) -> None:
     if storage.LAST_MIGRATION is not None:   # once: the first launch after the data folder moved
         ctx.toast(f"Your data now lives in {Path(DEFAULT_PREFERENCES_FILENAME).resolve().parent} "
                   f"(copied from {storage.LAST_MIGRATION}; the old files were left in place)", "info")
+        storage.LAST_MIGRATION = None   # one notice, not one per window (the web build opens many)
 
     async def _prewarm_views() -> None:
         """Build the other views while the app is idle, so switching to them is instant.

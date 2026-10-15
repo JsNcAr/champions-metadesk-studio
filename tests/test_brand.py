@@ -4,6 +4,7 @@ the web icons copied into the assets folder, and the logo in the rail."""
 from __future__ import annotations
 
 import importlib.util
+import os
 import struct
 import sys
 import tempfile
@@ -14,7 +15,7 @@ from pathlib import Path
 import flet as ft
 
 from _ui_stubs import StubPage
-from pokemon_champions_planning_tool import brand
+from pokemon_champions_planning_tool import brand, flet_client
 from pokemon_champions_planning_tool.ui.context import AppContext
 from pokemon_champions_planning_tool.ui.shell import AppShell
 
@@ -106,11 +107,13 @@ class TestRailLogo(unittest.TestCase):
 
 
 class TestLinuxDesktopEntry(unittest.TestCase):
+    APP_ID = flet_client.APP_ID
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.data = Path(self._tmp.name) / "share"
         self.env = {"XDG_DATA_HOME": str(self.data)}
-        self.entry = self.data / "applications" / f"{brand.FLET_APP_ID}.desktop"
+        self.entry = self.data / "applications" / f"{self.APP_ID}.desktop"
         patcher = unittest.mock.patch.object(brand, "_refresh_desktop_caches")   # no desktop tools in tests
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -118,35 +121,103 @@ class TestLinuxDesktopEntry(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_writes_the_entry_and_the_icon_sizes_once(self):
-        self.assertTrue(brand.install_linux_desktop_entry(platform="linux", env=self.env))
+    def install(self, **kw):
+        return brand.install_linux_desktop_entry(self.APP_ID, platform=kw.pop("platform", "linux"), env=kw.pop("env", self.env))
+
+    def test_writes_the_entry_for_the_apps_own_id_and_the_icon_sizes_once(self):
+        self.assertTrue(self.install())
         text = self.entry.read_text()
         self.assertIn(f"Icon={brand.ICON_NAME}", text)
-        self.assertIn(f"StartupWMClass={brand.FLET_APP_ID}", text)
+        self.assertIn(f"StartupWMClass={self.APP_ID}", text)
         self.assertIn("NoDisplay=true", text)
         for size in brand.LINUX_ICON_SIZES:
             icon = self.data / "icons" / "hicolor" / f"{size}x{size}" / "apps" / f"{brand.ICON_NAME}.png"
             self.assertEqual(icon.read_bytes()[:8], build_icons.PNG_MAGIC)
-        self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env=self.env), "already in place")
+        self.assertFalse(self.install(), "already in place")
 
-    def test_another_flet_apps_entry_is_left_alone(self):
-        self.entry.parent.mkdir(parents=True)
-        self.entry.write_text("[Desktop Entry]\nName=Some other Flet app\nIcon=other\n")
-        self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env=self.env))
-        self.assertIn("Some other Flet app", self.entry.read_text())
-        self.assertFalse((self.data / "icons").exists())
+    def test_the_shared_flet_entry_an_earlier_version_wrote_is_removed(self):
+        legacy = self.data / "applications" / f"{brand.FLET_SHARED_APP_ID}.desktop"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(brand.desktop_entry(brand.FLET_SHARED_APP_ID, "true"))
+        self.install()
+        self.assertFalse(legacy.exists())
+
+    def test_another_apps_flet_entry_is_left_alone(self):
+        other = self.data / "applications" / f"{brand.FLET_SHARED_APP_ID}.desktop"
+        other.parent.mkdir(parents=True)
+        other.write_text("[Desktop Entry]\nName=Some other Flet app\nIcon=other\n")
+        self.install()
+        self.assertIn("Some other Flet app", other.read_text())
 
     def test_only_on_linux(self):
         for platform in ("win32", "darwin"):
-            self.assertFalse(brand.install_linux_desktop_entry(platform=platform, env=self.env))
+            self.assertFalse(self.install(platform=platform))
         self.assertFalse(self.data.exists())
 
     def test_an_unwritable_folder_is_logged_not_raised(self):
         blocker = Path(self._tmp.name) / "file"
         blocker.write_text("x")
         with self.assertLogs("pokemon_champions_planning_tool.brand", "WARNING"):
-            self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env={"XDG_DATA_HOME": str(blocker)}))
+            self.assertFalse(self.install(env={"XDG_DATA_HOME": str(blocker)}))
 
+
+class TestOwnFletClient(unittest.TestCase):
+    """The app's copy of Flet's Linux client: same executable but its own app ID; lib/ and data/ linked."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.source = root / "flet-cache" / "flet"
+        (self.source / "lib").mkdir(parents=True)
+        (self.source / "data").mkdir()
+        (self.source / "lib" / "libapp.so").write_bytes(b"lib")
+        self.binary = b"\x7fELF..." + flet_client.FLET_APP_ID + b"\x00...rest"
+        (self.source / "flet").write_bytes(self.binary)
+        self.root = root / "cache"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def prepare(self, **kw):
+        return flet_client.prepare(platform=kw.pop("platform", "linux"), env=kw.pop("env", {}),
+                                   locate=kw.pop("locate", lambda: (self.source, "0.85.3")), root=self.root)
+
+    def test_builds_a_client_with_the_apps_id_and_linked_libraries(self):
+        view = Path(self.prepare())
+        self.assertEqual(view, self.root / "0.85.3")
+        exe = (view / "flet").read_bytes()
+        self.assertEqual(len(exe), len(self.binary), "patched in place: nothing moves")
+        self.assertIn(flet_client.APP_ID.encode(), exe)
+        self.assertNotIn(flet_client.FLET_APP_ID, exe)
+        self.assertTrue(os.access(view / "flet", os.X_OK))
+        for name in ("lib", "data"):
+            self.assertTrue((view / name).is_symlink())
+        self.assertEqual((view / "lib" / "libapp.so").read_bytes(), b"lib")
+        self.assertEqual((self.source / "flet").read_bytes(), self.binary, "Flet's own cache is untouched")
+
+    def test_idempotent_and_old_versions_are_cleared(self):
+        old = self.root / "0.80.0"
+        old.mkdir(parents=True)
+        first = self.prepare()
+        self.assertEqual(self.prepare(), first)
+        self.assertFalse(old.exists())
+
+    def test_an_unexpected_binary_falls_back_to_flets_client(self):
+        (self.source / "flet").write_bytes(b"no id here")
+        with self.assertLogs("pokemon_champions_planning_tool.flet_client", "WARNING"):
+            self.assertIsNone(self.prepare())
+        (self.source / "flet").write_bytes(flet_client.FLET_APP_ID * 2)
+        with self.assertRaises(flet_client.ClientError):
+            flet_client.patch_app_id((self.source / "flet").read_bytes())
+
+    def test_not_on_other_systems_or_when_flet_view_path_is_set(self):
+        self.assertIsNone(self.prepare(platform="win32"))
+        self.assertIsNone(self.prepare(env={"FLET_VIEW_PATH": "/somewhere"}))
+        self.assertFalse(self.root.exists())
+
+    def test_the_id_keeps_the_binarys_layout(self):
+        self.assertEqual(len(flet_client.APP_ID.encode()), len(flet_client.FLET_APP_ID))
+        self.assertRegex(flet_client.APP_ID, r"^[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z][A-Za-z0-9_-]*)+$", "a valid GApplication ID")
 
 if __name__ == "__main__":
     unittest.main()

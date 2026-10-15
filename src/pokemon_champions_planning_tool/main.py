@@ -1,6 +1,8 @@
+import os
 import sys
 from pathlib import Path
 
+from pokemon_champions_planning_tool import flet_client
 from pokemon_champions_planning_tool.brand import install_linux_desktop_entry, install_web_icons
 from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR
 from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database, get_session
@@ -137,7 +139,12 @@ def run():
 
     view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
     if view_mode == ft.AppView.FLET_APP:
-        install_linux_desktop_entry()   # before the window opens, so the dock matches it to the app's icon
+        # Linux: run Flet's client under the app's own ID, and give that ID the app's icon, before the
+        # window opens (the dock matches the window to its .desktop entry by app ID).
+        own_client = flet_client.prepare()
+        if own_client:
+            os.environ["FLET_VIEW_PATH"] = own_client
+            install_linux_desktop_entry(flet_client.APP_ID)
     ft.run(gui_main, view=view_mode, port=8550, assets_dir=DEFAULT_ASSETS_DIR)
 
 

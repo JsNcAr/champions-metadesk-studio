@@ -215,7 +215,10 @@ This layer is responsible for talking to external systems and reading or writing
 src/pokemon_champions_planning_tool/
   __init__.py
   main.py
-  brand.py        the logo files the app ships (data/brand): the rail image, the window icon, the web icons
+  brand.py        the logo files the app ships (data/brand): the rail image, the window icon, the web icons,
+                  the Linux desktop entry + icon theme files for the app's own app ID
+  flet_client.py  Linux: a copy of Flet's client with the app ID io.metadesk.champ (FLET_VIEW_PATH), so the
+                  dock matches the window to the app's icon
   ui/
     __init__.py
     ...

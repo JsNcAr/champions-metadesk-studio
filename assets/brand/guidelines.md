@@ -50,10 +50,11 @@ no font is needed to use the files.
 - Rebuild the wordmark in a live font.
 
 ## Linux dock icon
-Linux desktops take a window's icon from a `.desktop` file named after its app ID, not from the program. The
-desktop app writes a hidden `com.appveyor.flet.desktop` (marked `X-Champions-MetaDesk-Studio`) and the icon in
-`~/.local/share/icons/hicolor/` on start. Flet's client reports that app ID for every Flet app, so other Flet
-apps on the same machine show this icon too, and an entry another app already wrote is never replaced.
+Linux desktops take a window's icon from a `.desktop` file named after its app ID, not from the program. Flet's
+prebuilt Linux client reports `com.appveyor.flet` for every Flet app, so the desktop app runs its own copy of
+the client (`flet_client.py`): the small executable with its app ID replaced by `io.metadesk.champ`, with its
+libraries linked from Flet's cache. It writes a hidden `io.metadesk.champ.desktop` and the icon in
+`~/.local/share/icons/hicolor/`. Other Flet apps keep their own icons, and Flet's cache isn't modified.
 
 ## Notes
 The mark is original. It isn't affiliated with Nintendo, Game Freak, Creatures Inc. or The Pokémon Company.

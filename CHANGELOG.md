@@ -15,9 +15,9 @@ for the headings and style.
 - **The app has its own logo.** A crimson tile with a split disc: the two sides of a matchup, with the hit
   that lands first. It replaces the Poké Ball icon at the top of the menu rail, and it's the icon of the
   Windows, macOS and Linux builds, the browser tab in the web version and an installed web app. The
-  masters, lockups and a short usage guide are in `assets/brand/`. On Linux the desktop app installs a
-  hidden desktop entry and the icon in your user folder, which is how GNOME, KDE and other desktops pick the
-  dock icon.
+  masters, lockups and a short usage guide are in `assets/brand/`. On Linux the desktop app runs Flet's client under
+  its own app ID and installs a hidden desktop entry and the icon in your user folder, which is how GNOME, KDE
+  and other desktops pick the dock icon; other Flet apps keep theirs.
 
 ## [0.7.0] - 2026-10-15
 

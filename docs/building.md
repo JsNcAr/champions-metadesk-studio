@@ -80,6 +80,7 @@ built app's host provides), and whether the dock shows the crimson tile.
 | CMake or `gtk/gtk.h` errors | Flutter's Linux toolchain is incomplete: run `scripts/flet_build_prereqs.sh` again |
 | `flutter doctor` lists missing pieces | `dist/doctor.txt` says which; install them and rebuild |
 | A stale or broken template | `poetry run flet build linux --clear-cache --yes` |
+| `pyconfig.h: '_POSIX_C_SOURCE' macro redefined [-Werror,-Wmacro-redefined]` | Newer clang/glibc (e.g. openSUSE Tumbleweed) with Flutter's `-Werror`: `build_desktop.sh` passes `-Wno-error=macro-redefined` and clears the stale CMake cache; building by hand, export `CFLAGS`/`CXXFLAGS` with that flag and delete `build/flutter/build/linux` first |
 | The window opens without the icon in the dock | Log out and back in once (the desktop caches icons); check `~/.local/share/applications/io.metadesk.champ.desktop` |
 
 ---

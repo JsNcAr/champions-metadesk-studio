@@ -33,6 +33,16 @@ trap on_exit EXIT
 echo "== icons" | tee "${LOG}"
 "${PYTHON}" scripts/build_icons.py 2>&1 | tee -a "${LOG}"
 
+if [[ "${TARGET}" == "linux" ]]; then
+  # Flutter's Linux build compiles with -Werror, and the embedded Python's pyconfig.h redefines
+  # _POSIX_C_SOURCE/_XOPEN_SOURCE that newer glibc/clang already define: a harmless warning made fatal
+  # (seen on openSUSE Tumbleweed with clang 23). Keep it a warning; CMake reads these on configure.
+  export CFLAGS="${CFLAGS:-} -Wno-error=macro-redefined"
+  export CXXFLAGS="${CXXFLAGS:-} -Wno-error=macro-redefined"
+  # A configure from an earlier attempt keeps its old flags in CMakeCache.txt: start it fresh.
+  rm -rf build/flutter/build/linux
+fi
+
 echo "== flet build ${TARGET} (build ${BUILD_NUMBER})" | tee -a "${LOG}"
 poetry run flet build "${TARGET}" --yes --build-number "${BUILD_NUMBER}" -o "dist/${TARGET}" 2>&1 | tee -a "${LOG}"
 doctor

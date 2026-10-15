@@ -19,6 +19,11 @@ for the headings and style.
   Windows and `~/.local/share/champions-metadesk-studio` on Linux (macOS already used
   Application Support). The first launch copies your existing data over and leaves the old
   files in place. Running from source still uses the working directory.
+- **A log file for bug reports.** Warnings, failed syncs and crashes are now written to
+  `logs/app.log` in the data folder (rotated, at most about 4 MB) instead of a console a
+  downloaded build doesn't have. A background task that fails is logged with its traceback,
+  and so is a crash in any thread. Settings › About shows the data folder and the log file,
+  each with a button that opens the folder. Nothing is sent anywhere.
 - Box exports from a downloaded build are saved to your Downloads folder, and the message
   shows the full path, instead of the folder the app was started from.
 

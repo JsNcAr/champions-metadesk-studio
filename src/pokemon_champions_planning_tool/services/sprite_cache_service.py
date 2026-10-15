@@ -17,6 +17,7 @@ one-launch delay any newly-discovered sprite already has. See ``_try_fallback_do
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import threading
 import weakref
@@ -34,6 +35,8 @@ from ..domain.pokemon_identity import (
     get_showdown_ani_sprite_url,
     get_showdown_sprite_slug,
 )
+
+log = logging.getLogger(__name__)
 
 
 # What counts as a cached sprite. Anything else in the folder (the tracked .gitkeep, a
@@ -232,12 +235,12 @@ class SpriteCacheService:
         try:
             ok = self.download_sprite_sync(url, filename)
         except Exception:  # noqa: BLE001 - background downloads are best-effort
-            pass
+            log.debug("Sprite download failed: %s", url, exc_info=True)
         if not ok:   # a network error on the primary still gets the fallback a try
             try:
                 ok = self._try_fallback_download(url, filename)
             except Exception:  # noqa: BLE001
-                pass
+                log.debug("Sprite fallback download failed: %s", url, exc_info=True)
         with self._lock:
             self._in_flight.discard(filename)
             if not ok:

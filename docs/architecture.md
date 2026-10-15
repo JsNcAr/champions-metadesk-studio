@@ -214,7 +214,11 @@ This layer is responsible for talking to external systems and reading or writing
 ```text
 src/pokemon_champions_planning_tool/
   __init__.py
-  main.py
+  main.py         launch: data folder, logging, older data copied in, schema, then the GUI or CLI
+  config.py       paths (DATA_DIR: the working directory from source, the per-user folder when packaged), URLs, limits
+  storage.py      prepare_data_dir, migrate_legacy_data (SQLite backup API; the originals stay)
+  logs.py         setup_logging: rotating logs/app.log beside the database, stdout when there is one,
+                  sys/threading excepthooks; modules log through logging.getLogger(__name__)
   ui/
     __init__.py
     ...
@@ -233,6 +237,10 @@ src/pokemon_champions_planning_tool/
 - `domain/` contains pure business logic and data rules.
 - `services/` coordinates workflows such as adding a Pokemon or building a team.
 - `infrastructure/` contains API clients, persistence, and CSV export helpers.
+- Logging: every module logs through `logging.getLogger(__name__)` (no `print`, except the
+  `--cli` shell's own output). `run_in_background` logs a failed task with its traceback before
+  handing it to `on_error`, so a handler that ignores the error still leaves a trace.
+  Expected network failures are warnings without a traceback; anything unexpected keeps it.
 
 The repository is fully implemented using these package layers. The Flet GUI in `ui/`
 is the primary interface; the interactive terminal shell in `services/terminal_shell.py`

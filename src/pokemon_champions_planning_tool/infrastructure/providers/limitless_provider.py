@@ -26,6 +26,7 @@ Real API shape (verified 2026-08-31):
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -46,6 +47,8 @@ from ...config import (
     TOURNAMENT_USER_AGENT,
 )
 from ...domain.pokemon_identity import _CHAMPIONS_REG_RE, classify_battle_format
+
+log = logging.getLogger(__name__)
 
 # Standings requests per batch unless the rate budget runs out first.
 _MAX_STANDINGS_PER_SYNC = LIMITLESS_STANDINGS_PER_RUN
@@ -186,7 +189,7 @@ class LimitlessProvider:
                 if status == 429:
                     delay = float(retry_after) if retry_after.isdigit() else float(self.rate_reset_s or attempt * 5)
                     delay = min(max(delay, 1.0), 90.0)
-                    print(f"⚠️ Limitless API rate-limited (HTTP 429). Waiting {delay:.0f}s before retry {attempt}/{retries}…")
+                    log.warning(f"Limitless API rate-limited (HTTP 429). Waiting {delay:.0f}s before retry {attempt}/{retries}…")
                 else:
                     delay = attempt * 1.5
                 time.sleep(delay)
@@ -227,7 +230,7 @@ class LimitlessProvider:
             try:
                 data = self._get("/tournaments", {"game": "VGC", "limit": LIMITLESS_PAGE_SIZE, "page": page})
             except LimitlessNetworkError as exc:
-                print(f"⚠️ Limitless tourneys page {page} fetch failed: {exc}")
+                log.warning(f"Limitless tourneys page {page} fetch failed: {exc}")
                 break
 
             if not isinstance(data, list) or not data:
@@ -277,7 +280,7 @@ class LimitlessProvider:
                             )
                         )
                 except Exception as exc:
-                    print(f"⚠️ Skipping malformed Limitless tourney item: {exc}")
+                    log.warning(f"Skipping malformed Limitless tourney item: {exc}")
                     continue
 
             if known and not page_has_new:
@@ -315,7 +318,7 @@ class LimitlessProvider:
         except LimitlessNetworkError as exc:
             if raise_on_error:
                 raise
-            print(f"⚠️ Failed to fetch standings for Limitless tourney '{tournament_id}': {exc}")
+            log.warning(f"Failed to fetch standings for Limitless tourney '{tournament_id}': {exc}")
             return []
 
         if not isinstance(data, list):
@@ -377,7 +380,7 @@ class LimitlessProvider:
                         )
                     )
             except Exception as exc:
-                print(f"⚠️ Skipping malformed Limitless standing: {exc}")
+                log.warning(f"Skipping malformed Limitless standing: {exc}")
                 continue
 
         return sorted(standings, key=lambda s: s.placement)
@@ -411,11 +414,11 @@ class LimitlessProvider:
         for t_id in tournament_ids:
             if fetched >= max_requests:
                 self.last_batch_stop = "cap"
-                print(f"ℹ️ Limitless: standings batch cap ({max_requests}) reached, stopping early.")
+                log.info(f"Limitless: standings batch cap ({max_requests}) reached, stopping early.")
                 break
             if self.budget is not None and self.budget <= 0:
                 self.last_batch_stop = "rate"
-                print(f"ℹ️ Limitless: rate budget exhausted ({self.rate_remaining} left in window, reserve {self.rate_reserve}); resuming next run.")
+                log.info(f"Limitless: rate budget exhausted ({self.rate_remaining} left in window, reserve {self.rate_reserve}); resuming next run.")
                 break
 
             fetched += 1
@@ -426,7 +429,7 @@ class LimitlessProvider:
                     t_id, max_placement=max_placement, raise_on_error=True
                 )
             except LimitlessNetworkError as exc:
-                print(f"⚠️ Failed to fetch standings for Limitless tourney '{t_id}': {exc}")
+                log.warning(f"Failed to fetch standings for Limitless tourney '{t_id}': {exc}")
 
             if fetched < len(tournament_ids) and fetched < max_requests:
                 time.sleep(delay_between)

@@ -16,11 +16,15 @@ All UI code reads from state dicts — zero DB queries during rendering.
 
 from __future__ import annotations
 
+import logging
+
 from sqlmodel import Session
 
 from ..infrastructure.database.models import ItemRecord
 from ..infrastructure.database.repositories import ItemRepository
 from ..infrastructure.providers import HybridItemProvider
+
+log = logging.getLogger(__name__)
 
 
 def check_items_catalog_staleness(session: Session) -> bool:
@@ -37,7 +41,7 @@ def check_items_catalog_staleness(session: Session) -> bool:
 
     if remote_count == 0:
         # Showdown unreachable — treat as not stale so we don't block startup
-        print("ℹ️ Items: Showdown unreachable; skipping staleness check.")
+        log.info("Items: Showdown unreachable; skipping staleness check.")
         return False
 
     is_stale = remote_count != local_count
@@ -46,13 +50,10 @@ def check_items_catalog_staleness(session: Session) -> bool:
         spritenums = provider.item_spritenums()
         missing = [r for r in repo.list_all() if not r.sprite_url and r.canonical_id.replace("-", "") in spritenums]
         if missing:
-            print(f"🔄 Items: {len(missing)} items have no icon yet; re-syncing to add them.")
+            log.info(f"Items: {len(missing)} items have no icon yet; re-syncing to add them.")
             return True
     if is_stale:
-        print(
-            f"🔄 Items: Showdown reports {remote_count} legal items, "
-            f"local DB has {local_count}. Re-sync needed."
-        )
+        log.info("Items: Showdown reports %s legal items, local DB has %s. Re-sync needed.", remote_count, local_count)
     return is_stale
 
 
@@ -72,7 +73,7 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
     if not force and not check_items_catalog_staleness(session):
         total = repo.count()
         if total > 0:
-            print(f"✅ Items catalog up-to-date in local DB ({total} items).")
+            log.info(f"Items catalog up-to-date in local DB ({total} items).")
             return {"status": "cached", "added": 0, "updated": 0, "total": total}
 
     provider = HybridItemProvider()
@@ -87,7 +88,7 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
     new_records = provider.fetch_item_records(existing_pokeapi_slugs=existing)
 
     if not new_records:
-        print("⚠️ Items: No item data retrieved (offline?). Using cached DB.")
+        log.warning("Items: No item data retrieved (offline?). Using cached DB.")
         return {"status": "offline", "added": 0, "updated": 0, "total": repo.count()}
 
     added = 0
@@ -121,10 +122,7 @@ def sync_items_catalog(session: Session, force: bool = False) -> dict:
     repo.update_meta(total_holdable_items=legal_count)
 
     total = repo.count()
-    print(
-        f"✅ Items catalog synced: {added} added, {updated} updated "
-        f"(Total: {total} items)."
-    )
+    log.info("Items catalog synced: %s added, %s updated (Total: %s items).", added, updated, total)
     return {"status": "synced", "added": added, "updated": updated, "total": total}
 
 
@@ -154,7 +152,4 @@ def load_items_catalog(session: Session, state: dict) -> None:
 
     legal_count = len(state["champions_items"])
     mega_count = sum(len(v) for v in mega_stone_map.values())
-    print(
-        f"✅ Items catalog loaded into state: {legal_count} Champions-legal items, "
-        f"{mega_count} Mega Stone entries."
-    )
+    log.info("Items catalog loaded into state: %s Champions-legal items, %s Mega Stone entries.", legal_count, mega_count)

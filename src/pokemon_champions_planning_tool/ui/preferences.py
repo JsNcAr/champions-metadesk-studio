@@ -8,9 +8,12 @@ starts empty and is overwritten on the next write.
 
 from __future__ import annotations
 
+import logging
 import json
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 
 class Preferences:
@@ -40,7 +43,7 @@ class Preferences:
         try:
             self.path.write_text(json.dumps(self._data, indent=2, sort_keys=True), encoding="utf-8")
         except OSError as exc:
-            print(f"⚠️ Could not save preferences to {self.path}: {exc}")
+            log.warning(f"Could not save preferences to {self.path}: {exc}")
 
 
 __all__ = ["Preferences"]

@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -9,7 +10,10 @@ from pokemon_champions_planning_tool.services.move_catalog_service import sync_m
 from pokemon_champions_planning_tool.services.species_catalog_service import sync_species_catalog_on_startup
 from pokemon_champions_planning_tool.services.pokemon_import_service import refresh_stub_pokemon
 from pokemon_champions_planning_tool.services.terminal_shell import TerminalShell
+from pokemon_champions_planning_tool.logs import setup_logging
 from pokemon_champions_planning_tool.storage import migrate_legacy_data, prepare_data_dir
+
+log = logging.getLogger(__name__)
 
 
 STARTUP_CHECK_HOURS = 24
@@ -97,7 +101,7 @@ def refresh_catalogues(session) -> set[str]:
     try:
         refresh_stub_pokemon(session)
     except Exception as exc:  # noqa: BLE001 - repair is best-effort
-        print(f"⚠️ Box data repair skipped: {exc}")
+        log.warning(f"Box data repair skipped: {exc}")
     return changed
 
 
@@ -114,14 +118,15 @@ def prepare_sprite_cache_dir(path: str | Path = DEFAULT_SPRITE_CACHE_DIR) -> boo
         Path(path).mkdir(parents=True, exist_ok=True)
         return True
     except OSError as exc:
-        print(f"⚠️ Sprite cache disabled: cannot create {path} ({exc}).")
+        log.warning(f"Sprite cache disabled: cannot create {path} ({exc}).")
         return False
 
 
 def run():
-    # The data folder first (a packaged build's per-user folder), then an older packaged
-    # build's data copied into it, then the schema (DDL, migrations).
+    # The data folder first (a packaged build's per-user folder), then the log in it, then
+    # an older packaged build's data copied into it, then the schema (DDL, migrations).
     prepare_data_dir()
+    setup_logging()
     migrate_legacy_data()
     initialize_database()
 

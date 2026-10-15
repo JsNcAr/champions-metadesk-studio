@@ -10,6 +10,7 @@ Services NEVER import ShowdownItemAdapter or the PokéAPI client directly.
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
@@ -19,6 +20,8 @@ from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
 from ...domain.item_sprites import sheet_url
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Known stat modifier map — applied at sync time, zero extra network calls
@@ -93,7 +96,7 @@ def _fetch_pokeapi_item_detail(pokeapi_slug: str) -> dict | None:
         res.raise_for_status()
         return res.json()
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ PokéAPI: Could not fetch item '{pokeapi_slug}': {e}")
+        log.warning(f"PokéAPI: Could not fetch item '{pokeapi_slug}': {e}")
         return None
 
 

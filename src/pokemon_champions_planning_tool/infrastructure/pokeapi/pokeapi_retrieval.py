@@ -1,5 +1,6 @@
 """PokéAPI adapter for Pokemon stat retrieval."""
 
+import logging
 from functools import lru_cache
 import requests
 
@@ -15,6 +16,8 @@ from ...domain.pokemon_identity import (
 )
 from ...domain.species import CANONICAL_ALIASES
 from ..database.models import MegaEvolutionRecord
+
+log = logging.getLogger(__name__)
 
 
 class PokeApiUnavailable(Exception):
@@ -152,7 +155,7 @@ def get_champions_pokedex_species(pokedex_name: str = "champions") -> list[dict]
                 })
         return entries
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Network error fetching {pokedex_name} Pokédex catalog: {e}")
+        log.warning(f"Network error fetching {pokedex_name} Pokédex catalog: {e}")
         return []
 
 
@@ -172,7 +175,7 @@ def get_mega_varieties_for_species(species_name: str) -> list[str]:
                 mega_names.append(v_name)
         return mega_names
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Network error checking Mega varieties for '{species_name}': {e}")
+        log.warning(f"Network error checking Mega varieties for '{species_name}': {e}")
         return []
 
 
@@ -209,7 +212,7 @@ def get_official_mega_details(mega_api_name: str) -> MegaEvolutionRecord | None:
             ability=ability,
         )
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ Network error fetching Mega details for '{mega_api_name}': {e}")
+        log.warning(f"Network error fetching Mega details for '{mega_api_name}': {e}")
         return None
 
 

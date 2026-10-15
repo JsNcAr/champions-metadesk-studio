@@ -26,6 +26,7 @@ Division handling (verified 2026-09-01):
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -39,6 +40,8 @@ from ...config import (
     TOURNAMENT_USER_AGENT,
     VICTORY_ROAD_BASE_URL,
 )
+
+log = logging.getLogger(__name__)
 
 # Known official premier events maintained as static registry
 OFFICIAL_EVENT_SLUGS: list[dict[str, Any]] = [
@@ -317,7 +320,7 @@ class VictoryRoadProvider:
                 return resp.content.decode("utf-8", errors="ignore")
             except Exception as exc:
                 if attempt < retries:
-                    print(f"⚠️ Victory Road fetch attempt {attempt} failed ({exc}). Retrying in 2.0s...")
+                    log.warning(f"Victory Road fetch attempt {attempt} failed ({exc}). Retrying in 2.0s...")
                     time.sleep(2.0)
                     continue
                 raise VictoryRoadNetworkError(f"HTTP GET failed for '{url}': {exc}") from exc
@@ -380,7 +383,7 @@ class VictoryRoadProvider:
         try:
             html = self._fetch_html(url)
         except VictoryRoadNetworkError as exc:
-            print(f"⚠️ Victory Road scraper: network error fetching '{slug}': {exc}")
+            log.warning(f"Victory Road scraper: network error fetching '{slug}': {exc}")
             self.last_fetch_failed = True
             return None
 
@@ -391,10 +394,8 @@ class VictoryRoadProvider:
             standings = [s for s in standings if s.division == DIVISION_MASTERS]
             dropped = total - len(standings)
             if dropped:
-                print(
-                    f"ℹ️ Victory Road scraper: '{slug}' — kept {len(standings)} Masters "
-                    f"entries, dropped {dropped} Senior/Junior entries."
-                )
+                log.info("Victory Road scraper: '%s' — kept %s Masters entries, dropped %s Senior/Junior entries.",
+                         slug, len(standings), dropped)
 
         if not standings:
             # No results table with team pastes yet (typical for a few days after an event).

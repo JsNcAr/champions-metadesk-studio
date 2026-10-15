@@ -132,6 +132,12 @@ and tips.
 Box exports go to `pokemon_team_stats.csv` (in the working directory from source, in Downloads
 in a downloaded build): the CLI keeps it in sync with the box, and the GUI writes it when you export.
 
+## Reporting a bug
+
+Open an [issue](https://github.com/JsNcAr/champions-metadesk-studio/issues) with what you did and
+what happened, and attach the app's log: **Settings › About › Log file › Open folder**, then
+`app.log`. The log stays on your computer unless you share it; the app sends nothing anywhere.
+
 ## Development
 
 ```bash

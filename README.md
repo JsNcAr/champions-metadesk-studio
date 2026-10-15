@@ -91,6 +91,19 @@ Standalone builds for Windows, macOS and Linux are attached to every
 [release](https://github.com/JsNcAr/champions-metadesk-studio/releases/latest). No Python
 needed. Release notes are in the [changelog](CHANGELOG.md).
 
+**First launch.** The builds are not code-signed yet, so the system warns the first time:
+
+- **Windows:** "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **macOS** (Apple Silicon): "can't be opened because Apple cannot check it" or "is damaged".
+  Try to open it once, then **System Settings › Privacy & Security › Open Anyway**. On macOS 14
+  and older, right-click the app and choose **Open**. If it still refuses:
+  `xattr -dr com.apple.quarantine /path/to/ChampionsMetaDeskStudio.app`.
+- **Linux:** `tar -xzf champions-metadesk-linux-x64.tar.gz && ./champions-metadesk`. It needs
+  GTK 3 and libmpv (`sudo apt install libgtk-3-0 libmpv2` on current Debian and Ubuntu; `libmpv1` on older ones).
+
+Each release lists the archives' checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt`
+on Linux, `shasum -a 256` on macOS, `Get-FileHash` on Windows).
+
 A downloaded build keeps your data in your user folder, wherever you start it from:
 
 | OS | Data folder |

@@ -12,6 +12,10 @@ for the headings and style.
 
 ### Added
 
+- **Install help with every release.** Each GitHub release now ends with an Installing
+  section that explains the Windows and macOS first-launch warnings (the builds aren't
+  code-signed yet), and lists the archives' checksums in `SHA256SUMS.txt`. The release
+  workflow is ready to sign and notarize as soon as signing credentials are added.
 - **Backup & restore** in Settings. Back up now saves one zip with your box, teams, plans,
   rival presets, formats and settings (to Downloads in a downloaded build). Restore… lists
   the backups it finds or takes a path, checks the backup, and replaces your data the next

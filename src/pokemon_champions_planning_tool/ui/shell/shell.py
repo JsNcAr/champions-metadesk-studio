@@ -14,12 +14,14 @@ from dataclasses import dataclass, field
 
 import flet as ft
 
+from ...brand import rail_image
+from ...config import APP_NAME
 from ..components.banner import InlineBanner
 from ..context import AppContext
 from ..events import NAVIGATE
 from ..format import MAC, shortcut
 from ..tasks import is_mounted, skip_auto_update
-from ..theme import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Motion, Palette, Radius, Space
+from ..theme import DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, IconSize, Layout, Motion, Palette, Space
 
 ViewFactory = Callable[[], ft.Control]
 
@@ -51,6 +53,14 @@ _FADE_MS = Motion.FAST_MS
 
 # Keys reachable with Ctrl+<digit>, in rail order.
 _DIGIT_KEYS = ("1", "2", "3", "4", "5", "6", "7", "8", "9")
+
+
+def _logo() -> ft.Control:
+    """The app's logo (the crimson tile) at the top of the rail; the app's name if the file is missing."""
+    data = rail_image()
+    if data is None:
+        return ft.Text("MD", weight=ft.FontWeight.W_700, color=Palette.ON_SURFACE)
+    return ft.Image(src=data, width=40, height=40, fit=ft.BoxFit.CONTAIN, data={"brand": "rail"})
 
 
 class AppShell(ft.Row):
@@ -87,12 +97,11 @@ class AppShell(ft.Row):
             min_width=Layout.RAIL_WIDTH,
             group_alignment=-1.0,
             leading=ft.Container(
-                content=ft.Icon(ft.Icons.CATCHING_POKEMON, color=Palette.PRIMARY, size=IconSize.LG),
+                content=_logo(),
                 width=40,
                 height=40,
                 alignment=ft.Alignment.CENTER,
-                bgcolor=Palette.SURFACE_2,
-                border_radius=Radius.MD,
+                tooltip=APP_NAME,
                 margin=ft.Margin.only(top=Space.MD, bottom=Space.SM),
             ),
             trailing=ft.Container(

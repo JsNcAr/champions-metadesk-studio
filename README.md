@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/lockup-horizontal-dark.svg">
+    <img src="assets/brand/lockup-horizontal.svg" alt="Champions MetaDesk Studio" width="420">
+  </picture>
+</p>
+
 # Champions MetaDesk Studio
 
 **A desktop and web workbench for competitive Pokémon Champions (VGC) players: your box, your

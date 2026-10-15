@@ -6,6 +6,7 @@ from pathlib import Path
 
 import flet as ft
 
+from ..brand import WINDOW_ICON
 from ..config import APP_NAME, DEFAULT_PREFERENCES_FILENAME
 from ..infrastructure.database.database import get_session
 from ..services.tournament_service import TournamentService
@@ -153,6 +154,8 @@ def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
 
 def main(page: ft.Page) -> None:
     page.title = APP_NAME
+    if not getattr(page, "web", False) and WINDOW_ICON.is_file():   # stand-in pages (smoke test) have no `web`
+        page.window.icon = str(WINDOW_ICON)   # the taskbar and title-bar icon (Flet applies it on Windows)
     apply_theme(page)
     page.padding = 0
 

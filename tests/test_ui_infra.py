@@ -110,9 +110,12 @@ class TestRunInBackground(unittest.TestCase):
         def work():
             raise ValueError("nope")
 
-        run_in_background(page, work, on_done=lambda _: self.fail("on_done must not run"), on_error=errors.append, busy=[button])
+        with self.assertLogs("pokemon_champions_planning_tool.ui.tasks", "ERROR") as logs:
+            run_in_background(page, work, on_done=lambda _: self.fail("on_done must not run"), on_error=errors.append, busy=[button])
         self.assertEqual([type(e) for e in errors], [ValueError])
         self.assertFalse(button.disabled)
+        self.assertIn("work failed", logs.output[0], "logged with its name, even though on_error handled it")
+        self.assertIn("ValueError: nope", logs.output[0], "with the traceback")
 
     def test_error_without_handler_shows_error_toast(self):
         page = StubPage()

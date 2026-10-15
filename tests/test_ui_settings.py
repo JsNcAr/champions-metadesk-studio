@@ -215,18 +215,45 @@ class TestSettingsView(unittest.TestCase):
         self.assertIn("1 event", self.view.row_tournaments._status.value)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestAbout(unittest.TestCase):
     def test_about_names_the_license_and_the_trademark_disclaimer(self):
         from pokemon_champions_planning_tool.config import DISCLAIMER
 
         rows = dict(SettingsView._about_rows())
         self.assertIn("MIT", rows["License"].content)
+        self.assertIn("Data folder", rows)
+        self.assertIn("Log file", rows)
         self.assertEqual(rows["Disclaimer"].value, DISCLAIMER)
         for owner in ("Nintendo", "Game Freak", "Creatures Inc.", "The Pokémon Company"):
             self.assertIn(owner, DISCLAIMER)
         notice = (Path(__file__).resolve().parents[1] / "NOTICE.md").read_text()
         self.assertIn(DISCLAIMER.split(". ")[1], notice.replace("\n", " "), "NOTICE.md carries the same disclaimer")
+
+    def test_the_folder_buttons_open_the_data_and_log_folders(self):
+        from pokemon_champions_planning_tool.config import DEFAULT_DATABASE_FILENAME
+
+        opened = []
+        rows = dict(SettingsView._about_rows(on_open=opened.append))
+        for key in ("Data folder", "Log file"):
+            button = rows[key].controls[1]
+            button.on_click(None)
+        self.assertEqual(opened[0], Path(DEFAULT_DATABASE_FILENAME).resolve().parent)
+        self.assertEqual(opened[1].name, "logs")
+
+
+class TestReveal(unittest.TestCase):
+    def test_opens_the_folder_with_the_platform_file_manager(self):
+        from unittest.mock import patch
+
+        from pokemon_champions_planning_tool.ui import tasks
+
+        with patch.object(tasks.sys, "platform", "linux"), patch.object(tasks.subprocess, "run") as run:
+            tasks.reveal("/data/folder")
+        self.assertEqual(run.call_args.args[0], ["xdg-open", str(Path("/data/folder"))])
+        with patch.object(tasks.sys, "platform", "linux"), patch.object(tasks.subprocess, "run", side_effect=FileNotFoundError("xdg-open")):
+            with self.assertRaises(OSError):
+                tasks.reveal("/data/folder")
+
+
+if __name__ == "__main__":
+    unittest.main()

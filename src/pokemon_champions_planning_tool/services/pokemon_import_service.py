@@ -6,12 +6,16 @@ resulting box entry; callers decide about side effects such as the CSV export.
 
 from __future__ import annotations
 
+import logging
+
 from ..domain.entities.box_entry import BoxEntry
 from ..domain.entities.pokemon import Pokemon
 from ..domain.pokemon_identity import format_api_name
 from ..infrastructure.database.database import get_session
 from ..infrastructure.database.repositories import BoxRepository, PokemonRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import PokeApiUnavailable, get_official_stats
+
+log = logging.getLogger(__name__)
 
 
 class PokemonNotFoundError(LookupError):
@@ -87,13 +91,14 @@ def refresh_stub_pokemon(session) -> dict:
         try:
             fetched = get_official_stats(display_name) or get_official_stats(canonical_id)
         except PokeApiUnavailable as exc:
-            print(f"⚠️ Box data repair paused: {exc}")
+            log.warning(f"Box data repair paused: {exc}")
             break  # the network is the problem, not the name: stop asking
         if fetched:
             pokemon_repo.upsert(fetched)
             repaired += 1
     if stubs:
-        print(f"{'✅' if repaired == len(stubs) else '⚠️'} Box data repair: {repaired} of {len(stubs)} placeholder Pokémon re-fetched.")
+        log.log(logging.INFO if repaired == len(stubs) else logging.WARNING,
+                "Box data repair: %s of %s placeholder Pokémon re-fetched.", repaired, len(stubs))
     return {"stubs": len(stubs), "repaired": repaired}
 
 

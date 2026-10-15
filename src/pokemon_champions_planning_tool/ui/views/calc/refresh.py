@@ -8,11 +8,14 @@ compute (no attacker, no team…) the result is cleared at once instead.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from ...context import AppContext
 from ...tasks import Debouncer
+
+log = logging.getLogger(__name__)
 
 Progress = Callable[[Any], None]
 
@@ -110,7 +113,7 @@ class BackgroundRefresh:
             self.running = False
             self._busy(False)
             self._on_error()
-            print(f"⚠️ {self.name} failed: {exc}")
+            log.warning(f"{self.name} failed: {exc}", exc_info=exc)
 
         try:
             self.ctx.run_in_background(work, on_done=done, on_error=failed)

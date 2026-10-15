@@ -8,11 +8,13 @@ from typing import Any
 
 import flet as ft
 
-from ....config import DEFAULT_CSV_FILENAME, DEFAULT_DATABASE_FILENAME, DISCLAIMER
+from ....config import DEFAULT_CSV_FILENAME, DEFAULT_DATABASE_FILENAME, DISCLAIMER, LOG_DIR
+from ....logs import LOG_FILENAME, log_file
 from ... import events
 from ...components import KeyValueList, PageHeader, Panel, SectionHeader
 from ...context import AppContext
 from ...format import absolute_time, plural, relative_time
+from ...tasks import reveal
 from ...theme import Accent, IconSize, Palette, Radius, Space
 from .format_panel import FormatDialog, FormatPanel
 from .store import SettingsStatus, SettingsStore
@@ -113,7 +115,7 @@ class SettingsView(ft.Column):
         self.row_health = SyncRow(ft.Icons.HEALTH_AND_SAFETY_OUTLINED, "Data health", lambda: self._sync("health"), button_label="Repair")
         self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "sprites": self.row_sprites, "health": self.row_health}
 
-        self.about = KeyValueList(self._about_rows())
+        self.about = KeyValueList(self._about_rows(on_open=self._open_folder))
 
         self.formats = FormatPanel(registry=ctx.formats, on_edit=self._edit_format, on_delete=self._delete_format, on_default=self._set_default_format)
         self._format_dropdown = ft.Dropdown(
@@ -314,9 +316,25 @@ class SettingsView(ft.Column):
         except RuntimeError:
             return False
 
+    def _open_folder(self, folder: Path) -> None:
+        try:
+            reveal(folder)
+        except OSError as exc:
+            self.ctx.toast(f"Couldn't open the folder: {exc}. It is {folder}", "warning")
+
     @staticmethod
-    def _about_rows() -> list[tuple[str, str | ft.Control]]:
+    def _about_rows(on_open: Callable[[Path], None] | None = None) -> list[tuple[str, str | ft.Control]]:
         from pokemon_champions_planning_tool import __version__ as app_version
+
+        def path_row(path: Path, folder: Path, button: str) -> ft.Control:
+            return ft.Column(spacing=0, tight=True, horizontal_alignment=ft.CrossAxisAlignment.START, controls=[
+                ft.Text(str(path), selectable=True, theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE),
+                ft.TextButton(button, icon=ft.Icons.FOLDER_OPEN_OUTLINED, data={"open": str(folder)},
+                              on_click=lambda _e: on_open(folder) if on_open else None),
+            ])
+
+        data_folder = Path(DEFAULT_DATABASE_FILENAME).resolve().parent
+        log_path = log_file() or (Path(LOG_DIR) / LOG_FILENAME).resolve()
         sources = ft.Row(
             wrap=True,
             spacing=Space.SM,
@@ -329,7 +347,8 @@ class SettingsView(ft.Column):
         )
         return [
             ("Version", app_version),
-            ("Database", str(Path(DEFAULT_DATABASE_FILENAME).resolve())),
+            ("Data folder", path_row(data_folder, data_folder, "Open")),
+            ("Log file", path_row(log_path, log_path.parent, "Open folder")),
             ("CSV export", str(Path(DEFAULT_CSV_FILENAME).resolve())),
             ("Data sources", sources),
             ("License", ft.TextButton("MIT · third-party notices", url="https://github.com/JsNcAr/champions-metadesk-studio/blob/main/NOTICE.md")),

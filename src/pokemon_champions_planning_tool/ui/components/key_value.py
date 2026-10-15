@@ -24,7 +24,7 @@ class KeyValueList(ft.Column):
         value_control = (
             ft.Text(value, theme_style=ft.TextThemeStyle.BODY_MEDIUM, color=Palette.ON_SURFACE, selectable=True, expand=True)
             if isinstance(value, str)
-            else value
+            else ft.Container(content=value, expand=True, alignment=ft.Alignment.TOP_LEFT)   # the rest of the width, so long text wraps
         )
         return ft.Row(
             vertical_alignment=ft.CrossAxisAlignment.START,

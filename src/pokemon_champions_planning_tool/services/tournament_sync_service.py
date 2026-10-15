@@ -12,6 +12,7 @@ Standardizes and normalizes all ingested data into SQLModel entities:
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -53,6 +54,8 @@ from ..infrastructure.providers import (
 )
 from .showdown_service import parse_showdown_text
 from ..infrastructure.providers.victory_road_provider import OFFICIAL_EVENT_SLUGS
+
+log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[["SyncProgress"], None]
 
@@ -556,7 +559,7 @@ def _sync_victory_road(
             try:
                 events = vr.fetch_season_calendar(season)
             except Exception as exc:  # noqa: BLE001 - discovery is best-effort
-                print(f"⚠️ Victory Road calendar {season} unavailable: {exc}")
+                log.warning(f"Victory Road calendar {season} unavailable: {exc}")
                 continue
             calendar_checked = True
             for ev in events or []:
@@ -591,7 +594,8 @@ def _sync_victory_road(
             # ``is True``: providers without the flag (and test doubles) mean "no team list".
             network_error = getattr(vr, "last_fetch_failed", False) is True
             message, give_up = _vr_no_sheets_message(record, now, network_error)
-            print(message)
+            # The message keeps its ⚠️/ℹ️ prefix for the sync report; the log has the level.
+            log.log(logging.WARNING if message.startswith("⚠️") else logging.INFO, message.split(" ", 1)[1])
             if give_up:
                 repo.mark_standings_synced(t_id, True)
                 repo.set_state(_vr_retry_key(t_id), "")
@@ -641,7 +645,7 @@ def _sync_victory_road(
                     showdown_text = pdata.get("paste", "")
                     members_raw = _parse_showdown_members(showdown_text)
                 except Exception as exc:
-                    print(f"⚠️ Could not fetch Pokepast '{st.paste_id}' for {st.player_name}: {exc}")
+                    log.warning(f"Could not fetch Pokepast '{st.paste_id}' for {st.player_name}: {exc}")
                     paste_errors += 1
                     event_errors += 1
                     continue
@@ -653,7 +657,7 @@ def _sync_victory_road(
                     for m in vr_data.members:
                         members_raw.append((format_api_name(m.display_name), m.display_name))
                 except Exception as exc:
-                    print(f"⚠️ Could not fetch VRPaste '{st.paste_id}' for {st.player_name}: {exc}")
+                    log.warning(f"Could not fetch VRPaste '{st.paste_id}' for {st.player_name}: {exc}")
                     paste_errors += 1
                     event_errors += 1
                     continue

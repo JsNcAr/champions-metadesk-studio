@@ -17,10 +17,17 @@ the old UI spawned a ``threading.Thread`` and mutated controls from it now goes 
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
+import subprocess
+import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import flet as ft
+
+log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -65,8 +72,10 @@ def run_in_background(
     ``work`` receives nothing and returns plain data; it must open its own database
     session and must not touch controls. While it runs, ``busy`` controls are disabled
     and ``spinner`` is made visible; both are restored before the callback runs. If
-    ``work`` raises, ``on_error`` is called instead (defaulting to an error toast).
+    ``work`` raises, ``on_error`` is called instead (defaulting to an error toast); the
+    error and its traceback are logged first, whatever ``on_error`` then does with it.
     """
+    name = getattr(work, "__qualname__", None) or "task"
     for control in busy:
         control.disabled = True
         safe_update(control)
@@ -92,6 +101,7 @@ def run_in_background(
             try:
                 on_done(result)
             except BaseException as callback_exc:  # noqa: BLE001
+                log.error("Background task %s: handling its result failed", name, exc_info=callback_exc)
                 if on_error is not None:
                     on_error(callback_exc)
                 else:
@@ -103,11 +113,26 @@ def run_in_background(
         try:
             result = work()
         except BaseException as exc:  # noqa: BLE001 - surfaced through on_error
+            log.error("Background task %s failed", name, exc_info=exc)
             page.run_task(_finish, None, exc)
         else:
             page.run_task(_finish, result, None)
 
     page.run_thread(_worker)
+
+
+def reveal(path: str | os.PathLike[str]) -> None:
+    """Open a folder in the system file manager (Explorer, Finder, or the desktop's own
+    through xdg-open). Raises ``OSError`` when there is none to open it with."""
+    target = str(Path(path))
+    if sys.platform == "win32":
+        os.startfile(target)  # noqa: S606 - a folder the app owns, not user input
+    else:   # both hand the folder to the file manager and exit straight away
+        try:
+            subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", target], check=True, timeout=10,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.SubprocessError, FileNotFoundError) as exc:
+            raise OSError(f"Couldn't open {target}: {exc}") from exc
 
 
 def open_url(page: ft.Page, url: str) -> None:

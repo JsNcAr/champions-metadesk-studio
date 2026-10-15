@@ -89,6 +89,8 @@ The container downloads all Windows-compatible wheels, installs them into a head
 
 When running the standalone executable:
 
-* **Database Storage**: The application connects to `pokemon_champions.db`. You can override the database path by setting the `PCPT_DATABASE` environment variable.
+* **Data folder**: A frozen build (`sys.frozen`) keeps `pokemon_champions.db`, `preferences.json`, `logs/` and the sprite cache in the per-user folder from `config.user_data_dir()`: `%LOCALAPPDATA%\Champions MetaDesk Studio` on Windows, `~/Library/Application Support/Champions MetaDesk Studio` on macOS, `$XDG_DATA_HOME` or `~/.local/share/champions-metadesk-studio` on Linux. `storage.prepare_data_dir()` creates it at launch. A run from source keeps the working directory. `PCPT_DATABASE` overrides the database path in both.
+* **Older data**: On the first launch with an empty data folder, `storage.migrate_legacy_data()` copies a `pokemon_champions.db` found in the launch folder or beside the executable (through SQLite's backup API, so changes still in its `-wal` file come along) plus its `preferences.json`, and leaves the originals in place. A failed copy is logged and the app starts fresh.
+* **Exports**: Box exports and the CSV go to `~/Downloads` (the home folder if there is none).
 * **User Preferences**: Configuration and UI settings are persisted to `preferences.json` beside the database file.
 * **Seed Data**: Tournaments and reference damage calculation assets are unpacked from the bundled archive automatically on first launch.

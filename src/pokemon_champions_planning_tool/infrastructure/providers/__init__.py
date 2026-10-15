@@ -10,15 +10,18 @@ Services NEVER import ShowdownItemAdapter or the PokéAPI client directly.
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
 import requests
 
-from ...config import POKEAPI_BASE_URL, POKEAPI_TIMEOUT_SECONDS
+from ...config import POKEAPI_BASE_URL, HTTP_HEADERS, POKEAPI_TIMEOUT_SECONDS
 from ...domain.item_sprites import sheet_url
 from ..database.models import ItemRecord
 from ..showdown.showdown_adapter import ShowdownItemAdapter
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Known stat modifier map — applied at sync time, zero extra network calls
@@ -87,13 +90,13 @@ def _fetch_pokeapi_item_detail(pokeapi_slug: str) -> dict | None:
     """Fetches a single item's display metadata from PokéAPI. Returns None on error."""
     try:
         url = f"{POKEAPI_BASE_URL}/item/{pokeapi_slug}"
-        res = requests.get(url, timeout=POKEAPI_TIMEOUT_SECONDS)
+        res = requests.get(url, headers=HTTP_HEADERS, timeout=POKEAPI_TIMEOUT_SECONDS)
         if res.status_code == 404:
             return None
         res.raise_for_status()
         return res.json()
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ PokéAPI: Could not fetch item '{pokeapi_slug}': {e}")
+        log.warning(f"PokéAPI: Could not fetch item '{pokeapi_slug}': {e}")
         return None
 
 

@@ -283,10 +283,7 @@ class TestPrepareSpriteCacheDir(unittest.TestCase):
 
         from pokemon_champions_planning_tool.main import prepare_sprite_cache_dir
 
-        import contextlib
-        import io
-
         with mock.patch.object(Path, "mkdir", side_effect=PermissionError(13, "Read-only file system")), \
-                contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertLogs("pokemon_champions_planning_tool.main", "WARNING") as logs:
             self.assertFalse(prepare_sprite_cache_dir("/assets/sprites"))
-        self.assertIn("Sprite cache disabled", out.getvalue())
+        self.assertIn("Sprite cache disabled", logs.output[0])

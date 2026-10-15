@@ -10,6 +10,27 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Downloaded builds keep your data in your user folder.** On Windows and Linux the app kept
+  its database, preferences and sprites in whatever folder it was started from, so a
+  different shortcut showed an empty app, and a read-only folder (such as Program Files)
+  stopped it from saving at all. It now uses `%LOCALAPPDATA%\Champions MetaDesk Studio` on
+  Windows and `~/.local/share/champions-metadesk-studio` on Linux (macOS already used
+  Application Support). The first launch copies your existing data over and leaves the old
+  files in place. Running from source still uses the working directory.
+- **A log file for bug reports.** Warnings, failed syncs and crashes are now written to
+  `logs/app.log` in the data folder (rotated, at most about 4 MB) instead of a console a
+  downloaded build doesn't have. A background task that fails is logged with its traceback,
+  and so is a crash in any thread. Settings › About shows the data folder and the log file,
+  each with a button that opens the folder. Nothing is sent anywhere.
+- **The app identifies itself to the sites it reads.** Victory Road requests were sent with a
+  Chrome browser User-Agent; every request (Victory Road, Limitless, Pokepast, VRPaste,
+  Showdown, PokéAPI, sprites) now sends `ChampionsMetaDeskStudio/<version>` with a link to
+  this repository, so site owners can see what is calling them and who to contact.
+- Box exports from a downloaded build are saved to your Downloads folder, and the message
+  shows the full path, instead of the folder the app was started from.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

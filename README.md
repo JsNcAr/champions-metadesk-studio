@@ -91,6 +91,18 @@ Standalone builds for Windows, macOS and Linux are attached to every
 [release](https://github.com/JsNcAr/champions-metadesk-studio/releases/latest). No Python
 needed. Release notes are in the [changelog](CHANGELOG.md).
 
+A downloaded build keeps your data in your user folder, wherever you start it from:
+
+| OS | Data folder |
+|---|---|
+| Windows | `%LOCALAPPDATA%\Champions MetaDesk Studio` |
+| macOS | `~/Library/Application Support/Champions MetaDesk Studio` |
+| Linux | `~/.local/share/champions-metadesk-studio` (or `$XDG_DATA_HOME`) |
+
+Earlier builds kept it beside the program on Windows and Linux; the first launch of a newer
+build copies that database and its preferences over and leaves the old files in place.
+Settings › About shows the folder and opens it. Box exports go to your Downloads folder.
+
 ## Run from source
 
 Requires Python 3.13 and [Poetry](https://python-poetry.org).
@@ -111,14 +123,20 @@ and tips.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PCPT_DATABASE` | `pokemon_champions.db` (working directory) | Path of the SQLite database file. |
+| `PCPT_DATABASE` | `pokemon_champions.db` in the data folder: the working directory from source, your user folder in a downloaded build | Path of the SQLite database file. |
 | `PCPT_PREFERENCES` | `preferences.json` beside the database | Path of the view-preferences file. |
 | `PCPT_VR_MAX_PLACEMENT` | `64` | Placements ingested per official event from Victory Road. |
-| `PCPT_ASSETS_DIR` | `assets` (working directory) | Directory the app serves static assets from. |
+| `PCPT_ASSETS_DIR` | `assets` in the data folder | Directory the app serves static assets from. |
 | `PCPT_SPRITE_CACHE_DIR` | `sprites` inside the assets directory | Where downloaded sprites are cached. Keep it inside the assets directory. |
 
-Box exports go to `pokemon_team_stats.csv`: the CLI keeps it in sync with the box, and the GUI
-writes it when you export.
+Box exports go to `pokemon_team_stats.csv` (in the working directory from source, in Downloads
+in a downloaded build): the CLI keeps it in sync with the box, and the GUI writes it when you export.
+
+## Reporting a bug
+
+Open an [issue](https://github.com/JsNcAr/champions-metadesk-studio/issues) with what you did and
+what happened, and attach the app's log: **Settings › About › Log file › Open folder**, then
+`app.log`. The log stays on your computer unless you share it; the app sends nothing anywhere.
 
 ## Development
 

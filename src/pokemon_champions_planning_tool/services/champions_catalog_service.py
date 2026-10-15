@@ -1,8 +1,12 @@
 """Service for syncing and managing the local Champions Pokédex species catalog."""
 
+import logging
+
 from sqlmodel import Session
 from ..infrastructure.database.repositories import ChampionsCatalogRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import get_champions_pokedex_species
+
+log = logging.getLogger(__name__)
 
 
 def sync_champions_catalog_on_startup(session: Session, pokedex_name: str = "champions") -> dict:
@@ -17,14 +21,14 @@ def sync_champions_catalog_on_startup(session: Session, pokedex_name: str = "cha
 
     if not remote_entries:
         existing_count = len(repo.list_all())
-        print(f"ℹ️ Could not fetch remote {pokedex_name} Pokédex; using cached local DB catalog ({existing_count} species).")
+        log.info(f"Could not fetch remote {pokedex_name} Pokédex; using cached local DB catalog ({existing_count} species).")
         return {"status": "offline_cached", "added": 0, "total_local": existing_count}
 
     result = repo.sync_species_entries(remote_entries)
     added = result["added"]
     if added > 0:
-        print(f"✅ Champions Pokédex catalog synced: Added {added} new species to local DB (Total: {result['total_remote']}).")
+        log.info(f"Champions Pokédex catalog synced: Added {added} new species to local DB (Total: {result['total_remote']}).")
     else:
-        print(f"✅ Champions Pokédex catalog up-to-date in local DB ({result['total_remote']} species).")
+        log.info(f"Champions Pokédex catalog up-to-date in local DB ({result['total_remote']} species).")
 
     return result

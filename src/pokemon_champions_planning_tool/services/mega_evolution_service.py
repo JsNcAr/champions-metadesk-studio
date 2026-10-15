@@ -1,8 +1,12 @@
 """Service for discovering, syncing, and caching Mega Evolutions in SQLite."""
 
+import logging
+
 from sqlmodel import Session
 from ..infrastructure.database.repositories import ChampionsCatalogRepository, MegaEvolutionRepository
 from ..infrastructure.pokeapi.pokeapi_retrieval import get_mega_varieties_for_species, get_official_mega_details
+
+log = logging.getLogger(__name__)
 
 
 def sync_mega_evolutions_for_species(session: Session, species_name: str) -> list:
@@ -56,9 +60,9 @@ def sync_all_champions_megas_on_startup(session: Session) -> dict:
 
     total_now = len(mega_repo.list_all())
     if added_count > 0:
-        print(f"✅ Mega Evolutions catalog synced: Added {added_count} Mega forms to local DB (Total: {total_now}).")
+        log.info(f"Mega Evolutions catalog synced: Added {added_count} Mega forms to local DB (Total: {total_now}).")
     else:
-        print(f"✅ Mega Evolutions catalog up-to-date in local DB ({total_now} Mega forms).")
+        log.info(f"Mega Evolutions catalog up-to-date in local DB ({total_now} Mega forms).")
 
     return {
         "added": added_count,

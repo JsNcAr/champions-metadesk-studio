@@ -10,6 +10,13 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Changed
+
+- **The app has its own logo.** A crimson tile with a split disc: the two sides of a matchup, with the hit
+  that lands first. It replaces the Poké Ball icon at the top of the menu rail, and it's the icon of the
+  Windows, macOS and Linux builds, the browser tab in the web version and an installed web app. The
+  masters, lockups and a short usage guide are in `assets/brand/`.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

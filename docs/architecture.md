@@ -215,6 +215,7 @@ This layer is responsible for talking to external systems and reading or writing
 src/pokemon_champions_planning_tool/
   __init__.py
   main.py
+  brand.py        the logo files the app ships (data/brand): the rail image, the window icon, the web icons
   ui/
     __init__.py
     ...

@@ -11,6 +11,13 @@ Pokémon character names are trademarks of their respective owners. No Pokémon 
 artwork are distributed with this project: sprites are loaded at runtime from Pokémon Showdown
 and cached on the user's machine.
 
+## The logo
+
+The Champions MetaDesk Studio logo (the files in `assets/brand/`, the icons in `packaging/icons/` and
+`src/pokemon_champions_planning_tool/data/brand/`) is original artwork made for this project. The
+wordmark is drawn from Roboto (Apache License 2.0), converted to outlines and modified. See
+`assets/brand/guidelines.md` for how to use it.
+
 ## Smogon damage calculator
 
 `src/pokemon_champions_planning_tool/domain/damage/` is a Python port of the Pokémon Champions

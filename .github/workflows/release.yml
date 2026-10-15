@@ -106,6 +106,7 @@ jobs:
           poetry run flet pack run.py \
             -n "champions-metadesk" \
             --product-name "Champions MetaDesk Studio" \
+            --icon packaging/icons/app.ico \
             --product-version "$APP_VERSION" \
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \
             --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json:pokemon_champions_planning_tool/domain/damage" \
@@ -120,7 +121,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
+          poetry run flet pack run.py -n "champions-metadesk" --product-name "Champions MetaDesk Studio" --icon packaging/icons/app.ico --product-version "$env:APP_VERSION" --add-data "src/pokemon_champions_planning_tool/data;pokemon_champions_planning_tool/data" --add-data "src/pokemon_champions_planning_tool/domain/damage/reference_data.json;pokemon_champions_planning_tool/domain/damage" -y
           Compress-Archive -Path dist\champions-metadesk.exe, LICENSE, NOTICE.md -DestinationPath dist\champions-metadesk-windows-x64.zip
 
       # --- Build macOS ---
@@ -130,6 +131,7 @@ jobs:
           poetry run flet pack run.py \
             -n "ChampionsMetaDeskStudio" \
             --product-name "Champions MetaDesk Studio" \
+            --icon packaging/icons/app.icns \
             --product-version "$APP_VERSION" \
             --bundle-id "com.champions.metadesk" \
             --add-data "src/pokemon_champions_planning_tool/data:pokemon_champions_planning_tool/data" \

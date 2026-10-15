@@ -213,6 +213,13 @@ fallback is only as good as the subjects, so write summaries a user could unders
   Or paste the section into **Edit release** on GitHub. The annotated tag keeps the
   original text; that is expected.
 
+## The app icon
+
+The builds take their icon from `packaging/icons/` (`app.ico` for Windows and Linux, `app.icns` for macOS).
+Both are packed from the PNGs in `assets/brand/png/` by `python scripts/build_icons.py`, which also refreshes the
+icons the app ships in `src/pokemon_champions_planning_tool/data/brand/`. After changing the logo, re-render
+those PNGs from `assets/brand/tile.svg` (16–48 px from `tile-small.svg`) and run the script.
+
 ## Troubleshooting
 
 | Problem | What to do |

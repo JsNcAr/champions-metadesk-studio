@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from pokemon_champions_planning_tool.brand import install_web_icons
+from pokemon_champions_planning_tool.brand import install_linux_desktop_entry, install_web_icons
 from pokemon_champions_planning_tool.config import DEFAULT_ASSETS_DIR, DEFAULT_SPRITE_CACHE_DIR
 from pokemon_champions_planning_tool.infrastructure.database.database import initialize_database, get_session
 from pokemon_champions_planning_tool.services.champions_catalog_service import sync_champions_catalog_on_startup
@@ -136,6 +136,8 @@ def run():
         install_web_icons(DEFAULT_ASSETS_DIR)   # the browser tab and web-app icons: the app's logo, not Flet's
 
     view_mode = ft.AppView.WEB_BROWSER if "--web" in sys.argv else ft.AppView.FLET_APP
+    if view_mode == ft.AppView.FLET_APP:
+        install_linux_desktop_entry()   # before the window opens, so the dock matches it to the app's icon
     ft.run(gui_main, view=view_mode, port=8550, assets_dir=DEFAULT_ASSETS_DIR)
 
 

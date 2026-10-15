@@ -49,6 +49,12 @@ no font is needed to use the files.
 - Place the free-standing crimson symbol on a busy or red background: use the tile or the white version.
 - Rebuild the wordmark in a live font.
 
+## Linux dock icon
+Linux desktops take a window's icon from a `.desktop` file named after its app ID, not from the program. The
+desktop app writes a hidden `com.appveyor.flet.desktop` (marked `X-Champions-MetaDesk-Studio`) and the icon in
+`~/.local/share/icons/hicolor/` on start. Flet's client reports that app ID for every Flet app, so other Flet
+apps on the same machine show this icon too, and an entry another app already wrote is never replaced.
+
 ## Notes
 The mark is original. It isn't affiliated with Nintendo, Game Freak, Creatures Inc. or The Pokémon Company.
 A professional trademark search is recommended before wider use.

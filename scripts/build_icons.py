@@ -77,6 +77,8 @@ def runtime_files() -> dict[str, Path]:
         "icons/icon-maskable-192.png": WEB_DIR / "maskable-512.png",
         "icons/icon-maskable-512.png": WEB_DIR / "maskable-512.png",
         "icons/apple-touch-icon-192.png": WEB_DIR / "apple-touch-icon.png",
+        # Linux: the icon theme sizes for the desktop entry that gives the dock its icon
+        **{f"linux/{s}.png": PNG_DIR / f"tile-{s}.png" for s in (48, 128, 256, 512)},
     }
 
 

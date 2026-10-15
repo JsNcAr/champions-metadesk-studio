@@ -8,6 +8,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import flet as ft
@@ -101,6 +102,50 @@ class TestRailLogo(unittest.TestCase):
         self.assertIsInstance(leading, ft.Image)
         self.assertEqual(leading.src, brand.RAIL_IMAGE.read_bytes())
         self.assertEqual(shell.rail.leading.tooltip, "Champions MetaDesk Studio")
+
+
+
+class TestLinuxDesktopEntry(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.data = Path(self._tmp.name) / "share"
+        self.env = {"XDG_DATA_HOME": str(self.data)}
+        self.entry = self.data / "applications" / f"{brand.FLET_APP_ID}.desktop"
+        patcher = unittest.mock.patch.object(brand, "_refresh_desktop_caches")   # no desktop tools in tests
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_writes_the_entry_and_the_icon_sizes_once(self):
+        self.assertTrue(brand.install_linux_desktop_entry(platform="linux", env=self.env))
+        text = self.entry.read_text()
+        self.assertIn(f"Icon={brand.ICON_NAME}", text)
+        self.assertIn(f"StartupWMClass={brand.FLET_APP_ID}", text)
+        self.assertIn("NoDisplay=true", text)
+        for size in brand.LINUX_ICON_SIZES:
+            icon = self.data / "icons" / "hicolor" / f"{size}x{size}" / "apps" / f"{brand.ICON_NAME}.png"
+            self.assertEqual(icon.read_bytes()[:8], build_icons.PNG_MAGIC)
+        self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env=self.env), "already in place")
+
+    def test_another_flet_apps_entry_is_left_alone(self):
+        self.entry.parent.mkdir(parents=True)
+        self.entry.write_text("[Desktop Entry]\nName=Some other Flet app\nIcon=other\n")
+        self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env=self.env))
+        self.assertIn("Some other Flet app", self.entry.read_text())
+        self.assertFalse((self.data / "icons").exists())
+
+    def test_only_on_linux(self):
+        for platform in ("win32", "darwin"):
+            self.assertFalse(brand.install_linux_desktop_entry(platform=platform, env=self.env))
+        self.assertFalse(self.data.exists())
+
+    def test_an_unwritable_folder_is_logged_not_raised(self):
+        blocker = Path(self._tmp.name) / "file"
+        blocker.write_text("x")
+        with self.assertLogs("pokemon_champions_planning_tool.brand", "WARNING"):
+            self.assertFalse(brand.install_linux_desktop_entry(platform="linux", env={"XDG_DATA_HOME": str(blocker)}))
 
 
 if __name__ == "__main__":

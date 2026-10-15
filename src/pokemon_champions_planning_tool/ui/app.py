@@ -154,7 +154,7 @@ def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
 
 def main(page: ft.Page) -> None:
     page.title = APP_NAME
-    if not page.web and WINDOW_ICON.is_file():
+    if not getattr(page, "web", False) and WINDOW_ICON.is_file():   # stand-in pages (smoke test) have no `web`
         page.window.icon = str(WINDOW_ICON)   # the taskbar and title-bar icon (Flet applies it on Windows)
     apply_theme(page)
     page.padding = 0

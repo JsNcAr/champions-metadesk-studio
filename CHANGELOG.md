@@ -10,6 +10,14 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Added
+
+- **Backup & restore** in Settings. Back up now saves one zip with your box, teams, plans,
+  rival presets, formats and settings (to Downloads in a downloaded build). Restore… lists
+  the backups it finds or takes a path, checks the backup, and replaces your data the next
+  time the app starts, after saving the current data to the `backups` folder. The app also
+  saves a copy there before a new version upgrades your data, keeping the newest five.
+
 ### Fixed
 
 - **Downloaded builds keep your data in your user folder.** On Windows and Linux the app kept

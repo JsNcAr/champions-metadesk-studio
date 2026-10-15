@@ -283,6 +283,26 @@ default. `ui/formats.py` keeps the chosen default in `preferences.json` under
 dicts). A team's `format_id` overrides the default; the team builder shows only the
 mechanics of the team's format, and export writes `Tera Type:` only when it has Tera.
 
+## Backups (files, not tables)
+
+`storage.create_backup` writes `ChampionsMetaDesk-backup-<YYYYMMDD-HHMMSS>[-reason].zip`:
+
+| Member | What |
+|---|---|
+| `pokemon_champions.db` | The whole database, copied through SQLite's backup API (changes still in `-wal` included). |
+| `preferences.json` | When there is one: formats, saved views, the calc state, layout choices. |
+| `manifest.json` | `{"app", "version", "schema" (PRAGMA user_version), "created_at", "reason"}`. |
+
+A restore is staged, never applied while the app runs: `stage_restore` checks the zip (the app
+name, `PRAGMA integrity_check`, a schema no newer than `CURRENT_SCHEMA_VERSION`; an older one is
+migrated on open) and unpacks it into `restore-pending/` beside the database, writing its
+manifest last as the "complete" marker. `apply_pending_restore`, called by `main.run()` before
+anything opens the database, backs up the current data to `backups/…-before-restore.zip`,
+checkpoints and removes the old `-wal`/`-shm`, and moves the staged files in. A failure leaves the
+current data and renames the folder `restore-failed-<time>`. `backup_before_upgrade` saves
+`…-before-upgrade-v<N>.zip` when the database's `user_version` is behind; `backups/` keeps the
+newest five.
+
 ## Derived Values
 
 The following values are computed dynamically by the application layer rather than stored:

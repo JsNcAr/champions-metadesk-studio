@@ -200,6 +200,12 @@ def main(page: ft.Page) -> None:
         ctx.toast(f"Your data now lives in {Path(DEFAULT_PREFERENCES_FILENAME).resolve().parent} "
                   f"(copied from {storage.LAST_MIGRATION}; the old files were left in place)", "info")
         storage.LAST_MIGRATION = None   # one notice, not one per window (the web build opens many)
+    if storage.LAST_RESTORE is not None:
+        restored = storage.LAST_RESTORE
+        made = f" from {restored.created_at.astimezone():%d %b %Y %H:%M}" if restored.created_at else ""
+        saved = f"; your previous data was saved to {restored.saved_to}" if restored.saved_to else ""
+        ctx.toast(f"Restored the backup{made}{saved}", "success")
+        storage.LAST_RESTORE = None
 
     async def _prewarm_views() -> None:
         """Build the other views while the app is idle, so switching to them is instant.

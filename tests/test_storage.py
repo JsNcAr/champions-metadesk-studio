@@ -156,3 +156,174 @@ class TestPrepareDataDir(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _DataFolderCase(unittest.TestCase):
+    """A data folder (database, preferences) and an export folder in a temp directory, with
+    config pointed at them."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.data, self.exports = root / "data", root / "Downloads"
+        self.data.mkdir()
+        self.exports.mkdir()
+        self.db, self.prefs = self.data / "pokemon_champions.db", self.data / "preferences.json"
+        for name, value in (("DEFAULT_DATABASE_FILENAME", str(self.db)), ("DEFAULT_PREFERENCES_FILENAME", str(self.prefs)),
+                            ("EXPORT_DIR", self.exports)):
+            patcher = patch.object(config, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        storage.LAST_RESTORE = None
+
+    def tearDown(self):
+        while _OPEN:
+            _OPEN.pop().close()
+        storage.LAST_RESTORE = None
+        self._tmp.cleanup()
+
+    def _database(self, rows=3, schema=None):
+        con = sqlite3.connect(self.db)
+        con.execute("CREATE TABLE IF NOT EXISTS t (n INTEGER)")
+        con.execute("DELETE FROM t")
+        con.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(rows)])
+        if schema is not None:
+            con.execute(f"PRAGMA user_version = {int(schema)}")
+        con.commit()
+        con.close()
+
+    def _rows(self):
+        con = sqlite3.connect(self.db)
+        try:
+            return con.execute("SELECT COUNT(*) FROM t").fetchone()[0]
+        finally:
+            con.close()
+
+
+class TestBackupAndRestore(_DataFolderCase):
+    def test_a_backup_round_trip_brings_back_the_data_and_the_preferences(self):
+        from pokemon_champions_planning_tool.infrastructure.database.database import CURRENT_SCHEMA_VERSION
+
+        self._database(rows=3, schema=CURRENT_SCHEMA_VERSION)
+        self.prefs.write_text('{"formats.default": "champions"}', encoding="utf-8")
+        backup = storage.create_backup()
+        self.assertEqual(backup.parent, self.exports)
+        self.assertTrue(backup.name.startswith(storage.BACKUP_PREFIX))
+        info = storage.inspect_backup(backup)
+        self.assertEqual((info.schema, info.has_preferences), (CURRENT_SCHEMA_VERSION, True))
+
+        self._database(rows=7)                                # changed after the backup
+        self.prefs.write_text('{"formats.default": "other"}', encoding="utf-8")
+        storage.stage_restore(backup)
+        self.assertIsNotNone(storage.pending_restore())
+        self.assertEqual(self._rows(), 7, "staging changes nothing yet")
+
+        restored = storage.apply_pending_restore()
+        self.assertIsNotNone(restored)
+        self.assertEqual(self._rows(), 3)
+        self.assertEqual(self.prefs.read_text(encoding="utf-8"), '{"formats.default": "champions"}')
+        self.assertIsNone(storage.pending_restore(), "the staged folder is gone")
+        self.assertTrue(restored.saved_to and restored.saved_to.is_file(), "the replaced data was backed up first")
+        self.assertIn("before-restore", restored.saved_to.name)
+        self.assertEqual(storage.LAST_RESTORE, restored)
+
+    def test_a_backup_includes_changes_still_in_the_wal(self):
+        con = sqlite3.connect(self.db)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA wal_autocheckpoint=0")
+        con.execute("CREATE TABLE t (n INTEGER)")
+        con.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(5)])
+        con.commit()
+        _OPEN.append(con)
+        backup = storage.create_backup()
+        with tempfile.TemporaryDirectory() as tmp:
+            import zipfile
+            with zipfile.ZipFile(backup) as zf:
+                zf.extract(storage.DB_MEMBER, tmp)
+            copy = sqlite3.connect(Path(tmp) / storage.DB_MEMBER)
+            try:
+                self.assertEqual(copy.execute("SELECT COUNT(*) FROM t").fetchone()[0], 5)
+            finally:
+                copy.close()
+
+    def test_nothing_to_back_up_says_so(self):
+        with self.assertRaisesRegex(storage.BackupError, "no data"):
+            storage.create_backup()
+
+    def test_bad_backups_are_refused_with_a_reason(self):
+        import json
+        import zipfile
+
+        from pokemon_champions_planning_tool.infrastructure.database.database import CURRENT_SCHEMA_VERSION
+
+        not_zip = self.exports / "x.zip"
+        not_zip.write_text("hello")
+        with self.assertRaisesRegex(storage.BackupError, "Can't read"):
+            storage.inspect_backup(not_zip)
+
+        def make(name, members):
+            path = self.exports / name
+            with zipfile.ZipFile(path, "w") as zf:
+                for member, data in members.items():
+                    zf.writestr(member, data)
+            return path
+
+        self._database(schema=CURRENT_SCHEMA_VERSION + 1)
+        newer_db = self.db.read_bytes()
+        manifest = json.dumps({"app": config.APP_NAME, "version": "9.9.9"})
+        cases = {
+            "no manifest": (make("a.zip", {storage.DB_MEMBER: newer_db}), "isn't a Champions MetaDesk backup"),
+            "another app": (make("b.zip", {storage.DB_MEMBER: newer_db, storage.MANIFEST_MEMBER: json.dumps({"app": "Other"})}), "isn't a Champions MetaDesk backup"),
+            "damaged database": (make("c.zip", {storage.DB_MEMBER: b"not sqlite" * 50, storage.MANIFEST_MEMBER: manifest}), "damaged"),
+            "newer schema": (make("d.zip", {storage.DB_MEMBER: newer_db, storage.MANIFEST_MEMBER: manifest}), "newer version"),
+        }
+        for label, (path, message) in cases.items():
+            with self.subTest(label):
+                with self.assertRaisesRegex(storage.BackupError, message):
+                    storage.stage_restore(path)
+                self.assertIsNone(storage.pending_restore(), "nothing is staged")
+
+    def test_a_failed_restore_keeps_the_current_data(self):
+        self._database(rows=3)
+        backup = storage.create_backup()
+        storage.stage_restore(backup)
+        self._database(rows=9)
+        with patch.object(storage.os, "replace", side_effect=OSError("disk full")), \
+                self.assertLogs("pokemon_champions_planning_tool.storage", "ERROR"):
+            self.assertIsNone(storage.apply_pending_restore())
+        self.assertEqual(self._rows(), 9)
+        self.assertIsNone(storage.pending_restore())
+        self.assertTrue(list(self.data.glob("restore-failed-*")) or not (self.data / "restore-pending").exists())
+
+    def test_a_restore_can_be_cancelled(self):
+        self._database()
+        storage.stage_restore(storage.create_backup())
+        storage.cancel_pending_restore()
+        self.assertIsNone(storage.pending_restore())
+        self.assertIsNone(storage.apply_pending_restore())
+
+    def test_an_older_schema_is_backed_up_before_the_upgrade(self):
+        from pokemon_champions_planning_tool.infrastructure.database.database import CURRENT_SCHEMA_VERSION
+
+        self._database(schema=CURRENT_SCHEMA_VERSION)
+        self.assertIsNone(storage.backup_before_upgrade(), "current schema: nothing to do")
+        self._database(schema=CURRENT_SCHEMA_VERSION - 1)
+        path = storage.backup_before_upgrade()
+        self.assertIsNotNone(path)
+        self.assertEqual(path.parent, self.data / "backups")
+        self.assertIn(f"before-upgrade-v{CURRENT_SCHEMA_VERSION - 1}", path.name)
+
+    def test_automatic_backups_keep_the_newest_five_and_the_list_is_newest_first(self):
+        self._database()
+        folder = self.data / "backups"
+        made = []
+        for i in range(7):
+            path = storage.create_backup(folder, reason=f"auto{i}")
+            os.utime(path, (1_000_000 + i, 1_000_000 + i))
+            made.append(path)
+        storage.prune_backups(folder)
+        self.assertEqual(sorted(folder.glob("*.zip")), sorted(made[2:]))
+        manual = storage.create_backup()
+        listed = storage.list_backups()
+        self.assertEqual(listed[0], manual.resolve(), "the newest first")
+        self.assertEqual(len(listed), 6)

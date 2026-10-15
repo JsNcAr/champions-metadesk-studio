@@ -216,7 +216,8 @@ src/pokemon_champions_planning_tool/
   __init__.py
   main.py         launch: data folder, logging, older data copied in, schema, then the GUI or CLI
   config.py       paths (DATA_DIR: the working directory from source, the per-user folder when packaged), URLs, limits
-  storage.py      prepare_data_dir, migrate_legacy_data (SQLite backup API; the originals stay)
+  storage.py      prepare_data_dir, migrate_legacy_data (SQLite backup API; the originals stay), backups:
+                  create/inspect/stage_restore, apply_pending_restore at launch, backup_before_upgrade
   logs.py         setup_logging: rotating logs/app.log beside the database, stdout when there is one,
                   sys/threading excepthooks; modules log through logging.getLogger(__name__)
   ui/

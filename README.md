@@ -103,6 +103,15 @@ Earlier builds kept it beside the program on Windows and Linux; the first launch
 build copies that database and its preferences over and leaves the old files in place.
 Settings › About shows the folder and opens it. Box exports go to your Downloads folder.
 
+### Backups
+
+**Settings › Backup & restore › Back up now** saves one zip (your box, teams, plans, rival presets,
+formats and settings, plus the tournament data) to your Downloads folder, or to the working
+directory when running from source. **Restore…** lists the backups it finds, or takes a pasted
+path. It checks the backup, then replaces your data the next time the app starts, after
+saving the data it replaces to the `backups` folder inside the data folder. The app also saves
+a copy there before a new version upgrades your data, and keeps the newest five.
+
 ## Run from source
 
 Requires Python 3.13 and [Poetry](https://python-poetry.org).

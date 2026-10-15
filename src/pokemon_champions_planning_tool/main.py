@@ -11,7 +11,12 @@ from pokemon_champions_planning_tool.services.species_catalog_service import syn
 from pokemon_champions_planning_tool.services.pokemon_import_service import refresh_stub_pokemon
 from pokemon_champions_planning_tool.services.terminal_shell import TerminalShell
 from pokemon_champions_planning_tool.logs import setup_logging
-from pokemon_champions_planning_tool.storage import migrate_legacy_data, prepare_data_dir
+from pokemon_champions_planning_tool.storage import (
+    apply_pending_restore,
+    backup_before_upgrade,
+    migrate_legacy_data,
+    prepare_data_dir,
+)
 
 log = logging.getLogger(__name__)
 
@@ -123,11 +128,14 @@ def prepare_sprite_cache_dir(path: str | Path = DEFAULT_SPRITE_CACHE_DIR) -> boo
 
 
 def run():
-    # The data folder first (a packaged build's per-user folder), then the log in it, then
-    # an older packaged build's data copied into it, then the schema (DDL, migrations).
+    # The data folder first (a packaged build's per-user folder), then the log in it. Then,
+    # before anything opens the database: a restore staged in Settings, an older packaged
+    # build's data copied in, and a backup if this version is about to upgrade the schema.
     prepare_data_dir()
     setup_logging()
+    apply_pending_restore()
     migrate_legacy_data()
+    backup_before_upgrade()
     initialize_database()
 
     if "--cli" in sys.argv:

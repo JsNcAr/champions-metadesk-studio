@@ -16,6 +16,7 @@ from ...context import AppContext
 from ...format import absolute_time, plural, relative_time
 from ...tasks import reveal
 from ...theme import Accent, IconSize, Palette, Radius, Space
+from .backup_panel import BackupPanel
 from .format_panel import FormatDialog, FormatPanel
 from .store import SettingsStatus, SettingsStore
 
@@ -116,6 +117,7 @@ class SettingsView(ft.Column):
         self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "sprites": self.row_sprites, "health": self.row_health}
 
         self.about = KeyValueList(self._about_rows(on_open=self._open_folder))
+        self.backup = BackupPanel(ctx)
 
         self.formats = FormatPanel(registry=ctx.formats, on_edit=self._edit_format, on_delete=self._delete_format, on_default=self._set_default_format)
         self._format_dropdown = ft.Dropdown(
@@ -180,6 +182,7 @@ class SettingsView(ft.Column):
                                 ),
                             ]
                         ),
+                        self.backup,
                         Panel([SectionHeader("About"), self.about]),
                     ],
                 ),

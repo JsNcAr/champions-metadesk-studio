@@ -255,5 +255,77 @@ class TestReveal(unittest.TestCase):
                 tasks.reveal("/data/folder")
 
 
+
+class TestBackupPanel(unittest.TestCase):
+    def setUp(self):
+        import sqlite3
+
+        from _ui_stubs import check_layout  # noqa: F401 - imported here to fail loudly if the helper moves
+        from pokemon_champions_planning_tool import config, storage
+
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.data, self.exports = root / "data", root / "Downloads"
+        self.data.mkdir()
+        self.exports.mkdir()
+        db = self.data / "pokemon_champions.db"
+        con = sqlite3.connect(db)
+        con.execute("CREATE TABLE t (n INTEGER)")
+        con.commit()
+        con.close()
+        for name, value in (("DEFAULT_DATABASE_FILENAME", str(db)), ("DEFAULT_PREFERENCES_FILENAME", str(self.data / "preferences.json")),
+                            ("EXPORT_DIR", self.exports)):
+            patcher = patch.object(config, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.storage = storage
+        self.page = StubPage()
+        self.ctx = AppContext(self.page)
+        from pokemon_champions_planning_tool.ui.views.settings.backup_panel import BackupPanel
+
+        self.panel = BackupPanel(self.ctx)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_back_up_now_writes_a_zip_and_says_where(self):
+        self.panel.back_up()
+        backups = list(self.exports.glob("ChampionsMetaDesk-backup-*.zip"))
+        self.assertEqual(len(backups), 1)
+        toast = self.page.dialogs[-1]
+        self.assertIsInstance(toast, ft.SnackBar)
+        self.assertFalse(self.panel._backup.disabled)
+
+    def test_restore_lists_backups_checks_one_and_stages_it(self):
+        from _ui_stubs import check_layout
+
+        self.storage.create_backup()
+        self.panel.open_restore()
+        dialog = self.page.dialogs[-1]
+        self.assertEqual(len(dialog._choices.content.controls), 1, "the backup in Downloads is listed")
+        serialise(dialog)
+        check_layout(dialog)
+        dialog._advance()                      # check it
+        self.assertIsNotNone(dialog._checked)
+        self.assertTrue(dialog._details.visible)
+        self.assertIsNone(self.storage.pending_restore(), "checking stages nothing")
+        dialog._advance()                      # replace my data
+        self.assertIsNotNone(self.storage.pending_restore())
+        self.assertEqual(dialog.title.value, "Restore ready")
+        self.assertTrue(self.panel._pending.visible, "the panel says a restore is waiting")
+        self.panel._cancel_pending()
+        self.assertIsNone(self.storage.pending_restore())
+        self.assertFalse(self.panel._pending.visible)
+
+    def test_a_bad_path_shows_the_reason(self):
+        self.panel.open_restore()
+        dialog = self.page.dialogs[-1]
+        dialog._path.value = str(self.exports / "missing.zip")
+        dialog._advance()
+        self.assertTrue(dialog._error.visible)
+        self.assertIn("No file", dialog._error.value)
+        self.assertIsNone(dialog._checked)
+
+
 if __name__ == "__main__":
     unittest.main()

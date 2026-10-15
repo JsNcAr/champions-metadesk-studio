@@ -75,6 +75,22 @@ class SettingsStore:
     def __init__(self, session_factory: SessionFactory = get_session) -> None:
         self._sf = session_factory
 
+    # -- updates --------------------------------------------------------------------------
+
+    def update_status(self) -> tuple[Any, str | None]:
+        """(the latest release the last check saw, when that check ran)."""
+        from ....services import update_check
+
+        with self._sf() as s:
+            return update_check.stored_latest(s), update_check.last_checked(s)
+
+    def check_updates_now(self) -> Any:
+        """Ask GitHub now; the newer release, or None."""
+        from ....services import update_check
+
+        with self._sf() as s:
+            return update_check.check_for_update(s, force=True)
+
     def status(self) -> SettingsStatus:
         with self._sf() as s:
             mega_count = s.exec(select(func.count()).select_from(MegaEvolutionRecord)).one()

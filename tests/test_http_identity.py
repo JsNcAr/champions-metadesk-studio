@@ -37,6 +37,7 @@ class TestUserAgent(unittest.TestCase):
         from pokemon_champions_planning_tool.infrastructure.providers.pokepast_provider import PokepastProvider
         from pokemon_champions_planning_tool.infrastructure.providers.showdown_moves_provider import ShowdownMovesProvider
         from pokemon_champions_planning_tool.infrastructure.providers.victory_road_provider import VictoryRoadProvider
+        from pokemon_champions_planning_tool.services import update_check
 
         clients = {
             "Victory Road": lambda: VictoryRoadProvider()._fetch_html("https://victoryroad.pro/2026-season-calendar/"),
@@ -47,6 +48,7 @@ class TestUserAgent(unittest.TestCase):
             "Showdown items": showdown._fetch_base_items_ts,
             "PokéAPI": lambda: pokeapi_retrieval._get_json("https://pokeapi.co/api/v2/pokemon/pikachu"),
             "PokéAPI items": lambda: providers._fetch_pokeapi_item_detail("leftovers"),
+            "Update check": update_check.fetch_latest,
         }
         for name, call in clients.items():
             with self.subTest(name):

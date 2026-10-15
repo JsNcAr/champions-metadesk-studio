@@ -88,6 +88,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Limitless allows 50 requests per 5 minutes, so a sync fetches standings in slices and continues next time.",
         "Official events are discovered from Victory Road's season calendars; a few finished events are read per sync, newest Champions events first.",
         f"Database: {Path(DEFAULT_DATABASE_FILENAME).resolve()} · Preferences: {Path(DEFAULT_PREFERENCES_FILENAME).resolve()} (PCPT_DATABASE, PCPT_PREFERENCES, PCPT_VR_MAX_PLACEMENT override them). Settings › About opens the folder; logs/app.log beside the database is the file to attach to a bug report.",
+        "Once a day the app asks GitHub whether a newer version is out and tells you once; Settings › About has Check now and the switch to turn it off. It never downloads anything itself.",
         "Settings › Backup & restore saves everything in one zip (to Downloads in a downloaded build). Restoring one replaces your data the next time the app starts, after saving the current data to the backups folder; the app also saves a copy there before a new version upgrades your data.",
         "Layout choices (grid or table, stats on cards, summary panel, show all moves, Meta layout) are remembered between launches.",
     ),

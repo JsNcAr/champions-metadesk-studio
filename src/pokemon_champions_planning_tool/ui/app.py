@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 import flet as ft
 
-from .. import storage
+from .. import __version__, storage
 from ..config import APP_NAME, DEFAULT_PREFERENCES_FILENAME
 from ..infrastructure.database.database import get_session
 from ..services.tournament_service import TournamentService
+from ..services import update_check
 from ..services.tournament_sync_service import sync_tournaments_once_per_process
 from . import events
 from .catalogs import Catalogs
@@ -139,6 +141,36 @@ def _start_background_sync(ctx: AppContext) -> None:
     ctx.sync_tournaments(work, on_done=done, on_error=failed)
 
 
+UPDATE_CHECK_DELAY_S = 5   # after the catalogue refresh and the sync have started
+
+
+def _start_update_check(ctx: AppContext) -> None:
+    """Ask GitHub, at most once a day, whether a newer release is out; tell the user once
+    per version. Never downloads anything. Off when Settings' switch is off."""
+    if ctx.prefs.get(update_check.PREF_ENABLED, True) is False:
+        return
+
+    def work():
+        time.sleep(UPDATE_CHECK_DELAY_S)
+        with get_session() as session:
+            release = update_check.check_for_update(session)
+            return release if release is not None and update_check.claim_notification(session, release) else None
+
+    def done(release) -> None:
+        ctx.bus.emit(events.UPDATE_CHECKED, release)
+        if release is not None:
+            show_update_toast(ctx, release)
+
+    ctx.run_in_background(work, on_done=done, on_error=lambda exc: log.warning("Update check failed: %s", exc))
+
+
+def show_update_toast(ctx: AppContext, release: update_check.Release) -> None:
+    from .tasks import open_url
+
+    ctx.toast(f"Version {release.version} is available (you have {__version__})", "info",
+              action="Download", on_action=lambda: open_url(ctx.page, release.url))
+
+
 def _install_shutdown_hooks(page: ft.Page, ctx: AppContext) -> None:
     """Flush pending writes however the session ends.
 
@@ -229,3 +261,4 @@ def main(page: ft.Page) -> None:
         _start_catalogue_refresh(ctx, shell)
         _start_sprite_prefetch(ctx)
         _start_background_sync(ctx)
+        _start_update_check(ctx)

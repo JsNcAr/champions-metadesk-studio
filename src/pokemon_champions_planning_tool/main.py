@@ -9,6 +9,7 @@ from pokemon_champions_planning_tool.services.items_catalog_service import sync_
 from pokemon_champions_planning_tool.services.move_catalog_service import sync_move_catalog_on_startup
 from pokemon_champions_planning_tool.services.species_catalog_service import sync_species_catalog_on_startup
 from pokemon_champions_planning_tool.services.pokemon_import_service import refresh_stub_pokemon
+from pokemon_champions_planning_tool.services.app_state import check_due
 from pokemon_champions_planning_tool.services.terminal_shell import TerminalShell
 from pokemon_champions_planning_tool.logs import setup_logging
 from pokemon_champions_planning_tool.storage import (
@@ -21,29 +22,8 @@ from pokemon_champions_planning_tool.storage import (
 log = logging.getLogger(__name__)
 
 
-STARTUP_CHECK_HOURS = 24
-
-
-def _startup_check_due(session, key: str, hours: int = STARTUP_CHECK_HOURS) -> bool:
-    """True at most once per ``hours`` per key; records the check time when due."""
-    from datetime import datetime, timedelta, timezone
-
-    from pokemon_champions_planning_tool.infrastructure.database.repositories import TournamentRepository
-
-    repo = TournamentRepository(session)
-    stamp = repo.get_state(key)
-    now = datetime.now(timezone.utc)
-    if stamp:
-        try:
-            last = datetime.fromisoformat(stamp)
-            if last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            if now - last < timedelta(hours=hours):
-                return False
-        except ValueError:
-            pass
-    repo.set_state(key, now.isoformat())
-    return True
+# Kept under its old name: the startup checks below and older tests import it from here.
+_startup_check_due = check_due
 
 
 def _empty_table(session, table: str) -> bool:

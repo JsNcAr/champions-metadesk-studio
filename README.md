@@ -116,6 +116,13 @@ Earlier builds kept it beside the program on Windows and Linux; the first launch
 build copies that database and its preferences over and leaves the old files in place.
 Settings › About shows the folder and opens it. Box exports go to your Downloads folder.
 
+### Updates
+
+Once a day the app asks GitHub whether a newer release is out and, if so, says so once
+(and in Settings › About, with a Download link to the release page). It never downloads or
+installs anything itself, and the request carries only the app's name and version. Turn it
+off in Settings › About; **Check now** asks any time.
+
 ### Backups
 
 **Settings › Backup & restore › Back up now** saves one zip (your box, teams, plans, rival presets,

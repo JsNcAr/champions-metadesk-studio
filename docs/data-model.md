@@ -283,6 +283,13 @@ default. `ui/formats.py` keeps the chosen default in `preferences.json` under
 dicts). A team's `format_id` overrides the default; the team builder shows only the
 mechanics of the team's format, and export writes `Tera Type:` only when it has Tera.
 
+## App state keys for the update check (`app_state`)
+
+`updates.checked_at` (ISO time of the last request; the daily gate), `updates.latest` (JSON of
+the release it saw: tag, version, url, published_at) and `updates.notified` (the tag a toast
+was shown for, so each version is announced once). The switch is `updates.check` in
+`preferences.json` (on unless `false`).
+
 ## Backups (files, not tables)
 
 `storage.create_backup` writes `ChampionsMetaDesk-backup-<YYYYMMDD-HHMMSS>[-reason].zip`:

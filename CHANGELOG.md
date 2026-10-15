@@ -16,6 +16,10 @@ for the headings and style.
   section that explains the Windows and macOS first-launch warnings (the builds aren't
   code-signed yet), and lists the archives' checksums in `SHA256SUMS.txt`. The release
   workflow is ready to sign and notarize as soon as signing credentials are added.
+- **New-version notice.** Once a day the app asks GitHub whether a newer release is out and
+  says so once, with a Download link to the release page; Settings › About shows the
+  latest version, has Check now, and a switch to turn the daily check off. Nothing is
+  downloaded or installed by the app.
 - **Backup & restore** in Settings. Back up now saves one zip with your box, teams, plans,
   rival presets, formats and settings (to Downloads in a downloaded build). Restore… lists
   the backups it finds or takes a path, checks the backup, and replaces your data the next

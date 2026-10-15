@@ -17,6 +17,7 @@ from ...format import absolute_time, plural, relative_time
 from ...tasks import reveal
 from ...theme import Accent, IconSize, Palette, Radius, Space
 from .backup_panel import BackupPanel
+from .update_row import UpdateRow
 from .format_panel import FormatDialog, FormatPanel
 from .store import SettingsStatus, SettingsStore
 
@@ -116,7 +117,8 @@ class SettingsView(ft.Column):
         self.row_health = SyncRow(ft.Icons.HEALTH_AND_SAFETY_OUTLINED, "Data health", lambda: self._sync("health"), button_label="Repair")
         self._rows = {"megas": self.row_megas, "items": self.row_items, "moves": self.row_moves, "tournaments": self.row_tournaments, "sprites": self.row_sprites, "health": self.row_health}
 
-        self.about = KeyValueList(self._about_rows(on_open=self._open_folder))
+        self.update_row = UpdateRow(ctx, self.store)
+        self.about = KeyValueList(self._about_rows(on_open=self._open_folder, version=self.update_row))
         self.backup = BackupPanel(ctx)
 
         self.formats = FormatPanel(registry=ctx.formats, on_edit=self._edit_format, on_delete=self._delete_format, on_default=self._set_default_format)
@@ -197,6 +199,7 @@ class SettingsView(ft.Column):
 
     def refresh(self) -> None:
         """Reload the counts. Called on activation and after any sync."""
+        self.update_row.refresh()
         def on_done(status: SettingsStatus) -> None:
             self.apply_status(status)
             if self._is_mounted():
@@ -326,7 +329,7 @@ class SettingsView(ft.Column):
             self.ctx.toast(f"Couldn't open the folder: {exc}. It is {folder}", "warning")
 
     @staticmethod
-    def _about_rows(on_open: Callable[[Path], None] | None = None) -> list[tuple[str, str | ft.Control]]:
+    def _about_rows(on_open: Callable[[Path], None] | None = None, version: ft.Control | None = None) -> list[tuple[str, str | ft.Control]]:
         from pokemon_champions_planning_tool import __version__ as app_version
 
         def path_row(path: Path, folder: Path, button: str) -> ft.Control:
@@ -349,7 +352,7 @@ class SettingsView(ft.Column):
             ],
         )
         return [
-            ("Version", app_version),
+            ("Version", version if version is not None else app_version),
             ("Data folder", path_row(data_folder, data_folder, "Open")),
             ("Log file", path_row(log_path, log_path.parent, "Open folder")),
             ("CSV export", str(Path(DEFAULT_CSV_FILENAME).resolve())),

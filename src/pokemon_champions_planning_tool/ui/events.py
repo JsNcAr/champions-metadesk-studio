@@ -86,3 +86,5 @@ class EventBus:
 
 # A tournament sync reported progress. Payload: services.tournament_sync_service.SyncProgress.
 SYNC_PROGRESS = "sync.progress"
+# The daily update check ran; payload: the newer Release, or None (up to date, or no answer).
+UPDATE_CHECKED = "updates.checked"

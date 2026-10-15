@@ -22,6 +22,7 @@ from uuid import UUID
 
 from sqlmodel import Session
 
+from ....config import EXPORT_DIR
 from ....domain.entities.box_entry import BoxEntry
 from ....domain.entities.team import Team
 from ....domain.entities.team_member import TeamMember
@@ -426,8 +427,8 @@ class BoxStore:
         return report
 
     def save_export_file(self, content: str, filename: str) -> Path:
-        """Save text content to the local filesystem."""
-        path = Path(filename)
+        """Save text content in the export folder (Downloads for a packaged build)."""
+        path = Path(EXPORT_DIR) / filename
         path.write_text(content, encoding="utf-8")
         return path.resolve()
 

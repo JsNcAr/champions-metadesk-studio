@@ -124,7 +124,15 @@ class TestUiBoxImportExport(unittest.TestCase):
             dialog._save_file()
             mock_save.assert_called_once()
             self.assertTrue(dialog._banner.visible)
-            self.assertIn("Saved to champions_box.json", dialog._banner._text.value)
+            self.assertIn("Saved to /tmp/champions_box.json", dialog._banner._text.value, "the full path, not a bare name")
+
+    def test_an_export_file_goes_to_the_export_folder(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch("pokemon_champions_planning_tool.ui.views.box.store.EXPORT_DIR", Path(tmp)):
+            path = self.store.save_export_file("{}", "champions_box.json")
+            self.assertEqual(path, (Path(tmp) / "champions_box.json").resolve())
+            self.assertEqual(path.read_text(encoding="utf-8"), "{}")
 
     def test_import_dialog_input_detection(self):
         dialog = BoxImportDialog(self.ctx, self.store)

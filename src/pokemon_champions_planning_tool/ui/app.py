@@ -6,6 +6,7 @@ from pathlib import Path
 
 import flet as ft
 
+from .. import storage
 from ..config import APP_NAME, DEFAULT_PREFERENCES_FILENAME
 from ..infrastructure.database.database import get_session
 from ..services.tournament_service import TournamentService
@@ -191,6 +192,9 @@ def main(page: ft.Page) -> None:
     # window the user can already see rather than a blank one.
     page.add(shell)
     shell.navigate("box")
+    if storage.LAST_MIGRATION is not None:   # once: the first launch after the data folder moved
+        ctx.toast(f"Your data now lives in {Path(DEFAULT_PREFERENCES_FILENAME).resolve().parent} "
+                  f"(copied from {storage.LAST_MIGRATION}; the old files were left in place)", "info")
 
     async def _prewarm_views() -> None:
         """Build the other views while the app is idle, so switching to them is instant.

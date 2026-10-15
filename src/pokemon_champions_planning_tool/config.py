@@ -2,18 +2,34 @@
 
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 APP_NAME = "Champions MetaDesk Studio"
 
-# A macOS .app launched from Finder runs with the working directory "/", which is
-# read-only, so the relative defaults below could not create the database and the app
-# died on startup. The packaged app keeps its files in Application Support instead.
-if getattr(sys, "frozen", False) and sys.platform == "darwin":
-    _DATA_DIR = Path.home() / "Library" / "Application Support" / APP_NAME
-    _DATA_DIR.mkdir(parents=True, exist_ok=True)
-else:
-    _DATA_DIR = Path()
+FROZEN = bool(getattr(sys, "frozen", False))   # a packaged build (PyInstaller via flet pack)
+
+
+def user_data_dir(platform: str = sys.platform, env: Mapping[str, str] = os.environ, home: Path | None = None) -> Path:
+    """Where a packaged build keeps its files: the platform's per-user application data
+    folder. Local, not roaming, on Windows: a SQLite file and a sprite cache don't belong
+    in a roaming profile."""
+    home = home if home is not None else Path.home()
+    if platform == "darwin":
+        return home / "Library" / "Application Support" / APP_NAME
+    if platform == "win32":
+        return Path(env.get("LOCALAPPDATA") or home / "AppData" / "Local") / APP_NAME
+    return Path(env.get("XDG_DATA_HOME") or home / ".local" / "share") / "champions-metadesk-studio"
+
+
+# A packaged app does not choose its working directory (a macOS .app opened from Finder
+# starts in the read-only "/", a Windows shortcut wherever it says), so its files live in
+# the per-user folder; a run from source or a pip install keeps them in the working
+# directory. The folder is created by storage.prepare_data_dir(), not on import.
+DATA_DIR = user_data_dir() if FROZEN else Path()
+# Where exports (Box files, the CSV) are written: Downloads for a packaged build.
+EXPORT_DIR = ((Path.home() / "Downloads" if (Path.home() / "Downloads").is_dir() else Path.home())
+              if FROZEN else Path())
 
 # Shown in Settings › About; the README and NOTICE.md carry the same text.
 DISCLAIMER = (
@@ -21,21 +37,23 @@ DISCLAIMER = (
     "endorsed or sponsored by Nintendo, Game Freak, Creatures Inc. or The Pokémon Company. "
     "Pokémon and Pokémon character names are trademarks of their respective owners."
 )
-DEFAULT_CSV_FILENAME = "pokemon_team_stats.csv"
-# Where the SQLite file lives. Relative paths resolve against the working directory
-# (Application Support for the packaged macOS app).
+DEFAULT_CSV_FILENAME = str(EXPORT_DIR / "pokemon_team_stats.csv")
+# Where the SQLite file lives: DATA_DIR (relative paths resolve against the working
+# directory; a packaged build uses the per-user folder).
 # Override with PCPT_DATABASE=/path/to/file.db; preferences.json sits beside it unless
 # PCPT_PREFERENCES points elsewhere.
-DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", str(_DATA_DIR / "pokemon_champions.db"))
+DEFAULT_DATABASE_FILENAME = os.environ.get("PCPT_DATABASE", str(DATA_DIR / "pokemon_champions.db"))
 DEFAULT_PREFERENCES_FILENAME = os.environ.get(
     "PCPT_PREFERENCES", str(Path(DEFAULT_DATABASE_FILENAME).parent / "preferences.json")
 )
+# Logs sit beside the database, so PCPT_DATABASE moves them too.
+LOG_DIR = str(Path(DEFAULT_DATABASE_FILENAME).parent / "logs")
 # Absolute on purpose. Flet resolves a *relative* assets_dir against the directory of
 # sys.argv[0], not the working directory, so "assets" became
 # src/pokemon_champions_planning_tool/assets — a path that does not exist, which makes
 # Flet serve no assets at all. The sprite cache meanwhile wrote to ./assets/sprites, so
 # nothing it downloaded was ever reachable. Resolving here keeps the two in step.
-DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", str(_DATA_DIR / "assets"))).resolve())
+DEFAULT_ASSETS_DIR = str(Path(os.environ.get("PCPT_ASSETS_DIR", str(DATA_DIR / "assets"))).resolve())
 DEFAULT_SPRITE_CACHE_DIR = str(
     Path(os.environ.get("PCPT_SPRITE_CACHE_DIR", str(Path(DEFAULT_ASSETS_DIR) / "sprites"))).resolve()
 )

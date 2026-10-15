@@ -113,7 +113,7 @@ CSV remains a useful export format for spreadsheet tools.
 ## Runtime Configuration & Environment
 
 The storage location and sync behavior can be configured via environment variables:
-- `PCPT_DATABASE`: Path of the SQLite database file (default: `pokemon_champions.db` in working directory).
+- `PCPT_DATABASE`: Path of the SQLite database file (default: `pokemon_champions.db` in the working directory from source, in the per-user data folder in a packaged build; see [building.md](building.md#4-configuration--database-behavior-in-frozen-builds)).
 - `PCPT_PREFERENCES`: Path of the view-preferences JSON file (default: `preferences.json` beside the database).
 - `PCPT_VR_MAX_PLACEMENT`: Maximum placements ingested per official Victory Road event (default: `64`).
 

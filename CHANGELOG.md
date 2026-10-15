@@ -10,6 +10,18 @@ for the headings and style.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Downloaded builds keep your data in your user folder.** On Windows and Linux the app kept
+  its database, preferences and sprites in whatever folder it was started from, so a
+  different shortcut showed an empty app, and a read-only folder (such as Program Files)
+  stopped it from saving at all. It now uses `%LOCALAPPDATA%\Champions MetaDesk Studio` on
+  Windows and `~/.local/share/champions-metadesk-studio` on Linux (macOS already used
+  Application Support). The first launch copies your existing data over and leaves the old
+  files in place. Running from source still uses the working directory.
+- Box exports from a downloaded build are saved to your Downloads folder, and the message
+  shows the full path, instead of the folder the app was started from.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

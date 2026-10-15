@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import flet as ft
 
 from ..config import DEFAULT_DATABASE_FILENAME, DEFAULT_PREFERENCES_FILENAME
@@ -85,7 +87,7 @@ TIPS: dict[str, tuple[str, ...]] = {
         "Tournaments sync at launch when the last sync is older than six hours or a backlog is waiting; Settings › Sync now always runs.",
         "Limitless allows 50 requests per 5 minutes, so a sync fetches standings in slices and continues next time.",
         "Official events are discovered from Victory Road's season calendars; a few finished events are read per sync, newest Champions events first.",
-        f"Database: {DEFAULT_DATABASE_FILENAME} · Preferences: {DEFAULT_PREFERENCES_FILENAME} (PCPT_DATABASE, PCPT_PREFERENCES, PCPT_VR_MAX_PLACEMENT override them).",
+        f"Database: {Path(DEFAULT_DATABASE_FILENAME).resolve()} · Preferences: {Path(DEFAULT_PREFERENCES_FILENAME).resolve()} (PCPT_DATABASE, PCPT_PREFERENCES, PCPT_VR_MAX_PLACEMENT override them). Settings › About opens the folder.",
         "Layout choices (grid or table, stats on cards, summary panel, show all moves, Meta layout) are remembered between launches.",
     ),
 }

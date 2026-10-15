@@ -133,7 +133,7 @@ class BoxExportDialog(ft.AlertDialog):
         filename = _FILENAMES.get(self.current_format, "box_export.txt")
         try:
             path = self.store.save_export_file(self._text.value or "", filename)
-            self._banner.show(f"Saved to {path.name} in project directory", "success")
+            self._banner.show(f"Saved to {path}", "success")
             self.ctx.toast(f"Saved {path.name}", "success")
         except Exception as exc:
             self._banner.show(f"Error saving file: {exc}", "error")

@@ -9,6 +9,7 @@ from pokemon_champions_planning_tool.services.move_catalog_service import sync_m
 from pokemon_champions_planning_tool.services.species_catalog_service import sync_species_catalog_on_startup
 from pokemon_champions_planning_tool.services.pokemon_import_service import refresh_stub_pokemon
 from pokemon_champions_planning_tool.services.terminal_shell import TerminalShell
+from pokemon_champions_planning_tool.storage import migrate_legacy_data, prepare_data_dir
 
 
 STARTUP_CHECK_HOURS = 24
@@ -118,7 +119,10 @@ def prepare_sprite_cache_dir(path: str | Path = DEFAULT_SPRITE_CACHE_DIR) -> boo
 
 
 def run():
-    # Initialize DB schema once before anything else (DDL, migrations)
+    # The data folder first (a packaged build's per-user folder), then an older packaged
+    # build's data copied into it, then the schema (DDL, migrations).
+    prepare_data_dir()
+    migrate_legacy_data()
     initialize_database()
 
     if "--cli" in sys.argv:
